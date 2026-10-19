@@ -63,7 +63,17 @@ object ImportedMangaConverter {
         val temp = File.createTempFile("manganooir-sniff-", ".zip", context.cacheDir)
         try {
             context.contentResolver.openInputStream(uri)?.use { input ->
-                temp.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+                temp.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var written = 0L
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        written += n
+                        if (written > 512L * 1024 * 1024) return false
+                        output.write(buffer, 0, n)
+                    }
+                }
             } ?: return false
             return runCatching {
                 ZipFile(temp).use { zip ->
