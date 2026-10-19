@@ -76,7 +76,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
             .putString("destination", destination.trim()).apply()
         options.save(prefs)
     }
-    fun enqueue(convert: Boolean) {
+    fun enqueue(convert: Boolean, saveTree: Uri? = null) {
         if (chosen.isEmpty()) return
         persist()
         val req = OneTimeWorkRequestBuilder<NooirTransferWorker>()
@@ -87,15 +87,28 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 NooirTransferWorker.KEY_FORMAT to format.name,
                 NooirTransferWorker.KEY_DEVICE to device,
                 NooirTransferWorker.KEY_CONVERT to convert,
+                NooirTransferWorker.KEY_TREE_URI to saveTree?.toString(),
                 NooirTransferWorker.KEY_OPTIONS to options.token(),
             )).build()
         manager.enqueue(req)
         workId = req.id
         workInfo = null
         prefs.edit().putString("last_transfer_work", req.id.toString()).apply()
-        message = "Queued " + chosen.size + " file(s). You may press Back; the transfer continues."
+        message = "Queued " + chosen.size + " file(s). You may press Back; work continues."
     }
 
+    val chooseFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { folder ->
+        if (folder != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    folder, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                enqueue(true, saveTree = folder)
+            } catch (e: SecurityException) {
+                message = "Cannot keep access to that folder: " + e.message
+            }
+        }
+    }
     val choose = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { files ->
         if (files.isNotEmpty()) {
             if (files.size > 25) {
@@ -152,7 +165,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 if (message.isNotBlank()) Text(message)
                 if (workInfo != null) {
                     Text("Transfer: " + when (workInfo?.state) {
-                        WorkInfo.State.SUCCEEDED -> "Complete · XTEink confirmed"
+                        WorkInfo.State.SUCCEEDED -> "All files finished successfully"
                         WorkInfo.State.FAILED -> "Failed: " + workInfo?.outputData
                             ?.getString(NooirTransferWorker.KEY_ERROR).orEmpty()
                         WorkInfo.State.CANCELLED -> "Cancelled"
@@ -217,7 +230,11 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 Button(enabled = canQueue, onClick = { enqueue(true) }) {
                     Text("Convert manga & send · " + chosen.size + " file(s)")
                 }
-                Text("Convert mode automatically converts supported CBZ/images; other selected documents are sent unchanged.")
+                TextButton(enabled = chosen.isNotEmpty() && !running,
+                    onClick = { persist(); chooseFolder.launch(null) }) {
+                    Text("Convert & save selected to phone folder")
+                }
+                Text("Convert mode converts CBZ/images and copies unsupported documents unchanged. Each file is saved or sent separately.")
                 TextButton(
                     enabled = chosen.isNotEmpty(),
                     onClick = {
