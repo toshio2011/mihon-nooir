@@ -54,7 +54,7 @@ fun NooirDeviceFilesDialog(onDismiss: () -> Unit) {
     var transferBusy by remember { mutableStateOf(false) }
 
     LaunchedEffect(manager) {
-        manager.getWorkInfosForUniqueWorkFlow(NooirMangaExportWorker.QUEUE_NAME).collect { jobs ->
+        manager.getWorkInfosForUniqueWorkFlow(NooirDeviceWorkQueue.NAME).collect { jobs ->
             magmaBusy = jobs.any { it.state == WorkInfo.State.RUNNING }
         }
     }
