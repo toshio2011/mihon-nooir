@@ -3,7 +3,7 @@ package dev.nooir.mangabridge
 import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
-import java.net.URI
+import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -19,9 +19,8 @@ object NooirDeviceFileClient {
 
     private fun hostValue(value: String): String {
         val input = value.trim()
-        require(input.length in 1..253 && !input.contains('/') && !input.contains('\\') &&
-            !input.contains('?') && !input.contains('#') && !input.contains('@') &&
-            !input.contains(':') && input.any { it == '.' || it.isLetter() }) {
+        require(input.matches(Regex("[A-Za-z0-9.-]{1,253}")) &&
+            !input.startsWith('.') && !input.endsWith('.')) {
             "Enter the reader hostname/IP only, without http:// or a path"
         }
         return input
@@ -55,8 +54,8 @@ object NooirDeviceFileClient {
 
     private fun get(host: String, endpoint: String): ByteArray {
         val h = hostValue(host)
-        val url = URI("http", null, h, -1, endpoint.substringBefore('?'),
-            endpoint.substringAfter('?', "").ifEmpty { null }, null).toURL()
+        require(endpoint.startsWith("/api/files?path="))
+        val url = URL("http://" + h + endpoint)
         val conn = url.openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 3500
