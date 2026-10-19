@@ -93,7 +93,8 @@ object XtcCodec {
         chapters: List<BookChapter> = emptyList(),
         chapterResolver: ((Int) -> List<BookChapter>)? = null,
         direction: ReadingDirection = ReadingDirection.RIGHT_TO_LEFT,
-        onPageEncoded: ((Int) -> Unit)? = null
+        onPageEncoded: ((Int) -> Unit)? = null,
+        richMetadataJson: String? = null,
     ): XtcWriteResult {
         require(spoolDirectory.isDirectory || spoolDirectory.mkdirs()) { "Cannot create spool directory" }
         val temp = File.createTempFile("nooir-pages-", ".bin", spoolDirectory)
@@ -167,8 +168,22 @@ object XtcCodec {
                 pos += size
             }
             BufferedInputStream(FileInputStream(temp)).use { input -> input.copyTo(output, 64 * 1024) }
+            // Optional MangaNooir extension: [UTF-8 JSON][u32 LE size][NOOIRMD1].
+            // It lives *after* the final referenced page, leaving legacy XTC/XTCH
+            // header, page offsets, image data and chapter indexes untouched.
+            // Readers that do not support this optional trailer simply ignore it.
+            val json = richMetadataJson?.takeIf { it.isNotBlank() }?.toByteArray(StandardCharsets.UTF_8)
+            val extraBytes = if (json != null) {
+                require(json.size <= 8192) { "XTC extended metadata exceeds 8 KiB" }
+                val footer = ByteArray(12)
+                setU32(footer, 0, json.size.toLong())
+                "NOOIRMD1".toByteArray(StandardCharsets.US_ASCII).copyInto(footer, 4)
+                output.write(json)
+                output.write(footer)
+                json.size + footer.size
+            } else 0
             output.flush()
-            return XtcWriteResult(entries.size, dataOffset + dataLength)
+            return XtcWriteResult(entries.size, dataOffset + dataLength + extraBytes)
         } finally {
             temp.delete()
         }
