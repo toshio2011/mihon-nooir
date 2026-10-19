@@ -48,10 +48,10 @@ fun main() {
     check(sidewaysFit.size == 1) { "Wide panorama must remain one page if spread split is off" }
 
     val sidewaysSpreads = PageSlicePlanner.plan(
-        1600, 1200, 800, 480, "PAGED", true, true, 10, "LANDSCAPE",
+        1800, 1700, 800, 480, "PAGED", true, true, 10, "LANDSCAPE",
     )
     check(sidewaysSpreads.size > 2)
-    check(sidewaysSpreads.first().left == 800)
+    check(sidewaysSpreads.first().left == 900)
     check(sidewaysSpreads.last().left == 0)
 
     val rightFirst = plan(1800, 1100, layout = "PAGED", split = true)
