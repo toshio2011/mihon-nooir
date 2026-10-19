@@ -77,3 +77,16 @@ The launcher and localized app name are now **MangaNooir**, distinct from Mihon.
 The export dialog remembers format (Auto/XTC/XTCH/EPUB/CBZ), X4/X3 device preset, hostname/IP, and folder. **Save file** uses Android's file picker. **Send to XTEink** probes Nooir's `GET /api/status`, creates the export in temporary app storage, then uploads with multipart `POST /upload?path=/Books`. Keep your XTEink in Nooir's File Transfer mode and phone on the same Wi-Fi. Sending to the same name overwrites the previous file on the device.
 
 As with the earlier build, sources and metadata are retained in Mihon; format conversion remains non-destructive. **Direct transfer still requires on-device hardware testing.** Page crop, contrast, dithering settings, upload progress, and download-time format selection remain future milestones.
+
+
+## Send & Convert any phone file — experimental PR
+
+A **More → Send & Convert files** entry will let the user choose any Android document (Storage Access Framework). Options:
+
+- **Send original to Folio Nooir** over local Wi-Fi (the target device must be in File Transfer mode). This copies file bytes as-is and does not imply the e-reader can open arbitrary formats. HTTP without encryption is appropriate for a trusted LAN only.
+- **Share original** via Android's native share sheet, including any installed cross-device transfer app.
+- **Manga detected:** recognize JPG/PNG/WebP/BMP/GIF or CBZ/ZIP containing images. Offer Auto/XTC/XTCH/EPUB/CBZ conversion and Save file or Convert & send to Nooir. For CBZ, extract available ComicInfo.xml title, creator, genre, description, language, publisher, series metadata, using native output fields wherever possible.
+
+Files are selected by the user, not gathered through bulk storage scanning. The original file is not modified. Conversion currently accepts input up to 512 MB. Nouir may store documents it does not know how to display.
+
+**Still planned, not implemented here:** direct WebDAV/OPDS/Calibre/KOReader/other-device support, built-in web-article extraction to EPUB or PDF, richer metadata editing, live progress, multi-file batch sending and large-library queues. Quick Export of web-sourced manga remains a separate PR, with a future streaming/chapter-batch redesign to lift the temporary first-test cap.

@@ -48,7 +48,8 @@ object ImportedMangaConverter {
         val ext = name.substringAfterLast('.', "").lowercase()
         val mime = resolver.getType(uri).orEmpty().lowercase()
         val kind = when {
-            ext in setOf("cbz", "zip") -> if (isComicZip(context, uri)) Kind.COMIC_ARCHIVE else Kind.DOCUMENT
+            ext in setOf("cbz", "zip") -> if (size != null && size > 512L * 1024 * 1024) Kind.DOCUMENT
+                else if (isComicZip(context, uri)) Kind.COMIC_ARCHIVE else Kind.DOCUMENT
             ext in setOf("jpg", "jpeg", "png", "webp", "bmp", "gif") ||
                 mime in setOf("image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif") -> Kind.IMAGE
             else -> Kind.DOCUMENT
@@ -111,9 +112,7 @@ object ImportedMangaConverter {
                     val depth = if (actual == ExportFormat.XTC) XtcFormat.XTC else XtcFormat.XTCH
                     count = XtcCodec.write(
                         depth,
-                        source.pages(listOf(input), width, height, depth.depth).onEach {
-                            // Avoid processing a malicious archive with tens of thousands of pages.
-                        },
+                        source.pages(listOf(input), width, height, depth.depth),
                         target, context.cacheDir, metadata = metadata.xtc(),
                         direction = metadata.direction,
                         chapterResolver = { pages ->

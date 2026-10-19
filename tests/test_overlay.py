@@ -32,6 +32,20 @@ class TestOverlay(unittest.TestCase):
             strings = root/'i18n/src/commonMain/moko-resources/base'
             strings.mkdir(parents=True)
             (strings/'strings.xml').write_text('<string name="app_name" translatable="false">Mihon</string>')
+            moretab = root/'app/src/main/java/eu/kanade/tachiyomi/ui/more'
+            moretab.mkdir(parents=True)
+            (moretab/'MoreTab.kt').write_text(
+                "import eu.kanade.presentation.more.MoreScreen\n"
+                "        MoreScreen(\n"
+                "            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },\n"
+            )
+            morescreen = root/'app/src/main/java/eu/kanade/presentation/more'
+            morescreen.mkdir(parents=True)
+            (morescreen/'MoreScreen.kt').write_text(
+                "    onClickDownloadQueue: () -> Unit,\n"
+                "            item {\n"
+                "                val downloadQueueState = downloadQueueStateProvider()\n"
+            )
             updater = root/'app/src/main/java/eu/kanade/tachiyomi/data/updater'
             updater.mkdir(parents=True)
             (updater/'AppUpdateChecker.kt').write_text('"mihonapp/mihon-preview"\n"mihonapp/mihon"\n')
@@ -39,13 +53,17 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('NooirExportDialog',(manga/'MangaScreen.kt').read_text())
             self.assertIn('nooirDownloadProvider',(manga/'MangaViewModel.kt').read_text())
             self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionName = "1.0.1"',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionCode = 1000001',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionName = "1.0.2"',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionCode = 1000002',(app/'build.gradle.kts').read_text())
             self.assertIn('toshio2011/mihon-nooir',(updater/'AppUpdateChecker.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').exists())
             self.assertIn('onClickExport = onExportClicked', (presentation/'MangaScreen.kt').read_text())
             self.assertIn('Export to XTEink', (components/'MangaToolbar.kt').read_text())
             self.assertIn('MangaNooir', (strings/'strings.xml').read_text())
+            self.assertIn('AnyFileTransferDialog', (moretab/'MoreTab.kt').read_text())
+            self.assertIn('Send & Convert files', (morescreen/'MoreScreen.kt').read_text())
+            self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/ImportedMangaConverter.kt').exists())
+            self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/AnyFileTransferDialog.kt').exists())
 
 if __name__=='__main__': unittest.main()
