@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -66,7 +67,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 NooirPdfExportWorker.FOLDER to folder.trim(),
                 NooirPdfExportWorker.MODE to mode,
             )).build()
-        workManager.enqueue(job)
+        workManager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, job)
         workId = job.id
         prefs.edit().putString(NooirPdfExportWorker.LAST_WORK, job.id.toString()).apply()
     }
