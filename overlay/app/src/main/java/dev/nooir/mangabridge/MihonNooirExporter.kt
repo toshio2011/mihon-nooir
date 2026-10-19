@@ -118,7 +118,10 @@ object MihonNooirExporter {
         // Use the actual Mihon series artwork if we can obtain it; otherwise leave
         // original page ordering intact rather than fabricating a cover.
         val coverUri = NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder)
-        val coverOptions = options.copy(layout = "PAGED", cropWhiteMargins = false, splitSpreads = false)
+        val coverOptions = options.copy(
+            layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
+            orientation = "PORTRAIT", overlapPercent = 0,
+        )
         fun coverPage(depth: Int): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
             runCatching {
                 pageSource.pages(listOf(uri), width, height, depth, coverOptions).singleOrNull()
@@ -129,7 +132,9 @@ object MihonNooirExporter {
         }.joinToString("").ifBlank { "Manga" }
         val tmp = File(tempFolder, safeTitle + "." + actual.extension)
 
-        fun chapterFrames(depth: Int): Sequence<Pair<Chapter, dev.nooir.bridge.QuantizedPage>> = sequence {
+        fun chapterFrames(
+            depth: Int, archiveLandscape: Boolean = false,
+        ): Sequence<Pair<Chapter, dev.nooir.bridge.QuantizedPage>> = sequence {
             for ((chapterIndex, entry) in locations.withIndex()) {
                 val (chapter, downloaded) = entry
                 ownerJob.ensureActive()
@@ -195,7 +200,11 @@ object MihonNooirExporter {
                         }
                     }
                     require(uris.isNotEmpty()) { "No readable images in " + chapter.name }
-                    for (page in pageSource.pages(uris, width, height, depth, options)) {
+                    // EPUB/CBZ can carry genuinely sideways 800x480 images.
+                    // XTC/XTCH must retain physical panel dimensions 480x800.
+                    val frameWidth = if (archiveLandscape) height else width
+                    val frameHeight = if (archiveLandscape) width else height
+                    for (page in pageSource.pages(uris, frameWidth, frameHeight, depth, options)) {
                         ownerJob.ensureActive()
                         yield(chapter to page)
                     }
@@ -250,7 +259,7 @@ object MihonNooirExporter {
                     val cover = coverPage(2)
                     val stream = sequence {
                         if (cover != null) yield(ArchivePage("Cover", png(cover), cover.width, cover.height))
-                        for ((chapter, page) in chapterFrames(2)) {
+                        for ((chapter, page) in chapterFrames(2, options.orientation == "LANDSCAPE")) {
                             yield(ArchivePage(chapter.name, png(page), page.width, page.height))
                         }
                     }
