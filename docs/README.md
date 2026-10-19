@@ -6,6 +6,7 @@ Choose the walkthrough that matches what you're trying to do:
 
 | Guide | Covers |
 |---|---|
+| **[Project handover — live development status](PROJECT_HANDOVER.md)** | Current branches/PRs/CI, newest 1.0.10 work, known gaps and new-chat continuation instructions |
 | [Getting started](GETTING_STARTED.md) | Choose a build, install the APK, and export a first book |
 | **[Select chapters for export](CHAPTER_SELECTION.md)** | Long-press/tap selection, select-all, normal vs Quick Export, example ranges, common mistakes |
 | [Wi-Fi transfer to XTEink](WIFI_TRANSFER.md) | Same LAN or reader hotspot, IP setup, progress stages, failure troubleshooting |

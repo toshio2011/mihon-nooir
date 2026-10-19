@@ -6,7 +6,7 @@
 
 An independent, experimental Android fork of [Mihon](https://github.com/mihonapp/mihon), with an e-reader conversion workflow inspired by [MangaPoint](https://github.com/W1seGit/MangaPoint) and designed alongside [Folio Nooir](https://github.com/toshio2011/folio-nooir).
 
-[All guides](docs/README.md) · [Choose chapters](docs/CHAPTER_SELECTION.md) · [Getting started](docs/GETTING_STARTED.md) · [Wi-Fi transfer](docs/WIFI_TRANSFER.md) · [FAQ](docs/FAQ.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8) · [Developer handover](docs/PROJECT_HANDOVER.md)
+[All guides](docs/README.md) · [Choose chapters](docs/CHAPTER_SELECTION.md) · [Getting started](docs/GETTING_STARTED.md) · [Wi-Fi transfer](docs/WIFI_TRANSFER.md) · [FAQ](docs/FAQ.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8) · [**Project handover (developers)**](docs/PROJECT_HANDOVER.md) · [Developer handover](docs/PROJECT_HANDOVER.md)
 
 ![Android](https://img.shields.io/badge/platform-Android-informational)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
