@@ -268,6 +268,15 @@ object MihonNooirExporter {
                 onStage("Uploading to XTEink", locations.size, locations.size)
                 NooirUpload.upload(tmp, requireNotNull(deviceHost),
                     requireNotNull(destinationFolder), onUploadProgress)
+                if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
+                    onStage("Syncing synopsis", locations.size, locations.size)
+                    val synced = runCatching {
+                        NooirUpload.updateBookInfo(deviceHost, destinationFolder, tmp.name,
+                            meta.title, meta.author, meta.description)
+                    }.getOrDefault(false)
+                    if (!synced) onStage("Book sent; synopsis sync unavailable",
+                        locations.size, locations.size)
+                }
             }
             ExportResult(pageCount, tmp.length(), actual)
         } finally {
