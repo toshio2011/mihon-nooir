@@ -33,10 +33,37 @@ object NooirUpload {
                 if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) length = cursor.getLong(sizeIndex)
             }
         }
-        val fileLength = length ?: error("Cannot determine file size. Please select a local file.")
-        require(fileLength > 0) { "Selected file is empty" }
         val safeName = sanitizeFileName(filename)
-        return uploadContent(safeName, fileLength, deviceHost, destination) {
+        if (length == null || length!! < 0L) {
+            // Some SAF/cloud providers omit SIZE. Nooir doesn't reliably support
+            // chunked uploads, so spool only these uncommon inputs with a hard cap.
+            val staging = File.createTempFile("manganooir-unknown-size-", ".tmp", context.cacheDir)
+            try {
+                resolver.openInputStream(document)?.use { input ->
+                    staging.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var count = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            count += n
+                            require(count <= 1024L * 1024 * 1024) {
+                                "Cloud file exceeds 1 GB temporary transfer limit"
+                            }
+                            output.write(buffer, 0, n)
+                        }
+                    }
+                } ?: error("Cannot read selected file")
+                require(staging.length() > 0L) { "Selected file is empty" }
+                return uploadContent(safeName, staging.length(), deviceHost, destination) {
+                    staging.inputStream()
+                }
+            } finally {
+                staging.delete()
+            }
+        }
+        require(length!! > 0) { "Selected file is empty" }
+        return uploadContent(safeName, length!!, deviceHost, destination) {
             resolver.openInputStream(document) ?: error("Cannot read selected file")
         }
     }
