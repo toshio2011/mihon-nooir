@@ -133,7 +133,7 @@ Fork updates are separate from official Mihon updates. Regular releases require 
 
 ## Experimental work and next-session handover (20 October 2026)
 
-**Continue development from [the full cross-chat project handover](docs/PROJECT_HANDOVER.md).** It audits all stacked draft PRs through **experimental 1.0.9**, their exact branches, current CI/artifact checks, implemented features, incomplete features, and X4 hardware test requirements.
+**Continue development from [the full cross-chat project handover](docs/PROJECT_HANDOVER.md).** It audits all stacked draft PRs through **experimental 1.0.9**, plus the newer **1.0.10 web-novel and Nooir Tools/Activity Queue branches** that have **not yet passed CI**, their exact source heads, remaining gaps, and X4 hardware test requirements.
 
 The newest [draft PR #15](https://github.com/toshio2011/mihon-nooir/pull/15) includes the earlier experimental previews plus landscape/overlap, Web → reflowable EPUB, PDF → mixed text-and-image EPUB, a lightweight XTEink Device Files browser, and a unified background job queue. Its [1.0.9 CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39332739610) passed. **None of these stacked experimental PRs is merged into main, and physical X4 validation is still outstanding.** Always check newer commits and runs before using this status.
 
