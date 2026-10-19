@@ -63,6 +63,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var destination by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var sendSettings by remember { mutableStateOf(false) }
+    var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
 
     LaunchedEffect(workId) {
         val current = workId ?: return@LaunchedEffect
@@ -73,6 +74,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
         prefs.edit().putString("format", format.name)
             .putString("device", device).putString("host", host.trim())
             .putString("destination", destination.trim()).apply()
+        options.save(prefs)
     }
     fun enqueue(convert: Boolean) {
         if (chosen.isEmpty()) return
@@ -85,6 +87,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 NooirTransferWorker.KEY_FORMAT to format.name,
                 NooirTransferWorker.KEY_DEVICE to device,
                 NooirTransferWorker.KEY_CONVERT to convert,
+                NooirTransferWorker.KEY_OPTIONS to options.token(),
             )).build()
         manager.enqueue(req)
         workId = req.id
@@ -202,6 +205,12 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         label = { Text(option.label) },
                     )
                 }
+                TextButton(onClick = { sendSettings = !sendSettings }) {
+                    Text(if (sendSettings) "Hide conversion settings" else "More conversion settings")
+                }
+                if (sendSettings) {
+                    MangaConversionSettings(options, onChange = { options = it })
+                }
                 Button(enabled = canQueue, onClick = { enqueue(false) }) {
                     Text("Send " + chosen.size + " original file(s)")
                 }
@@ -222,10 +231,6 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         context.startActivity(Intent.createChooser(intent, "Share selected files"))
                     },
                 ) { Text("Share selected with another app or device") }
-                TextButton(onClick = { sendSettings = !sendSettings }) {
-                    Text(if (sendSettings) "Hide conversion help" else "About conversion settings")
-                }
-                if (sendSettings) Text("MangaPoint has many more settings than this preview. We are adding working crop, layout, reading direction and image-enhancement controls in stages, not fake toggles.")
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Back to MangaNooir") } },
