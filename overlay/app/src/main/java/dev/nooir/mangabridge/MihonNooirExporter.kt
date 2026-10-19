@@ -81,8 +81,9 @@ object MihonNooirExporter {
         val meta = ExtendedMetadata(
             title = manga.title, author = manga.author.orEmpty(), artist = manga.artist.orEmpty(),
             description = manga.description.orEmpty(), genres = manga.genre.orEmpty(),
+            language = source.lang.ifBlank { "und" },
             series = manga.title, identifier = "mihon:${manga.source}:${manga.id}",
-            sourceUrl = manga.url,
+            sourceUrl = manga.url.takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
         )
         val sourcePages = AndroidPageSource(context)
         val tmp = File.createTempFile("nooir-mihon-", ".${actual.extension}", context.cacheDir)
