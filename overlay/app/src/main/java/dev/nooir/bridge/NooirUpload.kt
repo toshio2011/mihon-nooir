@@ -12,6 +12,30 @@ import java.util.UUID
  * Plain HTTP is only suitable for a trusted local network.
  */
 object NooirUpload {
+    fun checkConnected(deviceHost: String): String {
+        val uri = URI("http://" + deviceHost.trim())
+        require(uri.scheme == "http" && uri.host != null && uri.rawUserInfo == null &&
+            uri.port == -1 && uri.path.isNullOrEmpty() && uri.rawQuery == null) {
+            "Use only your XTEink IP address or local hostname (e.g. crosspoint.local)"
+        }
+        val conn = (URI("http://" + uri.host + "/api/status").toURL().openConnection() as HttpURLConnection)
+        try {
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 5000
+            conn.readTimeout = 8000
+            check(conn.responseCode == 200) {
+                "Cannot reach Nooir File Transfer (HTTP " + conn.responseCode + "). Enable File Transfer on XTEink."
+            }
+            val status = conn.inputStream.bufferedReader().use { it.readText() }
+            check(status.contains("\"device\"") && status.contains("\"version\"")) {
+                "Connected to host, but it does not appear to be the Nooir file-transfer server"
+            }
+            return status
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     fun upload(file: File, deviceHost: String, destination: String = "/"): String {
         require(file.isFile && file.length() > 0) { "Missing export file" }
         require(destination.startsWith('/') && !destination.contains("..")) { "Invalid folder" }

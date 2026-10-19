@@ -25,7 +25,7 @@ replace_once(vm, "    private val downloadManager: DownloadManager,\n", "    pri
 replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n", '''    val snackbarHostState: SnackbarHostState = SnackbarHostState()
 
     /** Never mutates or deletes Mihon's original downloaded chapters. */
-    fun exportDownloadedToNooir(context: Context, destination: Uri, format: ExportFormat) {
+    fun exportDownloadedToNooir(context: Context, destination: Uri, format: ExportFormat, device: String) {
         val s = successState ?: return
         val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
         val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
@@ -33,50 +33,107 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
             val message = runCatching {
                 require(downloaded.isNotEmpty()) { "Download at least one chapter first" }
                 val result = MihonNooirExporter.export(context, nooirDownloadProvider,
-                    s.manga, s.source, downloaded, destination, format)
-                "Exported ${result.pageCount} pages as ${result.format.extension.uppercase()}"
-            }.getOrElse { "Export failed: ${it.message}" }
+                    s.manga, s.source, downloaded, destination, format, device)
+                "Exported " + result.pageCount + " pages as " + result.format.extension.uppercase()
+            }.getOrElse { "Export failed: " + it.message }
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    fun sendDownloadedToNooir(
+        context: Context, format: ExportFormat, device: String, host: String, folder: String,
+    ) {
+        val s = successState ?: return
+        val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
+        val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
+        viewModelScope.launch {
+            val message = runCatching {
+                require(downloaded.isNotEmpty()) { "Download at least one chapter first" }
+                val result = MihonNooirExporter.sendToDevice(context, nooirDownloadProvider,
+                    s.manga, s.source, downloaded, host, folder, format, device)
+                "Sent " + result.pageCount + " pages to XTEink (" + result.format.extension.uppercase() + ")"
+            }.getOrElse { "XTEink transfer failed: " + it.message }
             snackbarHostState.showSnackbar(message)
         }
     }
 ''')
 
 screen = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaScreen.kt"
-replace_once(screen, "import androidx.compose.foundation.layout.systemBarsPadding\n", "import androidx.compose.foundation.layout.systemBarsPadding\nimport androidx.compose.foundation.layout.Column\nimport androidx.compose.foundation.layout.Row\nimport androidx.compose.material3.TextButton\nimport androidx.compose.material3.Text\nimport androidx.compose.material3.AlertDialog\nimport dev.nooir.bridge.ExportFormat\n")
-replace_once(screen, "        MangaScreen(\n            state = successState,", '''        var nooirFormat by remember { mutableStateOf(ExportFormat.AUTO) }
-        var showExportDialog by remember { mutableStateOf(false) }
-        val nooirSave = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-            if (uri != null) viewModel.exportDownloadedToNooir(context, uri, nooirFormat)
+replace_once(screen, "import androidx.compose.foundation.layout.systemBarsPadding\n",
+    "import androidx.compose.foundation.layout.systemBarsPadding\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.NooirExportDialog\n")
+replace_once(screen, "        MangaScreen(\n            state = successState,", '''        var showNooirExport by remember { mutableStateOf(false) }
+        var nooirSaveFormat by remember { mutableStateOf(ExportFormat.AUTO) }
+        var nooirSaveDevice by remember { mutableStateOf("X4") }
+        val nooirSaveLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/octet-stream")
+        ) { uri ->
+            if (uri != null) viewModel.exportDownloadedToNooir(context, uri, nooirSaveFormat, nooirSaveDevice)
         }
-        if (showExportDialog) {
-            AlertDialog(
-                onDismissRequest = { showExportDialog = false },
-                title = { Text("Export downloaded manga") },
-                text = {
-                    Column {
-                        Text("Original downloads are kept. Select chapters first, or export every downloaded chapter.")
-                        ExportFormat.entries.forEach { choice ->
-                            TextButton(onClick = {
-                                nooirFormat = choice
-                                showExportDialog = false
-                                val actual = choice.resolved("X4")
-                                val filename = successState.manga.title.take(70)
-                                    .map { c -> if (c.isLetterOrDigit() || c == ' ' || c == '-' || c == '_') c else '_' }.joinToString("")
-                                nooirSave.launch("$filename.${actual.extension}")
-                            }) { Text(choice.label + if (choice == ExportFormat.AUTO) " (XTCH for X4)" else "") }
-                        }
-                    }
+        if (showNooirExport) {
+            NooirExportDialog(
+                mangaTitle = successState.manga.title,
+                onDismiss = { showNooirExport = false },
+                onSave = { format, device ->
+                    nooirSaveFormat = format
+                    nooirSaveDevice = device
+                    val filename = successState.manga.title.take(70)
+                        .map { c -> if (c.isLetterOrDigit() || c == ' ' || c == '-' || c == '_') c else '_' }.joinToString("")
+                    nooirSaveLauncher.launch(filename + "." + format.resolved(device).extension)
                 },
-                confirmButton = { TextButton(onClick = { showExportDialog = false }) { Text("Cancel") } },
+                onSend = { format, device, host, folder ->
+                    viewModel.sendDownloadedToNooir(context, format, device, host, folder)
+                },
             )
         }
-        Column {
-            Row {
-                TextButton(onClick = { showExportDialog = true }) { Text("Export to e-reader (XTC / XTCH / EPUB / CBZ)") }
-            }
         MangaScreen(
             state = successState,''')
-replace_once(screen, "            onInvertSelection = viewModel::invertSelection,\n        )", "            onInvertSelection = viewModel::invertSelection,\n        )\n        } // Nooir export controls")
+replace_once(screen, "            onDownloadActionClicked = viewModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },",
+    "            onDownloadActionClicked = viewModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },\n            onExportClicked = { showNooirExport = true },")
+# Inject export into both phone and tablet toolbars, never above the main screen.
+presentation = upstream / "app/src/main/java/eu/kanade/presentation/manga/MangaScreen.kt"
+presentation_text = presentation.read_text()
+for old, new, count in [
+    ("    onDownloadActionClicked: ((DownloadAction) -> Unit)?,",
+     "    onDownloadActionClicked: ((DownloadAction) -> Unit)?,\n    onExportClicked: (() -> Unit)?,", 3),
+    ("            onDownloadActionClicked = onDownloadActionClicked,",
+     "            onDownloadActionClicked = onDownloadActionClicked,\n            onExportClicked = onExportClicked,", 2),
+    ("                onClickDownload = onDownloadActionClicked,",
+     "                onClickDownload = onDownloadActionClicked,\n                onClickExport = onExportClicked,", 2),
+]:
+    actual = presentation_text.count(old)
+    if actual != count:
+        raise RuntimeError(f"Presentation anchor count changed: expected {count}, got {actual}: {old}")
+    presentation_text = presentation_text.replace(old, new)
+presentation.write_text(presentation_text)
+
+toolbar = upstream / "app/src/main/java/eu/kanade/presentation/manga/components/MangaToolbar.kt"
+replace_once(toolbar, "import mihon.icons.materialsymbols.rounded.SelectAll\n",
+    "import mihon.icons.materialsymbols.rounded.SelectAll\nimport mihon.icons.materialsymbols.rounded.Save\n")
+replace_once(toolbar, "    onClickDownload: ((DownloadAction) -> Unit)?,",
+    "    onClickDownload: ((DownloadAction) -> Unit)?,\n    onClickExport: (() -> Unit)?,")
+toolbar_text = toolbar.read_text()
+marker = "                    add(\n                        AppBar.Action(\n                            title = stringResource(MR.strings.action_filter),"
+if toolbar_text.count(marker) != 1:
+    raise RuntimeError("Toolbar filter action moved")
+toolbar_text = toolbar_text.replace(marker, '''                    if (onClickExport != null) {
+                        add(AppBar.Action(title = "Export to XTEink",
+                            icon = MaterialSymbols.Rounded.Save, onClick = onClickExport))
+                    }
+''' + marker)
+marker = "                        return@buildList"
+if toolbar_text.count(marker) != 1:
+    raise RuntimeError("Toolbar selection mode moved")
+toolbar_text = toolbar_text.replace(marker, '''                        if (onClickExport != null) {
+                            add(AppBar.Action(title = "Export selected chapters",
+                                icon = MaterialSymbols.Rounded.Save, onClick = onClickExport))
+                        }
+''' + marker)
+toolbar.write_text(toolbar_text)
+
+# Both the launcher label and the app's UI translation use the same Moko resource.
+i18n = upstream / "i18n/src/commonMain/moko-resources/base/strings.xml"
+replace_once(i18n, '<string name="app_name" translatable="false">Mihon</string>',
+    '<string name="app_name" translatable="false">MangaNooir</string>')
 # Use a separate app identity and independent release versions.
 replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihon"')
 version = (root / "config/version.txt").read_text().strip()

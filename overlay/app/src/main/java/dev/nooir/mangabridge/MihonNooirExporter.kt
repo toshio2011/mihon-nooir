@@ -7,6 +7,8 @@ import dev.nooir.bridge.ExportFormat
 import dev.nooir.bridge.ExtendedMetadata
 import dev.nooir.bridge.ArchivePage
 import dev.nooir.bridge.BookArchiveWriter
+import dev.nooir.bridge.NooirUpload
+import java.util.UUID
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
 import android.graphics.Bitmap
@@ -45,14 +47,26 @@ object MihonNooirExporter {
     data class ExportResult(val pageCount: Int, val fileBytes: Long, val format: ExportFormat)
 
     suspend fun export(
-        context: Context,
-        provider: DownloadProvider,
-        manga: Manga,
-        source: Source,
-        chapters: List<Chapter>,
-        destination: Uri,
-        format: ExportFormat,
+        context: Context, provider: DownloadProvider, manga: Manga, source: Source,
+        chapters: List<Chapter>, destination: Uri, format: ExportFormat,
         device: String = "X4",
+    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device)
+
+    suspend fun sendToDevice(
+        context: Context, provider: DownloadProvider, manga: Manga, source: Source,
+        chapters: List<Chapter>, deviceHost: String, destinationFolder: String,
+        format: ExportFormat, device: String = "X4",
+    ): ExportResult {
+        // Check the Nooir transfer server before spending time processing images.
+        NooirUpload.checkConnected(deviceHost)
+        return renderExport(context, provider, manga, source, chapters,
+            null, deviceHost, destinationFolder, format, device)
+    }
+
+    private suspend fun renderExport(
+        context: Context, provider: DownloadProvider, manga: Manga, source: Source,
+        chapters: List<Chapter>, destination: Uri?, deviceHost: String?,
+        destinationFolder: String?, format: ExportFormat, device: String,
     ): ExportResult = withContext(Dispatchers.IO) {
         require(chapters.isNotEmpty()) { "Select at least one downloaded chapter" }
         val resolved = chapters.sortedWith(compareBy<Chapter> { it.chapterNumber }.thenBy { it.id })
@@ -86,7 +100,13 @@ object MihonNooirExporter {
             sourceUrl = manga.url.takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
         )
         val sourcePages = AndroidPageSource(context)
-        val tmp = File.createTempFile("nooir-mihon-", ".${actual.extension}", context.cacheDir)
+        val tempDir = File(context.cacheDir, "manganooir-transfer-" + UUID.randomUUID()).apply {
+            check(mkdirs()) { "Could not create temp export folder" }
+        }
+        val safeTitle = manga.title.take(70).map { c ->
+            if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-' || c == '_') c else '_'
+        }.joinToString("").ifBlank { "Manga" }
+        val tmp = File(tempDir, safeTitle + "." + actual.extension)
         try {
             val resultCount: Int
             tmp.outputStream().use { stream ->
@@ -122,12 +142,17 @@ object MihonNooirExporter {
                     resultCount = BookArchiveWriter.write(actual, archivePages, stream, meta)
                 }
             }
-            context.contentResolver.openOutputStream(destination, "w")?.use { output ->
-                tmp.inputStream().use { it.copyTo(output, 64 * 1024) }
-            } ?: error("Could not open selected output location")
+            if (destination != null) {
+                context.contentResolver.openOutputStream(destination, "w")?.use { output ->
+                    tmp.inputStream().use { it.copyTo(output, 64 * 1024) }
+                } ?: error("Could not open selected output location")
+            } else {
+                NooirUpload.upload(tmp, requireNotNull(deviceHost), requireNotNull(destinationFolder))
+            }
             ExportResult(resultCount, tmp.length(), actual)
         } finally {
             tmp.delete()
+            tempDir.delete()
         }
     }
 
