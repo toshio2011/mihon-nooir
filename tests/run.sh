@@ -12,3 +12,6 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt
 java -jar "$tmp/formats.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PageSlicePlanner.kt tests/PageSlicePlannerTest.kt -include-runtime -d "$tmp/slicing.jar"
 java -jar "$tmp/slicing.jar"
+
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
+java -jar "$tmp/reflow.jar"
