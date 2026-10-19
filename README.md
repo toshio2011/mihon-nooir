@@ -141,3 +141,16 @@ Troubleshooting: if the UI appears stuck, check Android's persistent transfer no
 Our earlier versions exposed **format and device only**: despite using a grayscale/dithering converter, they did **not** provide MangaPoint's comprehensive per-book settings. MangaPoint's source has Manga/Manhwa/Manhua presets, page layout (paged/webtoon/automatic), reading direction, fixed and automatic margin trimming, sensitivity/padding, spread fit/split/rotate, contrast, auto-levels, dithering algorithms, webtoon segmentation/overlap, portrait/landscape, fit/width/100–300% zoom (tile or crop), optional directional guide arrows and a live before/after preview. Its export workflow also has grouping/splitting options. Those capabilities are **not all implemented** by MangaNooir yet.
 
 The first phone implementation should expose only controls that actually affect rendering; the rest remain tasks in [roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8). Progress for transferring the original is not equivalent to conversion progress; if a conversion has unknown total page count, display a stage/count rather than an invented percentage.
+
+
+### Background behaviour in MangaNooir 1.0.4 preview
+
+- **More → Send & Convert**: selected files form a sequential WorkManager queue. You can press **Back**, switch to another app, or lock the phone. Android's foreground notification gives item count, upload bytes/percent, confirmation, failure and cancellation. Open More → Send & Convert again to inspect or cancel the last transfer.
+- **Export beside manga Download**: XTC, XTCH, EPUB and CBZ conversion / Quick Export and Send are also queued through WorkManager, with saved chapter selections and a foreground notification. The most recent manga export status is shown in More → Send & Convert.
+- For either path, **100% means bytes sent to the XTEink but not yet acknowledged**. Only “Confirmed by XTEink” indicates successful upload. Conversion stages do not have a fake percent.
+- **Convert & save**: choose a folder for a batch of files; converted manga outputs are saved individually and non-manga documents are copied unchanged. This also runs in the background.
+- A system force-stop, severe power or connectivity loss, permissions removed by a provider, or unavailable SD card can stop/fail jobs. WorkManager can restart eligible work after app process recreation but cannot guarantee uninterrupted network transfer; canceled or failed partial outputs should be checked before retrying.
+- **Output settings** shared between manga and file import: Manga/Manhwa/Manhua presets; Auto/Pages/Webtoon; conservative auto white-margin trimming; double-page spread splitting; left-/right-to-left order; contrast (50 neutral); Floyd–Steinberg vs nearest-level grayscale.
+- MangaPoint's manual/fixed margin adjustments, trim sensitivity, custom presets, zoom/tiling, preview, orientation/landscape, guide arrows and sophisticated long-strip planning are **still TODO**, not implemented controls.
+
+**Development status:** feature PR #10 is an experimental change layered on the combined 1.0.3 preview. A green Android build and X4 on-device verification are required before treating it as ready for regular use.
