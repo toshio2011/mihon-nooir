@@ -152,6 +152,34 @@ toolbar.write_text(toolbar_text)
 i18n = upstream / "i18n/src/commonMain/moko-resources/base/strings.xml"
 replace_once(i18n, '<string name="app_name" translatable="false">Mihon</string>',
     '<string name="app_name" translatable="false">MangaNooir</string>')
+# A distinct file workflow is available from More, not only from a manga screen.
+more_tab = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/MoreTab.kt"
+replace_once(more_tab, "import eu.kanade.presentation.more.MoreScreen\n",
+    "import eu.kanade.presentation.more.MoreScreen\nimport dev.nooir.mangabridge.AnyFileTransferDialog\nimport androidx.compose.runtime.remember\nimport androidx.compose.runtime.mutableStateOf\n")
+replace_once(more_tab, "        MoreScreen(\n", '''        var showSendConvert by remember { mutableStateOf(false) }
+        if (showSendConvert) {
+            AnyFileTransferDialog(onDismiss = { showSendConvert = false })
+        }
+        MoreScreen(
+''')
+replace_once(more_tab, "            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },",
+    "            onClickSendConvertFiles = { showSendConvert = true },\n            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },")
+more_screen = upstream / "app/src/main/java/eu/kanade/presentation/more/MoreScreen.kt"
+replace_once(more_screen, "    onClickDownloadQueue: () -> Unit,",
+    "    onClickSendConvertFiles: () -> Unit,\n    onClickDownloadQueue: () -> Unit,")
+replace_once(more_screen, '''            item {
+                val downloadQueueState = downloadQueueStateProvider()''',
+    '''            item {
+                TextPreferenceWidget(
+                    title = "Send & Convert files",
+                    subtitle = "Any phone file, manga conversion or device sharing",
+                    icon = MaterialSymbols.Rounded.Storage,
+                    onPreferenceClick = onClickSendConvertFiles,
+                )
+            }
+            item {
+                val downloadQueueState = downloadQueueStateProvider()''')
+
 # Use a separate app identity and independent release versions.
 replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihon"')
 version = (root / "config/version.txt").read_text().strip()
