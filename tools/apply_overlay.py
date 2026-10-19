@@ -164,11 +164,12 @@ replace_once(app_graph, "    fun inject(downloadWorker: DownloadWorker)\n",
 # A distinct file workflow is available from More, not only from a manga screen.
 more_tab = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/MoreTab.kt"
 replace_once(more_tab, "import eu.kanade.presentation.more.MoreScreen\n",
-    "import eu.kanade.presentation.more.MoreScreen\nimport dev.nooir.mangabridge.AnyFileTransferDialog\nimport dev.nooir.mangabridge.NooirWebToReaderDialog\nimport dev.nooir.mangabridge.NooirPdfToEpubDialog\nimport dev.nooir.mangabridge.NooirDeviceFilesDialog\nimport androidx.compose.runtime.remember\nimport androidx.compose.runtime.mutableStateOf\n")
+    "import eu.kanade.presentation.more.MoreScreen\nimport dev.nooir.mangabridge.AnyFileTransferDialog\nimport dev.nooir.mangabridge.NooirWebToReaderDialog\nimport dev.nooir.mangabridge.NooirPdfToEpubDialog\nimport dev.nooir.mangabridge.NooirDeviceFilesDialog\nimport dev.nooir.mangabridge.NooirNovelBatchDialog\nimport androidx.compose.runtime.remember\nimport androidx.compose.runtime.mutableStateOf\n")
 replace_once(more_tab, "        MoreScreen(\n", '''        var showSendConvert by remember { mutableStateOf(false) }
         var showWebToReader by remember { mutableStateOf(false) }
         var showPdfToEpub by remember { mutableStateOf(false) }
         var showDeviceFiles by remember { mutableStateOf(false) }
+        var showWebNovels by remember { mutableStateOf(false) }
         if (showSendConvert) {
             AnyFileTransferDialog(onDismiss = { showSendConvert = false })
         }
@@ -181,13 +182,16 @@ replace_once(more_tab, "        MoreScreen(\n", '''        var showSendConvert b
         if (showDeviceFiles) {
             NooirDeviceFilesDialog(onDismiss = { showDeviceFiles = false })
         }
+        if (showWebNovels) {
+            NooirNovelBatchDialog(onDismiss = { showWebNovels = false })
+        }
         MoreScreen(
 ''')
 replace_once(more_tab, "            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },",
-    "            onClickSendConvertFiles = { showSendConvert = true },\n            onClickWebToReader = { showWebToReader = true },\n            onClickPdfToEpub = { showPdfToEpub = true },\n            onClickDeviceFiles = { showDeviceFiles = true },\n            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },")
+    "            onClickSendConvertFiles = { showSendConvert = true },\n            onClickWebToReader = { showWebToReader = true },\n            onClickPdfToEpub = { showPdfToEpub = true },\n            onClickDeviceFiles = { showDeviceFiles = true },\n            onClickWebNovels = { showWebNovels = true },\n            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },")
 more_screen = upstream / "app/src/main/java/eu/kanade/presentation/more/MoreScreen.kt"
 replace_once(more_screen, "    onClickDownloadQueue: () -> Unit,",
-    "    onClickSendConvertFiles: () -> Unit,\n    onClickWebToReader: () -> Unit,\n    onClickPdfToEpub: () -> Unit,\n    onClickDeviceFiles: () -> Unit,\n    onClickDownloadQueue: () -> Unit,")
+    "    onClickSendConvertFiles: () -> Unit,\n    onClickWebToReader: () -> Unit,\n    onClickPdfToEpub: () -> Unit,\n    onClickDeviceFiles: () -> Unit,\n    onClickWebNovels: () -> Unit,\n    onClickDownloadQueue: () -> Unit,")
 replace_once(more_screen, '''            item {
                 val downloadQueueState = downloadQueueStateProvider()''',
     '''            item {
@@ -220,6 +224,14 @@ replace_once(more_screen, '''            item {
                     subtitle = "Browse books on the reader without loading its library",
                     icon = MaterialSymbols.Rounded.Storage,
                     onPreferenceClick = onClickDeviceFiles,
+                )
+            }
+            item {
+                TextPreferenceWidget(
+                    title = "Web novels & batch EPUB",
+                    subtitle = "Select public chapters and export multiple stories",
+                    icon = MaterialSymbols.Rounded.Storage,
+                    onPreferenceClick = onClickWebNovels,
                 )
             }
             item {
