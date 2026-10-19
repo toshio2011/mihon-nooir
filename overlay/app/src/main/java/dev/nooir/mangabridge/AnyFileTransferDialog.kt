@@ -55,6 +55,12 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
         )
     }
     var workInfo by remember { mutableStateOf<WorkInfo?>(null) }
+    val mangaWorkId = remember {
+        prefs.getString(NooirMangaExportWorker.PREF_WORK_ID, null)?.let {
+            runCatching { UUID.fromString(it) }.getOrNull()
+        }
+    }
+    var mangaWorkInfo by remember { mutableStateOf<WorkInfo?>(null) }
     var mangaWorkId by remember {
         mutableStateOf(
             prefs.getString(NooirMangaExportWorker.PREF_WORK_ID, null)
@@ -75,6 +81,11 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     LaunchedEffect(workId) {
         val current = workId ?: return@LaunchedEffect
         manager.getWorkInfoByIdFlow(current).collect { workInfo = it }
+    }
+
+    LaunchedEffect(mangaWorkId) {
+        val current = mangaWorkId ?: return@LaunchedEffect
+        manager.getWorkInfoByIdFlow(current).collect { mangaWorkInfo = it }
     }
 
     LaunchedEffect(mangaWorkId) {
@@ -227,6 +238,36 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         } else {
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             Text("Preparing/converting: chapter progress, not a byte percentage")
+                        }
+                        TextButton(onClick = { mangaWorkId?.let(manager::cancelWorkById) }) {
+                            Text("Cancel manga export")
+                        }
+                    }
+                }
+                mangaWorkInfo?.let { manga ->
+                    val active = manga.state == WorkInfo.State.ENQUEUED || manga.state == WorkInfo.State.RUNNING
+                    val stage = manga.progress.getString(NooirMangaExportWorker.KEY_STAGE).orEmpty()
+                    val index = manga.progress.getInt(NooirMangaExportWorker.KEY_CHAPTER, 0)
+                    val chapters = manga.progress.getInt(NooirMangaExportWorker.KEY_CHAPTERS, 0)
+                    val pct = manga.progress.getInt(NooirMangaExportWorker.KEY_PERCENT, -1)
+                    Text("Manga export: " + when (manga.state) {
+                        WorkInfo.State.SUCCEEDED -> "Completed successfully"
+                        WorkInfo.State.FAILED -> "Failed: " +
+                            manga.outputData.getString(NooirMangaExportWorker.KEY_ERROR).orEmpty()
+                        WorkInfo.State.CANCELLED -> "Cancelled"
+                        else -> stage.ifBlank { "Queued / preparing" } +
+                            if (chapters > 0) " · chapter " + index + "/" + chapters else ""
+                    })
+                    if (active) {
+                        if (pct >= 0) {
+                            LinearProgressIndicator(
+                                progress = { pct.coerceIn(0, 100) / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(pct.toString() + "% sent · waiting for XTEink to confirm at 100%")
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text("Converting chapters; total pages may not be known yet")
                         }
                         TextButton(onClick = { mangaWorkId?.let(manager::cancelWorkById) }) {
                             Text("Cancel manga export")
