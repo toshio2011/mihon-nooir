@@ -66,7 +66,7 @@ object NooirPdfToEpub {
                             // PDImageXObject may cache and reuse this Bitmap; do NOT
                             // recycle it. Store only a bounded JPEG rather than
                             // keeping dozens of native bitmaps alive per page.
-                            val jpeg = encoded(bitmap)
+                            val jpeg = NooirPdfToEpub.encoded(bitmap)
                             val coversPage = abs(ctm.scaleX) > pageHeight * 0.75f &&
                                 abs(ctm.scaleY) > pageHeight * 0.75f
                             if (jpeg.size <= 6 * 1024 * 1024) {
