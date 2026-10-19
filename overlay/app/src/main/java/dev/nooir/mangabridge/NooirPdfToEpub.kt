@@ -37,7 +37,7 @@ object NooirPdfToEpub {
         val vectorMarks: Int, val hadImageErrors: Boolean)
 
     /** One PDF page's positioned text/image blocks, using the native PDF text layer. */
-    private class PageCollector(private val pageHeight: Float) : PDFTextStripper() {
+    private class PageCollector(private val pageWidth: Float, private val pageHeight: Float) : PDFTextStripper() {
         val lines = mutableListOf<WordLine>()
         val pictures = mutableListOf<PlacedImage>()
         var vectorMarks: Int = 0
@@ -67,7 +67,7 @@ object NooirPdfToEpub {
                             // recycle it. Store only a bounded JPEG rather than
                             // keeping dozens of native bitmaps alive per page.
                             val jpeg = NooirPdfToEpub.encoded(bitmap)
-                            val coversPage = abs(ctm.scaleX) > pageHeight * 0.75f &&
+                            val coversPage = abs(ctm.scaleX) > pageWidth * 0.75f &&
                                 abs(ctm.scaleY) > pageHeight * 0.75f
                             if (jpeg.size <= 6 * 1024 * 1024) {
                                 pictures += PlacedImage(top, jpeg, coversPage)
@@ -113,6 +113,7 @@ object NooirPdfToEpub {
     fun convert(
         context: Context, pdf: File, output: File,
         mode: Mode = Mode.MIXED,
+        titleHint: String? = null,
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ) {
         require(pdf.isFile && pdf.length() in 1..(100L * 1024 * 1024)) {
@@ -125,7 +126,8 @@ object NooirPdfToEpub {
             require(total in 1..600) { "PDF page count must be between 1 and 600" }
             val info = book.documentInformation
             val title = info.title?.takeIf { it.isNotBlank() }
-                ?: pdf.nameWithoutExtension.ifBlank { "Imported PDF" }
+                ?: titleHint?.substringBeforeLast('.', titleHint).orEmpty()
+                    .ifBlank { pdf.nameWithoutExtension.ifBlank { "Imported PDF" } }
             val author = info.author.orEmpty()
             ParcelFileDescriptor.open(pdf, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
                 PdfRenderer(fd).use { renderer ->
@@ -135,7 +137,7 @@ object NooirPdfToEpub {
                             onPage(index + 1, total, "Inspecting text and figures")
                             val page = book.getPage(index)
                             val text = if (mode == Mode.MIXED) runCatching {
-                                val collector = PageCollector(page.cropBox.height)
+                                val collector = PageCollector(page.cropBox.width, page.cropBox.height)
                                 collector.startPage = index + 1
                                 collector.endPage = index + 1
                                 collector.getText(book)
@@ -147,7 +149,7 @@ object NooirPdfToEpub {
                             // For pages with extensive vector graphics or failed image
                             // decoding, preserve the whole page rather than dropping a
                             // floor plan or diagram. Other pages can still reflow.
-                            val fallback = !enoughText || text!!.vectorMarks >= 65 ||
+                            val fallback = !enoughText || text!!.vectorMarks >= 12 ||
                                 text.hadImageErrors ||
                                 text.pictures.any { it.coversPage }
                             val sectionTitle = "Page " + (index + 1)
@@ -190,6 +192,9 @@ object NooirPdfToEpub {
                                 }
                                 val body = blocks.sortedBy { it.first }.joinToString("\n") { it.second }
                                 epub.addSection(sectionTitle, body)
+                            }
+                            require(output.length() < 300L * 1024 * 1024) {
+                                "Generated EPUB is larger than 300 MiB; split the PDF into smaller sections"
                             }
                             onPage(index + 1, total, "Added to EPUB")
                         }
