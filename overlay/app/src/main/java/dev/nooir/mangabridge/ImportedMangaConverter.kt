@@ -155,6 +155,14 @@ object ImportedMangaConverter {
                 NooirUpload.checkConnected(requireNotNull(sendHost))
                 onStage("Uploading")
                 NooirUpload.upload(output, sendHost, sendFolder, onUploadProgress)
+                if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
+                    onStage("Syncing synopsis")
+                    val synced = runCatching {
+                        NooirUpload.updateBookInfo(sendHost, sendFolder, output.name,
+                            metadata.title, metadata.author, metadata.description)
+                    }.getOrDefault(false)
+                    if (!synced) onStage("Book sent; synopsis sync unavailable")
+                }
             }
             Result(count, actual)
         } finally {
