@@ -15,12 +15,16 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import java.io.ByteArrayOutputStream
 import eu.kanade.tachiyomi.data.download.DownloadProvider
+import eu.kanade.domain.chapter.model.toSChapter
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
 import java.io.File
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 
 /** Export chapters already downloaded by Mihon, using its own storage abstraction.
  *  No Suwayomi server, storage permission, or access to another app's private data.
@@ -49,31 +53,74 @@ object MihonNooirExporter {
     suspend fun export(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, destination: Uri, format: ExportFormat,
-        device: String = "X4",
-    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device)
+        device: String = "X4", quickExport: Boolean = false,
+    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device, quickExport)
 
     suspend fun sendToDevice(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, deviceHost: String, destinationFolder: String,
-        format: ExportFormat, device: String = "X4",
+        format: ExportFormat, device: String = "X4", quickExport: Boolean = false,
     ): ExportResult {
         // Check the Nooir transfer server before spending time processing images.
         withContext(Dispatchers.IO) { NooirUpload.checkConnected(deviceHost) }
         return renderExport(context, provider, manga, source, chapters,
-            null, deviceHost, destinationFolder, format, device)
+            null, deviceHost, destinationFolder, format, device, quickExport)
     }
 
     private suspend fun renderExport(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, destination: Uri?, deviceHost: String?,
         destinationFolder: String?, format: ExportFormat, device: String,
+        quickExport: Boolean,
     ): ExportResult = withContext(Dispatchers.IO) {
-        require(chapters.isNotEmpty()) { "Select at least one downloaded chapter" }
+        require(chapters.isNotEmpty()) { "Select at least one chapter" }
+        if (quickExport) require(chapters.size <= 5) { "Quick Export allows up to 5 chapters" }
+        val quickDir = if (quickExport) File(context.cacheDir, "nooir-quick-" + UUID.randomUUID()).apply {
+            check(mkdirs()) { "Cannot create Quick Export cache" }
+        } else null
+        var quickPages = 0
+        var quickBytes = 0L
+        try {
         val resolved = chapters.sortedWith(compareBy<Chapter> { it.chapterNumber }.thenBy { it.id })
             .map { chapter ->
                 val location = provider.findChapterDir(chapter.name, chapter.scanlator, chapter.url, manga.title, source)
-                    ?: error("Chapter is not downloaded: ${chapter.name}")
-                val uris: List<Uri> = if (location.isFile) {
+                val uris: List<Uri> = if (location == null) {
+                    check(quickExport && source is HttpSource) {
+                        "Chapter is not downloaded: ${chapter.name}. Enable Quick Export for online chapters."
+                    }
+                    val pages = source.getPageList(chapter.toSChapter())
+                    require(pages.isNotEmpty()) { "No pages returned for ${chapter.name}" }
+                    quickPages += pages.size
+                    require(quickPages <= 250) { "Quick Export limit: 250 remote pages per job" }
+                    val folder = File(requireNotNull(quickDir), "chapter-" + chapter.id).apply {
+                        check(mkdirs()) { "Cannot create chapter cache" }
+                    }
+                    pages.mapIndexed { index, page ->
+                        coroutineContext.ensureActive()
+                        if (page.imageUrl.isNullOrBlank()) page.imageUrl = source.getImageUrl(page)
+                        val out = File(folder, "%04d.img".format(index))
+                        source.getImage(page).use { response ->
+                            check(response.isSuccessful) { "Image request HTTP ${response.code} failed in ${chapter.name}" }
+                            response.body.byteStream().use { input ->
+                                out.outputStream().use { target ->
+                                    val buffer = ByteArray(32 * 1024)
+                                    var perImage = 0L
+                                    while (true) {
+                                        coroutineContext.ensureActive()
+                                        val n = input.read(buffer)
+                                        if (n < 0) break
+                                        perImage += n
+                                        quickBytes += n
+                                        require(perImage <= 25L * 1024 * 1024) { "Image exceeds 25 MB limit" }
+                                        require(quickBytes <= 250L * 1024 * 1024) { "Quick Export exceeds 250 MB limit" }
+                                        target.write(buffer, 0, n)
+                                    }
+                                }
+                            }
+                        }
+                        Uri.fromFile(out)
+                    }
+                } else if (location.isFile) {
                     require(location.name?.endsWith(".cbz", ignoreCase = true) == true) {
                         "Unsupported chapter archive: ${location.name}"
                     }
@@ -153,6 +200,9 @@ object MihonNooirExporter {
         } finally {
             tmp.delete()
             tempDir.delete()
+        }
+        } finally {
+            quickDir?.deleteRecursively()
         }
     }
 
