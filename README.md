@@ -118,3 +118,26 @@ Includes both PR #6 (Quick Export) and PR #7 (any-file Send & Convert); APK buil
 8. Record source-extension failures, memory/storage warnings, incorrect image ordering, missing metadata, or transfer errors for follow-up fixes.
 
 This checklist needs a user/device run: Android GitHub Actions cannot establish a real Wi-Fi connection to the physical X4.
+
+
+## Send files from Android to Folio Nooir (XTEink X3/X4)
+
+This workflow uses the **local network** and the Nooir HTTP file-transfer server, not Bluetooth. The reader's server has **no password**: use only a trusted home Wi-Fi or the temporary XTEink hotspot, and leave File Transfer mode when finished.
+
+1. On XTEink choose **Home → File Transfer → Join Network**, join your home 2.4-GHz Wi-Fi. Your phone must be on the **same home network** (it may use the router's 5-GHz band if local devices can see each other).
+2. Keep the reader's File Transfer screen visible. It displays a URL, for example \`http://192.168.1.102/\`, and often \`http://crosspoint.local/\`. Your IP will be different.
+3. On your phone open **Chrome**, browse to the XTEink's displayed URL, and confirm you see the file manager. If Chrome can't reach it, fix the Wi-Fi first; try the displayed IP instead of \`crosspoint.local\`, disable VPN, and check router client isolation.
+4. In **MangaNooir → More → Send & Convert files**, choose one or several local documents. Enter **only the IP/hostname** from the reader (e.g., \`192.168.1.102\`, not \`http://...\`) and an existing destination folder (use \`/\` to send to the root, or \`/Books\` if it exists).
+5. **Send originals** preserves the selected files unchanged; **Convert & send manga** converts supported image/CBZ inputs before transfer. Unsupported formats can be sent unchanged, but the reader may not be able to open them.
+6. A transfer notification and progress details should appear in builds with the background queue. **100% sent** means Android finished sending bytes; wait for **XTEink confirmed** before treating it as completed.
+7. Look for the uploaded files on the reader (file manager/library). Existing filenames in the destination may be overwritten—check before starting.
+
+No router? Choose **File Transfer → Create Hotspot** on your XTEink, connect the phone to \`CrossPoint-Reader\`, and use the address printed on the reader (often \`192.168.4.1\`). Android may report “Connected without internet”; stay connected. The hotspot is **open**, so switch it off when finished.
+
+Troubleshooting: if the UI appears stuck, check Android's persistent transfer notification for progress; wait for the receiver's acknowledgement; verify reader battery, SD-card space, Wi-Fi range, and destination folder. If the reader cannot be reached from Chrome, the app cannot reach it either. Transfer support: [Nooir web server](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md) and [HTTP upload API](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver-endpoints.md).
+
+## MangaPoint conversion settings audit
+
+Our earlier versions exposed **format and device only**: despite using a grayscale/dithering converter, they did **not** provide MangaPoint's comprehensive per-book settings. MangaPoint's source has Manga/Manhwa/Manhua presets, page layout (paged/webtoon/automatic), reading direction, fixed and automatic margin trimming, sensitivity/padding, spread fit/split/rotate, contrast, auto-levels, dithering algorithms, webtoon segmentation/overlap, portrait/landscape, fit/width/100–300% zoom (tile or crop), optional directional guide arrows and a live before/after preview. Its export workflow also has grouping/splitting options. Those capabilities are **not all implemented** by MangaNooir yet.
+
+The first phone implementation should expose only controls that actually affect rendering; the rest remain tasks in [roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8). Progress for transferring the original is not equivalent to conversion progress; if a conversion has unknown total page count, display a stage/count rather than an invented percentage.
