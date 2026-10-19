@@ -73,15 +73,31 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('onClickExport = onExportClicked', (presentation/'MangaScreen.kt').read_text())
             self.assertIn('Export to XTEink', (components/'MangaToolbar.kt').read_text())
             self.assertIn('MangaNooir', (strings/'strings.xml').read_text())
-            self.assertIn('AnyFileTransferDialog', (moretab/'MoreTab.kt').read_text())
-            self.assertIn('NooirWebToReaderDialog', (moretab/'MoreTab.kt').read_text())
-            self.assertIn('Web to E-reader', (morescreen/'MoreScreen.kt').read_text())
-            self.assertIn('PDF to EPUB', (morescreen/'MoreScreen.kt').read_text())
-            self.assertIn('NooirPdfToEpubDialog', (moretab/'MoreTab.kt').read_text())
-            self.assertIn('NooirDeviceFilesDialog', (moretab/'MoreTab.kt').read_text())
-            self.assertIn('XTEink Device Files', (morescreen/'MoreScreen.kt').read_text())
-            self.assertIn('Web novels & batch EPUB', (morescreen/'MoreScreen.kt').read_text())
-            self.assertIn('NooirNovelBatchDialog', (moretab/'MoreTab.kt').read_text())
+            # The hub replaces scattered More entries without hiding any tools.
+            more_tab_text = (moretab/'MoreTab.kt').read_text()
+            more_screen_text = (morescreen/'MoreScreen.kt').read_text()
+            hub = (root/'app/src/main/java/dev/nooir/mangabridge/NooirToolsHubDialog.kt')
+            queue = (root/'app/src/main/java/dev/nooir/mangabridge/NooirActivityQueueDialog.kt')
+            self.assertTrue(hub.exists())
+            self.assertTrue(queue.exists())
+            self.assertIn('NooirToolsHubDialog', more_tab_text)
+            self.assertIn('onClickNooirTools', more_tab_text)
+            self.assertEqual(more_screen_text.count('title = "Nooir Tools"'), 1)
+            self.assertIn('onClickNooirTools', more_screen_text)
+            for dialog in (
+                'NooirActivityQueueDialog',
+                'AnyFileTransferDialog',
+                'NooirWebToReaderDialog',
+                'NooirNovelBatchDialog',
+                'NooirPdfToEpubDialog',
+                'NooirDeviceFilesDialog',
+            ):
+                self.assertIn(dialog, hub.read_text(), dialog)
+            self.assertIn('getWorkInfosForUniqueWorkFlow', queue.read_text())
+            self.assertIn('cancelUniqueWork(NooirDeviceWorkQueue.NAME)', queue.read_text())
+            self.assertIn('Cancel entire Nooir queue', queue.read_text())
+            # Mihon's native download queue stays present.
+            self.assertIn('onClickDownloadQueue', more_screen_text)
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirWebNovel.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirNovelBatchWorker.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirDeviceFileClient.kt').exists())
@@ -90,7 +106,6 @@ class TestOverlay(unittest.TestCase):
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirPdfExportWorker.kt').exists())
             self.assertIn('pdfbox-android', (app/'build.gradle.kts').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirWebExportWorker.kt').exists())
-            self.assertIn('Send & Convert files', (morescreen/'MoreScreen.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/ImportedMangaConverter.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/AnyFileTransferDialog.kt').exists())
             self.assertNotIn('chapters.size <= 5', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
