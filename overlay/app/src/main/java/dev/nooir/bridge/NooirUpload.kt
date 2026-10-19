@@ -21,6 +21,9 @@ object NooirUpload {
     /** Send *any* SAF document without copying large files to app storage.
      * The receiver determines whether it can display/open the file.
      */
+    /** Conservative default for the ESP32 HTTP/SD path: don't start giant single-file transfers. */
+    private const val MAX_SAFE_UPLOAD_BYTES = 180L * 1024 * 1024
+
     fun uploadDocument(
         context: Context, document: Uri, deviceHost: String, destination: String = "/Books",
         onProgress: (Long, Long) -> Unit = { _, _ -> },
@@ -37,6 +40,9 @@ object NooirUpload {
             }
         }
         val safeName = sanitizeFileName(filename)
+        if (length != null && length!! > MAX_SAFE_UPLOAD_BYTES) {
+            error("File is over 180 MB. Split it into smaller files for reliable XTEink transfer.")
+        }
         if (length == null || length!! < 0L) {
             // Some SAF/cloud providers omit SIZE. Nooir doesn't reliably support
             // chunked uploads, so spool only these uncommon inputs with a hard cap.
@@ -50,8 +56,8 @@ object NooirUpload {
                             val n = input.read(buffer)
                             if (n < 0) break
                             count += n
-                            require(count <= 1024L * 1024 * 1024) {
-                                "Cloud file exceeds 1 GB temporary transfer limit"
+                            require(count <= MAX_SAFE_UPLOAD_BYTES) {
+                                "Cloud file exceeds 180 MB safe transfer limit"
                             }
                             output.write(buffer, 0, n)
                         }
@@ -88,6 +94,9 @@ object NooirUpload {
         onProgress: (Long, Long) -> Unit,
         open: () -> InputStream,
     ): String {
+        require(fileLength in 1..MAX_SAFE_UPLOAD_BYTES) {
+            "File is over 180 MB. Split it into smaller files before sending to XTEink."
+        }
         require(destination.startsWith("/") && !destination.contains("..")) { "Invalid destination folder" }
         val uri = URI("http://" + deviceHost.trim())
         require(uri.scheme == "http" && uri.host != null && uri.port == -1 &&
@@ -167,6 +176,7 @@ object NooirUpload {
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): String {
         require(file.isFile && file.length() > 0) { "Missing export file" }
+        require(file.length() <= MAX_SAFE_UPLOAD_BYTES) { "Manga is over 180 MB; export fewer chapters per file." }
         require(file.name.matches(Regex("[A-Za-z0-9_.() -]{1,160}\\.(xtc|xtch|epub|cbz)", RegexOption.IGNORE_CASE))) {
             "Unsupported manga output name"
         }
