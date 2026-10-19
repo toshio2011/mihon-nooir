@@ -123,7 +123,7 @@ fun NooirExportDialog(
                     label = { Text("Destination folder") },
                     singleLine = true,
                 )
-                Text("Start File Transfer on Nooir and connect both devices to the same Wi-Fi. Sending to an existing filename replaces it. Original Mihon downloads are kept.")
+                Text("Start File Transfer on Nooir and connect both devices to the same Wi-Fi. Existing filenames are rejected by Nooir: rename or choose another folder. Original Mihon downloads are kept.")
             }
         },
         confirmButton = {
