@@ -77,3 +77,10 @@ The launcher and localized app name are now **MangaNooir**, distinct from Mihon.
 The export dialog remembers format (Auto/XTC/XTCH/EPUB/CBZ), X4/X3 device preset, hostname/IP, and folder. **Save file** uses Android's file picker. **Send to XTEink** probes Nooir's `GET /api/status`, creates the export in temporary app storage, then uploads with multipart `POST /upload?path=/Books`. Keep your XTEink in Nooir's File Transfer mode and phone on the same Wi-Fi. Sending to the same name overwrites the previous file on the device.
 
 As with the earlier build, sources and metadata are retained in Mihon; format conversion remains non-destructive. **Direct transfer still requires on-device hardware testing.** Page crop, contrast, dithering settings, upload progress, and download-time format selection remain future milestones.
+
+
+## Quick Export (experimental, source fetch without saving to Mihon)
+
+Enable **Quick Export** in the MangaNooir export dialog after selecting **1–5 chapters**. It uses any chapters already downloaded in Mihon, and fetches missing pages through the installed manga source's own page-list and image APIs. These missing pages are placed only in a temporary private cache and cleaned up on completion or failure. A successful result is saved as XTC/XTCH/EPUB/CBZ or transferred to XTEink.
+
+Safety limits: 5 chapters, 250 remote pages, 25 MB per page, and 250 MB remote cache. No permanent Mihon download is created. Network access and an installed functioning online source extension are required. Some sources can block fetching or require authentication. Full chapter-by-chapter progress, pause/resume, and remote source reliability still need device testing.
