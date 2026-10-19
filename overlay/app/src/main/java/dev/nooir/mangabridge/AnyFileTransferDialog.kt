@@ -1,6 +1,7 @@
 package dev.nooir.mangabridge
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,10 +15,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,22 +29,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import dev.nooir.bridge.ExportFormat
-import dev.nooir.bridge.NooirUpload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
-/** More -> Send & Convert files. User-selected SAF documents only; no storage scanning. */
+/** More -> Send & Convert files, with multi-selection and durable background work. */
 @Composable
 fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
-    var pickedUri by remember { mutableStateOf<Uri?>(null) }
-    var selected by remember { mutableStateOf<ImportedMangaConverter.SelectedFile?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("") }
+    val manager = remember { WorkManager.getInstance(context) }
+    var chosen by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var displayNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var message by remember { mutableStateOf("") }
+    var workId by remember {
+        mutableStateOf(
+            prefs.getString("last_transfer_work", null)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        )
+    }
+    var workInfo by remember { mutableStateOf<WorkInfo?>(null) }
     var format by remember {
         mutableStateOf(runCatching { ExportFormat.valueOf(prefs.getString("format", "AUTO")!!) }
             .getOrDefault(ExportFormat.AUTO))
@@ -49,154 +62,172 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     var device by remember { mutableStateOf(prefs.getString("device", "X4") ?: "X4") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var destination by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
+    var sendSettings by remember { mutableStateOf(false) }
 
-    fun persistSettings() {
-        prefs.edit().putString("format", format.name).putString("device", device)
-            .putString("host", host.trim()).putString("destination", destination.trim()).apply()
+    LaunchedEffect(workId) {
+        val current = workId ?: return@LaunchedEffect
+        manager.getWorkInfoByIdFlow(current).collect { workInfo = it }
     }
 
-    fun conversion(destinationUri: Uri?, sendToNooir: Boolean) {
-        val uri = pickedUri ?: return
-        val file = selected ?: return
-        if (!file.isManga || busy) return
-        persistSettings()
-        busy = true
-        status = "Converting manga…"
-        scope.launch {
-            status = try {
-                val result = ImportedMangaConverter.convert(
-                    context, uri, file, format, device,
-                    saveDestination = destinationUri,
-                    sendHost = if (sendToNooir) host.trim() else null,
-                    sendFolder = destination.trim(),
-                )
-                if (sendToNooir) "Sent " + result.pages + " pages to Nooir as " + result.format.extension.uppercase() + "."
-                else "Saved " + result.pages + " pages as " + result.format.extension.uppercase() + "."
-            } catch (e: Exception) {
-                "Conversion failed: " + (e.message ?: "Unknown error")
-            } finally {
-                busy = false
-            }
-        }
+    fun persist() {
+        prefs.edit().putString("format", format.name)
+            .putString("device", device).putString("host", host.trim())
+            .putString("destination", destination.trim()).apply()
+    }
+    fun enqueue(convert: Boolean) {
+        if (chosen.isEmpty()) return
+        persist()
+        val req = OneTimeWorkRequestBuilder<NooirTransferWorker>()
+            .setInputData(workDataOf(
+                NooirTransferWorker.KEY_URIS to chosen.map(Uri::toString).toTypedArray(),
+                NooirTransferWorker.KEY_HOST to host.trim(),
+                NooirTransferWorker.KEY_FOLDER to destination.trim(),
+                NooirTransferWorker.KEY_FORMAT to format.name,
+                NooirTransferWorker.KEY_DEVICE to device,
+                NooirTransferWorker.KEY_CONVERT to convert,
+            )).build()
+        manager.enqueue(req)
+        workId = req.id
+        workInfo = null
+        prefs.edit().putString("last_transfer_work", req.id.toString()).apply()
+        message = "Queued " + chosen.size + " file(s). You may press Back; the transfer continues."
     }
 
-    val saveConverted = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/octet-stream"),
-    ) { output ->
-        if (output != null) conversion(output, false)
-    }
-    val chooseFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked ->
-        if (picked != null) {
-            pickedUri = picked
-            selected = null
-            status = "Inspecting selected file…"
-            busy = true
-            scope.launch {
-                try {
-                    selected = withContext(Dispatchers.IO) { ImportedMangaConverter.inspect(context, picked) }
-                    status = when (selected?.kind) {
-                        ImportedMangaConverter.Kind.COMIC_ARCHIVE -> "Manga archive detected — conversion available."
-                        ImportedMangaConverter.Kind.IMAGE -> "Manga image detected — conversion available."
-                        else -> "Send original or share this file. Conversion is not available for this format."
+    val choose = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { files ->
+        if (files.isNotEmpty()) {
+            if (files.size > 25) {
+                message = "Select at most 25 files per batch for now."
+            } else {
+                chosen = files
+                files.forEach { file ->
+                    try {
+                        context.contentResolver.takePersistableUriPermission(
+                            file, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: SecurityException) {
+                        // Some providers don't offer persistent access; report if worker can't read it.
                     }
-                } catch (e: Exception) {
-                    status = "Cannot inspect file: " + e.message
-                    selected = null
-                } finally {
-                    busy = false
                 }
+                displayNames = files.map { file ->
+                    context.contentResolver.query(file, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    } ?: (file.lastPathSegment ?: "Document")
+                }
+                message = "Selected " + files.size + " file(s)."
             }
         }
     }
-    val validReceiver = host.isNotBlank() && destination.startsWith("/") && !destination.contains("..")
-    val name = selected?.name?.substringBeforeLast('.', selected?.name.orEmpty())
-        ?.take(64)?.map { c -> if ((c.isLetterOrDigit() && c.code < 128) || c == '-' || c == '_') c else '_' }
-        ?.joinToString("")?.ifBlank { "Manga" } ?: "Manga"
+    val valid = host.trim().isNotEmpty() && !host.contains('/') &&
+        destination.startsWith("/") && !destination.contains("..")
+    val running = workInfo?.state == WorkInfo.State.RUNNING || workInfo?.state == WorkInfo.State.ENQUEUED
+    val canQueue = chosen.isNotEmpty() && valid && !running
+    val progress = workInfo?.progress
+    val phase = progress?.getString(NooirTransferWorker.KEY_PHASE).orEmpty()
+    val item = progress?.getInt(NooirTransferWorker.KEY_INDEX, 0) ?: 0
+    val count = progress?.getInt(NooirTransferWorker.KEY_COUNT, 0) ?: 0
+    val percent = progress?.getInt(NooirTransferWorker.KEY_PERCENT, -1) ?: -1
+    val sent = progress?.getLong(NooirTransferWorker.KEY_SENT, 0) ?: 0
+    val bytes = progress?.getLong(NooirTransferWorker.KEY_TOTAL_BYTES, 0) ?: 0
 
     AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
+        onDismissRequest = onDismiss,
         title = { Text("Send & Convert files") },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(9.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = { chooseFile.launch(arrayOf("*/*")) }, enabled = !busy) {
-                    Text(if (selected == null) "Choose a file from phone" else "Choose another file")
+                Button(onClick = { choose.launch(arrayOf("*/*")) }) {
+                    Text("Choose multiple files")
                 }
-                selected?.let { file ->
-                    Text("Selected: " + file.name)
-                    file.bytes?.let { Text("Size: " + it / 1024 + " KB") }
+                if (displayNames.isNotEmpty()) {
+                    Text("Selected " + displayNames.size + " file(s):")
+                    displayNames.take(5).forEach { Text("• " + it, maxLines = 1) }
+                    if (displayNames.size > 5) Text("…and " + (displayNames.size - 5) + " more")
                 }
-                if (status.isNotBlank()) Text(status)
-                Text("Receiver (Folio Nooir)")
+                if (message.isNotBlank()) Text(message)
+                if (workInfo != null) {
+                    Text("Transfer: " + when (workInfo?.state) {
+                        WorkInfo.State.SUCCEEDED -> "Complete · XTEink confirmed"
+                        WorkInfo.State.FAILED -> "Failed: " + workInfo?.outputData
+                            ?.getString(NooirTransferWorker.KEY_ERROR).orEmpty()
+                        WorkInfo.State.CANCELLED -> "Cancelled"
+                        else -> if (count > 0) "File " + item + "/" + count + " · " + phase
+                            else "Queued or connecting…"
+                    })
+                    if (running) {
+                        if (percent >= 0) {
+                            LinearProgressIndicator(
+                                progress = { percent.coerceIn(0, 100) / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(percent.toString() + "% · " + (sent / 1024) + "/" + (bytes / 1024) + " KB sent")
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text("Preparing / converting. No accurate percentage available yet.")
+                        }
+                        TextButton(onClick = { workId?.let(manager::cancelWorkById) }) {
+                            Text("Cancel transfer")
+                        }
+                        Text("You can press Back or switch apps. The transfer continues in the background.")
+                    }
+                }
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
                     label = { Text("XTEink hostname or IP") },
                     singleLine = true,
-                    supportingText = { Text("Start File Transfer on your XTEink. Both devices need the same Wi-Fi.") },
+                    supportingText = { Text("Same trusted Wi-Fi. Example: 192.168.1.102 (without http://)") },
                 )
                 OutlinedTextField(
                     value = destination,
                     onValueChange = { destination = it },
-                    label = { Text("Device folder") },
+                    label = { Text("Destination folder on XTEink") },
                     singleLine = true,
+                    supportingText = { Text("Use / if no Books folder exists.") },
                 )
-                Button(
-                    enabled = !busy && selected != null && validReceiver,
-                    onClick = {
-                        val uri = pickedUri ?: return@Button
-                        persistSettings()
-                        busy = true
-                        status = "Sending original file…"
-                        scope.launch {
-                            status = try {
-                                withContext(Dispatchers.IO) {
-                                    NooirUpload.checkConnected(host.trim())
-                                    NooirUpload.uploadDocument(context, uri, host.trim(), destination.trim())
-                                }
-                                "Original file transferred. The receiver may not support opening this format."
-                            } catch (e: Exception) {
-                                "Transfer failed: " + (e.message ?: "Unknown error")
-                            } finally { busy = false }
-                        }
-                    },
-                ) { Text("Send original to XTEink") }
-                TextButton(
-                    enabled = !busy && pickedUri != null,
-                    onClick = { pickedUri?.let { ImportedMangaConverter.shareOriginal(context, it) } },
-                ) { Text("Share original to other device/app") }
-
-                if (selected?.isManga == true) {
-                    Text("Manga detected — convert before sending")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("X4", "X3").forEach { preset ->
-                            FilterChip(selected = device == preset, onClick = { device = preset }, label = { Text(preset) })
-                        }
+                Text("Device")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("X4", "X3").forEach { name ->
+                        FilterChip(selected = device == name,
+                            onClick = { device = name }, label = { Text(name) })
                     }
-                    ExportFormat.entries.forEach { option ->
-                        FilterChip(
-                            selected = format == option,
-                            onClick = { format = option },
-                            label = { Text(option.label) },
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(enabled = !busy, onClick = {
-                            saveConverted.launch(name + "." + format.resolved(device).extension)
-                        }) { Text("Convert & save") }
-                        Button(enabled = !busy && validReceiver, onClick = { conversion(null, true) }) {
-                            Text("Convert & send")
-                        }
-                    }
-                    Text("CBZ/ZIP images and JPG, PNG, WebP, BMP, GIF are supported inputs. Metadata from ComicInfo.xml is retained where available.")
                 }
-                Text("Other files (PDF, EPUB, documents, audio and more) can be sent unchanged. Whether they open on the receiver depends on its firmware.")
+                Text("Manga output format")
+                ExportFormat.entries.forEach { option ->
+                    FilterChip(
+                        selected = format == option,
+                        onClick = { format = option },
+                        label = { Text(option.label) },
+                    )
+                }
+                Button(enabled = canQueue, onClick = { enqueue(false) }) {
+                    Text("Send " + chosen.size + " original file(s)")
+                }
+                Button(enabled = canQueue, onClick = { enqueue(true) }) {
+                    Text("Convert manga & send · " + chosen.size + " file(s)")
+                }
+                Text("Convert mode automatically converts supported CBZ/images; other selected documents are sent unchanged.")
+                TextButton(
+                    enabled = chosen.isNotEmpty(),
+                    onClick = {
+                        val intent = Intent(if (chosen.size > 1) Intent.ACTION_SEND_MULTIPLE else Intent.ACTION_SEND).apply {
+                            type = "*/*"
+                            if (chosen.size > 1) putParcelableArrayListExtra(
+                                Intent.EXTRA_STREAM, ArrayList(chosen)
+                            ) else putExtra(Intent.EXTRA_STREAM, chosen.first())
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share selected files"))
+                    },
+                ) { Text("Share selected with another app or device") }
+                TextButton(onClick = { sendSettings = !sendSettings }) {
+                    Text(if (sendSettings) "Hide conversion help" else "About conversion settings")
+                }
+                if (sendSettings) Text("MangaPoint has many more settings than this preview. We are adding working crop, layout, reading direction and image-enhancement controls in stages, not fake toggles.")
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text("Done") }
-        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Back to MangaNooir") } },
     )
 }
