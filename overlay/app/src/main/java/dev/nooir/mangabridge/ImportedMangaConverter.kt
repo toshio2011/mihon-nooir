@@ -97,6 +97,8 @@ object ImportedMangaConverter {
         saveDestination: Uri? = null,
         sendHost: String? = null,
         sendFolder: String = "/Books",
+        onStage: (String) -> Unit = {},
+        onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
     ): Result = withContext(Dispatchers.IO) {
         require(picked.isManga) { "This file is not a supported manga image or CBZ archive" }
         if (picked.bytes != null) require(picked.bytes <= 512L * 1024 * 1024) {
@@ -106,6 +108,7 @@ object ImportedMangaConverter {
         val actual = requestedFormat.resolved(device)
         val (width, height) = if (device == "X3") (528 to 792) else (480 to 800)
         val baseTitle = picked.name.substringBeforeLast('.', picked.name).ifBlank { "Manga" }
+        onStage("Reading manga metadata")
         val metadata = loadMetadata(context, input, picked, baseTitle)
         val source = AndroidPageSource(context)
         val tempFolder = File(context.cacheDir, "manganooir-import-" + UUID.randomUUID()).apply {
@@ -117,6 +120,7 @@ object ImportedMangaConverter {
         val output = File(tempFolder, filename + "." + actual.extension)
         try {
             val count: Int
+            onStage("Converting pages")
             output.outputStream().use { target ->
                 if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
                     val depth = if (actual == ExportFormat.XTC) XtcFormat.XTC else XtcFormat.XTCH
@@ -142,8 +146,10 @@ object ImportedMangaConverter {
                     output.inputStream().use { it.copyTo(target, 64 * 1024) }
                 } ?: error("Cannot write output file")
             } else {
+                onStage("Connecting to XTEink")
                 NooirUpload.checkConnected(requireNotNull(sendHost))
-                NooirUpload.upload(output, sendHost, sendFolder)
+                onStage("Uploading")
+                NooirUpload.upload(output, sendHost, sendFolder, onUploadProgress)
             }
             Result(count, actual)
         } finally {
