@@ -32,7 +32,7 @@ import kotlin.math.min
 object NooirPdfToEpub {
     enum class Mode { MIXED, ORIGINAL_PAGES }
     private data class WordLine(val y: Float, val text: String)
-    private data class PlacedImage(val y: Float, val bitmap: Bitmap)
+    private data class PlacedImage(val y: Float, val jpeg: ByteArray, val coversPage: Boolean)
     private data class Content(val lines: List<WordLine>, val pictures: List<PlacedImage>,
         val vectorMarks: Int, val hadImageErrors: Boolean)
 
@@ -63,8 +63,16 @@ object NooirPdfToEpub {
                         val top = (pageHeight - ctm.translateY - abs(ctm.scaleY)).coerceAtLeast(0f)
                         val bitmap = image.image
                         if (bitmap != null && bitmap.width > 32 && bitmap.height > 32) {
-                            pictures += PlacedImage(top, bitmap)
-                        } else bitmap?.recycle()
+                            // PDImageXObject may cache and reuse this Bitmap; do NOT
+                            // recycle it. Store only a bounded JPEG rather than
+                            // keeping dozens of native bitmaps alive per page.
+                            val jpeg = encoded(bitmap)
+                            val coversPage = abs(ctm.scaleX) > pageHeight * 0.75f &&
+                                abs(ctm.scaleY) > pageHeight * 0.75f
+                            if (jpeg.size <= 6 * 1024 * 1024) {
+                                pictures += PlacedImage(top, jpeg, coversPage)
+                            } else hadImageErrors = true
+                        }
                     }
                 } catch (_: Exception) { hadImageErrors = true }
             }
@@ -141,13 +149,10 @@ object NooirPdfToEpub {
                             // floor plan or diagram. Other pages can still reflow.
                             val fallback = !enoughText || text!!.vectorMarks >= 65 ||
                                 text.hadImageErrors ||
-                                text.pictures.any { it.bitmap.width > page.cropBox.width * 2 &&
-                                    it.bitmap.height > page.cropBox.height * 2 &&
-                                    text.lines.sumOf { line -> line.text.length } < 200 }
+                                text.pictures.any { it.coversPage }
                             val sectionTitle = "Page " + (index + 1)
                             if (fallback) {
                                 onPage(index + 1, total, "Preserving complex/scanned page as image")
-                                text?.pictures?.forEach { it.bitmap.recycle() }
                                 val image = epub.addImage(ReflowEpubWriter.ImageAsset(
                                     renderPage(renderer, index), "jpg", "image/jpeg",
                                 ))
@@ -179,12 +184,9 @@ object NooirPdfToEpub {
                                 }
                                 finishParagraph()
                                 text.pictures.forEach { picture ->
-                                    try {
-                                        val encoded = encoded(picture.bitmap)
-                                        val image = epub.addImage(ReflowEpubWriter.ImageAsset(
-                                            encoded, "jpg", "image/jpeg"))
-                                        blocks += picture.y to "<figure><img src=\"${ReflowEpubWriter.xml(image)}\" alt=\"Illustration on PDF page ${index+1}\"/></figure>"
-                                    } finally { picture.bitmap.recycle() }
+                                    val image = epub.addImage(ReflowEpubWriter.ImageAsset(
+                                        picture.jpeg, "jpg", "image/jpeg"))
+                                    blocks += picture.y to "<figure><img src=\"${ReflowEpubWriter.xml(image)}\" alt=\"Illustration on PDF page ${index+1}\"/></figure>"
                                 }
                                 val body = blocks.sortedBy { it.first }.joinToString("\n") { it.second }
                                 epub.addSection(sectionTitle, body)
