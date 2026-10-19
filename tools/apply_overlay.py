@@ -87,6 +87,8 @@ replace_once(screen, "        MangaScreen(\n            state = successState,", 
         if (showNooirExport) {
             NooirExportDialog(
                 mangaTitle = successState.manga.title,
+                selectedChapterCount = successState.selectedChapters.size,
+                onlineSource = successState.source is HttpSource,
                 onDismiss = { showNooirExport = false },
                 onSave = { format, device, quickExport ->
                     nooirSaveFormat = format
