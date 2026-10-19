@@ -116,15 +116,15 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
                     onCheckedChange = { onChange(options.copy(preset = "Custom", landscapeClockwise = it)) })
             }
         }
-        if (options.layout != "PAGED") {
-            Text("Webtoon page overlap · " + options.overlapPercent + "%")
+        if (options.layout != "PAGED" || options.orientation == "LANDSCAPE") {
+            Text("Overlapping page cuts · " + options.overlapPercent + "%")
             Slider(
                 value = options.overlapPercent.toFloat(),
                 onValueChange = { onChange(options.copy(preset = "Custom", overlapPercent = it.toInt())) },
                 valueRange = 0f..50f,
                 steps = 49,
             )
-            Text("Repeats a strip's ending on the next page so dialogue is not cut off. 0% disables overlap.")
+            Text("Repeats the previous page's last lines on the next page, for webtoons and portrait pages read sideways. 0% disables overlap.")
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Trim white margins")
