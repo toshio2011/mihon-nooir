@@ -1,6 +1,6 @@
 # Mihon × MangaPoint × Folio Nooir
 
-**Experimental Android fork integration, not yet a production APK.**
+**Experimental Android fork; APK builds in GitHub Actions, but not yet a production release.**
 
 Standalone Android manga reader based on the *full Mihon upstream*, with a MangaPoint-compatible e-reader export workflow. No Suwayomi server, private server or account required. Source discovery remains provided by Mihon's existing extensions, and sources are not bundled.
 
@@ -13,7 +13,7 @@ Standalone Android manga reader based on the *full Mihon upstream*, with a Manga
 - **EPUB 3 fixed-layout:** ordered XHTML/image pages, navigation document, embedded cover, OPF title/creator/description/subjects/language/publisher/rights/identifier metadata.
 - **CBZ:** numbered PNGs, `ComicInfo.xml` with title/series/writer/artist/description/genre/language/cover/chapter bookmarks; machine-readable metadata JSON included for more fields.
 - Include original manga metadata as available from Mihon. Missing metadata is not fabricated. Preserve untouched original downloads for later re-export.
-- Currently X4 480×800 by default (X3 528×792 is implemented as a backend parameter but not exposed by the UI yet).
+- X4 480×800 and X3 528×792 presets are selectable in the export dialog.
 - Test XTC/XTCH writer and EPUB/CBZ container + metadata + chapter navigation as pure JVM tests.
 
 ## Metadata limitations
@@ -36,7 +36,7 @@ Why retain originals? Conversion is destructive. A saved original allows choosin
 
 ## Build
 
-GitHub Actions `Build Mihon Nooir debug APK` clones the pinned Mihon revision, applies this overlay, and attempts `:app:assembleFoss`; the resulting APK will be uploaded as a workflow artifact **if the build succeeds**. We have not yet verified a full Android build or installed it on the user's phone.
+GitHub Actions `Build Mihon Nooir debug APK` clones the pinned Mihon revision, applies this overlay, and attempts `:app:assembleFoss`; the resulting APK will be uploaded as a workflow artifact **if the build succeeds**. The combined 1.0.3 preview passed an Android CI build, but on-device Quick Export and Nooir file-transfer tests are not yet verified.
 
 ```
 python3 -m unittest discover -s tests -p 'test_*.py' -v
@@ -81,7 +81,7 @@ As with the earlier build, sources and metadata are retained in Mihon; format co
 
 ## Quick Export (experimental, source fetch without saving to Mihon)
 
-Enable **Quick Export** in the MangaNooir export dialog after selecting **1–5 chapters**. It uses any chapters already downloaded in Mihon, and fetches missing pages through the installed manga source's own page-list and image APIs. These missing pages are placed only in a temporary private cache and cleaned up on completion or failure. A successful result is saved as XTC/XTCH/EPUB/CBZ or transferred to XTEink.
+Enable **Quick Export** in the MangaNooir export dialog after selecting at least one chapter (there is no fixed chapter-count limit). It uses any chapters already downloaded in Mihon, and fetches missing pages through the installed manga source's own page-list and image APIs. These missing pages are placed only in a temporary private cache and cleaned up on completion or failure. A successful result is saved as XTC/XTCH/EPUB/CBZ or transferred to XTEink.
 
 Safety limits per chapter: up to 1,000 remote pages, 25 MB per page, 400 MB temporary cache. No fixed chapter count; processing is sequential. Very long exports should eventually use a foreground WorkManager job. No permanent Mihon download is created. Network access and an installed functioning online source extension are required. Some sources can block fetching or require authentication. Full chapter-by-chapter progress, pause/resume, and remote source reliability still need device testing.
 
@@ -100,7 +100,21 @@ A **More → Send & Convert files** entry will let the user choose any Android d
 
 Files are selected by the user, not gathered through bulk storage scanning. The original file is not modified. Conversion currently accepts input up to 512 MB. Nouir may store documents it does not know how to display.
 
-**Still planned, not implemented here:** direct WebDAV/OPDS/Calibre/KOReader/other-device support, built-in web-article extraction to EPUB or PDF, richer metadata editing, live progress, multi-file batch sending and large-library queues. Quick Export of web-sourced manga remains a separate PR, with a future streaming/chapter-batch redesign to lift the temporary first-test cap.
+**Still planned, not implemented here:** direct WebDAV/OPDS/Calibre/KOReader/other-device support, built-in web-article extraction to EPUB or PDF, richer metadata editing, live progress, multi-file batch sending and large-library queues. Quick Export of web-sourced manga was prototyped in PR #6 and now streams one chapter at a time in the combined preview. Progress, retry/resume and foreground background jobs remain future work.
 
 ## Combined 1.0.3 preview
-CI-check only; keep main stable until on-device Nooir transfer and extension Quick Export tests pass.
+Includes both PR #6 (Quick Export) and PR #7 (any-file Send & Convert); APK build was green at commit d203e54. CI now also runs the JVM-format test suite. Keep main stable until the latest CI commit passes and on-device Nooir transfer and extension Quick Export are tested.
+
+
+## Device verification checklist for 1.0.3
+
+1. Download the **integration branch** APK artifact only after its latest green GitHub Actions run. Do not overwrite your normal Mihon installation; experimental MangaNooir CI packages may be signed with different keys, so back up the fork's data before uninstalling an earlier build.
+2. Open MangaNooir and confirm **More → Send & Convert files** and the export action beside Download. Check the original library and reader continue working.
+3. For a manga with a working online extension, select one chapter **not downloaded** in Mihon. Export → **Quick Export** → XTCH → **Save file**. Verify successful output and that the chapter is still not marked downloaded.
+4. Try multiple chapters across a volume. Ensure readable chapter navigation and check that temporary files are removed on success and failure.
+5. In **More → Send & Convert files**, select a small CBZ containing ComicInfo.xml, convert it to EPUB or XTCH and validate the output metadata; also choose a PDF/EPUB and check **Send original** without converting it.
+6. On Folio Nooir, enter **File Transfer** mode and connect the phone and reader to the same trusted Wi-Fi. Enter the device IP shown by Nooir (if `crosspoint.local` does not resolve), destination `/Books`, and test sending a **small** CBZ/EPUB first.
+7. Check the file appears in Nooir's library. A file uploading successfully does not guarantee the firmware knows how to open arbitrary formats.
+8. Record source-extension failures, memory/storage warnings, incorrect image ordering, missing metadata, or transfer errors for follow-up fixes.
+
+This checklist needs a user/device run: Android GitHub Actions cannot establish a real Wi-Fi connection to the physical X4.
