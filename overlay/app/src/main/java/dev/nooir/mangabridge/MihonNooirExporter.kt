@@ -54,17 +54,19 @@ object MihonNooirExporter {
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, destination: Uri, format: ExportFormat,
         device: String = "X4", quickExport: Boolean = false,
-    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device, quickExport)
+        options: MangaConversionOptions = MangaConversionOptions(),
+    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device, quickExport, options)
 
     suspend fun sendToDevice(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, deviceHost: String, destinationFolder: String,
         format: ExportFormat, device: String = "X4", quickExport: Boolean = false,
+        options: MangaConversionOptions = MangaConversionOptions(),
     ): ExportResult {
         // Check the Nooir transfer server before spending time processing images.
         withContext(Dispatchers.IO) { NooirUpload.checkConnected(deviceHost) }
         return renderExport(context, provider, manga, source, chapters,
-            null, deviceHost, destinationFolder, format, device, quickExport)
+            null, deviceHost, destinationFolder, format, device, quickExport, options)
     }
 
     /** Stream one source chapter at a time; only the active chapter is temporarily cached. */
@@ -72,7 +74,7 @@ object MihonNooirExporter {
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, destination: Uri?, deviceHost: String?,
         destinationFolder: String?, format: ExportFormat, device: String,
-        quickExport: Boolean,
+        quickExport: Boolean, options: MangaConversionOptions,
     ): ExportResult = withContext(Dispatchers.IO) {
         require(chapters.isNotEmpty()) { "Select at least one chapter" }
         val ownerJob = coroutineContext[kotlinx.coroutines.Job]
@@ -93,6 +95,7 @@ object MihonNooirExporter {
             title = manga.title, author = manga.author.orEmpty(), artist = manga.artist.orEmpty(),
             description = manga.description.orEmpty(), genres = manga.genre.orEmpty(),
             language = source.lang.ifBlank { "und" },
+            direction = if (options.rightToLeft) dev.nooir.bridge.ReadingDirection.RIGHT_TO_LEFT else dev.nooir.bridge.ReadingDirection.LEFT_TO_RIGHT,
             series = manga.title, identifier = "mihon:" + manga.source + ":" + manga.id,
             sourceUrl = manga.url.takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
         )
@@ -168,7 +171,7 @@ object MihonNooirExporter {
                         }
                     }
                     require(uris.isNotEmpty()) { "No readable images in " + chapter.name }
-                    for (page in pageSource.pages(uris, width, height, depth)) {
+                    for (page in pageSource.pages(uris, width, height, depth, options)) {
                         ownerJob.ensureActive()
                         yield(chapter to page)
                     }
