@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Safely apply extension overlay to the pinned upstream Mihon revision."""
+from pathlib import Path
+import shutil, sys
+
+root = Path(__file__).resolve().parents[1]
+upstream = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / "upstream"
+assert (upstream / "app/build.gradle.kts").exists(), "Mihon checkout not found"
+
+def replace_once(path: Path, old: str, new: str):
+    source = path.read_text()
+    if source.count(old) != 1:
+        raise RuntimeError(f"Anchor changed in {path}: expected once, got {source.count(old)} for {old[:70]!r}")
+    path.write_text(source.replace(old, new, 1))
+
+for source in (root / "overlay").rglob("*.kt"):
+    destination = upstream / source.relative_to(root / "overlay")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+
+vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
+replace_once(vm, "import android.content.Context\n", "import android.content.Context\nimport android.net.Uri\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.MihonNooirExporter\n")
+replace_once(vm, "import eu.kanade.tachiyomi.data.download.DownloadManager\n", "import eu.kanade.tachiyomi.data.download.DownloadManager\nimport eu.kanade.tachiyomi.data.download.DownloadProvider\n")
+replace_once(vm, "    private val downloadManager: DownloadManager,\n", "    private val downloadManager: DownloadManager,\n    private val nooirDownloadProvider: DownloadProvider,\n")
+replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n", '''    val snackbarHostState: SnackbarHostState = SnackbarHostState()
+
+    /** Never mutates or deletes Mihon's original downloaded chapters. */
+    fun exportDownloadedToNooir(context: Context, destination: Uri, format: ExportFormat) {
+        val s = successState ?: return
+        val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
+        val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
+        viewModelScope.launch {
+            val message = runCatching {
+                require(downloaded.isNotEmpty()) { "Download at least one chapter first" }
+                val result = MihonNooirExporter.export(context, nooirDownloadProvider,
+                    s.manga, s.source, downloaded, destination, format)
+                "Exported ${result.pageCount} pages as ${result.format.extension.uppercase()}"
+            }.getOrElse { "Export failed: ${it.message}" }
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+''')
+
+screen = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaScreen.kt"
+replace_once(screen, "import androidx.compose.foundation.layout.systemBarsPadding\n", "import androidx.compose.foundation.layout.systemBarsPadding\nimport androidx.compose.foundation.layout.Column\nimport androidx.compose.foundation.layout.Row\nimport androidx.compose.material3.TextButton\nimport androidx.compose.material3.Text\nimport androidx.compose.material3.AlertDialog\nimport dev.nooir.bridge.ExportFormat\n")
+replace_once(screen, "        MangaScreen(\n            state = successState,", '''        var nooirFormat by remember { mutableStateOf(ExportFormat.AUTO) }
+        var showExportDialog by remember { mutableStateOf(false) }
+        val nooirSave = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+            if (uri != null) viewModel.exportDownloadedToNooir(context, uri, nooirFormat)
+        }
+        if (showExportDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportDialog = false },
+                title = { Text("Export downloaded manga") },
+                text = {
+                    Column {
+                        Text("Original downloads are kept. Select chapters first, or export every downloaded chapter.")
+                        ExportFormat.entries.forEach { choice ->
+                            TextButton(onClick = {
+                                nooirFormat = choice
+                                showExportDialog = false
+                                val actual = choice.resolved("X4")
+                                val filename = successState.manga.title.take(70)
+                                    .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                                nooirSave.launch("$filename.${actual.extension}")
+                            }) { Text(choice.label + if (choice == ExportFormat.AUTO) " (XTCH for X4)" else "") }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showExportDialog = false }) { Text("Cancel") } },
+            )
+        }
+        Column {
+            Row {
+                TextButton(onClick = { showExportDialog = true }) { Text("Export to e-reader (XTC / XTCH / EPUB / CBZ)") }
+            }
+        MangaScreen(
+            state = successState,''')
+replace_once(screen, "            onInvertSelection = viewModel::invertSelection,\n        )", "            onInvertSelection = viewModel::invertSelection,\n        )\n        } // Nooir export controls")
+replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihon"')
+print("Mihon Nooir integration overlay applied to", upstream)

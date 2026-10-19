@@ -1,0 +1,41 @@
+name: Build Mihon Nooir debug APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout integration source
+        uses: actions/checkout@v4
+      - name: Validate overlay structure
+        run: python3 -m unittest discover -s tests -p "test_*.py" -v
+      - name: Checkout pinned Mihon upstream
+        uses: actions/checkout@v4
+        with:
+          repository: mihonapp/mihon
+          ref: deeb9b2584b6e246135cbd31da49a39e6b6e1e52
+          path: upstream
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Apply integration
+        run: python3 tools/apply_overlay.py upstream
+      - name: Assemble fork (FOSS APK)
+        working-directory: upstream
+        run: bash ./gradlew :app:assembleFoss --no-daemon --stacktrace
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihon-nooir-foss-apk
+          path: upstream/app/build/outputs/apk/foss/*.apk
+          if-no-files-found: warn
