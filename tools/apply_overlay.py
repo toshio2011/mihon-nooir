@@ -30,12 +30,16 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
         val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
         val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
         viewModelScope.launch {
+            val feedback = launch {
+                snackbarHostState.showSnackbar("Converting manga…", duration = SnackbarDuration.Indefinite)
+            }
             val message = runCatching {
                 require(downloaded.isNotEmpty()) { "Download at least one chapter first" }
                 val result = MihonNooirExporter.export(context, nooirDownloadProvider,
                     s.manga, s.source, downloaded, destination, format, device)
                 "Exported " + result.pageCount + " pages as " + result.format.extension.uppercase()
             }.getOrElse { "Export failed: " + it.message }
+            feedback.cancel()
             snackbarHostState.showSnackbar(message)
         }
     }
@@ -53,6 +57,7 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
                     s.manga, s.source, downloaded, host, folder, format, device)
                 "Sent " + result.pageCount + " pages to XTEink (" + result.format.extension.uppercase() + ")"
             }.getOrElse { "XTEink transfer failed: " + it.message }
+            feedback.cancel()
             snackbarHostState.showSnackbar(message)
         }
     }

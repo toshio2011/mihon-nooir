@@ -58,7 +58,7 @@ object MihonNooirExporter {
         format: ExportFormat, device: String = "X4",
     ): ExportResult {
         // Check the Nooir transfer server before spending time processing images.
-        NooirUpload.checkConnected(deviceHost)
+        withContext(Dispatchers.IO) { NooirUpload.checkConnected(deviceHost) }
         return renderExport(context, provider, manga, source, chapters,
             null, deviceHost, destinationFolder, format, device)
     }

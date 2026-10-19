@@ -68,3 +68,12 @@ Our app retains Mihon's built-in update screen, progress/download and Android in
 The `watch-mihon.yml` workflow checks upstream daily and updates one issue when commits change. Upstream code is reviewed and tested before updating the pinned SHA: no automatic merge that might erase Nooir-specific fixes.
 
 Official releases require a **stable signing key across builds** so Android recognizes the APK as an update; development APKs from CI may not be upgradable. See [update policy](docs/UPDATES.md).
+
+
+## MangaNooir v1.0.1 UI / Wi-Fi transfer
+
+The launcher and localized app name are now **MangaNooir**, distinct from Mihon. The fork retains Mihon's features while showing an **Export to XTEink** action next to the manga toolbar Download button (also available when chapters are selected).
+
+The export dialog remembers format (Auto/XTC/XTCH/EPUB/CBZ), X4/X3 device preset, hostname/IP, and folder. **Save file** uses Android's file picker. **Send to XTEink** probes Nooir's `GET /api/status`, creates the export in temporary app storage, then uploads with multipart `POST /upload?path=/Books`. Keep your XTEink in Nooir's File Transfer mode and phone on the same Wi-Fi. Sending to the same name overwrites the previous file on the device.
+
+As with the earlier build, sources and metadata are retained in Mihon; format conversion remains non-destructive. **Direct transfer still requires on-device hardware testing.** Page crop, contrast, dithering settings, upload progress, and download-time format selection remain future milestones.
