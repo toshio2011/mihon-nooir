@@ -36,7 +36,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         /** Shared queue visible in More → Send & Convert. Only one manga worker
          * runs at a time, even when several books are selected from different screens.
          */
-        const val QUEUE_NAME = "manganooir_manga_exports"
+        const val QUEUE_NAME = NooirDeviceWorkQueue.NAME
         const val TITLE_TAG_PREFIX = "manganooir_title:"
 
         const val KEY_STAGE = "stage"
