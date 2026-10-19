@@ -12,6 +12,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import dev.nooir.bridge.GrayscaleConverter
 import dev.nooir.bridge.QuantizedPage
+import dev.nooir.bridge.PageSlicePlanner
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipFile
@@ -106,44 +107,44 @@ class AndroidPageSource(private val context: Context) {
         src: Bitmap, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions,
     ): List<QuantizedPage> {
-        val regions = mutableListOf<Rect>()
-        val ratio = src.width.toFloat() / src.height
-        val longStrip = when (options.layout) {
-            "WEBTOON" -> true
-            "PAGED" -> false
-            else -> src.height > 3 * src.width
-        }
-        if (longStrip) {
-            val segment = (src.width.toFloat() * height / width).toInt().coerceAtLeast(1)
-            var y = 0
-            while (y < src.height) {
-                val next = minOf(src.height, y + segment)
-                regions.add(Rect(0, y, src.width, next))
-                y = next
-            }
-        } else if (ratio > 1.35f && options.splitSpreads) {
-            val center = src.width / 2
-            if (options.rightToLeft) {
-                regions.add(Rect(center, 0, src.width, src.height))
-                regions.add(Rect(0, 0, center, src.height))
-            } else {
-                regions.add(Rect(0, 0, center, src.height))
-                regions.add(Rect(center, 0, src.width, src.height))
-            }
-        } else regions.add(Rect(0, 0, src.width, src.height))
+        // XTC/XTCH always use the panel's portrait framebuffer. Landscape
+        // content is composed in a virtual sideways screen then turned into
+        // the native portrait output. EPUB/CBZ can use true landscape images.
+        val needsRotation = options.orientation == "LANDSCAPE" && width < height
+        val viewWidth = if (needsRotation) height else width
+        val viewHeight = if (needsRotation) width else height
+        val regions = PageSlicePlanner.plan(
+            src.width, src.height, viewWidth, viewHeight,
+            options.layout, options.splitSpreads, options.rightToLeft,
+            options.overlapPercent,
+        )
         val result = ArrayList<QuantizedPage>(regions.size)
         for (initial in regions) {
-            val r = if (options.cropWhiteMargins) trimWhite(src, initial) else initial
-            val scale = minOf(width.toFloat() / r.width(), height.toFloat() / r.height())
-            val dw = (r.width() * scale).toInt().coerceIn(1, width)
-            val dh = (r.height() * scale).toInt().coerceIn(1, height)
+            val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
+            val r = if (options.cropWhiteMargins) trimWhite(src, sourceRegion) else sourceRegion
+            val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
+            val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
+            val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)
             val rendered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             try {
                 val canvas = Canvas(rendered)
                 canvas.drawColor(Color.WHITE)
-                val l = (width - dw) / 2
-                val t = (height - dh) / 2
+                if (needsRotation) {
+                    // Both rotations map the virtual WxH landscape page exactly
+                    // into the native HxW portrait XTC/XTCH framebuffer.
+                    canvas.save()
+                    if (options.landscapeClockwise) {
+                        canvas.translate(width.toFloat(), 0f)
+                        canvas.rotate(90f)
+                    } else {
+                        canvas.translate(0f, height.toFloat())
+                        canvas.rotate(-90f)
+                    }
+                }
+                val l = (viewWidth - dw) / 2
+                val t = (viewHeight - dh) / 2
                 canvas.drawBitmap(src, r, Rect(l, t, l + dw, t + dh), Paint(Paint.FILTER_BITMAP_FLAG))
+                if (needsRotation) canvas.restore()
                 val rgb = IntArray(width * height)
                 rendered.getPixels(rgb, 0, width, 0, 0, width, height)
                 val gray = ByteArray(rgb.size)
