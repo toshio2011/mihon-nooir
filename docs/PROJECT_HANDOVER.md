@@ -169,3 +169,35 @@ The user-facing main README and `docs/GETTING_STARTED.md` / `docs/CHAPTER_SELECT
 **Roadmap issues**: [#1 download-time export](https://github.com/toshio2011/mihon-nooir/issues/1), [#2 MangaPoint options](https://github.com/toshio2011/mihon-nooir/issues/2), [#3 metadata](https://github.com/toshio2011/mihon-nooir/issues/3), [#4 upload](https://github.com/toshio2011/mihon-nooir/issues/4), [#5 Mihon retention/test matrix](https://github.com/toshio2011/mihon-nooir/issues/5), [#8 master roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
 
 **Keep updating this file at meaningful milestones**; new chats should never have to reconstruct branch lineage and CI status from a long conversation.
+
+## 8. Build commands and repo mechanics (recovered from earlier handover)
+
+MangaNooir is an **overlay repository**, not a monorepo containing the entire Mihon Android application. Do not attempt to build its root directory as if it held all of Mihon's upstream source.
+
+- `config/mihon-upstream.sha` pins Mihon revision `deeb9b2584b6e246135cbd31da49a39e6b6e1e52` (17 Oct 2026). The CI workflow checks out Mihon at this revision, applies `tools/apply_overlay.py`, then assembles the FOSS APK.
+- App version comes from `config/version.txt`; newest unPR'd branches currently declare `1.0.10`.
+- Adapter/code lives in `overlay/app/src/main/java/dev/nooir/mangabridge/`; pure formats/writers/planner in `overlay/app/src/main/java/dev/nooir/bridge/`.
+- Tests: `tests/test_overlay.py` covers integration anchors, `tests/run.sh` compiles/runs pure Kotlin format, slicing and EPUB container tests.
+- Use the GitHub Actions workflow `.github/workflows/build-apk.yml` to confirm both source overlay and full Android FOSS compilation; check the artifact and run HEAD.
+
+Local source-only validation when Python and `kotlinc` are available:
+
+```bash
+git switch feature/nooir-tools-hub-activity-queue
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+bash tests/run.sh
+```
+
+Android compilation is performed **inside the pinned Mihon checkout after applying the overlay**, not at the MangaNooir root:
+
+```bash
+python3 tools/apply_overlay.py /path/to/pinned-mihon-checkout
+cd /path/to/pinned-mihon-checkout
+./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false
+```
+
+Local commands are documented for reproducing CI; they are **not evidence they ran in this handover session**.
+
+### Known documentation/concurrent-work caution
+
+Another documentation handover commit was pushed while this audit was being prepared (main commits `12877eab`, `94c71810`, `69bd30ce`). Their findings about 1.0.9 were compared with the additional 1.0.10 branches. This file consolidates both; main source functionality was not altered. **Re-check all branch heads before editing** since multiple sessions or automation may be active.
