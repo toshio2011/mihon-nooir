@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -60,7 +61,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
                 NooirWebExportWorker.HOST to host.trim(),
                 NooirWebExportWorker.FOLDER to folder.trim(),
             )).build()
-        manager.enqueue(request)
+        manager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
         workId = request.id
         prefs.edit().putString(NooirWebExportWorker.LAST_WORK, request.id.toString()).apply()
     }
