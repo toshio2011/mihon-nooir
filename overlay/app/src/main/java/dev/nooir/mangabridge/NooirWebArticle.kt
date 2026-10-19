@@ -16,7 +16,7 @@ import java.net.URI
  * Never executes JS, bypasses paywalls, or sends content to a third-party API.
  */
 object NooirWebArticle {
-    private fun publicHttps(value: String): String {
+    internal fun publicHttps(value: String): String {
         val url = URI(value.trim()).normalize()
         require(url.scheme.equals("https", ignoreCase = true) &&
             !url.host.isNullOrBlank() && url.port == -1 &&
@@ -36,7 +36,7 @@ object NooirWebArticle {
         return url.toASCIIString()
     }
 
-    private fun load(url: String): Document {
+    internal fun load(url: String): Document {
         var current = publicHttps(url)
         repeat(4) {
             val response = Jsoup.connect(current)
@@ -62,17 +62,32 @@ object NooirWebArticle {
         error("Too many webpage redirects")
     }
 
-    fun convert(url: String, output: File, onStage: (String) -> Unit = {}) {
-        onStage("Downloading webpage")
-        val doc = load(url)
-        val title = (doc.selectFirst("meta[property=og:title]")?.attr("content")
+    internal fun title(doc: Document): String = (
+        doc.selectFirst("meta[property=og:title]")?.attr("content")
             ?: doc.selectFirst("h1")?.text()
-            ?: doc.title()).trim().ifBlank { "Saved Article" }.take(240)
-        val author = (doc.selectFirst("meta[name=author]")?.attr("content")
-            ?: doc.selectFirst("[itemprop=author]")?.text().orEmpty()).take(120)
-        val description = (doc.selectFirst("meta[name=description]")?.attr("content")
-            ?: doc.selectFirst("meta[property=og:description]")?.attr("content").orEmpty()).take(800)
-        val root = doc.select("article, main, [itemprop=articleBody], .post-content, .entry-content")
+            ?: doc.title()
+        ).trim().ifBlank { "Saved Article" }.take(240)
+
+    internal fun metadata(doc: Document): ReflowMetadata = ReflowMetadata(
+        title = title(doc),
+        author = (doc.selectFirst("meta[name=author]")?.attr("content")
+            ?: doc.selectFirst("[itemprop=author]")?.text().orEmpty()).take(120),
+        description = (doc.selectFirst("meta[name=description]")?.attr("content")
+            ?: doc.selectFirst("meta[property=og:description]")?.attr("content").orEmpty()).take(800),
+        sourceUrl = doc.location(),
+        language = doc.selectFirst("html")?.attr("lang")?.take(16)?.ifBlank { "en" } ?: "en",
+    )
+
+    /** Append one already-accessible chapter, keeping genuine XHTML text and
+     * embedded JPEG/PNG/GIF artwork, without taking full-page screenshots.
+     * Images are capped for memory/size safety; no source scripts execute.
+     */
+    internal fun appendChapter(
+        doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
+        maxImages: Int = 25,
+    ) {
+        val root = doc.select("article, main, [itemprop=articleBody], .post-content, .entry-content," +
+            " .reading-content, .chapter-content, [data-page-number]")
             .maxByOrNull { it.text().length }
             ?: doc.body()
             ?: error("Cannot find readable article content")
@@ -80,60 +95,62 @@ object NooirWebArticle {
         article.select("script,style,nav,header,footer,aside,form,button,iframe,video,audio,canvas,svg, noscript," +
             ".advertisement,.ads,.social-share,.newsletter,.cookie-banner").remove()
         require(article.text().length >= 60) {
-            "No readable article text found. JavaScript-only and login-required websites may not work."
+            "No readable text for '$chapterTitle'. The page may require sign-in, a subscription or JavaScript; no restricted content was accessed."
         }
-        onStage("Saving text and illustrations")
-        ReflowEpubWriter.write(output, ReflowMetadata(
-            title = title, author = author, description = description,
-            sourceUrl = doc.location(),
-            language = doc.selectFirst("html")?.attr("lang")?.take(16)?.ifBlank { "en" } ?: "en",
-        )) { epub ->
-            var images = 0
-            article.select("img").forEach { img ->
-                val source = listOf("data-src", "data-original", "src")
-                    .firstNotNullOfOrNull { attr -> img.attr(attr).takeIf { it.isNotBlank() } }
-                val absolute = source?.let { runCatching { URI(doc.location()).resolve(it).toString() }.getOrNull() }
-                if (absolute.isNullOrBlank() || images >= 25) {
-                    img.remove()
-                    return@forEach
-                }
-                val asset = runCatching {
-                    val verified = publicHttps(absolute)
-                    val response = Jsoup.connect(verified).ignoreContentType(true)
-                        .userAgent("MangaNooir/1.0 (offline article export)")
-                        .timeout(12000).maxBodySize(2_000_000).followRedirects(false).execute()
-                    require(response.statusCode() == 200) { "Image not accessible" }
-                    val mime = response.contentType().orEmpty().substringBefore(';').lowercase()
-                    val extension = when (mime) {
-                        "image/jpeg" -> "jpg"
-                        "image/png" -> "png"
-                        "image/gif" -> "gif"
-                        else -> error("Unsupported web image format")
-                    }
-                    val bytes = response.bodyAsBytes()
-                    require(bytes.size in 1..2_000_000)
-                    ReflowEpubWriter.ImageAsset(bytes, extension, mime)
-                }.getOrNull()
-                if (asset == null) img.remove()
-                else {
-                    img.attr("src", epub.addImage(asset))
-                    img.removeAttr("srcset")
-                    img.removeAttr("data-src")
-                    images++
-                }
+        var images = 0
+        article.select("img").forEach { img ->
+            val source = listOf("data-src", "data-original", "src")
+                .firstNotNullOfOrNull { attr -> img.attr(attr).takeIf { it.isNotBlank() } }
+            val absolute = source?.let { runCatching { URI(doc.location()).resolve(it).toString() }.getOrNull() }
+            if (absolute.isNullOrBlank() || images >= maxImages) {
+                img.remove()
+                return@forEach
             }
-            val whitelist = Safelist.relaxed()
-                .addTags("figure", "figcaption", "section", "h1", "h2", "h3", "h4")
-                .addAttributes("img", "alt")
-                .preserveRelativeLinks(true)
-            val cleaned = Jsoup.clean(article.html(), doc.location(), whitelist)
-            val fragment = Jsoup.parseBodyFragment(cleaned)
-            fragment.outputSettings(Document.OutputSettings()
-                .syntax(Document.OutputSettings.Syntax.xml)
-                .escapeMode(org.jsoup.nodes.Entities.EscapeMode.xhtml)
-                .prettyPrint(false))
-            epub.addSection(title, "<h1>" + ReflowEpubWriter.xml(title) + "</h1>" +
-                fragment.body().html())
+            val asset = runCatching {
+                val verified = publicHttps(absolute)
+                val response = Jsoup.connect(verified).ignoreContentType(true)
+                    .userAgent("MangaNooir/1.0 (offline article export)")
+                    .timeout(12000).maxBodySize(2_000_000).followRedirects(false).execute()
+                require(response.statusCode() == 200) { "Image not accessible" }
+                val mime = response.contentType().orEmpty().substringBefore(';').lowercase()
+                val extension = when (mime) {
+                    "image/jpeg" -> "jpg"
+                    "image/png" -> "png"
+                    "image/gif" -> "gif"
+                    else -> error("Unsupported web image format")
+                }
+                val bytes = response.bodyAsBytes()
+                require(bytes.size in 1..2_000_000)
+                ReflowEpubWriter.ImageAsset(bytes, extension, mime)
+            }.getOrNull()
+            if (asset == null) img.remove()
+            else {
+                img.attr("src", epub.addImage(asset))
+                img.removeAttr("srcset")
+                img.removeAttr("data-src")
+                images++
+            }
+        }
+        val whitelist = Safelist.relaxed()
+            .addTags("figure", "figcaption", "section", "h1", "h2", "h3", "h4")
+            .addAttributes("img", "alt")
+            .preserveRelativeLinks(true)
+        val cleaned = Jsoup.clean(article.html(), doc.location(), whitelist)
+        val fragment = Jsoup.parseBodyFragment(cleaned)
+        fragment.outputSettings(Document.OutputSettings()
+            .syntax(Document.OutputSettings.Syntax.xml)
+            .escapeMode(org.jsoup.nodes.Entities.EscapeMode.xhtml)
+            .prettyPrint(false))
+        epub.addSection(chapterTitle,
+            "<h1>" + ReflowEpubWriter.xml(chapterTitle) + "</h1>" + fragment.body().html())
+    }
+
+    fun convert(url: String, output: File, onStage: (String) -> Unit = {}) {
+        onStage("Downloading webpage")
+        val doc = load(url)
+        onStage("Saving text and illustrations")
+        ReflowEpubWriter.write(output, metadata(doc)) { epub ->
+            appendChapter(doc, epub, title(doc))
         }
         onStage("EPUB complete")
     }
