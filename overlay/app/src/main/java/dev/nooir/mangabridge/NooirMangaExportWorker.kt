@@ -33,6 +33,12 @@ import java.util.UUID
 class NooirMangaExportWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     companion object {
         const val PREF_WORK_ID = "last_manga_work"
+        /** Shared queue visible in More → Send & Convert. Only one manga worker
+         * runs at a time, even when several books are selected from different screens.
+         */
+        const val QUEUE_NAME = "manganooir_manga_exports"
+        const val TITLE_TAG_PREFIX = "manganooir_title:"
+
         const val KEY_STAGE = "stage"
         const val KEY_CHAPTER = "chapter"
         const val KEY_CHAPTERS = "chapters"
@@ -40,9 +46,8 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         const val KEY_SENT = "sent"
         const val KEY_TOTAL = "total"
         const val KEY_ERROR = "error"
-        private const val QUEUE_NAME = "manganooir_manga_exports"
 
-        fun enqueue(context: Context, mangaId: Long, chapterIds: List<Long>,
+        fun enqueue(context: Context, mangaId: Long, mangaTitle: String, chapterIds: List<Long>,
             destination: Uri?, host: String?, folder: String, format: ExportFormat,
             device: String, quick: Boolean, options: MangaConversionOptions): UUID {
             require(chapterIds.isNotEmpty()) { "Select at least one chapter" }
@@ -52,7 +57,9 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             val manifest = File(dir, UUID.randomUUID().toString() + ".txt")
             manifest.writeText(chapterIds.distinct().joinToString("\n"))
             try {
-                val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>().setInputData(workDataOf(
+                val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
+                    .addTag(TITLE_TAG_PREFIX + mangaTitle.take(96))
+                    .setInputData(workDataOf(
                     "manga_id" to mangaId, "ids_file" to manifest.name,
                     "output_uri" to (destination?.toString() ?: ""),
                     "host" to host.orEmpty(), "folder" to folder,
