@@ -14,11 +14,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate overlay structure
         run: python3 -m unittest discover -s tests -p "test_*.py" -v
+      - name: Read upstream pin
+        id: pin
+        run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
       - name: Checkout pinned Mihon upstream
         uses: actions/checkout@v4
         with:
           repository: mihonapp/mihon
-          ref: deeb9b2584b6e246135cbd31da49a39e6b6e1e52
+          ref: ${{ steps.pin.outputs.sha }}
           path: upstream
       - name: Install Java
         uses: actions/setup-java@v4
@@ -29,7 +32,7 @@ jobs:
         run: python3 tools/apply_overlay.py upstream
       - name: Assemble fork (FOSS APK)
         working-directory: upstream
-        run: bash ./gradlew :app:assembleFoss --no-daemon --stacktrace
+        run: bash ./gradlew :app:assembleFoss -Pdist=ci --no-daemon --stacktrace
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4

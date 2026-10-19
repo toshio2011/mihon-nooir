@@ -60,3 +60,11 @@ Mihon is Apache-2.0; MangaPoint is MIT. Retain all upstream attribution and alte
 - Mihon: https://github.com/mihonapp/mihon
 - MangaPoint: https://github.com/W1seGit/MangaPoint
 - Nooir: https://github.com/toshio2011/folio-nooir
+
+## Keeping the app and Mihon upstream updated
+
+Our app retains Mihon's built-in update screen, progress/download and Android installer flow. The overlay redirects update checks to this fork's GitHub releases, never to the official Mihon APK. Version names are independent and tracked by `config/version.txt`.
+
+The `watch-mihon.yml` workflow checks upstream daily and updates one issue when commits change. Upstream code is reviewed and tested before updating the pinned SHA: no automatic merge that might erase Nooir-specific fixes.
+
+Official releases require a **stable signing key across builds** so Android recognizes the APK as an update; development APKs from CI may not be upgradable. See [update policy](docs/UPDATES.md).

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Safely apply extension overlay to the pinned upstream Mihon revision."""
 from pathlib import Path
-import shutil, sys
+import shutil, sys, re
 
 root = Path(__file__).resolve().parents[1]
 upstream = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / "upstream"
@@ -77,5 +77,18 @@ replace_once(screen, "        MangaScreen(\n            state = successState,", 
         MangaScreen(
             state = successState,''')
 replace_once(screen, "            onInvertSelection = viewModel::invertSelection,\n        )", "            onInvertSelection = viewModel::invertSelection,\n        )\n        } // Nooir export controls")
+# Use a separate app identity and independent release versions.
 replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihon"')
+version = (root / "config/version.txt").read_text().strip()
+assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Version must be X.Y.Z"
+major, minor, patch = map(int, version.split("."))
+assert major <= 20 and minor <= 99 and patch <= 9999, "Version part too large"
+version_code = major * 1_000_000 + minor * 10_000 + patch
+app_build = upstream / "app/build.gradle.kts"
+replace_once(app_build, 'versionCode = 38', f'versionCode = {version_code}')
+replace_once(app_build, 'versionName = "0.21.2"', f'versionName = "{version}"')
+# Never offer the original Mihon APK as a fork update.
+updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
+replace_once(updater, '"mihonapp/mihon-preview"', '"toshio2011/mihon-nooir"')
+replace_once(updater, '"mihonapp/mihon"', '"toshio2011/mihon-nooir"')
 print("Mihon Nooir integration overlay applied to", upstream)
