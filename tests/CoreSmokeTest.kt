@@ -27,6 +27,24 @@ fun main() {
         check(book[result.fileBytes.toInt()-1] == XtcCodec.encodePage(page).last())
         check(String(book.copyOfRange(56,66)).startsWith("A 漫画"))
     }
+    // Optional rich-metadata tail must not change legacy page/chapter offsets.
+    for ((fmt, page) in listOf(XtcFormat.XTC to p, XtcFormat.XTCH to gray)) {
+        val output = ByteArrayOutputStream()
+        val synopsisJson = """{"title":"Test","description":"A manga synopsis and proper cover."}"""
+        val result = XtcCodec.write(fmt, sequenceOf(page), output, work,
+            BookMetadata("Test", coverPage = 0), richMetadataJson = synopsisJson)
+        val data = output.toByteArray()
+        val magic = "NOOIRMD1".toByteArray()
+        check(data.takeLast(8).toByteArray().contentEquals(magic))
+        val n = data.size - 12
+        val payloadLength = (0..3).fold(0) { a, i -> a or ((data[n + i].toInt() and 255) shl (8*i)) }
+        check(payloadLength == synopsisJson.toByteArray().size)
+        check(String(data.copyOfRange(n - payloadLength, n)) == synopsisJson)
+        check(le64(data, 32) == 56L + 256L + 16L)
+        check(result.fileBytes == data.size.toLong())
+        check(data.copyOfRange(le64(data, 32).toInt(), le64(data, 32).toInt() + XtcCodec.encodePage(page).size)
+            .contentEquals(XtcCodec.encodePage(page)))
+    }
     val white = ByteArray(480*800) { 255.toByte() }
     val q = GrayscaleConverter.dither(480,800,white,1)
     check(q.levels.all { it == 1.toByte() })
