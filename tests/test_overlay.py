@@ -12,16 +12,40 @@ class TestOverlay(unittest.TestCase):
             manga.mkdir(parents=True)
             (manga/'MangaViewModel.kt').write_text('import android.content.Context\nimport eu.kanade.tachiyomi.data.download.DownloadManager\n    private val downloadManager: DownloadManager,\n    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n')
             (manga/'MangaScreen.kt').write_text('import androidx.compose.foundation.layout.systemBarsPadding\n        MangaScreen(\n            state = successState,\n            onInvertSelection = viewModel::invertSelection,\n        )')
+            presentation = root/'app/src/main/java/eu/kanade/presentation/manga'
+            presentation.mkdir(parents=True)
+            (presentation/'MangaScreen.kt').write_text(
+                "    onDownloadActionClicked: ((DownloadAction) -> Unit)?,\n" * 3 +
+                "            onDownloadActionClicked = onDownloadActionClicked,\n" * 2 +
+                "                onClickDownload = onDownloadActionClicked,\n" * 2
+            )
+            components = presentation/'components'
+            components.mkdir(parents=True)
+            (components/'MangaToolbar.kt').write_text(
+                "import mihon.icons.materialsymbols.rounded.SelectAll\n"
+                "    onClickDownload: ((DownloadAction) -> Unit)?,\n"
+                "                    add(\n"
+                "                        AppBar.Action(\n"
+                "                            title = stringResource(MR.strings.action_filter),\n"
+                "                        return@buildList\n"
+            )
+            strings = root/'i18n/src/commonMain/moko-resources/base'
+            strings.mkdir(parents=True)
+            (strings/'strings.xml').write_text('<string name="app_name" translatable="false">Mihon</string>')
             updater = root/'app/src/main/java/eu/kanade/tachiyomi/data/updater'
             updater.mkdir(parents=True)
             (updater/'AppUpdateChecker.kt').write_text('"mihonapp/mihon-preview"\n"mihonapp/mihon"\n')
             subprocess.run(['python3',str(ROOT/'tools/apply_overlay.py'),str(root)],check=True,capture_output=True)
-            self.assertIn('Export to e-reader',(manga/'MangaScreen.kt').read_text())
+            self.assertIn('NooirExportDialog',(manga/'MangaScreen.kt').read_text())
             self.assertIn('nooirDownloadProvider',(manga/'MangaViewModel.kt').read_text())
             self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionName = "1.0.0"',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionCode = 1000000',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionName = "1.0.1"',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionCode = 1000001',(app/'build.gradle.kts').read_text())
             self.assertIn('toshio2011/mihon-nooir',(updater/'AppUpdateChecker.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').exists())
+            self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').exists())
+            self.assertIn('onClickExport = onExportClicked', (presentation/'MangaScreen.kt').read_text())
+            self.assertIn('Export to XTEink', (components/'MangaToolbar.kt').read_text())
+            self.assertIn('MangaNooir', (strings/'strings.xml').read_text())
 
 if __name__=='__main__': unittest.main()
