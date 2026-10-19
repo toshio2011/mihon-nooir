@@ -47,7 +47,7 @@ class TestOverlay(unittest.TestCase):
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').exists())
             self.assertIn('Quick Export', (root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').read_text())
-            self.assertIn('source.getPageList', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
+            self.assertIn('online.getPageList', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
             self.assertIn('onClickExport = onExportClicked', (presentation/'MangaScreen.kt').read_text())
             self.assertIn('Export to XTEink', (components/'MangaToolbar.kt').read_text())
             self.assertIn('MangaNooir', (strings/'strings.xml').read_text())
