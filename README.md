@@ -1,79 +1,142 @@
-# Mihon × MangaPoint × Folio Nooir
+<div align="center">
 
-**Experimental Android fork integration, not yet a production APK.**
+# MangaNooir
 
-Standalone Android manga reader based on the *full Mihon upstream*, with a MangaPoint-compatible e-reader export workflow. No Suwayomi server, private server or account required. Source discovery remains provided by Mihon's existing extensions, and sources are not bundled.
+**Read manga on Android. Prepare it for your e-reader. Send it over Wi-Fi.**
 
-## First integration milestone — 19 October 2026
+An independent, experimental Android fork of [Mihon](https://github.com/mihonapp/mihon), with an e-reader conversion workflow inspired by [MangaPoint](https://github.com/W1seGit/MangaPoint) and designed alongside [Folio Nooir](https://github.com/toshio2011/folio-nooir).
 
-- Keep all Mihon features by applying a minimal overlay to Mihon's source, pinned to commit `deeb9b2584b6e246135cbd31da49a39e6b6e1e52` (17 Oct 2026).
-- Add **Export to e-reader** to the existing manga detail screen, using downloaded chapters selected in Mihon or every downloaded chapter when none is selected.
-- Offer **Auto, XTC, XTCH, EPUB, CBZ** formats. Auto currently resolves to XTCH for X4; this is a preset, not a proven perfect choice for every manga.
-- **XTC / XTCH:** MangaPoint-compatible 1-bit/2-bit page serialization, per-chapter navigation, title, author, publisher, language and cover-page index.
-- **EPUB 3 fixed-layout:** ordered XHTML/image pages, navigation document, embedded cover, OPF title/creator/description/subjects/language/publisher/rights/identifier metadata.
-- **CBZ:** numbered PNGs, `ComicInfo.xml` with title/series/writer/artist/description/genre/language/cover/chapter bookmarks; machine-readable metadata JSON included for more fields.
-- Include original manga metadata as available from Mihon. Missing metadata is not fabricated. Preserve untouched original downloads for later re-export.
-- Currently X4 480×800 by default (X3 528×792 is implemented as a backend parameter but not exposed by the UI yet).
-- Test XTC/XTCH writer and EPUB/CBZ container + metadata + chapter navigation as pure JVM tests.
+[Getting started](docs/GETTING_STARTED.md) · [Wi-Fi transfer guide](docs/WIFI_TRANSFER.md) · [Formats & conversion](docs/CONVERSION.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
 
-## Metadata limitations
+![Android](https://img.shields.io/badge/platform-Android-informational)
+![Status](https://img.shields.io/badge/status-experimental-orange)
+![Mihon](https://img.shields.io/badge/base-Mihon-blue)
 
-All **four output formats** have *some* metadata embedded. The formats do not support the same fields:
+</div>
 
-| Format | Native metadata readable by supporting readers | Additional metadata |
+> [!IMPORTANT]
+> **This is an experimental fork, not an official Mihon app or a stable MangaNooir release.** Automated APK builds have passed, but real-world conversion and XTEink transfers still need testing. There are **no published stable GitHub Releases yet**. Back up your library before changing test APKs.
+
+## Why MangaNooir?
+
+Mihon is already a great way to browse, organize and read manga on Android. MangaNooir aims to bridge the gap between reading on your phone and reading on an e-ink device **without giving up Mihon's existing reader, extensions, library, downloads, tracking, or backups**.
+
+- **Stay in Mihon:** use your installed source extensions and existing manga library. No Suwayomi server or separate login is required.
+- **Export manga:** choose XTC, XTCH, fixed-layout EPUB or CBZ for your reader.
+- **Keep your originals:** converting does not replace or remove Mihon downloads.
+- **Save to your phone or send to Folio Nooir:** use Android's Save file picker, or the XTEink's local Wi-Fi File Transfer mode.
+- **Bring your own files:** an experimental workflow recognizes local CBZ/image manga, converts supported inputs, and can send other documents unchanged.
+
+No manga or content-source extensions are bundled. You are responsible for what you access, download and transfer.
+
+## What is available?
+
+This repository has a **working main branch** and **newer experimental preview branches**. The code in a green preview build is not necessarily in the main-branch APK.
+
+| Feature | Main branch · 1.0.1 | Experimental 1.0.4 · [PR #10](https://github.com/toshio2011/mihon-nooir/pull/10) |
 |---|---|---|
-| XTC / XTCH | Title, author, publisher, language, created date, cover page, chapter index | These formats have no standard synopsis/genre fields; firmware may show only title/author |
-| EPUB | Title, author, publisher, language, description, subjects/genres, rights, identifier, cover, navigation | `META-INF/nooir-metadata.json` carries more source fields |
-| CBZ | `ComicInfo.xml`: series, title, writer, artist, summary, genre, language, source URL, cover and chapter bookmarks | `nooir-metadata.json` carries more source fields; support varies by reader |
+| Mihon reader, library, downloads and extensions | Yes | Yes |
+| Export existing downloaded chapters | Yes | Yes |
+| X4 / X3 presets; XTC, XTCH, EPUB, CBZ | Yes | Yes |
+| Save converted file / send to Folio Nooir via Wi-Fi | Yes — hardware testing needed | Yes — hardware testing needed |
+| **Quick Export** online chapters without permanent downloads | Not on main | Experimental |
+| **Send & Convert** files selected from phone storage | Not on main | Experimental |
+| Choose several files for a batch | Not on main | Experimental — up to 25 per batch |
+| Background jobs, status, cancel and upload byte progress | Not on main | Experimental |
+| Manga, Manhwa, Manhua presets and image adjustments | Not on main | Experimental |
 
-The extra JSON is not a substitute for native metadata and may be ignored by e-readers. For **XTC/XTCH complete rich metadata** we would need to add an optional sidecar file or a coordinated Nooir metadata-import feature; adding undocumented binary fields risks corrupting files.
+The 1.0.4 preview has passed Android CI and format tests. That is **not** a guarantee of success on every manga source, XTEink model, SD card or firmware. **Web-article conversion, broader direct-device protocols, advanced preview/zoom controls and automatic large-file splitting are still planned**, not finished features.
 
-## Target user experience
+## Download and install
 
-**Browse / download through Mihon → choose device + output format → convert downloaded manga → Save or send to Nooir over Wi-Fi.** A full *download-time format picker*, persistent conversion presets, scheduling conversion when the download finishes, progress/cancellation, direct transfer UI and broad device presets are still to build. The current picker works **when exporting already-downloaded chapters**, not automatically on download. Do not assume they are finished.
+There is **no published stable release** to download yet. Testers can use GitHub Actions build artifacts:
 
-Why retain originals? Conversion is destructive. A saved original allows choosing another output later without downloading again, and preserves all existing Mihon readers, downloads, library, history, categories, updates, backups and tracking.
+1. Open [GitHub Actions → Build Mihon Nooir debug APK](https://github.com/toshio2011/mihon-nooir/actions/workflows/build-apk.yml), or the [green experimental 1.0.4 build](https://github.com/toshio2011/mihon-nooir/actions/runs/39220489438).
+2. Open a **successful** workflow run, scroll to **Artifacts**, and download `mihon-nooir-foss-apk` (GitHub sign-in may be needed).
+3. Unzip the downloaded artifact on your Android phone.
+4. On an ARM64 phone, install an APK named with `arm64-v8a` if present, or a suitable universal APK. Avoid `unsigned` APKs.
+5. Allow installation from your file manager when Android asks.
 
-## Build
+**Already have Mihon?** MangaNooir uses a different app identity, so it can coexist with Mihon. **Already have an older MangaNooir test APK?** CI signing keys can differ: Android may reject an in-place update. Back up your MangaNooir data before considering uninstalling the older test build.
 
-GitHub Actions `Build Mihon Nooir debug APK` clones the pinned Mihon revision, applies this overlay, and attempts `:app:assembleFoss`; the resulting APK will be uploaded as a workflow artifact **if the build succeeds**. We have not yet verified a full Android build or installed it on the user's phone.
+[Full first-run walkthrough →](docs/GETTING_STARTED.md) · [Build and update policy →](docs/UPDATES.md)
 
-```
+## Quick start
+
+### Export manga from your library
+
+1. Open a manga in MangaNooir, download or select the chapters you want, and tap the **Export** action beside Download.
+2. Choose the **X4** or **X3** screen preset and the output format (Auto / XTC / XTCH / EPUB / CBZ).
+3. Pick **Save file** for an Android file location, or **Send to XTEink** while Folio Nooir's File Transfer mode is running.
+4. Your original chapters stay in Mihon.
+
+In the **1.0.4 preview only**, selecting online chapters and enabling **Quick Export** fetches missing pages temporarily, converts chapter by chapter, and removes the temporary page cache. The preview also offers advanced conversion settings and background progress.
+
+### Send an existing file from your phone — 1.0.4 preview
+
+Open **More → Send & Convert files → Choose multiple files**. Select CBZ, images, EPUB, PDF or other documents. Send the originals unchanged, or choose **Convert manga & send** for supported CBZ/image inputs. Other formats are **not automatically made readable by the XTEink** just because they can be transferred.
+
+[More about formats, metadata and conversion options →](docs/CONVERSION.md)
+
+## Send to XTEink over Wi-Fi
+
+Your phone and Folio Nooir reader need to reach each other on the **same local network**, or you can connect the phone directly to the reader's **Create Hotspot** network. You do **not** need Bluetooth or a USB cable.
+
+1. On your XTEink, open **Home → File Transfer → Join Network**. Join a **2.4 GHz** Wi-Fi network and leave File Transfer running.
+2. Note the IP address displayed by the reader, for example `192.168.1.102` (this is only an example).
+3. From your phone, open `http://<reader-ip>/` in Chrome. Check that the device's file manager loads.
+4. In MangaNooir's transfer settings, enter **only** the address or hostname (`192.168.1.102`, **without** `http://`), and choose an existing destination folder such as `/Books` or `/`.
+5. Start with a small EPUB or CBZ. Wait for the XTEink's **success confirmation**, then check the file on the reader.
+
+For a reader-created hotspot, choose **File Transfer → Create Hotspot** and connect the phone to `CrossPoint-Reader`. Use the address actually shown on the reader (often `192.168.4.1`).
+
+> [!WARNING]
+> Folio Nooir's local web server and hotspot do **not** use authentication. Use a trusted network, close File Transfer when finished, and avoid exposing it to strangers. Interrupted transfers or full SD cards can leave incomplete files. The experimental 1.0.4 sender has a conservative **180 MiB per-file** limit; that is a safety guard, not a measured hardware maximum.
+
+[**Step-by-step Wi-Fi transfer guide and troubleshooting →**](docs/WIFI_TRANSFER.md) · [Folio Nooir web server guide](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
+
+## Output formats and metadata
+
+| Format | Designed for | Metadata |
+|---|---|---|
+| **XTC** | Small monochrome pages | Native title/author and chapter navigation |
+| **XTCH** | Four-shade grayscale pages | Native title/author and chapter navigation |
+| **EPUB** | Fixed-layout comic pages | OPF metadata, cover, subjects and navigation |
+| **CBZ** | Comic archive readers | Ordered images and `ComicInfo.xml` metadata |
+
+Reader support differs by firmware. EPUB/CBZ may contain extra Nooir metadata JSON that other readers ignore; XTC/XTCH do not have standardized native fields for every rich metadata attribute.
+
+[Format details, reading order and conversion controls →](docs/CONVERSION.md)
+
+## Build from source
+
+This repository stores an **integration overlay** rather than a complete second copy of Mihon. CI checks out the pinned Mihon revision in `config/mihon-upstream.sha`, applies `tools/apply_overlay.py`, and builds the FOSS APK.
+
+```bash
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-bash tests/run.sh                 # requires kotlinc and Java installed
+bash tests/run.sh   # JDK + kotlinc
 python3 tools/apply_overlay.py /path/to/pinned-mihon-checkout
+# Inside that Mihon checkout:
+./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false
 ```
 
-## Next milestones
+Fork updates are separate from official Mihon updates. Regular releases require a **persistent Android signing key**; do not expect unrelated CI debug APKs to upgrade one another. See [the update policy](docs/UPDATES.md).
 
-1. Green full Android CI build, on-device import/export test, compare output against MangaPoint and Nooir parsers.
-2. Single manga screen format/device preset picker; per-manga remembered settings; export progress and cancellation.
-3. Download-time **keep originals + convert after download** queue using Mihon's download-state events and Android WorkManager; choose format at initiation; never block normal downloads.
-4. Direct Nooir HTTP/Wi-Fi transfer with connectivity checks, explicit confirmation, retries and destination folder choice.
-5. MangaPoint-grade crop, zoom, dithering, rotation, contrast, page split/strip presets and faithful XTC/XTCH/EPUB/CBZ output tests.
-6. Metadata editor and optional rich-metadata sidecars; cover selection and remote/book metadata integration without overwriting Mihon data.
+## Roadmap and feedback
 
-## Source and license
+This is a work in progress. The open [master roadmap](https://github.com/toshio2011/mihon-nooir/issues/8) tracks full-volume splitting, reader/device profiles, more MangaPoint-style controls, background transfer hardening, web articles, metadata improvements, and testing with actual XTEink devices.
 
-Mihon is Apache-2.0; MangaPoint is MIT. Retain all upstream attribution and altered-file notices. This is an unofficial, independent project. You must have appropriate rights to download and transfer manga; no content or providers are bundled.
+If a transfer fails, capture the **build version, device/firmware, file type and size, destination folder, and error message**. Do not post copyrighted manga pages or credentials in reports.
 
-- Mihon: https://github.com/mihonapp/mihon
-- MangaPoint: https://github.com/W1seGit/MangaPoint
-- Nooir: https://github.com/toshio2011/folio-nooir
+## Credits and licenses
 
-## Keeping the app and Mihon upstream updated
+MangaNooir stands on the work of several open-source communities:
 
-Our app retains Mihon's built-in update screen, progress/download and Android installer flow. The overlay redirects update checks to this fork's GitHub releases, never to the official Mihon APK. Version names are independent and tracked by `config/version.txt`.
+- **[Mihon](https://github.com/mihonapp/mihon)** — the full Android reading experience, library, extensions and core app. Thanks to the Mihon Open Source Project, [Javier Tomás](https://github.com/inorichi), and the many Mihon/Tachiyomi contributors. **Apache License 2.0** ([upstream license](https://github.com/mihonapp/mihon/blob/main/LICENSE)).
+- **[MangaPoint](https://github.com/W1seGit/MangaPoint)** — inspiration and technical reference for e-reader workflows, image processing, XTC/XTCH, EPUB/CBZ and reader presets. Thanks to its authors and contributors. **MIT License** ([license](LICENSES/MANGAPOINT-MIT.txt)).
+- **[Folio Nooir](https://github.com/toshio2011/folio-nooir)** — the companion experimental reader firmware and the network-transfer endpoint this project targets. Its firmware builds on **[CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)**; thanks to the original CrossPoint contributors and ongoing firmware community.
+- **Open-source contributors and testers** — bug reports, format investigations and device feedback make interoperability possible.
 
-The `watch-mihon.yml` workflow checks upstream daily and updates one issue when commits change. Upstream code is reviewed and tested before updating the pinned SHA: no automatic merge that might erase Nooir-specific fixes.
+The **MangaNooir integration code** is distributed under [MIT](LICENSE), while the **Mihon source it patches remains Apache-2.0** and included MangaPoint-derived material retains its MIT notices. Retain applicable upstream notices and license texts when distributing modified builds. This project is **unofficial** and is not affiliated with or endorsed by Mihon, MangaPoint, XTEink or any manga provider.
 
-Official releases require a **stable signing key across builds** so Android recognizes the APK as an update; development APKs from CI may not be upgradable. See [update policy](docs/UPDATES.md).
-
-
-## MangaNooir v1.0.1 UI / Wi-Fi transfer
-
-The launcher and localized app name are now **MangaNooir**, distinct from Mihon. The fork retains Mihon's features while showing an **Export to XTEink** action next to the manga toolbar Download button (also available when chapters are selected).
-
-The export dialog remembers format (Auto/XTC/XTCH/EPUB/CBZ), X4/X3 device preset, hostname/IP, and folder. **Save file** uses Android's file picker. **Send to XTEink** probes Nooir's `GET /api/status`, creates the export in temporary app storage, then uploads with multipart `POST /upload?path=/Books`. Keep your XTEink in Nooir's File Transfer mode and phone on the same Wi-Fi. Sending to the same name overwrites the previous file on the device.
-
-As with the earlier build, sources and metadata are retained in Mihon; format conversion remains non-destructive. **Direct transfer still requires on-device hardware testing.** Page crop, contrast, dithering settings, upload progress, and download-time format selection remain future milestones.
+MangaNooir provides no manga, bundled sources or hosted catalog. Only use content you have the right to access and transfer.
