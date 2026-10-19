@@ -11,6 +11,7 @@ import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import org.json.JSONObject
 
 /** Native HTTP uploader for Folio Nooir / CrossPoint's existing POST /upload endpoint.
  * Device must be in File Transfer mode and phone on the same LAN / device hotspot.
@@ -141,6 +142,39 @@ object NooirUpload {
                 ?.bufferedReader()?.use { it.readText() } ?: ""
             check(status in 200..299) { "Upload rejected: HTTP " + status + " (" + response.take(160) + ")" }
             return response
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Update Folio Nooir's existing per-book metadata override after upload.
+     * Older firmware without /api/book may reject the call; the uploaded book
+     * remains valid and callers must treat this as a nonfatal metadata warning.
+     */
+    fun updateBookInfo(
+        deviceHost: String, destination: String, filename: String,
+        title: String, author: String, synopsis: String,
+    ): Boolean {
+        if (synopsis.isBlank() && title.isBlank() && author.isBlank()) return true
+        require(destination.startsWith("/") && !destination.contains("..")) { "Invalid destination" }
+        require(!filename.contains("/") && !filename.contains("\\\\")) { "Invalid filename" }
+        val host = URI("http://" + deviceHost.trim())
+        require(host.host != null && host.port == -1 && host.rawUserInfo == null &&
+            host.path.isNullOrEmpty() && host.rawQuery == null) { "Invalid Nooir host" }
+        val fullPath = (if (destination == "/") "" else destination.trimEnd('/')) + "/" + filename
+        val data = JSONObject().put("path", fullPath).put("title", title.take(192))
+            .put("author", author.take(128)).put("synopsis", synopsis.take(4096))
+            .toString().toByteArray(StandardCharsets.UTF_8)
+        val conn = URI("http://" + host.host + "/api/book").toURL().openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 5000
+            conn.readTimeout = 8000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.setFixedLengthStreamingMode(data.size)
+            conn.outputStream.use { it.write(data) }
+            return conn.responseCode in 200..299
         } finally {
             conn.disconnect()
         }
