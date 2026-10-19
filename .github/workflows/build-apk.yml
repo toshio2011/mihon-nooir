@@ -32,7 +32,7 @@ jobs:
         run: python3 tools/apply_overlay.py upstream
       - name: Assemble fork (FOSS APK)
         working-directory: upstream
-        run: bash ./gradlew :app:assembleFoss -Pdist=ci --no-daemon --stacktrace
+        run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
