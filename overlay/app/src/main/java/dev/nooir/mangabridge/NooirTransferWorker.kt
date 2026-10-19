@@ -114,7 +114,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         setForeground(ForegroundInfo(
             notificationId,
             notification("Preparing " + files.size + " file(s)…", null),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         ))
         var completed = 0
         try {
