@@ -39,7 +39,7 @@ class ReflowEpubWriter private constructor(private val zip: ZipOutputStream, pri
         val name = "images/img%05d.%s".format(imageIndex, ext)
         writeEntry("OEBPS/" + name, asset.bytes)
         manifest += "<item id=\"img$imageIndex\" href=\"$name\" media-type=\"$mime\"" +
-            if (isCover) " properties=\"cover-image\"/>" else "/>"
+            (if (isCover) " properties=\"cover-image\"/>" else "/>")
         return "../" + name
     }
 
