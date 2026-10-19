@@ -11,7 +11,7 @@ class TestOverlay(unittest.TestCase):
             manga=root/'app/src/main/java/eu/kanade/tachiyomi/ui/manga'
             manga.mkdir(parents=True)
             (manga/'MangaViewModel.kt').write_text('import android.content.Context\nimport eu.kanade.tachiyomi.data.download.DownloadManager\n    private val downloadManager: DownloadManager,\n    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n')
-            (manga/'MangaScreen.kt').write_text('import androidx.compose.foundation.layout.systemBarsPadding\n        MangaScreen(\n            state = successState,\n            onInvertSelection = viewModel::invertSelection,\n        )')
+            (manga/'MangaScreen.kt').write_text('import androidx.compose.foundation.layout.systemBarsPadding\n        MangaScreen(\n            state = successState,\n            onDownloadActionClicked = viewModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },\n            onInvertSelection = viewModel::invertSelection,\n        )')
             presentation = root/'app/src/main/java/eu/kanade/presentation/manga'
             presentation.mkdir(parents=True)
             (presentation/'MangaScreen.kt').write_text(
@@ -35,7 +35,7 @@ class TestOverlay(unittest.TestCase):
             updater = root/'app/src/main/java/eu/kanade/tachiyomi/data/updater'
             updater.mkdir(parents=True)
             (updater/'AppUpdateChecker.kt').write_text('"mihonapp/mihon-preview"\n"mihonapp/mihon"\n')
-            subprocess.run(['python3',str(ROOT/'tools/apply_overlay.py'),str(root)],check=True,capture_output=True)
+            subprocess.run(['python3',str(ROOT/'tools/apply_overlay.py'),str(root)],check=True,capture_output=True,text=True)
             self.assertIn('NooirExportDialog',(manga/'MangaScreen.kt').read_text())
             self.assertIn('nooirDownloadProvider',(manga/'MangaViewModel.kt').read_text())
             self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
