@@ -12,8 +12,13 @@ Choose the walkthrough that matches what you're trying to do:
 | [Formats and conversion](CONVERSION.md) | XTC, XTCH, EPUB, CBZ, metadata, presets, reading order |
 | [FAQ](FAQ.md) | Fast answers to common questions |
 | [Build/update policy](UPDATES.md) | Versioning, pinned upstream, APK signing and app updates |
+| **[Project handover / current development state](PROJECT_HANDOVER.md)** | Complete audit of stacked PRs through 1.0.9, source branches, CI/artifacts, outstanding device tests and next steps |
+| [Experimental landscape & page overlap](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/ORIENTATION_OVERLAP.md) | Portrait/landscape and adjustable overlapping page cuts |
+| [Experimental web link to EPUB](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/WEB_TO_READER.md) | Paste a public article URL, reflow text/images and save/send |
+| [Experimental PDF to EPUB](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/PDF_TO_EPUB.md) | Real selectable PDF text + inline illustrations, scanned-page fallback, no AI/OCR |
+| [Experimental XTEink file browsing](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/DEVICE_FILES_AND_QUEUE.md) | Read-only SD folder view and existing full browser file manager |
 | [Experimental XTC cover/synopsis design](https://github.com/toshio2011/mihon-nooir/blob/feature/xtc-cover-synopsis/docs/XTC_METADATA.md) | Experimental 1.0.5 cover page, embedded synopsis and firmware interoperability |
 
-**Version reminder:** `main` still contains the working **1.0.1** feature set. The later **1.0.4** and **1.0.5** experimental Android builds have passed GitHub CI but aren't stable releases. Features listed in preview guides may not be available in 1.0.1.
+**Version reminder:** `main` still contains the working **1.0.1** feature set. The newer **1.0.4–1.0.9** experimental Android preview branches have passed GitHub CI, but **none is a stable or hardware-verified release**; start from the [audited 1.0.9 handover](PROJECT_HANDOVER.md). Features listed in preview guides may not be available in 1.0.1.
 
 For open features, device compatibility testing, and planned automatic chapter/volume splitting, see [roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8).
