@@ -6,7 +6,7 @@
 
 An independent, experimental Android fork of [Mihon](https://github.com/mihonapp/mihon), with an e-reader conversion workflow inspired by [MangaPoint](https://github.com/W1seGit/MangaPoint) and designed alongside [Folio Nooir](https://github.com/toshio2011/folio-nooir).
 
-[All guides](docs/README.md) · [Choose chapters](docs/CHAPTER_SELECTION.md) · [Getting started](docs/GETTING_STARTED.md) · [Wi-Fi transfer](docs/WIFI_TRANSFER.md) · [FAQ](docs/FAQ.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[All guides](docs/README.md) · [Choose chapters](docs/CHAPTER_SELECTION.md) · [Getting started](docs/GETTING_STARTED.md) · [Wi-Fi transfer](docs/WIFI_TRANSFER.md) · [FAQ](docs/FAQ.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8) · [Developer handover](docs/PROJECT_HANDOVER.md)
 
 ![Android](https://img.shields.io/badge/platform-Android-informational)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -130,6 +130,12 @@ python3 tools/apply_overlay.py /path/to/pinned-mihon-checkout
 ```
 
 Fork updates are separate from official Mihon updates. Regular releases require a **persistent Android signing key**; do not expect unrelated CI debug APKs to upgrade one another. See [the update policy](docs/UPDATES.md).
+
+## Experimental work and next-session handover (20 October 2026)
+
+**Continue development from [the full cross-chat project handover](docs/PROJECT_HANDOVER.md).** It audits all stacked draft PRs through **experimental 1.0.9**, their exact branches, current CI/artifact checks, implemented features, incomplete features, and X4 hardware test requirements.
+
+The newest [draft PR #15](https://github.com/toshio2011/mihon-nooir/pull/15) includes the earlier experimental previews plus landscape/overlap, Web → reflowable EPUB, PDF → mixed text-and-image EPUB, a lightweight XTEink Device Files browser, and a unified background job queue. Its [1.0.9 CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39332739610) passed. **None of these stacked experimental PRs is merged into main, and physical X4 validation is still outstanding.** Always check newer commits and runs before using this status.
 
 ## Roadmap and feedback
 
