@@ -67,6 +67,7 @@ object MihonNooirExporter {
             null, deviceHost, destinationFolder, format, device, quickExport)
     }
 
+    /** Stream one source chapter at a time; only the active chapter is temporarily cached. */
     private suspend fun renderExport(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, destination: Uri?, deviceHost: String?,
@@ -74,66 +75,9 @@ object MihonNooirExporter {
         quickExport: Boolean,
     ): ExportResult = withContext(Dispatchers.IO) {
         require(chapters.isNotEmpty()) { "Select at least one chapter" }
-        if (quickExport) require(chapters.size <= 5) { "Quick Export allows up to 5 chapters" }
-        val quickDir = if (quickExport) File(context.cacheDir, "nooir-quick-" + UUID.randomUUID()).apply {
-            check(mkdirs()) { "Cannot create Quick Export cache" }
-        } else null
-        var quickPages = 0
-        var quickBytes = 0L
-        try {
-        val resolved = chapters.sortedWith(compareBy<Chapter> { it.chapterNumber }.thenBy { it.id })
-            .map { chapter ->
-                val location = provider.findChapterDir(chapter.name, chapter.scanlator, chapter.url, manga.title, source)
-                val uris: List<Uri> = if (location == null) {
-                    check(quickExport && source is HttpSource) {
-                        "Chapter is not downloaded: ${chapter.name}. Enable Quick Export for online chapters."
-                    }
-                    val pages = source.getPageList(chapter.toSChapter())
-                    require(pages.isNotEmpty()) { "No pages returned for ${chapter.name}" }
-                    quickPages += pages.size
-                    require(quickPages <= 250) { "Quick Export limit: 250 remote pages per job" }
-                    val folder = File(requireNotNull(quickDir), "chapter-" + chapter.id).apply {
-                        check(mkdirs()) { "Cannot create chapter cache" }
-                    }
-                    pages.mapIndexed { index, page ->
-                        coroutineContext.ensureActive()
-                        if (page.imageUrl.isNullOrBlank()) page.imageUrl = source.getImageUrl(page)
-                        val out = File(folder, "%04d.img".format(index))
-                        source.getImage(page).use { response ->
-                            check(response.isSuccessful) { "Image request HTTP ${response.code} failed in ${chapter.name}" }
-                            response.body.byteStream().use { input ->
-                                out.outputStream().use { target ->
-                                    val buffer = ByteArray(32 * 1024)
-                                    var perImage = 0L
-                                    while (true) {
-                                        coroutineContext.ensureActive()
-                                        val n = input.read(buffer)
-                                        if (n < 0) break
-                                        perImage += n
-                                        quickBytes += n
-                                        require(perImage <= 25L * 1024 * 1024) { "Image exceeds 25 MB limit" }
-                                        require(quickBytes <= 250L * 1024 * 1024) { "Quick Export exceeds 250 MB limit" }
-                                        target.write(buffer, 0, n)
-                                    }
-                                }
-                            }
-                        }
-                        Uri.fromFile(out)
-                    }
-                } else if (location.isFile) {
-                    require(location.name?.endsWith(".cbz", ignoreCase = true) == true) {
-                        "Unsupported chapter archive: ${location.name}"
-                    }
-                    listOf(location.uri)
-                } else {
-                    location.listFiles().orEmpty().filter { it.isFile && isImage(it.name) }
-                        .sortedWith { a, b -> naturalComparator.compare(a.name, b.name) }
-                        .map { it.uri }
-                }
-                require(uris.isNotEmpty()) { "No readable image pages in ${chapter.name}" }
-                chapter.name to uris
-            }
-
+        val ownerJob = coroutineContext[kotlinx.coroutines.Job]
+            ?: error("Quick Export requires a coroutine Job")
+        val ordered = chapters.sortedWith(compareBy<Chapter> { it.chapterNumber }.thenBy { it.id })
         val actual = format.resolved(device)
         val (width, height) = when (device) {
             "X3" -> 528 to 792
@@ -143,66 +87,146 @@ object MihonNooirExporter {
             title = manga.title, author = manga.author.orEmpty(), artist = manga.artist.orEmpty(),
             description = manga.description.orEmpty(), genres = manga.genre.orEmpty(),
             language = source.lang.ifBlank { "und" },
-            series = manga.title, identifier = "mihon:${manga.source}:${manga.id}",
+            series = manga.title, identifier = "mihon:" + manga.source + ":" + manga.id,
             sourceUrl = manga.url.takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
         )
-        val sourcePages = AndroidPageSource(context)
-        val tempDir = File(context.cacheDir, "manganooir-transfer-" + UUID.randomUUID()).apply {
-            check(mkdirs()) { "Could not create temp export folder" }
+        val pageSource = AndroidPageSource(context)
+        val tempFolder = File(context.cacheDir, "manganooir-transfer-" + UUID.randomUUID()).apply {
+            check(mkdirs()) { "Cannot create conversion cache" }
         }
         val safeTitle = manga.title.take(70).map { c ->
             if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-' || c == '_') c else '_'
         }.joinToString("").ifBlank { "Manga" }
-        val tmp = File(tempDir, safeTitle + "." + actual.extension)
-        try {
-            val resultCount: Int
-            tmp.outputStream().use { stream ->
-                if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
-                    val xformat = if (actual == ExportFormat.XTC) XtcFormat.XTC else XtcFormat.XTCH
-                    val sections = mutableListOf<BookChapter>()
-                    var count = 0
-                    val pages = sequence {
-                        for ((chapterName, files) in resolved) {
-                            val start = count
-                            for (page in sourcePages.pages(files, width, height, xformat.depth)) {
-                                yield(page)
-                                count++
+        val tmp = File(tempFolder, safeTitle + "." + actual.extension)
+
+        fun chapterFrames(depth: Int): Sequence<Pair<Chapter, dev.nooir.bridge.QuantizedPage>> = sequence {
+            for (chapter in ordered) {
+                ownerJob.ensureActive()
+                val downloaded = provider.findChapterDir(
+                    chapter.name, chapter.scanlator, chapter.url, manga.title, source,
+                )
+                val remoteCache = if (downloaded == null && quickExport) {
+                    File(tempFolder, "chapter-" + chapter.id).apply { check(mkdirs()) }
+                } else null
+                try {
+                    val uris: List<Uri> = if (downloaded != null) {
+                        if (downloaded.isFile) {
+                            require(downloaded.name?.endsWith(".cbz", ignoreCase = true) == true) {
+                                "Unsupported chapter archive: " + downloaded.name
                             }
-                            if (count > start) sections += BookChapter(chapterName, start, count - 1)
+                            listOf(downloaded.uri)
+                        } else {
+                            downloaded.listFiles().orEmpty().filter { it.isFile && isImage(it.name) }
+                                .sortedWith { a, b -> naturalComparator.compare(a.name, b.name) }
+                                .map { it.uri }
+                        }
+                    } else {
+                        val online = source as? HttpSource
+                            ?: error("Online source is required for non-downloaded chapters")
+                        check(quickExport) { "Chapter not downloaded: " + chapter.name }
+                        // Suspend APIs are called within the synchronous image writer's iteration.
+                        // Inherit the parent job, so cancellation of the export aborts network requests.
+                        kotlinx.coroutines.runBlocking(ownerJob + Dispatchers.IO) {
+                            val pages = online.getPageList(chapter.toSChapter())
+                            require(pages.isNotEmpty()) { "No images found for " + chapter.name }
+                            require(pages.size <= 1000) { "Chapter has too many images" }
+                            var chapterBytes = 0L
+                            pages.mapIndexed { index, page ->
+                                ownerJob.ensureActive()
+                                if (page.imageUrl.isNullOrBlank()) page.imageUrl = online.getImageUrl(page)
+                                val output = File(requireNotNull(remoteCache), "%05d.img".format(index))
+                                online.getImage(page).use { response ->
+                                    check(response.isSuccessful) {
+                                        "Chapter image HTTP " + response.code + " failed: " + chapter.name
+                                    }
+                                    response.body.byteStream().use { input ->
+                                        output.outputStream().use { target ->
+                                            val buffer = ByteArray(32 * 1024)
+                                            var imageBytes = 0L
+                                            while (true) {
+                                                ownerJob.ensureActive()
+                                                val n = input.read(buffer)
+                                                if (n < 0) break
+                                                imageBytes += n
+                                                chapterBytes += n
+                                                require(imageBytes <= 25L * 1024 * 1024) {
+                                                    "Image exceeds 25 MB"
+                                                }
+                                                require(chapterBytes <= 400L * 1024 * 1024) {
+                                                    "Chapter exceeds 400 MB of temporary images"
+                                                }
+                                                target.write(buffer, 0, n)
+                                            }
+                                        }
+                                    }
+                                }
+                                Uri.fromFile(output)
+                            }
                         }
                     }
-                    resultCount = XtcCodec.write(xformat, pages, stream, context.cacheDir,
-                        metadata = meta.xtc(), direction = meta.direction,
-                        chapterResolver = { pageCount ->
-                            check(pageCount == count) { "Chapter page counts became inconsistent" }
-                            sections.toList()
+                    require(uris.isNotEmpty()) { "No readable images in " + chapter.name }
+                    for (page in pageSource.pages(uris, width, height, depth)) {
+                        ownerJob.ensureActive()
+                        yield(chapter to page)
+                    }
+                } finally {
+                    remoteCache?.deleteRecursively()
+                }
+            }
+        }
+
+        try {
+            val pageCount: Int
+            tmp.outputStream().use { output ->
+                if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
+                    val xtcFormat = if (actual == ExportFormat.XTC) XtcFormat.XTC else XtcFormat.XTCH
+                    val sections = mutableListOf<BookChapter>()
+                    var total = 0
+                    var activeId: Long? = null
+                    var activeName = ""
+                    var sectionStart = 0
+                    val stream = sequence {
+                        for ((chapter, page) in chapterFrames(xtcFormat.depth)) {
+                            if (activeId != chapter.id) {
+                                if (activeId != null && total > sectionStart) {
+                                    sections += BookChapter(activeName, sectionStart, total - 1)
+                                }
+                                sectionStart = total
+                                activeId = chapter.id
+                                activeName = chapter.name
+                            }
+                            yield(page)
+                            total++
                         }
+                        if (activeId != null && total > sectionStart) {
+                            sections += BookChapter(activeName, sectionStart, total - 1)
+                        }
+                    }
+                    pageCount = XtcCodec.write(
+                        xtcFormat, stream, output, context.cacheDir,
+                        metadata = meta.xtc(), direction = meta.direction,
+                        chapterResolver = { written ->
+                            check(total == written) { "Chapter navigation mismatch" }
+                            sections.toList()
+                        },
                     ).pageCount
                 } else {
-                    val archivePages = sequence {
-                        for ((chapterName, files) in resolved) {
-                            for (page in sourcePages.pages(files, width, height, 2)) {
-                                yield(ArchivePage(chapterName, png(page), page.width, page.height))
-                            }
-                        }
+                    val stream = chapterFrames(2).map { (chapter, page) ->
+                        ArchivePage(chapter.name, png(page), page.width, page.height)
                     }
-                    resultCount = BookArchiveWriter.write(actual, archivePages, stream, meta)
+                    pageCount = BookArchiveWriter.write(actual, stream, output, meta)
                 }
             }
             if (destination != null) {
                 context.contentResolver.openOutputStream(destination, "w")?.use { output ->
                     tmp.inputStream().use { it.copyTo(output, 64 * 1024) }
-                } ?: error("Could not open selected output location")
+                } ?: error("Cannot open selected output")
             } else {
                 NooirUpload.upload(tmp, requireNotNull(deviceHost), requireNotNull(destinationFolder))
             }
-            ExportResult(resultCount, tmp.length(), actual)
+            ExportResult(pageCount, tmp.length(), actual)
         } finally {
-            tmp.delete()
-            tempDir.delete()
-        }
-        } finally {
-            quickDir?.deleteRecursively()
+            tempFolder.deleteRecursively()
         }
     }
 
