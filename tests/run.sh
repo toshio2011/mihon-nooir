@@ -10,3 +10,5 @@ java -jar "$tmp/chapters.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,BookArchiveWriter.kt} tests/FormatsTest.kt -include-runtime -d "$tmp/formats.jar"
 java -jar "$tmp/formats.jar"
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/PageSlicePlanner.kt tests/PageSlicePlannerTest.kt -include-runtime -d "$tmp/slicing.jar"
+java -jar "$tmp/slicing.jar"
