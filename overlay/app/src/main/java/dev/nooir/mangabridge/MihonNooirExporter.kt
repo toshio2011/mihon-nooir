@@ -55,18 +55,22 @@ object MihonNooirExporter {
         chapters: List<Chapter>, destination: Uri, format: ExportFormat,
         device: String = "X4", quickExport: Boolean = false,
         options: MangaConversionOptions = MangaConversionOptions(),
-    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device, quickExport, options)
+        onStage: (String, Int, Int) -> Unit = { _, _, _ -> },
+        onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
+    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device, quickExport, options, onStage, onUploadProgress)
 
     suspend fun sendToDevice(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
         chapters: List<Chapter>, deviceHost: String, destinationFolder: String,
         format: ExportFormat, device: String = "X4", quickExport: Boolean = false,
         options: MangaConversionOptions = MangaConversionOptions(),
+        onStage: (String, Int, Int) -> Unit = { _, _, _ -> },
+        onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
     ): ExportResult {
         // Check the Nooir transfer server before spending time processing images.
         withContext(Dispatchers.IO) { NooirUpload.checkConnected(deviceHost) }
         return renderExport(context, provider, manga, source, chapters,
-            null, deviceHost, destinationFolder, format, device, quickExport, options)
+            null, deviceHost, destinationFolder, format, device, quickExport, options, onStage, onUploadProgress)
     }
 
     /** Stream one source chapter at a time; only the active chapter is temporarily cached. */
@@ -75,6 +79,8 @@ object MihonNooirExporter {
         chapters: List<Chapter>, destination: Uri?, deviceHost: String?,
         destinationFolder: String?, format: ExportFormat, device: String,
         quickExport: Boolean, options: MangaConversionOptions,
+        onStage: (String, Int, Int) -> Unit,
+        onUploadProgress: (Long, Long) -> Unit,
     ): ExportResult = withContext(Dispatchers.IO) {
         require(chapters.isNotEmpty()) { "Select at least one chapter" }
         val ownerJob = coroutineContext[kotlinx.coroutines.Job]
@@ -109,8 +115,11 @@ object MihonNooirExporter {
         val tmp = File(tempFolder, safeTitle + "." + actual.extension)
 
         fun chapterFrames(depth: Int): Sequence<Pair<Chapter, dev.nooir.bridge.QuantizedPage>> = sequence {
-            for ((chapter, downloaded) in locations) {
+            for ((chapterIndex, entry) in locations.withIndex()) {
+                val (chapter, downloaded) = entry
                 ownerJob.ensureActive()
+                onStage("Converting chapter " + (chapterIndex + 1) + "/" + locations.size,
+                    chapterIndex + 1, locations.size)
                 val remoteCache = if (downloaded == null && quickExport) {
                     File(tempFolder, "chapter-" + chapter.id).apply { check(mkdirs()) }
                 } else null
@@ -228,7 +237,12 @@ object MihonNooirExporter {
                     tmp.inputStream().use { it.copyTo(output, 64 * 1024) }
                 } ?: error("Cannot open selected output")
             } else {
-                NooirUpload.upload(tmp, requireNotNull(deviceHost), requireNotNull(destinationFolder))
+                require(tmp.length() <= 180L * 1024 * 1024) {
+                    "Output is over 180 MB: for XTEink stability, select fewer chapters or export smaller files."
+                }
+                onStage("Uploading to XTEink", locations.size, locations.size)
+                NooirUpload.upload(tmp, requireNotNull(deviceHost),
+                    requireNotNull(destinationFolder), onUploadProgress)
             }
             ExportResult(pageCount, tmp.length(), actual)
         } finally {
