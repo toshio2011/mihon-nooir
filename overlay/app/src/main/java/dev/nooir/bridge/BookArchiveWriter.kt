@@ -97,7 +97,8 @@ object BookArchiveWriter {
             else -> if (c.code >= 32 || c == '\n' || c == '\t') append(c)
         } }
     }
-    private fun jsonMetadata(m: ExtendedMetadata): String {
+    /** Shared JSON metadata for EPUB/CBZ and the optional XTC/XTCH tail. */
+    fun jsonMetadata(m: ExtendedMetadata): String {
         fun esc(s: String) = buildString { append('"'); s.forEach { c -> when(c) { '\\' -> append("\\\\"); '"' -> append("\\\""); '\n' -> append("\\n"); '\r' -> append("\\r"); '\t' -> append("\\t"); else -> if (c.code < 32) append("\\u%04x".format(c.code)) else append(c) } }; append('"') }
         return """{"title":${esc(m.title)},"author":${esc(m.author)},"artist":${esc(m.artist)},"description":${esc(m.description)},"genres":[${m.genres.joinToString(","){esc(it)}}],"publisher":${esc(m.publisher)},"language":${esc(m.language)},"series":${esc(m.series)},"identifier":${esc(m.identifier)},"sourceUrl":${esc(m.sourceUrl)},"status":${esc(m.status)},"rights":${esc(m.rights)}}"""
     }
