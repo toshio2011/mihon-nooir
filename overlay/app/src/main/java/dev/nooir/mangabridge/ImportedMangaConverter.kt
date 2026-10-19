@@ -99,6 +99,7 @@ object ImportedMangaConverter {
         sendFolder: String = "/Books",
         onStage: (String) -> Unit = {},
         onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
+        options: MangaConversionOptions = MangaConversionOptions(),
     ): Result = withContext(Dispatchers.IO) {
         require(picked.isManga) { "This file is not a supported manga image or CBZ archive" }
         if (picked.bytes != null) require(picked.bytes <= 512L * 1024 * 1024) {
@@ -109,7 +110,9 @@ object ImportedMangaConverter {
         val (width, height) = if (device == "X3") (528 to 792) else (480 to 800)
         val baseTitle = picked.name.substringBeforeLast('.', picked.name).ifBlank { "Manga" }
         onStage("Reading manga metadata")
-        val metadata = loadMetadata(context, input, picked, baseTitle)
+        val metadata = loadMetadata(context, input, picked, baseTitle).copy(
+            direction = if (options.rightToLeft) dev.nooir.bridge.ReadingDirection.RIGHT_TO_LEFT else dev.nooir.bridge.ReadingDirection.LEFT_TO_RIGHT,
+        )
         val source = AndroidPageSource(context)
         val tempFolder = File(context.cacheDir, "manganooir-import-" + UUID.randomUUID()).apply {
             check(mkdirs()) { "Cannot create conversion cache" }
@@ -126,7 +129,7 @@ object ImportedMangaConverter {
                     val depth = if (actual == ExportFormat.XTC) XtcFormat.XTC else XtcFormat.XTCH
                     count = XtcCodec.write(
                         depth,
-                        source.pages(listOf(input), width, height, depth.depth),
+                        source.pages(listOf(input), width, height, depth.depth, options),
                         target, context.cacheDir, metadata = metadata.xtc(),
                         direction = metadata.direction,
                         chapterResolver = { pages ->
@@ -135,7 +138,7 @@ object ImportedMangaConverter {
                         },
                     ).pageCount
                 } else {
-                    val archivePages = source.pages(listOf(input), width, height, 2).map { page ->
+                    val archivePages = source.pages(listOf(input), width, height, 2, options).map { page ->
                         ArchivePage(baseTitle, png(page), page.width, page.height)
                     }
                     count = BookArchiveWriter.write(actual, archivePages, target, metadata)
