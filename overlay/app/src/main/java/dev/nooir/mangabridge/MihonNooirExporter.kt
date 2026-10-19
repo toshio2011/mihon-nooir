@@ -11,6 +11,8 @@ import dev.nooir.bridge.NooirUpload
 import java.util.UUID
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
+import dev.nooir.bridge.xtcRichJson
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import android.graphics.Bitmap
 import android.graphics.Color
 import java.io.ByteArrayOutputStream
@@ -57,7 +59,8 @@ object MihonNooirExporter {
         options: MangaConversionOptions = MangaConversionOptions(),
         onStage: (String, Int, Int) -> Unit = { _, _, _ -> },
         onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
-    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device, quickExport, options, onStage, onUploadProgress)
+        coverCache: CoverCache? = null,
+    ): ExportResult = renderExport(context, provider, manga, source, chapters, destination, null, null, format, device, quickExport, options, onStage, onUploadProgress, coverCache)
 
     suspend fun sendToDevice(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
@@ -66,11 +69,12 @@ object MihonNooirExporter {
         options: MangaConversionOptions = MangaConversionOptions(),
         onStage: (String, Int, Int) -> Unit = { _, _, _ -> },
         onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
+        coverCache: CoverCache? = null,
     ): ExportResult {
         // Check the Nooir transfer server before spending time processing images.
         withContext(Dispatchers.IO) { NooirUpload.checkConnected(deviceHost) }
         return renderExport(context, provider, manga, source, chapters,
-            null, deviceHost, destinationFolder, format, device, quickExport, options, onStage, onUploadProgress)
+            null, deviceHost, destinationFolder, format, device, quickExport, options, onStage, onUploadProgress, coverCache)
     }
 
     /** Stream one source chapter at a time; only the active chapter is temporarily cached. */
@@ -81,6 +85,7 @@ object MihonNooirExporter {
         quickExport: Boolean, options: MangaConversionOptions,
         onStage: (String, Int, Int) -> Unit,
         onUploadProgress: (Long, Long) -> Unit,
+        coverCache: CoverCache?,
     ): ExportResult = withContext(Dispatchers.IO) {
         require(chapters.isNotEmpty()) { "Select at least one chapter" }
         val ownerJob = coroutineContext[kotlinx.coroutines.Job]
@@ -108,6 +113,16 @@ object MihonNooirExporter {
         val pageSource = AndroidPageSource(context)
         val tempFolder = File(context.cacheDir, "manganooir-transfer-" + UUID.randomUUID()).apply {
             check(mkdirs()) { "Cannot create conversion cache" }
+        }
+        // Folio Nooir uses the *first XTC page* to generate its shelf thumbnail.
+        // Use the actual Mihon series artwork if we can obtain it; otherwise leave
+        // original page ordering intact rather than fabricating a cover.
+        val coverUri = NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder)
+        val coverOptions = options.copy(layout = "PAGED", cropWhiteMargins = false, splitSpreads = false)
+        fun coverPage(depth: Int): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
+            runCatching {
+                pageSource.pages(listOf(uri), width, height, depth, coverOptions).singleOrNull()
+            }.getOrNull()
         }
         val safeTitle = manga.title.take(70).map { c ->
             if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-' || c == '_') c else '_'
@@ -200,7 +215,12 @@ object MihonNooirExporter {
                     var activeId: Long? = null
                     var activeName = ""
                     var sectionStart = 0
+                    val cover = coverPage(xtcFormat.depth)
                     val stream = sequence {
+                        if (cover != null) {
+                            yield(cover)
+                            total++
+                        }
                         for ((chapter, page) in chapterFrames(xtcFormat.depth)) {
                             if (activeId != chapter.id) {
                                 if (activeId != null && total > sectionStart) {
@@ -220,14 +240,19 @@ object MihonNooirExporter {
                     pageCount = XtcCodec.write(
                         xtcFormat, stream, output, context.cacheDir,
                         metadata = meta.xtc(), direction = meta.direction,
+                        richMetadataJson = meta.xtcRichJson(),
                         chapterResolver = { written ->
                             check(total == written) { "Chapter navigation mismatch" }
                             sections.toList()
                         },
                     ).pageCount
                 } else {
-                    val stream = chapterFrames(2).map { (chapter, page) ->
-                        ArchivePage(chapter.name, png(page), page.width, page.height)
+                    val cover = coverPage(2)
+                    val stream = sequence {
+                        if (cover != null) yield(ArchivePage("Cover", png(cover), cover.width, cover.height))
+                        for ((chapter, page) in chapterFrames(2)) {
+                            yield(ArchivePage(chapter.name, png(page), page.width, page.height))
+                        }
                     }
                     pageCount = BookArchiveWriter.write(actual, stream, output, meta)
                 }
