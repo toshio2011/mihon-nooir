@@ -6,7 +6,7 @@
 
 An independent, experimental Android fork of [Mihon](https://github.com/mihonapp/mihon), with an e-reader conversion workflow inspired by [MangaPoint](https://github.com/W1seGit/MangaPoint) and designed alongside [Folio Nooir](https://github.com/toshio2011/folio-nooir).
 
-[Getting started](docs/GETTING_STARTED.md) · [Wi-Fi transfer guide](docs/WIFI_TRANSFER.md) · [Formats & conversion](docs/CONVERSION.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[All guides](docs/README.md) · [Choose chapters](docs/CHAPTER_SELECTION.md) · [Getting started](docs/GETTING_STARTED.md) · [Wi-Fi transfer](docs/WIFI_TRANSFER.md) · [FAQ](docs/FAQ.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
 
 ![Android](https://img.shields.io/badge/platform-Android-informational)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -33,7 +33,7 @@ No manga or content-source extensions are bundled. You are responsible for what 
 
 This repository has a **working main branch** and **newer experimental preview branches**. The code in a green preview build is not necessarily in the main-branch APK.
 
-| Feature | Main branch · 1.0.1 | Experimental 1.0.4 · [PR #10](https://github.com/toshio2011/mihon-nooir/pull/10) |
+| Feature | Main branch · 1.0.1 | Experimental 1.0.4–1.0.5 · [PR #10](https://github.com/toshio2011/mihon-nooir/pull/10) / [PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) |
 |---|---|---|
 | Mihon reader, library, downloads and extensions | Yes | Yes |
 | Export existing downloaded chapters | Yes | Yes |
@@ -45,13 +45,13 @@ This repository has a **working main branch** and **newer experimental preview b
 | Background jobs, status, cancel and upload byte progress | Not on main | Experimental |
 | Manga, Manhwa, Manhua presets and image adjustments | Not on main | Experimental |
 
-The 1.0.4 preview has passed Android CI and format tests. That is **not** a guarantee of success on every manga source, XTEink model, SD card or firmware. **Web-article conversion, broader direct-device protocols, advanced preview/zoom controls and automatic large-file splitting are still planned**, not finished features.
+The 1.0.4 and 1.0.5 previews have passed Android CI and format tests. That is **not** a guarantee of success on every manga source, XTEink model, SD card or firmware. **Web-article conversion, broader direct-device protocols, advanced preview/zoom controls and automatic large-file splitting are still planned**, not finished features.
 
 ## Download and install
 
 There is **no published stable release** to download yet. Testers can use GitHub Actions build artifacts:
 
-1. Open [GitHub Actions → Build Mihon Nooir debug APK](https://github.com/toshio2011/mihon-nooir/actions/workflows/build-apk.yml), or the [green experimental 1.0.4 build](https://github.com/toshio2011/mihon-nooir/actions/runs/39220489438).
+1. Open [GitHub Actions → Build Mihon Nooir debug APK](https://github.com/toshio2011/mihon-nooir/actions/workflows/build-apk.yml), or the [green experimental 1.0.5 build](https://github.com/toshio2011/mihon-nooir/actions/runs/39228413383) ([earlier 1.0.4 build](https://github.com/toshio2011/mihon-nooir/actions/runs/39220489438)).
 2. Open a **successful** workflow run, scroll to **Artifacts**, and download `mihon-nooir-foss-apk` (GitHub sign-in may be needed).
 3. Unzip the downloaded artifact on your Android phone.
 4. On an ARM64 phone, install an APK named with `arm64-v8a` if present, or a suitable universal APK. Avoid `unsigned` APKs.
@@ -63,14 +63,21 @@ There is **no published stable release** to download yet. Testers can use GitHub
 
 ## Quick start
 
-### Export manga from your library
+### Choose chapters and export manga
 
-1. Open a manga in MangaNooir, download or select the chapters you want, and tap the **Export** action beside Download.
-2. Choose the **X4** or **X3** screen preset and the output format (Auto / XTC / XTCH / EPUB / CBZ).
-3. Pick **Save file** for an Android file location, or **Send to XTEink** while Folio Nooir's File Transfer mode is running.
-4. Your original chapters stay in Mihon.
+**Select the chapters *before* opening the Export dialog**—there isn't a second chapter picker inside Export.
 
-In the **1.0.4 preview only**, selecting online chapters and enabling **Quick Export** fetches missing pages temporarily, converts chapter by chapter, and removes the temporary page cache. The preview also offers advanced conversion settings and background progress.
+1. Open the manga's **details page**, then **long-press** the first chapter you want.
+2. **Tap** other chapters to add or remove them. For a consecutive range, long-pressing a later chapter may select the chapters between them. **Select All** and **Invert Selection** are available in the top toolbar; check the highlighted chapters before proceeding.
+3. Tap the **Save/Export icon** in the top toolbar (**Export selected chapters** in selection mode).
+4. Pick **X4/X3**, the output format (Auto / XTC / XTCH / EPUB / CBZ), then **Save file** or **Send to XTEink**. Your original Mihon downloads stay unchanged.
+
+**No chapters selected?** Normal Export includes **all downloaded chapters** of that manga. With chapters selected, Normal Export includes **only selected chapters already downloaded**; selected online-only chapters are skipped.
+
+**Need chapters you haven't downloaded?** In experimental 1.0.4/1.0.5, select the chapters first, then enable **Quick Export · fetch missing pages** in Export. Quick Export requires an online source and **at least one selected chapter**. Missing pages are fetched temporarily, processed one chapter at a time, and cleaned afterward.
+
+[**Detailed guide: selecting chapters, exporting ranges and Quick Export →**](docs/CHAPTER_SELECTION.md)
+
 
 ### Send an existing file from your phone — 1.0.4 preview
 
@@ -107,6 +114,8 @@ For a reader-created hotspot, choose **File Transfer → Create Hotspot** and co
 Reader support differs by firmware. EPUB/CBZ may contain extra Nooir metadata JSON that other readers ignore; XTC/XTCH do not have standardized native fields for every rich metadata attribute.
 
 [Format details, reading order and conversion controls →](docs/CONVERSION.md)
+
+**Experimental 1.0.5:** XTC/XTCH exports can now include an actual manga cover page and a bounded optional synopsis-metadata trailer, with a post-upload Folio Nooir metadata-sync attempt. Direct synopsis reading from manually copied files requires an experimental [companion firmware update](https://github.com/toshio2011/folio-nooir/pull/1). [How XTC cover and synopsis work →](https://github.com/toshio2011/mihon-nooir/blob/feature/xtc-cover-synopsis/docs/XTC_METADATA.md)
 
 ## Build from source
 

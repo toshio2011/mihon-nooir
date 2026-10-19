@@ -1,6 +1,6 @@
 # Send to an XTEink reader over Wi-Fi
 
-[← Back to README](../README.md) · [First-time setup](GETTING_STARTED.md) · [Folio Nooir web-server docs](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
+[← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [First-time setup](GETTING_STARTED.md) · [Folio Nooir web-server docs](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
 
 MangaNooir can send converted manga to an XTEink running **Folio Nooir's File Transfer server**. The experimental 1.0.4 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
 
@@ -31,7 +31,7 @@ No router nearby? You can connect your phone directly to the reader.
 
 ### From a manga details screen (main 1.0.1 and experimental preview)
 
-1. Open the manga and select/download the chapters to export.
+1. Open the manga details page. **Long-press** a chapter, then **tap** the others you want. The Export dialog itself cannot select chapters. [Chapter selection tutorial →](CHAPTER_SELECTION.md)
 2. Tap **Export** next to Download.
 3. Choose the X4/X3 target and XTC, XTCH, EPUB, CBZ or Auto.
 4. Choose **Send to XTEink**.

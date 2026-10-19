@@ -1,6 +1,6 @@
 # Formats, image conversion and metadata
 
-[← Back to README](../README.md) · [Getting started](GETTING_STARTED.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
+[← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [Getting started](GETTING_STARTED.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 MangaNooir exports manga into e-reader-oriented formats while keeping the source chapters and library information in Mihon.
 
@@ -19,7 +19,7 @@ The main branch and the experimental preview both support **X4** (480 × 800) an
 ## Convert from downloaded manga
 
 1. Open manga details in MangaNooir.
-2. Select chapters (or allow the current downloaded-chapter fallback).
+2. **Long-press** a chapter, then tap other chapters to select them. In **Normal Export**, selected chapters must be downloaded. If nothing is selected, all downloaded chapters of the manga are included. [Step-by-step chapter-selection guide →](CHAPTER_SELECTION.md)
 3. Tap **Export** next to Download.
 4. Choose device, format, and **Save file** or **Send to XTEink**.
 
@@ -65,7 +65,7 @@ MangaNooir uses only the metadata available from Mihon or the imported comic fil
 
 - **EPUB:** title, author, description, cover, language, publisher, identifiers, genres/subjects and navigation through the standard OPF/navigation files; optional extra JSON for Nooir-specific information.
 - **CBZ:** image sequence, `ComicInfo.xml` (series/title/writer/artist/summary/genre and related fields when available), and optional supplementary metadata JSON.
-- **XTC/XTCH:** native fixed-format fields such as title, author, language/publisher where supported, cover-page index and chapter navigation. They do **not** have standardized fields for a full synopsis or every genre. A future sidecar or matching Folio Nooir importer would be needed for richer XTC/XTCH metadata.
+- **XTC/XTCH:** native fixed-format fields such as title, author, language/publisher where supported, cover-page index and chapter navigation. They do **not** have standardized fields for a full synopsis or every genre. **Experimental 1.0.5** adds an optional bounded JSON trailer and a post-upload metadata sync; reading the trailer on Folio Nooir requires the separate experimental [firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). [Technical design →](https://github.com/toshio2011/mihon-nooir/blob/feature/xtc-cover-synopsis/docs/XTC_METADATA.md)
 
 Missing fields aren't invented. Readers may ignore optional metadata, especially vendor-specific JSON.
 

@@ -1,6 +1,6 @@
 # Getting started with MangaNooir
 
-[← Back to README](../README.md) · [Wi-Fi transfer](WIFI_TRANSFER.md) · [Formats](CONVERSION.md)
+[← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [Wi-Fi transfer](WIFI_TRANSFER.md) · [Formats](CONVERSION.md)
 
 MangaNooir is an **experimental** Android fork built on Mihon. Your everyday reading experience comes from Mihon; MangaNooir adds e-reader-oriented export tools.
 
@@ -9,7 +9,8 @@ MangaNooir is an **experimental** Android fork built on Mihon. Your everyday rea
 | Version | Where to get it | Intended use |
 |---|---|---|
 | **Main (1.0.1)** | [Main-branch Actions builds](https://github.com/toshio2011/mihon-nooir/actions/workflows/build-apk.yml) | Downloaded manga export, save file, XTEink Wi-Fi send |
-| **Experimental (1.0.4)** | [Verified PR #10 APK build](https://github.com/toshio2011/mihon-nooir/actions/runs/39220489438) | Test Quick Export, file picker, batch queue, conversion presets, background jobs |
+| **Experimental (1.0.4)** | [Green PR #10 APK build](https://github.com/toshio2011/mihon-nooir/actions/runs/39220489438) | Quick Export, file picker, batch queue, conversion presets, background jobs |
+| **Experimental (1.0.5)** | [Green PR #11 APK build](https://github.com/toshio2011/mihon-nooir/actions/runs/39228413383) | 1.0.4 features plus manga cover page and experimental XTC/XTCH synopsis metadata |
 
 **Neither is a stable release.** GitHub Releases currently contains no published APKs. CI compiles and tests the integration, but actual on-phone and on-reader functionality still needs validation.
 
@@ -29,21 +30,26 @@ You can browse your existing library and use the familiar Mihon screens. Source 
 
 MangaNooir doesn't need a separate manga server or Suwayomi account.
 
-## 3. Export a chapter you already downloaded
+## 3. Choose your manga chapters and export
 
-1. Pick a manga and download a chapter using Mihon's normal Download button.
-2. Open the manga details screen.
-3. Tap the **Export** action beside Download. You may select chapters first; otherwise the downloaded-chapter selection follows the app's current export defaults.
-4. Choose **X4** or **X3**, then choose a format: **Auto**, **XTC**, **XTCH**, **EPUB** or **CBZ**.
-5. Tap **Save file**, choose an Android destination, and wait for completion.
+**You choose chapters on the manga details page, not inside the Export dialog.**
 
-The original Mihon chapter files are **not deleted**. A converter output is a separate file.
+1. Open a manga details page and find its chapter list.
+2. **Long-press** the first chapter you want. Once selection mode appears, **tap** more chapters to select/deselect them. For consecutive chapters, long-press another end chapter to use Mihon's range behavior; verify the selected chapters and count.
+3. Use **Select All** or **Invert Selection** in the top toolbar if helpful.
+4. Tap the top-toolbar **Save/Export** icon.
+5. Choose **X4** or **X3**, then format **Auto/XTC/XTCH/EPUB/CBZ**.
+6. Choose **Save file** to store one combined book, or **Send to XTEink** to transfer it over Wi-Fi.
 
-### Experimental Quick Export (1.0.4 only)
+**Normal Export** includes only selected chapters **already downloaded**. If **nothing is selected**, it instead includes **all downloaded chapters** of that manga. The original downloads are never deleted.
 
-Select one or more chapters in the manga details screen, including chapters not permanently downloaded. In Export, enable **Quick Export**. Missing pages are retrieved through that installed source extension, processed chapter by chapter, and cleaned from the temporary cache afterward.
+### Experimental Quick Export (1.0.4 / 1.0.5 only)
 
-There is **no fixed five-chapter limit** in this preview, but long series still need enough temporary/final output storage. For direct XTEink HTTP sending, **180 MiB per file** is the current experimental guard. Source errors, authentication, network failures and format compatibility still need testing. Use a small chapter first.
+If you want chapters not downloaded permanently, **select them first** in the manga list, open Export, and turn on **Quick Export · fetch missing pages**. This fetches missing images using the installed online source extension and processes one chapter at a time. With Quick Export, **zero selected chapters isn't allowed**, and offline/local sources can't use it.
+
+There is **no fixed five-chapter limit**, but exporting many chapters takes time and storage; the experimental sender caps an individual XTEink upload at **180 MiB**. Start with a small chapter range.
+
+**[Full chapter-selection walkthrough with examples and troubleshooting →](CHAPTER_SELECTION.md)**
 
 ### Experimental conversion settings (1.0.4 only)
 
