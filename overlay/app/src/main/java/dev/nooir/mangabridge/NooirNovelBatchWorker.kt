@@ -42,7 +42,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             .setOnlyAlertOnce(true).setProgress(0, 0, true).build()
 
     override suspend fun doWork(): Result {
-        val urls = inputData.getStringArray(URLS)?.map(String::trim)?.filter(String::isNotBlank)?.distinct().orEmpty()
+        val urls = inputData.getStringArray(URLS)?.map { it.trim() }?.filter { it.isNotBlank() }?.distinct().orEmpty()
         val destination = inputData.getString(OUTPUT_TREE)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
