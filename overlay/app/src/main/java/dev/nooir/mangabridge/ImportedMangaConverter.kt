@@ -12,6 +12,7 @@ import dev.nooir.bridge.ExtendedMetadata
 import dev.nooir.bridge.NooirUpload
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
+import dev.nooir.bridge.xtcRichJson
 import android.graphics.Bitmap
 import android.graphics.Color
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +132,7 @@ object ImportedMangaConverter {
                         depth,
                         source.pages(listOf(input), width, height, depth.depth, options),
                         target, context.cacheDir, metadata = metadata.xtc(),
+                        richMetadataJson = metadata.xtcRichJson(),
                         direction = metadata.direction,
                         chapterResolver = { pages ->
                             require(pages in 1..10000) { "Unsupported page count" }
