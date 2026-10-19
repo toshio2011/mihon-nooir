@@ -1,0 +1,6 @@
+upstream/
+.gradle/
+.idea/
+build/
+*.apk
+*.aab
