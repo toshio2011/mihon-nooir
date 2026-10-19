@@ -174,7 +174,14 @@ object NooirUpload {
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             conn.setFixedLengthStreamingMode(data.size)
             conn.outputStream.use { it.write(data) }
-            return conn.responseCode in 200..299
+            if (conn.responseCode !in 200..299) return false
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            // Folio Nooir may respond HTTP 200 with {\"ok\":false} when SD metadata
+            // persistence fails. Do not report success unless the save is confirmed.
+            return runCatching {
+                val value = JSONObject(response)
+                value.optBoolean("ok", false) && value.optBoolean("metadata", false)
+            }.getOrDefault(false)
         } finally {
             conn.disconnect()
         }
