@@ -51,6 +51,9 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
         val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
         val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
         viewModelScope.launch {
+            val feedback = launch {
+                snackbarHostState.showSnackbar("Transferring file…", duration = SnackbarDuration.Indefinite)
+            }
             val message = runCatching {
                 require(downloaded.isNotEmpty()) { "Download at least one chapter first" }
                 val result = MihonNooirExporter.sendToDevice(context, nooirDownloadProvider,
