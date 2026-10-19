@@ -24,7 +24,7 @@ class ReflowEpubWriter private constructor(private val zip: ZipOutputStream, pri
     private var imageIndex = 0
 
     /** Add an embedded image and get its relative EPUB XHTML URL. */
-    fun addImage(asset: ImageAsset): String {
+    fun addImage(asset: ImageAsset, isCover: Boolean = false): String {
         require(asset.bytes.isNotEmpty() && asset.bytes.size <= 12 * 1024 * 1024) { "Unsupported image size" }
         val ext = asset.extension.lowercase()
         require(ext in setOf("jpg", "jpeg", "png", "gif", "svg")) { "Unsupported EPUB image type" }
@@ -38,7 +38,8 @@ class ReflowEpubWriter private constructor(private val zip: ZipOutputStream, pri
         imageIndex++
         val name = "images/img%05d.%s".format(imageIndex, ext)
         writeEntry("OEBPS/" + name, asset.bytes)
-        manifest += "<item id=\"img$imageIndex\" href=\"$name\" media-type=\"$mime\"/>"
+        manifest += "<item id=\"img$imageIndex\" href=\"$name\" media-type=\"$mime\"" +
+            if (isCover) " properties=\"cover-image\"/>" else "/>"
         return "../" + name
     }
 
