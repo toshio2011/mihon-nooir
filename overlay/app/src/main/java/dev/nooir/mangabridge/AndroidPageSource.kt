@@ -28,7 +28,9 @@ class AndroidPageSource(private val context: Context) {
         return uri.lastPathSegment ?: "manga"
     }
 
-    fun pages(inputUris: List<Uri>, width: Int, height: Int, depth: Int): Sequence<QuantizedPage> = sequence {
+    fun pages(inputUris: List<Uri>, width: Int, height: Int, depth: Int,
+        options: MangaConversionOptions = MangaConversionOptions(),
+    ): Sequence<QuantizedPage> = sequence {
         for (uri in inputUris.sortedWith { a, b -> NaturalPageOrder.compare(name(a), name(b)) }) {
             if (name(uri).endsWith(".cbz", true) || name(uri).endsWith(".zip", true)) {
                 val temp = File.createTempFile("nooir-cbz-", ".zip", context.cacheDir)
@@ -44,14 +46,14 @@ class AndroidPageSource(private val context: Context) {
                         for (entry in entries) {
                             // Two independent streams: first checks dimensions, second decodes.
                             val image = decode({ zip.getInputStream(entry) })
-                            try { for (page in render(image, width, height, depth)) yield(page) }
+                            try { for (page in render(image, width, height, depth, options)) yield(page) }
                             finally { image.recycle() }
                         }
                     }
                 } finally { temp.delete() }
             } else {
                 val image = decode({ resolver.openInputStream(uri) ?: error("Cannot open $uri") })
-                try { for (page in render(image, width, height, depth)) yield(page) }
+                try { for (page in render(image, width, height, depth, options)) yield(page) }
                 finally { image.recycle() }
             }
         }
@@ -73,16 +75,45 @@ class AndroidPageSource(private val context: Context) {
             ?: error("Image decoding failed")
     }
 
-    private fun render(src: Bitmap, width: Int, height: Int, depth: Int): List<QuantizedPage> {
+    private fun trimWhite(src: Bitmap, region: Rect): Rect {
+        // Conservative trim, never removing more than 30% from a side.
+        val step = maxOf(2, minOf(region.width(), region.height()) / 300)
+        var l = region.right; var t = region.bottom; var r = region.left; var b = region.top
+        var samples = 0
+        for (y in region.top until region.bottom step step) {
+            for (x in region.left until region.right step step) {
+                val c = src.getPixel(x, y)
+                val brightness = (Color.red(c) * 299 + Color.green(c) * 587 + Color.blue(c) * 114) / 1000
+                if (brightness < 240) {
+                    l = minOf(l, x); t = minOf(t, y)
+                    r = maxOf(r, x); b = maxOf(b, y)
+                    samples++
+                }
+            }
+        }
+        if (samples < 12) return region
+        val maxX = region.width() * 30 / 100
+        val maxY = region.height() * 30 / 100
+        return Rect(
+            maxOf(region.left, minOf(l, region.left + maxX)),
+            maxOf(region.top, minOf(t, region.top + maxY)),
+            minOf(region.right, maxOf(r + step, region.right - maxX)),
+            minOf(region.bottom, maxOf(b + step, region.bottom - maxY)),
+        ).takeIf { it.width() > 0 && it.height() > 0 } ?: region
+    }
+
+    private fun render(
+        src: Bitmap, width: Int, height: Int, depth: Int,
+        options: MangaConversionOptions,
+    ): List<QuantizedPage> {
         val regions = mutableListOf<Rect>()
         val ratio = src.width.toFloat() / src.height
-        if (ratio > 1.35f) {
-            // Japanese-style double spreads, ordered right-to-left.
-            val center = src.width / 2
-            regions.add(Rect(center, 0, src.width, src.height))
-            regions.add(Rect(0, 0, center, src.height))
-        } else if (src.height > 3 * src.width) {
-            // Vertical webtoon strip: cut into roughly one-screen chunks.
+        val longStrip = when (options.layout) {
+            "WEBTOON" -> true
+            "PAGED" -> false
+            else -> src.height > 3 * src.width
+        }
+        if (longStrip) {
             val segment = (src.width.toFloat() * height / width).toInt().coerceAtLeast(1)
             var y = 0
             while (y < src.height) {
@@ -90,9 +121,19 @@ class AndroidPageSource(private val context: Context) {
                 regions.add(Rect(0, y, src.width, next))
                 y = next
             }
+        } else if (ratio > 1.35f && options.splitSpreads) {
+            val center = src.width / 2
+            if (options.rightToLeft) {
+                regions.add(Rect(center, 0, src.width, src.height))
+                regions.add(Rect(0, 0, center, src.height))
+            } else {
+                regions.add(Rect(0, 0, center, src.height))
+                regions.add(Rect(center, 0, src.width, src.height))
+            }
         } else regions.add(Rect(0, 0, src.width, src.height))
         val result = ArrayList<QuantizedPage>(regions.size)
-        for (r in regions) {
+        for (initial in regions) {
+            val r = if (options.cropWhiteMargins) trimWhite(src, initial) else initial
             val scale = minOf(width.toFloat() / r.width(), height.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, width)
             val dh = (r.height() * scale).toInt().coerceIn(1, height)
@@ -106,18 +147,25 @@ class AndroidPageSource(private val context: Context) {
                 val rgb = IntArray(width * height)
                 rendered.getPixels(rgb, 0, width, 0, 0, width, height)
                 val gray = ByteArray(rgb.size)
+                val boost = (options.contrast.coerceIn(0, 100) / 50f).coerceIn(0.15f, 2f)
                 for (i in rgb.indices) {
                     val c = rgb[i]
-                    val r8 = Color.red(c)
-                    val g8 = Color.green(c)
-                    val b8 = Color.blue(c)
-                    gray[i] = ((r8 * 299 + g8 * 587 + b8 * 114) / 1000).toByte()
+                    val luminance = (Color.red(c) * 299 + Color.green(c) * 587 + Color.blue(c) * 114) / 1000
+                    gray[i] = ((128f + (luminance - 128f) * boost).toInt().coerceIn(0, 255)).toByte()
                 }
-                result.add(GrayscaleConverter.dither(width, height, gray, depth))
+                result.add(if (options.dither) GrayscaleConverter.dither(width, height, gray, depth)
+                else {
+                    val highest = if (depth == 1) 1 else 3
+                    val levels = ByteArray(gray.size) { i ->
+                        (((gray[i].toInt() and 255) * highest + 127) / 255).toByte()
+                    }
+                    QuantizedPage(width, height, levels, depth)
+                })
             } finally { rendered.recycle() }
         }
         return result
     }
+
 }
 
 /** Stable human-friendly filename ordering: page 2 comes before page 10. */
