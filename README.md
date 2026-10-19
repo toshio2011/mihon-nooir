@@ -83,4 +83,9 @@ As with the earlier build, sources and metadata are retained in Mihon; format co
 
 Enable **Quick Export** in the MangaNooir export dialog after selecting **1–5 chapters**. It uses any chapters already downloaded in Mihon, and fetches missing pages through the installed manga source's own page-list and image APIs. These missing pages are placed only in a temporary private cache and cleaned up on completion or failure. A successful result is saved as XTC/XTCH/EPUB/CBZ or transferred to XTEink.
 
-Safety limits: 5 chapters, 250 remote pages, 25 MB per page, and 250 MB remote cache. No permanent Mihon download is created. Network access and an installed functioning online source extension are required. Some sources can block fetching or require authentication. Full chapter-by-chapter progress, pause/resume, and remote source reliability still need device testing.
+Safety limits per chapter: up to 1,000 remote pages, 25 MB per page, 400 MB temporary cache. No fixed chapter count; processing is sequential. Very long exports should eventually use a foreground WorkManager job. No permanent Mihon download is created. Network access and an installed functioning online source extension are required. Some sources can block fetching or require authentication. Full chapter-by-chapter progress, pause/resume, and remote source reliability still need device testing.
+
+
+### Streaming Quick Export extension
+
+Quick Export no longer has a five-chapter ceiling. The writer fetches remote images one chapter at a time, decodes and streams their pages into the selected output format, and removes that chapter's temporary files before advancing. This supports selected volumes or entire series while bounding intermediate remote-page storage to the current chapter. Very large *final output files* may still require substantial storage; proper progress, cancellation buttons, background notifications and retry/resume are on the roadmap.
