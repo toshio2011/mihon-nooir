@@ -32,8 +32,8 @@ fun NooirExportDialog(
     selectedChapterCount: Int,
     onlineSource: Boolean,
     onDismiss: () -> Unit,
-    onSave: (ExportFormat, String, Boolean) -> Unit,
-    onSend: (ExportFormat, String, String, String, Boolean) -> Unit,
+    onSave: (ExportFormat, String, Boolean, MangaConversionOptions) -> Unit,
+    onSend: (ExportFormat, String, String, String, Boolean, MangaConversionOptions) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
@@ -45,6 +45,8 @@ fun NooirExportDialog(
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var destination by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var quickExport by remember { mutableStateOf(false) }
+    var showAdvanced by remember { mutableStateOf(false) }
+    var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
 
     fun saveSettings() {
         prefs.edit()
@@ -53,6 +55,7 @@ fun NooirExportDialog(
             .putString("host", host.trim())
             .putString("destination", destination.trim())
             .apply()
+        options.save(prefs)
     }
     val canExport = !quickExport || (onlineSource && selectedChapterCount >= 1)
     val canSend = canExport && host.trim().isNotEmpty() &&
@@ -102,6 +105,10 @@ fun NooirExportDialog(
                         }
                     }
                 }
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
+                }
+                if (showAdvanced) MangaConversionSettings(options, onChange = { options = it })
                 Text("XTEink / Folio Nooir Wi-Fi transfer")
                 OutlinedTextField(
                     value = host,
@@ -124,12 +131,12 @@ fun NooirExportDialog(
                 TextButton(enabled = canExport, onClick = {
                     saveSettings()
                     onDismiss()
-                    onSave(selectedFormat, device, quickExport)
+                    onSave(selectedFormat, device, quickExport, options)
                 }) { Text("Save file") }
                 Button(enabled = canSend, onClick = {
                     saveSettings()
                     onDismiss()
-                    onSend(selectedFormat, device, host.trim(), destination.trim(), quickExport)
+                    onSend(selectedFormat, device, host.trim(), destination.trim(), quickExport, options)
                 }) { Text("Send to XTEink") }
             }
         },
