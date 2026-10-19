@@ -29,6 +29,8 @@ import dev.nooir.bridge.ExportFormat
 @Composable
 fun NooirExportDialog(
     mangaTitle: String,
+    selectedChapterCount: Int,
+    onlineSource: Boolean,
     onDismiss: () -> Unit,
     onSave: (ExportFormat, String, Boolean) -> Unit,
     onSend: (ExportFormat, String, String, String, Boolean) -> Unit,
@@ -52,7 +54,8 @@ fun NooirExportDialog(
             .putString("destination", destination.trim())
             .apply()
     }
-    val canSend = host.trim().isNotEmpty() &&
+    val canExport = !quickExport || (onlineSource && selectedChapterCount in 1..5)
+    val canSend = canExport && host.trim().isNotEmpty() &&
         destination.trim().startsWith("/") && !destination.contains("..")
 
     AlertDialog(
@@ -76,15 +79,17 @@ fun NooirExportDialog(
                 }
                 Text("Chapter source")
                 Row {
-                    Checkbox(checked = quickExport, onCheckedChange = { quickExport = it })
-                    TextButton(onClick = { quickExport = !quickExport }) {
+                    Checkbox(checked = quickExport, enabled = onlineSource, onCheckedChange = { quickExport = it })
+                    TextButton(enabled = onlineSource, onClick = { quickExport = !quickExport }) {
                         Text("Quick Export · fetch missing pages")
                     }
                 }
                 Text(
-                    if (quickExport) "Select 1–5 chapters in the chapter list first. Missing pages are fetched temporarily, then deleted after export."
+                    if (!onlineSource) "Quick Export requires an online manga source."
+                    else if (quickExport) "Select 1–5 chapters in the chapter list first. Missing pages are fetched temporarily, then deleted after export."
                     else "Use Mihon's permanent downloads. If no chapters are selected, all downloaded chapters are exported."
                 )
+                if (quickExport) Text("Selected chapters: $selectedChapterCount / 5")
                 Text("Output format")
                 ExportFormat.entries.forEach { choice ->
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
@@ -116,7 +121,7 @@ fun NooirExportDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = {
+                TextButton(enabled = canExport, onClick = {
                     saveSettings()
                     onDismiss()
                     onSave(selectedFormat, device, quickExport)
