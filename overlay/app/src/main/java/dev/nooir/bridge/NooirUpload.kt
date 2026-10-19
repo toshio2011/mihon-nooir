@@ -21,7 +21,10 @@ object NooirUpload {
     /** Send *any* SAF document without copying large files to app storage.
      * The receiver determines whether it can display/open the file.
      */
-    fun uploadDocument(context: Context, document: Uri, deviceHost: String, destination: String = "/Books"): String {
+    fun uploadDocument(
+        context: Context, document: Uri, deviceHost: String, destination: String = "/Books",
+        onProgress: (Long, Long) -> Unit = { _, _ -> },
+    ): String {
         val resolver = context.contentResolver
         var filename = "document"
         var length: Long? = null
@@ -55,7 +58,7 @@ object NooirUpload {
                     }
                 } ?: error("Cannot read selected file")
                 require(staging.length() > 0L) { "Selected file is empty" }
-                return uploadContent(safeName, staging.length(), deviceHost, destination) {
+                return uploadContent(safeName, staging.length(), deviceHost, destination, onProgress) {
                     staging.inputStream()
                 }
             } finally {
@@ -63,7 +66,7 @@ object NooirUpload {
             }
         }
         require(length!! > 0) { "Selected file is empty" }
-        return uploadContent(safeName, length!!, deviceHost, destination) {
+        return uploadContent(safeName, length!!, deviceHost, destination, onProgress) {
             resolver.openInputStream(document) ?: error("Cannot read selected file")
         }
     }
@@ -82,6 +85,7 @@ object NooirUpload {
         fileLength: Long,
         deviceHost: String,
         destination: String,
+        onProgress: (Long, Long) -> Unit,
         open: () -> InputStream,
     ): String {
         require(destination.startsWith("/") && !destination.contains("..")) { "Invalid destination folder" }
@@ -116,8 +120,10 @@ object NooirUpload {
                         written += count
                         require(written <= fileLength) { "File grew during upload" }
                         output.write(buffer, 0, count)
+                        onProgress(written, fileLength)
                     }
                     check(written == fileLength) { "File changed during upload" }
+                    onProgress(written, fileLength)
                 }
                 output.write(suffix)
             }
@@ -155,42 +161,17 @@ object NooirUpload {
         }
     }
 
-    fun upload(file: File, deviceHost: String, destination: String = "/"): String {
+    /** Generated manga files share the same bounded HTTP upload/progress path. */
+    fun upload(
+        file: File, deviceHost: String, destination: String = "/",
+        onProgress: (Long, Long) -> Unit = { _, _ -> },
+    ): String {
         require(file.isFile && file.length() > 0) { "Missing export file" }
-        require(destination.startsWith('/') && !destination.contains("..")) { "Invalid folder" }
         require(file.name.matches(Regex("[A-Za-z0-9_.() -]{1,160}\\.(xtc|xtch|epub|cbz)", RegexOption.IGNORE_CASE))) {
-            "Unsupported file name or extension"
+            "Unsupported manga output name"
         }
-        val uri = URI("http://$deviceHost")
-        require(uri.scheme == "http" && uri.host != null && uri.rawUserInfo == null && uri.port == -1 && uri.path.isNullOrEmpty()) {
-            "Enter an IP address or local hostname, without a path or port"
+        return uploadContent(file.name, file.length(), deviceHost, destination, onProgress) {
+            file.inputStream()
         }
-        val path = URLEncoder.encode(destination, StandardCharsets.UTF_8.name())
-        val endpoint = URI("http://${uri.host}/upload?path=$path").toURL()
-        val boundary = "Nooir-" + UUID.randomUUID().toString()
-        val conn = (endpoint.openConnection() as HttpURLConnection)
-        try {
-            conn.requestMethod = "POST"
-            conn.doOutput = true
-            conn.connectTimeout = 10000
-            conn.readTimeout = 180000
-            // ESP32 upload handlers are not guaranteed to support chunked request bodies.
-            // Send a known content length while still streaming from disk.
-            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-            val safeName = file.name.replace("\"", "")
-            val prefix = ("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$safeName\"\r\n" +
-                "Content-Type: application/octet-stream\r\n\r\n").toByteArray(StandardCharsets.UTF_8)
-            val suffix = "\r\n--$boundary--\r\n".toByteArray(StandardCharsets.US_ASCII)
-            conn.setFixedLengthStreamingMode(prefix.size.toLong() + file.length() + suffix.size)
-            conn.outputStream.use { out ->
-                out.write(prefix)
-                file.inputStream().use { input -> input.copyTo(out, 16 * 1024) }
-                out.write(suffix)
-            }
-            val code = conn.responseCode
-            val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-            check(code in 200..299) { "Nooir upload failed: HTTP $code ($body)" }
-            return body
-        } finally { conn.disconnect() }
     }
 }
