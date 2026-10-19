@@ -25,15 +25,20 @@ data class MangaConversionOptions(
     val rightToLeft: Boolean = true,
     val contrast: Int = 50,               // 50 is neutral; 0..100
     val dither: Boolean = true,           // false = nearest threshold
+    val orientation: String = "PORTRAIT", // portrait panel / sideways reading
+    val overlapPercent: Int = 8,         // repeating rows on long WEBTOON strips, 0..50
+    val landscapeClockwise: Boolean = true, // turn content clockwise for XTC/XTCH
 ) {
     fun token() = listOf(preset, layout, cropWhiteMargins, splitSpreads, rightToLeft,
-        contrast.coerceIn(0, 100), dither).joinToString("|")
+        contrast.coerceIn(0, 100), dither, orientation, overlapPercent.coerceIn(0, 50),
+        landscapeClockwise).joinToString("|")
 
     companion object {
         fun preset(name: String): MangaConversionOptions = when (name) {
             "Manhwa" -> MangaConversionOptions(
                 preset = name, layout = "WEBTOON", cropWhiteMargins = true,
                 splitSpreads = false, rightToLeft = false, contrast = 55,
+                overlapPercent = 10,
             )
             "Manhua" -> MangaConversionOptions(
                 preset = name, layout = "AUTO", cropWhiteMargins = true,
@@ -45,7 +50,9 @@ data class MangaConversionOptions(
         fun fromToken(raw: String?): MangaConversionOptions {
             if (raw.isNullOrBlank()) return MangaConversionOptions()
             val v = raw.split("|")
-            if (v.size != 7) return MangaConversionOptions()
+            // Existing jobs/settings created by 1.0.4/1.0.5 stored seven tokens.
+            // Preserve those values and migrate only the new options to defaults.
+            if (v.size != 7 && v.size != 10) return MangaConversionOptions()
             return MangaConversionOptions(
                 preset = v[0].take(32),
                 layout = v[1].takeIf { it in setOf("AUTO", "PAGED", "WEBTOON") } ?: "AUTO",
@@ -54,6 +61,10 @@ data class MangaConversionOptions(
                 rightToLeft = v[4].toBoolean(),
                 contrast = (v[5].toIntOrNull() ?: 50).coerceIn(0, 100),
                 dither = v[6].toBoolean(),
+                orientation = v.getOrNull(7)?.takeIf { it in setOf("PORTRAIT", "LANDSCAPE") }
+                    ?: "PORTRAIT",
+                overlapPercent = (v.getOrNull(8)?.toIntOrNull() ?: 8).coerceIn(0, 50),
+                landscapeClockwise = v.getOrNull(9)?.toBooleanStrictOrNull() ?: true,
             )
         }
 
@@ -87,6 +98,34 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
                 )
             }
         }
+        Text("Page orientation")
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape").forEach { (value, title) ->
+                FilterChip(
+                    selected = options.orientation == value,
+                    onClick = { onChange(options.copy(preset = "Custom", orientation = value)) },
+                    label = { Text(title) },
+                )
+            }
+        }
+        if (options.orientation == "LANDSCAPE") {
+            Text("Turn the X3/X4 sideways to read landscape XTC/XTCH pages.")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Rotate content clockwise")
+                Switch(checked = options.landscapeClockwise,
+                    onCheckedChange = { onChange(options.copy(preset = "Custom", landscapeClockwise = it)) })
+            }
+        }
+        if (options.layout != "PAGED") {
+            Text("Webtoon page overlap · " + options.overlapPercent + "%")
+            Slider(
+                value = options.overlapPercent.toFloat(),
+                onValueChange = { onChange(options.copy(preset = "Custom", overlapPercent = it.toInt())) },
+                valueRange = 0f..50f,
+                steps = 49,
+            )
+            Text("Repeats a strip's ending on the next page so dialogue is not cut off. 0% disables overlap.")
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Trim white margins")
             Switch(checked = options.cropWhiteMargins,
@@ -113,6 +152,6 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
             Switch(checked = options.dither,
                 onCheckedChange = { onChange(options.copy(preset = "Custom", dither = it)) })
         }
-        Text("Changes apply to the next conversion. More MangaPoint settings, including manual crop, zoom, preview and guide arrows, are planned.")
+        Text("Changes apply to the next conversion. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page. Manual crop, zoom, preview and guide arrows are still planned.")
     }
 }
