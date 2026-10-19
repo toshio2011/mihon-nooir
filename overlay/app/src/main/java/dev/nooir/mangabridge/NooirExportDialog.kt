@@ -54,7 +54,7 @@ fun NooirExportDialog(
             .putString("destination", destination.trim())
             .apply()
     }
-    val canExport = !quickExport || (onlineSource && selectedChapterCount in 1..5)
+    val canExport = !quickExport || (onlineSource && selectedChapterCount >= 1)
     val canSend = canExport && host.trim().isNotEmpty() &&
         destination.trim().startsWith("/") && !destination.contains("..")
 
@@ -86,10 +86,10 @@ fun NooirExportDialog(
                 }
                 Text(
                     if (!onlineSource) "Quick Export requires an online manga source."
-                    else if (quickExport) "Select 1–5 chapters in the chapter list first. Missing pages are fetched temporarily, then deleted after export."
+                    else if (quickExport) "Select any number of chapters first, even a whole volume. MangaNooir fetches and converts one chapter at a time, cleaning temporary images after each."
                     else "Use Mihon's permanent downloads. If no chapters are selected, all downloaded chapters are exported."
                 )
-                if (quickExport) Text("Selected chapters: $selectedChapterCount / 5")
+                if (quickExport) Text("Selected chapters: $selectedChapterCount")
                 Text("Output format")
                 ExportFormat.entries.forEach { choice ->
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
