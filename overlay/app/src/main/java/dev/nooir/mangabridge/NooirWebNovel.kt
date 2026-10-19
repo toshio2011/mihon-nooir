@@ -2,6 +2,8 @@ package dev.nooir.mangabridge
 
 import dev.nooir.bridge.ReflowEpubWriter
 import org.jsoup.nodes.Document
+import org.jsoup.Jsoup
+import dev.nooir.bridge.ReflowEpubWriter.ImageAsset
 import java.io.File
 import java.net.URI
 
@@ -54,6 +56,30 @@ object NooirWebNovel {
         return found.values.toList()
     }
 
+    /** Optional metadata cover. Failure is nonfatal and doesn't fetch extra pages. */
+    private fun embedCover(doc: Document, epub: ReflowEpubWriter) {
+        val original = doc.selectFirst("meta[property=og:image]")?.attr("content")
+            ?.takeIf { it.isNotBlank() } ?: return
+        runCatching {
+            val candidate = URI(doc.location()).resolve(original).toString()
+            val url = NooirWebArticle.publicHttps(candidate)
+            val response = Jsoup.connect(url).ignoreContentType(true)
+                .timeout(12000).maxBodySize(1_500_000).followRedirects(false).execute()
+            require(response.statusCode() == 200)
+            val mime = response.contentType().orEmpty().substringBefore(';').lowercase()
+            val ext = when (mime) {
+                "image/jpeg" -> "jpg"
+                "image/png" -> "png"
+                else -> error("Not a supported book cover")
+            }
+            val bytes = response.bodyAsBytes()
+            require(bytes.size in 1..1_500_000)
+            val image = epub.addImage(ImageAsset(bytes, ext, mime), isCover = true)
+            epub.addSection("Cover", "<figure><img src=\\"" +
+                ReflowEpubWriter.xml(image) + "\\" alt=\\"Book cover\\"/></figure>")
+        }
+    }
+
     /** One EPUB per URL. Individual chapters become EPUB sections with a TOC. */
     fun convert(
         storyUrl: String, output: File,
@@ -65,6 +91,13 @@ object NooirWebNovel {
         val page = NooirWebArticle.load(storyUrl)
         val meta = NooirWebArticle.metadata(page)
         val chapterLinks = discover(page)
+        if (chapterLinks.isEmpty()) {
+            require(startAt == 1) { "This page has no visible chapter list; use chapter 1 or a directly readable chapter link." }
+            if (URI(page.location()).host.lowercase().endsWith("wattpad.com") &&
+                URI(page.location()).path.startsWith("/story/")) {
+                error("Wattpad's story page does not expose its chapter list as public HTML to this importer. No book was generated; try publicly readable chapter URLs or an authorized EPUB export.")
+            }
+        }
         val chosen = if (chapterLinks.isEmpty()) {
             listOf(Chapter(page.location(), NooirWebArticle.title(page)))
         } else {
@@ -78,6 +111,7 @@ object NooirWebNovel {
         }
         // Never silently omit undiscovered chapters or pretend locked text is readable.
         ReflowEpubWriter.write(output, meta) { epub ->
+            embedCover(page, epub)
             val total = chosen.size
             for ((i, item) in chosen.withIndex()) {
                 if (i > 0) Thread.sleep(1300L) // basic rate etiquette; no burst fetching
