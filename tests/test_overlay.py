@@ -46,6 +46,12 @@ class TestOverlay(unittest.TestCase):
                 "            item {\n"
                 "                val downloadQueueState = downloadQueueStateProvider()\n"
             )
+            graph = root/'app/src/main/java/mihon/app/di'
+            graph.mkdir(parents=True)
+            (graph/'AppGraph.kt').write_text(
+                "import eu.kanade.tachiyomi.data.download.DownloadWorker\n"
+                "    fun inject(downloadWorker: DownloadWorker)\n"
+            )
             updater = root/'app/src/main/java/eu/kanade/tachiyomi/data/updater'
             updater.mkdir(parents=True)
             (updater/'AppUpdateChecker.kt').write_text('"mihonapp/mihon-preview"\n"mihonapp/mihon"\n')
