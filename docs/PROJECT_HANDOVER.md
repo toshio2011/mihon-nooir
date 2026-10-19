@@ -6,6 +6,9 @@
 > **Reader firmware:** https://github.com/toshio2011/folio-nooir  
 > **Status:** Active experimental development; **not a stable release**. This handover documents observations, not proof of hardware compatibility.
 
+> **Continuation update (20 October 2026):** Draft [PR #16 — web novel batches](https://github.com/toshio2011/mihon-nooir/pull/16) and [PR #17 — Nooir Tools Hub](https://github.com/toshio2011/mihon-nooir/pull/17) have now been opened on the correct experimental stacked bases. The initial #17 CI failed due to obsolete menu assertions in the overlay smoke test; corrected at [3a7501d](https://github.com/toshio2011/mihon-nooir/commit/3a7501de97b1dc63c2130b0bc1fd68309a57c46d), with the updated tests passing. [#16 Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39340353433) and [#17 Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39340524938) were still in progress when this note was written. Historical references below to both branches being unPR'd now refer to the earlier snapshot. Verify latest run, SHA and artifact before declaring either build verified; no merge, release or physical device test has occurred.
+
+
 ## New-chat handoff — start here
 
 Paste this into a new ChatGPT conversation:
@@ -201,3 +204,12 @@ Local commands are documented for reproducing CI; they are **not evidence they r
 ### Known documentation/concurrent-work caution
 
 Another documentation handover commit was pushed while this audit was being prepared (main commits `12877eab`, `94c71810`, `69bd30ce`). Their findings about 1.0.9 were compared with the additional 1.0.10 branches. This file consolidates both; main source functionality was not altered. **Re-check all branch heads before editing** since multiple sessions or automation may be active.
+
+## 9. Takeover checkpoint — 20 October 2026
+
+- Confirmed the exact stacked branch ancestry: draft #15 (1.0.9) → draft #16 (web novels 1.0.10) → draft #17 (Tools Hub 1.0.10).
+- Opened draft PRs #16 and #17; both remain unmerged and target their preceding experimental branches, not main.
+- Fixed the first #17 overlay smoke-test failure by checking the single new Nooir Tools entry, its six destination dialogs and shared queue, while preserving Mihon's normal Download Queue.
+- Outstanding: confirm both final Android CI runs have passing conclusions and APK artifacts; real phone/X4 tests and actual EPUB fidelity remain outstanding.
+- Known UX review item: the novel batch dialog exposes single-job cancellation, which may cascade through the WorkManager dependency chain. Align its behavior with explicit queue-cancel warnings.
+- Preserve the newer main user guides when eventually integrating the experimental stack. Do not merge or release without explicit approval.
