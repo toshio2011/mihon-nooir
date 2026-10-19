@@ -71,7 +71,19 @@ replace_once(screen, "        MangaScreen(\n            state = successState,", 
         val nooirSaveLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument("application/octet-stream")
         ) { uri ->
-            if (uri != null) viewModel.exportDownloadedToNooir(context, uri, nooirSaveFormat, nooirSaveDevice, nooirSaveQuick, nooirSaveOptions)
+            if (uri != null) {
+                // The export runs in WorkManager and must retain the SAF write grant
+                // even if Android recreates the app process.
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                } catch (_: SecurityException) {
+                    // Some document providers grant a non-persistable URI. The
+                    // worker may then fail if the app process is killed.
+                }
+                viewModel.exportDownloadedToNooir(context, uri, nooirSaveFormat, nooirSaveDevice, nooirSaveQuick, nooirSaveOptions)
+            }
         }
         if (showNooirExport) {
             NooirExportDialog(
