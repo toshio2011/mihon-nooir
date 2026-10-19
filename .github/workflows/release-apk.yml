@@ -1,0 +1,69 @@
+name: Release signed Mihon Nooir APK
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify persistent Android signing credentials
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEY_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ALIAS_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY_B64" && test -n "$KEY_PASS" && test -n "$KEY_ALIAS" && test -n "$ALIAS_PASS" || { echo "Configure stable signing secrets first. No APK published."; exit 1; }
+          umask 077
+          printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/nooir-release.keystore"
+          test -s "$RUNNER_TEMP/nooir-release.keystore"
+      - name: Read upstream pin
+        id: pin
+        run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: mihonapp/mihon
+          ref: ${{ steps.pin.outputs.sha }}
+          path: upstream
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Apply integration overlay
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          python3 tools/apply_overlay.py upstream
+      - name: Build stable-signed APK
+        working-directory: upstream
+        env:
+          MIHON_GITHUB_RELEASE: 'true'
+          storeFile: ${{ runner.temp }}/nooir-release.keystore
+          storePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash ./gradlew :app:assembleFoss -Pdist=foss --no-daemon --stacktrace
+      - name: Publish release with versioned APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version=$(tr -d '\r\n' < config/version.txt)
+          tag="v$version"
+          apk=$(find upstream/app/build/outputs/apk/foss -maxdepth 1 -name '*.apk' -type f -print -quit)
+          test -n "$apk"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists; refusing overwrite"
+            exit 1
+          fi
+          dest="$RUNNER_TEMP/mihon-nooir-$tag-foss.apk"
+          cp "$apk" "$dest"
+          gh release create "$tag" "$dest" --target "$GITHUB_SHA" --title "Mihon Nooir $tag" --notes "Experimental fork; signed update from Mihon Nooir."
+      - name: Clean up signing keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/nooir-release.keystore"
