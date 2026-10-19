@@ -89,3 +89,18 @@ Safety limits per chapter: up to 1,000 remote pages, 25 MB per page, 400 MB temp
 ### Streaming Quick Export extension
 
 Quick Export no longer has a five-chapter ceiling. The writer fetches remote images one chapter at a time, decodes and streams their pages into the selected output format, and removes that chapter's temporary files before advancing. This supports selected volumes or entire series while bounding intermediate remote-page storage to the current chapter. Very large *final output files* may still require substantial storage; proper progress, cancellation buttons, background notifications and retry/resume are on the roadmap.
+
+## Send & Convert any phone file — experimental PR
+
+A **More → Send & Convert files** entry will let the user choose any Android document (Storage Access Framework). Options:
+
+- **Send original to Folio Nooir** over local Wi-Fi (the target device must be in File Transfer mode). This copies file bytes as-is and does not imply the e-reader can open arbitrary formats. HTTP without encryption is appropriate for a trusted LAN only.
+- **Share original** via Android's native share sheet, including any installed cross-device transfer app.
+- **Manga detected:** recognize JPG/PNG/WebP/BMP/GIF or CBZ/ZIP containing images. Offer Auto/XTC/XTCH/EPUB/CBZ conversion and Save file or Convert & send to Nooir. For CBZ, extract available ComicInfo.xml title, creator, genre, description, language, publisher, series metadata, using native output fields wherever possible.
+
+Files are selected by the user, not gathered through bulk storage scanning. The original file is not modified. Conversion currently accepts input up to 512 MB. Nouir may store documents it does not know how to display.
+
+**Still planned, not implemented here:** direct WebDAV/OPDS/Calibre/KOReader/other-device support, built-in web-article extraction to EPUB or PDF, richer metadata editing, live progress, multi-file batch sending and large-library queues. Quick Export of web-sourced manga remains a separate PR, with a future streaming/chapter-batch redesign to lift the temporary first-test cap.
+
+## Combined 1.0.3 preview
+CI-check only; keep main stable until on-device Nooir transfer and extension Quick Export tests pass.
