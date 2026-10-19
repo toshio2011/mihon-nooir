@@ -76,7 +76,7 @@ replace_once(screen, "        MangaScreen(\n            state = successState,", 
                 // even if Android recreates the app process.
                 try {
                     context.contentResolver.takePersistableUriPermission(
-                        uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        uri, android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                     )
                 } catch (_: SecurityException) {
                     // Some document providers grant a non-persistable URI. The
