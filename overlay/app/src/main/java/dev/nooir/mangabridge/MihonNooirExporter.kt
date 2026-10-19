@@ -78,6 +78,12 @@ object MihonNooirExporter {
         val ownerJob = coroutineContext[kotlinx.coroutines.Job]
             ?: error("Quick Export requires a coroutine Job")
         val ordered = chapters.sortedWith(compareBy<Chapter> { it.chapterNumber }.thenBy { it.id })
+        // Chapter storage lookups are suspending: do these before entering SequenceScope.
+        val locations = ordered.map { chapter ->
+            chapter to provider.findChapterDir(
+                chapter.name, chapter.scanlator, chapter.url, manga.title, source,
+            )
+        }
         val actual = format.resolved(device)
         val (width, height) = when (device) {
             "X3" -> 528 to 792
@@ -100,11 +106,8 @@ object MihonNooirExporter {
         val tmp = File(tempFolder, safeTitle + "." + actual.extension)
 
         fun chapterFrames(depth: Int): Sequence<Pair<Chapter, dev.nooir.bridge.QuantizedPage>> = sequence {
-            for (chapter in ordered) {
+            for ((chapter, downloaded) in locations) {
                 ownerJob.ensureActive()
-                val downloaded = provider.findChapterDir(
-                    chapter.name, chapter.scanlator, chapter.url, manga.title, source,
-                )
                 val remoteCache = if (downloaded == null && quickExport) {
                     File(tempFolder, "chapter-" + chapter.id).apply { check(mkdirs()) }
                 } else null
