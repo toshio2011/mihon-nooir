@@ -35,7 +35,7 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
             else candidates.filter { it.isDownloaded }.map { it.chapter }
         val result = runCatching {
             require(selected.isNotEmpty()) { "Select chapters to export first" }
-            NooirMangaExportWorker.enqueue(context, s.manga.id, selected.map { it.id },
+            NooirMangaExportWorker.enqueue(context, s.manga.id, s.manga.title, selected.map { it.id },
                 destination, null, "", format, device, quickExport, options)
             "Manga export queued in background. Check More → Send & Convert for progress."
         }.getOrElse { "Could not queue export: " + it.message }
@@ -52,7 +52,7 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
             else candidates.filter { it.isDownloaded }.map { it.chapter }
         val result = runCatching {
             require(selected.isNotEmpty()) { "Select chapters to export first" }
-            NooirMangaExportWorker.enqueue(context, s.manga.id, selected.map { it.id },
+            NooirMangaExportWorker.enqueue(context, s.manga.id, s.manga.title, selected.map { it.id },
                 null, host, folder, format, device, quickExport, options)
             "Manga transfer queued. It continues after Back; check More → Send & Convert."
         }.getOrElse { "Could not queue manga transfer: " + it.message }
