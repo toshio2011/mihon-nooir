@@ -18,6 +18,7 @@ import androidx.work.workDataOf
 import dev.nooir.bridge.ExportFormat
 import dev.zacsweers.metro.Inject
 import eu.kanade.tachiyomi.data.download.DownloadProvider
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -74,6 +75,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
     @Inject private lateinit var getMangaWithChapters: GetMangaWithChapters
     @Inject private lateinit var sourceManager: SourceManager
     @Inject private lateinit var downloadProvider: DownloadProvider
+    @Inject private lateinit var coverCache: CoverCache
     init { graph.inject(this) }
 
     private val manager =
@@ -140,7 +142,8 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                 if (output.isNotEmpty()) {
                     MihonNooirExporter.export(applicationContext, downloadProvider,
                         manga, source, chapters, Uri.parse(output), format, device, quick, options,
-                        onStage = { stage, i, total -> progress(stage, i, total) })
+                        onStage = { stage, i, total -> progress(stage, i, total) },
+                        coverCache = coverCache)
                 } else {
                     MihonNooirExporter.sendToDevice(applicationContext, downloadProvider,
                         manga, source, chapters, host, folder, format, device, quick, options,
@@ -150,7 +153,8 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                             val pct = (sent * 100L / total.coerceAtLeast(1L)).toInt()
                             progress(if (sent >= total) "Waiting for XTEink confirmation"
                                 else "Uploading to XTEink", count, count, sent, total, pct)
-                        })
+                        },
+                        coverCache = coverCache)
                 }
             }
             manager.notify(notificationId, notif(if (output.isNotEmpty()) "Manga file saved"
