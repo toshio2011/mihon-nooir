@@ -32,6 +32,28 @@ fun main() {
     check(runCatching { plan(0, 200) }.isFailure)
     check(plan(600, 3600, overlap = 500).size > 2) // clamp at 50%, no infinite loop
 
+    // Portrait manga pages in landscape mode must NOT shrink to a single
+    // sideways screen; they are turned into repeated top/bottom panels.
+    val sidewaysPage = PageSlicePlanner.plan(
+        480, 800, 800, 480, "PAGED", false, true, 12, "LANDSCAPE",
+    )
+    check(sidewaysPage.size >= 3)
+    check(sidewaysPage.first().top == 0 && sidewaysPage.last().bottom == 800)
+    check(sidewaysPage.zipWithNext().all { (a, b) ->
+        b.top < a.bottom && b.top > a.top
+    })
+    val sidewaysFit = PageSlicePlanner.plan(
+        1600, 800, 800, 480, "PAGED", false, true, 12, "LANDSCAPE",
+    )
+    check(sidewaysFit.size == 1) { "Wide panorama must remain one page if spread split is off" }
+
+    val sidewaysSpreads = PageSlicePlanner.plan(
+        1600, 1200, 800, 480, "PAGED", true, true, 10, "LANDSCAPE",
+    )
+    check(sidewaysSpreads.size > 2)
+    check(sidewaysSpreads.first().left == 800)
+    check(sidewaysSpreads.last().left == 0)
+
     val rightFirst = plan(1800, 1100, layout = "PAGED", split = true)
     check(rightFirst == listOf(PageRegion(900, 0, 1800, 1100), PageRegion(0, 0, 900, 1100)))
     val leftFirst = plan(1800, 1100, layout = "PAGED", split = true, rtl = false)
