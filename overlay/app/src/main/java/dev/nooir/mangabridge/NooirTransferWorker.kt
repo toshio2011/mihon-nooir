@@ -32,6 +32,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         const val KEY_CONVERT = "convert"
         const val KEY_FORMAT = "format"
         const val KEY_DEVICE = "device"
+        const val KEY_OPTIONS = "options"
         const val KEY_PHASE = "phase"
         const val KEY_PERCENT = "percent"
         const val KEY_SENT = "sent"
@@ -97,6 +98,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         val format = runCatching { ExportFormat.valueOf(inputData.getString(KEY_FORMAT) ?: "AUTO") }
             .getOrDefault(ExportFormat.AUTO)
         val device = inputData.getString(KEY_DEVICE) ?: "X4"
+        val options = MangaConversionOptions.fromToken(inputData.getString(KEY_OPTIONS))
         if (files.isEmpty() || host.isBlank() || !folder.startsWith('/') || folder.contains("..")) {
             return Result.failure(Data.Builder().putString(KEY_ERROR, "Invalid files, host or folder").build())
         }
@@ -128,6 +130,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                             applicationContext, uri, selected, format, device,
                             sendHost = host, sendFolder = folder,
                             onStage = { step -> emit(step, index, files.size, title) },
+                            options = options,
                             onUploadProgress = { sent, total ->
                                 if (isStopped) throw CancellationException("Transfer cancelled")
                                 val percent = (sent * 100L / total.coerceAtLeast(1L)).toInt()
