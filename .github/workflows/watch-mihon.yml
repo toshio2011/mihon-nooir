@@ -1,0 +1,34 @@
+name: Watch Mihon upstream
+on:
+  schedule:
+    - cron: '27 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare upstream commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          pinned=$(tr -d '\r\n' < config/mihon-upstream.sha)
+          latest=$(gh api repos/mihonapp/mihon/commits/main --jq '.sha')
+          if [[ "$pinned" == "$latest" ]]; then
+            echo "Upstream Mihon unchanged ($pinned)"
+            exit 0
+          fi
+          title="Mihon upstream updates available"
+          body=$(printf 'Mihon has new upstream commits.\n\n- Pinned: `%s`\n- Latest: `%s`\n- [Compare](https://github.com/mihonapp/mihon/compare/%s...%s)\n\nReview and test upstream changes in a PR before bumping `config/mihon-upstream.sha`. Never automatically merge or publish an APK.\n' "$pinned" "$latest" "$pinned" "$latest")
+          existing=$(gh issue list --state open --search "Mihon upstream updates available in:title" --json number,title --jq '.[] | select(.title=="Mihon upstream updates available") | .number' | head -1)
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
