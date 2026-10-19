@@ -55,13 +55,9 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
         )
     }
     var workInfo by remember { mutableStateOf<WorkInfo?>(null) }
-    var mangaWorkId by remember {
-        mutableStateOf(
-            prefs.getString(NooirMangaExportWorker.PREF_WORK_ID, null)
-                ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-        )
-    }
-    var mangaWorkInfo by remember { mutableStateOf<WorkInfo?>(null) }
+    // A manga export is a chain, not a single task. Watching only the last
+    // queued UUID hides the manga that is *currently* uploading.
+    var mangaJobs by remember { mutableStateOf<List<WorkInfo>>(emptyList()) }
     var format by remember {
         mutableStateOf(runCatching { ExportFormat.valueOf(prefs.getString("format", "AUTO")!!) }
             .getOrDefault(ExportFormat.AUTO))
@@ -77,9 +73,9 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
         manager.getWorkInfoByIdFlow(current).collect { workInfo = it }
     }
 
-    LaunchedEffect(mangaWorkId) {
-        val current = mangaWorkId ?: return@LaunchedEffect
-        manager.getWorkInfoByIdFlow(current).collect { mangaWorkInfo = it }
+    LaunchedEffect(manager) {
+        manager.getWorkInfosForUniqueWorkFlow(NooirMangaExportWorker.QUEUE_NAME)
+            .collect { mangaJobs = it }
     }
 
     fun persist() {
@@ -201,35 +197,72 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         Text("You can press Back or switch apps. The transfer continues in the background.")
                     }
                 }
-                mangaWorkInfo?.let { manga ->
-                    val active = manga.state == WorkInfo.State.ENQUEUED || manga.state == WorkInfo.State.RUNNING
-                    val stage = manga.progress.getString(NooirMangaExportWorker.KEY_STAGE).orEmpty()
-                    val index = manga.progress.getInt(NooirMangaExportWorker.KEY_CHAPTER, 0)
-                    val chapters = manga.progress.getInt(NooirMangaExportWorker.KEY_CHAPTERS, 0)
-                    val pct = manga.progress.getInt(NooirMangaExportWorker.KEY_PERCENT, -1)
-                    Text("Manga export: " + when (manga.state) {
-                        WorkInfo.State.SUCCEEDED -> "Completed successfully"
-                        WorkInfo.State.FAILED -> "Failed: " +
-                            manga.outputData.getString(NooirMangaExportWorker.KEY_ERROR).orEmpty()
-                        WorkInfo.State.CANCELLED -> "Cancelled"
-                        else -> stage.ifBlank { "Queued / preparing" } +
-                            if (chapters > 0) " · chapter " + index + "/" + chapters else ""
-                    })
-                    if (active) {
-                        if (pct >= 0) {
-                            LinearProgressIndicator(
-                                progress = { pct.coerceIn(0, 100) / 100f },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Text(pct.toString() + "% sent · waiting for XTEink to confirm at 100%")
-                        } else {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            Text("Converting chapters; total pages may not be known yet")
-                        }
-                        TextButton(onClick = { mangaWorkId?.let(manager::cancelWorkById) }) {
-                            Text("Cancel manga export")
+                if (mangaJobs.isNotEmpty()) {
+                    val active = mangaJobs.filter {
+                        it.state == WorkInfo.State.RUNNING ||
+                            it.state == WorkInfo.State.ENQUEUED ||
+                            it.state == WorkInfo.State.BLOCKED
+                    }
+                    Text("Manga export queue · " + active.size + " active/waiting")
+                    Text("Manga books run one at a time. Adding a second book does not stop the first one.")
+                    val ordered = mangaJobs.sortedBy {
+                        when (it.state) {
+                            WorkInfo.State.RUNNING -> 0
+                            WorkInfo.State.ENQUEUED -> 1
+                            WorkInfo.State.BLOCKED -> 2
+                            WorkInfo.State.FAILED -> 3
+                            WorkInfo.State.CANCELLED -> 4
+                            WorkInfo.State.SUCCEEDED -> 5
                         }
                     }
+                    ordered.take(12).forEach { manga ->
+                        val title = manga.tags.firstOrNull {
+                            it.startsWith(NooirMangaExportWorker.TITLE_TAG_PREFIX)
+                        }?.removePrefix(NooirMangaExportWorker.TITLE_TAG_PREFIX)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: "Manga export " + manga.id.toString().take(8)
+                        val stage = manga.progress.getString(NooirMangaExportWorker.KEY_STAGE).orEmpty()
+                        val currentChapter = manga.progress.getInt(NooirMangaExportWorker.KEY_CHAPTER, 0)
+                        val chapters = manga.progress.getInt(NooirMangaExportWorker.KEY_CHAPTERS, 0)
+                        val pct = manga.progress.getInt(NooirMangaExportWorker.KEY_PERCENT, -1)
+                        Text("• " + title)
+                        Text("  " + when (manga.state) {
+                            WorkInfo.State.RUNNING ->
+                                stage.ifBlank { "Converting / uploading" } +
+                                    if (chapters > 0) " · chapter " + currentChapter + "/" + chapters else ""
+                            WorkInfo.State.ENQUEUED -> "Queued · waiting for worker"
+                            WorkInfo.State.BLOCKED -> "Waiting for previous manga to finish"
+                            WorkInfo.State.SUCCEEDED -> "Completed successfully"
+                            WorkInfo.State.FAILED -> "Failed: " +
+                                manga.outputData.getString(NooirMangaExportWorker.KEY_ERROR)
+                                    .orEmpty().ifBlank { "Please retry" }
+                            WorkInfo.State.CANCELLED -> "Cancelled"
+                        })
+                        if (manga.state == WorkInfo.State.RUNNING) {
+                            if (pct >= 0) {
+                                LinearProgressIndicator(
+                                    progress = { pct.coerceIn(0, 100) / 100f },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Text("  " + pct + "% sent · wait for XTEink confirmation at 100%")
+                            } else {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                Text("  Processing; total page count may not yet be known")
+                            }
+                        }
+                        if (manga.state == WorkInfo.State.RUNNING ||
+                            manga.state == WorkInfo.State.ENQUEUED ||
+                            manga.state == WorkInfo.State.BLOCKED
+                        ) {
+                            TextButton(onClick = { manager.cancelWorkById(manga.id) }) {
+                                Text("Cancel this manga export")
+                            }
+                        }
+                    }
+                    if (ordered.size > 12) {
+                        Text("…and " + (ordered.size - 12) + " older queue records")
+                    }
+                    Text("Note: Canceling a job in a dependent queue can also stop later waiting jobs. If that happens, add them again.")
                 }
                 OutlinedTextField(
                     value = host,
