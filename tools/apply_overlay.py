@@ -161,77 +161,30 @@ replace_once(app_graph, "import eu.kanade.tachiyomi.data.download.DownloadWorker
 replace_once(app_graph, "    fun inject(downloadWorker: DownloadWorker)\n",
     "    fun inject(downloadWorker: DownloadWorker)\n    fun inject(nooirMangaExportWorker: NooirMangaExportWorker)\n")
 
-# A distinct file workflow is available from More, not only from a manga screen.
+# Keep original Mihon's More layout clean: expose ONE Nooir Tools entry.
+# The tool hub itself routes to the existing converters, file manager and queue.
 more_tab = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/MoreTab.kt"
 replace_once(more_tab, "import eu.kanade.presentation.more.MoreScreen\n",
-    "import eu.kanade.presentation.more.MoreScreen\nimport dev.nooir.mangabridge.AnyFileTransferDialog\nimport dev.nooir.mangabridge.NooirWebToReaderDialog\nimport dev.nooir.mangabridge.NooirPdfToEpubDialog\nimport dev.nooir.mangabridge.NooirDeviceFilesDialog\nimport dev.nooir.mangabridge.NooirNovelBatchDialog\nimport androidx.compose.runtime.remember\nimport androidx.compose.runtime.mutableStateOf\n")
-replace_once(more_tab, "        MoreScreen(\n", '''        var showSendConvert by remember { mutableStateOf(false) }
-        var showWebToReader by remember { mutableStateOf(false) }
-        var showPdfToEpub by remember { mutableStateOf(false) }
-        var showDeviceFiles by remember { mutableStateOf(false) }
-        var showWebNovels by remember { mutableStateOf(false) }
-        if (showSendConvert) {
-            AnyFileTransferDialog(onDismiss = { showSendConvert = false })
-        }
-        if (showWebToReader) {
-            NooirWebToReaderDialog(onDismiss = { showWebToReader = false })
-        }
-        if (showPdfToEpub) {
-            NooirPdfToEpubDialog(onDismiss = { showPdfToEpub = false })
-        }
-        if (showDeviceFiles) {
-            NooirDeviceFilesDialog(onDismiss = { showDeviceFiles = false })
-        }
-        if (showWebNovels) {
-            NooirNovelBatchDialog(onDismiss = { showWebNovels = false })
+    "import eu.kanade.presentation.more.MoreScreen\nimport dev.nooir.mangabridge.NooirToolsHubDialog\nimport androidx.compose.runtime.remember\nimport androidx.compose.runtime.mutableStateOf\n")
+replace_once(more_tab, "        MoreScreen(\n", '''        var showNooirTools by remember { mutableStateOf(false) }
+        if (showNooirTools) {
+            NooirToolsHubDialog(onDismiss = { showNooirTools = false })
         }
         MoreScreen(
 ''')
 replace_once(more_tab, "            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },",
-    "            onClickSendConvertFiles = { showSendConvert = true },\n            onClickWebToReader = { showWebToReader = true },\n            onClickPdfToEpub = { showPdfToEpub = true },\n            onClickDeviceFiles = { showDeviceFiles = true },\n            onClickWebNovels = { showWebNovels = true },\n            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },")
+    "            onClickNooirTools = { showNooirTools = true },\n            onClickDownloadQueue = { navigator.push(DownloadQueueScreen) },")
 more_screen = upstream / "app/src/main/java/eu/kanade/presentation/more/MoreScreen.kt"
 replace_once(more_screen, "    onClickDownloadQueue: () -> Unit,",
-    "    onClickSendConvertFiles: () -> Unit,\n    onClickWebToReader: () -> Unit,\n    onClickPdfToEpub: () -> Unit,\n    onClickDeviceFiles: () -> Unit,\n    onClickWebNovels: () -> Unit,\n    onClickDownloadQueue: () -> Unit,")
+    "    onClickNooirTools: () -> Unit,\n    onClickDownloadQueue: () -> Unit,")
 replace_once(more_screen, '''            item {
                 val downloadQueueState = downloadQueueStateProvider()''',
     '''            item {
                 TextPreferenceWidget(
-                    title = "Send & Convert files",
-                    subtitle = "Any phone file, manga conversion or device sharing",
+                    title = "Nooir Tools",
+                    subtitle = "Send, convert, manage e-reader files and see activity",
                     icon = MaterialSymbols.Rounded.Storage,
-                    onPreferenceClick = onClickSendConvertFiles,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "Web to E-reader",
-                    subtitle = "Paste a link, save article text and images as EPUB",
-                    icon = MaterialSymbols.Rounded.Storage,
-                    onPreferenceClick = onClickWebToReader,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "PDF to EPUB",
-                    subtitle = "Keep real novel text and embedded illustrations",
-                    icon = MaterialSymbols.Rounded.Storage,
-                    onPreferenceClick = onClickPdfToEpub,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "XTEink Device Files",
-                    subtitle = "Browse books on the reader without loading its library",
-                    icon = MaterialSymbols.Rounded.Storage,
-                    onPreferenceClick = onClickDeviceFiles,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "Web novels & batch EPUB",
-                    subtitle = "Select public chapters and export multiple stories",
-                    icon = MaterialSymbols.Rounded.Storage,
-                    onPreferenceClick = onClickWebNovels,
+                    onPreferenceClick = onClickNooirTools,
                 )
             }
             item {
