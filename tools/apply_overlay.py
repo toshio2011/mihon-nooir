@@ -25,18 +25,21 @@ replace_once(vm, "    private val downloadManager: DownloadManager,\n", "    pri
 replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n", '''    val snackbarHostState: SnackbarHostState = SnackbarHostState()
 
     /** Never mutates or deletes Mihon's original downloaded chapters. */
-    fun exportDownloadedToNooir(context: Context, destination: Uri, format: ExportFormat, device: String) {
+    fun exportDownloadedToNooir(context: Context, destination: Uri, format: ExportFormat, device: String, quickExport: Boolean) {
         val s = successState ?: return
         val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
         val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
+        val selected = if (quickExport) s.selectedChapters.map { it.chapter } else downloaded
         viewModelScope.launch {
             val feedback = launch {
                 snackbarHostState.showSnackbar("Converting manga…", duration = SnackbarDuration.Indefinite)
             }
             val message = runCatching {
-                require(downloaded.isNotEmpty()) { "Download at least one chapter first" }
+                require(selected.isNotEmpty()) {
+                    if (quickExport) "Select 1 to 5 chapters first" else "Download at least one chapter first"
+                }
                 val result = MihonNooirExporter.export(context, nooirDownloadProvider,
-                    s.manga, s.source, downloaded, destination, format, device)
+                    s.manga, s.source, selected, destination, format, device, quickExport)
                 "Exported " + result.pageCount + " pages as " + result.format.extension.uppercase()
             }.getOrElse { "Export failed: " + it.message }
             feedback.cancel()
@@ -45,19 +48,22 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
     }
 
     fun sendDownloadedToNooir(
-        context: Context, format: ExportFormat, device: String, host: String, folder: String,
+        context: Context, format: ExportFormat, device: String, host: String, folder: String, quickExport: Boolean,
     ) {
         val s = successState ?: return
         val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
         val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
+        val selected = if (quickExport) s.selectedChapters.map { it.chapter } else downloaded
         viewModelScope.launch {
             val feedback = launch {
                 snackbarHostState.showSnackbar("Transferring file…", duration = SnackbarDuration.Indefinite)
             }
             val message = runCatching {
-                require(downloaded.isNotEmpty()) { "Download at least one chapter first" }
+                require(selected.isNotEmpty()) {
+                    if (quickExport) "Select 1 to 5 chapters first" else "Download at least one chapter first"
+                }
                 val result = MihonNooirExporter.sendToDevice(context, nooirDownloadProvider,
-                    s.manga, s.source, downloaded, host, folder, format, device)
+                    s.manga, s.source, selected, host, folder, format, device, quickExport)
                 "Sent " + result.pageCount + " pages to XTEink (" + result.format.extension.uppercase() + ")"
             }.getOrElse { "XTEink transfer failed: " + it.message }
             feedback.cancel()
@@ -72,24 +78,26 @@ replace_once(screen, "import androidx.compose.foundation.layout.systemBarsPaddin
 replace_once(screen, "        MangaScreen(\n            state = successState,", '''        var showNooirExport by remember { mutableStateOf(false) }
         var nooirSaveFormat by remember { mutableStateOf(ExportFormat.AUTO) }
         var nooirSaveDevice by remember { mutableStateOf("X4") }
+        var nooirSaveQuick by remember { mutableStateOf(false) }
         val nooirSaveLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument("application/octet-stream")
         ) { uri ->
-            if (uri != null) viewModel.exportDownloadedToNooir(context, uri, nooirSaveFormat, nooirSaveDevice)
+            if (uri != null) viewModel.exportDownloadedToNooir(context, uri, nooirSaveFormat, nooirSaveDevice, nooirSaveQuick)
         }
         if (showNooirExport) {
             NooirExportDialog(
                 mangaTitle = successState.manga.title,
                 onDismiss = { showNooirExport = false },
-                onSave = { format, device ->
+                onSave = { format, device, quickExport ->
                     nooirSaveFormat = format
                     nooirSaveDevice = device
+                    nooirSaveQuick = quickExport
                     val filename = successState.manga.title.take(70)
                         .map { c -> if (c.isLetterOrDigit() || c == ' ' || c == '-' || c == '_') c else '_' }.joinToString("")
                     nooirSaveLauncher.launch(filename + "." + format.resolved(device).extension)
                 },
-                onSend = { format, device, host, folder ->
-                    viewModel.sendDownloadedToNooir(context, format, device, host, folder)
+                onSend = { format, device, host, folder, quickExport ->
+                    viewModel.sendDownloadedToNooir(context, format, device, host, folder, quickExport)
                 },
             )
         }
