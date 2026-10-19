@@ -36,7 +36,7 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
             }
             val message = runCatching {
                 require(selected.isNotEmpty()) {
-                    if (quickExport) "Select 1 to 5 chapters first" else "Download at least one chapter first"
+                    if (quickExport) "Select at least one chapter first" else "Download at least one chapter first"
                 }
                 val result = MihonNooirExporter.export(context, nooirDownloadProvider,
                     s.manga, s.source, selected, destination, format, device, quickExport)
@@ -60,7 +60,7 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
             }
             val message = runCatching {
                 require(selected.isNotEmpty()) {
-                    if (quickExport) "Select 1 to 5 chapters first" else "Download at least one chapter first"
+                    if (quickExport) "Select at least one chapter first" else "Download at least one chapter first"
                 }
                 val result = MihonNooirExporter.sendToDevice(context, nooirDownloadProvider,
                     s.manga, s.source, selected, host, folder, format, device, quickExport)
