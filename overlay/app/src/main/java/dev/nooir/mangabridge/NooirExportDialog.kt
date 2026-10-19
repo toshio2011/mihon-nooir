@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -29,8 +30,8 @@ import dev.nooir.bridge.ExportFormat
 fun NooirExportDialog(
     mangaTitle: String,
     onDismiss: () -> Unit,
-    onSave: (ExportFormat, String) -> Unit,
-    onSend: (ExportFormat, String, String, String) -> Unit,
+    onSave: (ExportFormat, String, Boolean) -> Unit,
+    onSend: (ExportFormat, String, String, String, Boolean) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
@@ -41,6 +42,7 @@ fun NooirExportDialog(
     var device by remember { mutableStateOf(prefs.getString("device", "X4") ?: "X4") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var destination by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
+    var quickExport by remember { mutableStateOf(false) }
 
     fun saveSettings() {
         prefs.edit()
@@ -72,6 +74,17 @@ fun NooirExportDialog(
                         )
                     }
                 }
+                Text("Chapter source")
+                Row {
+                    Checkbox(checked = quickExport, onCheckedChange = { quickExport = it })
+                    TextButton(onClick = { quickExport = !quickExport }) {
+                        Text("Quick Export · fetch missing pages")
+                    }
+                }
+                Text(
+                    if (quickExport) "Select 1–5 chapters in the chapter list first. Missing pages are fetched temporarily, then deleted after export."
+                    else "Use Mihon's permanent downloads. If no chapters are selected, all downloaded chapters are exported."
+                )
                 Text("Output format")
                 ExportFormat.entries.forEach { choice ->
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
@@ -106,12 +119,12 @@ fun NooirExportDialog(
                 TextButton(onClick = {
                     saveSettings()
                     onDismiss()
-                    onSave(selectedFormat, device)
+                    onSave(selectedFormat, device, quickExport)
                 }) { Text("Save file") }
                 Button(enabled = canSend, onClick = {
                     saveSettings()
                     onDismiss()
-                    onSend(selectedFormat, device, host.trim(), destination.trim())
+                    onSend(selectedFormat, device, host.trim(), destination.trim(), quickExport)
                 }) { Text("Send to XTEink") }
             }
         },
