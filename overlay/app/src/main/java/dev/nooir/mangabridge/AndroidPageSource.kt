@@ -116,7 +116,7 @@ class AndroidPageSource(private val context: Context) {
         val regions = PageSlicePlanner.plan(
             src.width, src.height, viewWidth, viewHeight,
             options.layout, options.splitSpreads, options.rightToLeft,
-            options.overlapPercent,
+            options.overlapPercent, options.orientation,
         )
         val result = ArrayList<QuantizedPage>(regions.size)
         for (initial in regions) {
