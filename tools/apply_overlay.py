@@ -61,7 +61,7 @@ replace_once(screen, "        MangaScreen(\n            state = successState,", 
                                 showExportDialog = false
                                 val actual = choice.resolved("X4")
                                 val filename = successState.manga.title.take(70)
-                                    .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                                    .map { c -> if (c.isLetterOrDigit() || c == ' ' || c == '-' || c == '_') c else '_' }.joinToString("")
                                 nooirSave.launch("$filename.${actual.extension}")
                             }) { Text(choice.label + if (choice == ExportFormat.AUTO) " (XTCH for X4)" else "") }
                         }
