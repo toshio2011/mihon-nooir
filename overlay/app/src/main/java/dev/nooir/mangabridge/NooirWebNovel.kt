@@ -75,8 +75,7 @@ object NooirWebNovel {
             val bytes = response.bodyAsBytes()
             require(bytes.size in 1..1_500_000)
             val image = epub.addImage(ImageAsset(bytes, ext, mime), isCover = true)
-            epub.addSection("Cover", "<figure><img src=\\"" +
-                ReflowEpubWriter.xml(image) + "\\" alt=\\"Book cover\\"/></figure>")
+            epub.addSection("Cover", """<figure><img src="$image" alt="Book cover"/></figure>""")
         }
     }
 
