@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -74,8 +75,13 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     }
 
     LaunchedEffect(manager) {
-        manager.getWorkInfosForUniqueWorkFlow(NooirMangaExportWorker.QUEUE_NAME)
-            .collect { mangaJobs = it }
+        manager.getWorkInfosForUniqueWorkFlow(NooirDeviceWorkQueue.NAME)
+            .collect { jobs ->
+                mangaJobs = jobs.filter { job ->
+                    job.tags.any { it.startsWith(NooirMangaExportWorker.TITLE_TAG_PREFIX) } ||
+                        job.tags.contains(NooirMangaExportWorker::class.java.name)
+                }
+            }
     }
 
     fun persist() {
@@ -98,7 +104,8 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 NooirTransferWorker.KEY_TREE_URI to saveTree?.toString(),
                 NooirTransferWorker.KEY_OPTIONS to options.token(),
             )).build()
-        manager.enqueue(req)
+        // Reuse the same sequential chain as manga, URL and PDF exports.
+        manager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
         workId = req.id
         workInfo = null
         prefs.edit().putString("last_transfer_work", req.id.toString()).apply()
