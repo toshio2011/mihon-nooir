@@ -19,62 +19,50 @@ for source in (root / "overlay").rglob("*.kt"):
     shutil.copy2(source, destination)
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
-replace_once(vm, "import android.content.Context\n", "import android.content.Context\nimport android.net.Uri\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.MihonNooirExporter\nimport dev.nooir.mangabridge.MangaConversionOptions\n")
+replace_once(vm, "import android.content.Context\n", "import android.content.Context\nimport android.net.Uri\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.MihonNooirExporter\nimport dev.nooir.mangabridge.MangaConversionOptions\nimport dev.nooir.mangabridge.NooirMangaExportWorker\n")
 replace_once(vm, "import eu.kanade.tachiyomi.data.download.DownloadManager\n", "import eu.kanade.tachiyomi.data.download.DownloadManager\nimport eu.kanade.tachiyomi.data.download.DownloadProvider\n")
 replace_once(vm, "    private val downloadManager: DownloadManager,\n", "    private val downloadManager: DownloadManager,\n    private val nooirDownloadProvider: DownloadProvider,\n")
 replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n", '''    val snackbarHostState: SnackbarHostState = SnackbarHostState()
 
-    /** Never mutates or deletes Mihon's original downloaded chapters. */
-    fun exportDownloadedToNooir(context: Context, destination: Uri, format: ExportFormat, device: String, quickExport: Boolean, options: MangaConversionOptions) {
-        val s = successState ?: return
-        val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
-        val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
-        val selected = if (quickExport) s.selectedChapters.map { it.chapter } else downloaded
-        viewModelScope.launch {
-            val feedback = launch {
-                snackbarHostState.showSnackbar("Converting manga…", duration = SnackbarDuration.Indefinite)
-            }
-            val message = runCatching {
-                require(selected.isNotEmpty()) {
-                    if (quickExport) "Select at least one chapter first" else "Download at least one chapter first"
-                }
-                val result = MihonNooirExporter.export(context, nooirDownloadProvider,
-                    s.manga, s.source, selected, destination, format, device, quickExport, options)
-                "Exported " + result.pageCount + " pages as " + result.format.extension.uppercase()
-            }.getOrElse { "Export failed: " + it.message }
-            feedback.cancel()
-            snackbarHostState.showSnackbar(message)
-        }
-    }
-
-    fun sendDownloadedToNooir(
-        context: Context, format: ExportFormat, device: String, host: String, folder: String, quickExport: Boolean, options: MangaConversionOptions,
+    /** The worker owns all conversion and upload state; navigating away is safe. */
+    fun exportDownloadedToNooir(
+        context: Context, destination: Uri, format: ExportFormat, device: String,
+        quickExport: Boolean, options: MangaConversionOptions,
     ) {
         val s = successState ?: return
         val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
-        val downloaded = candidates.filter { it.isDownloaded }.map { it.chapter }
-        val selected = if (quickExport) s.selectedChapters.map { it.chapter } else downloaded
-        viewModelScope.launch {
-            val feedback = launch {
-                snackbarHostState.showSnackbar("Transferring file…", duration = SnackbarDuration.Indefinite)
-            }
-            val message = runCatching {
-                require(selected.isNotEmpty()) {
-                    if (quickExport) "Select at least one chapter first" else "Download at least one chapter first"
-                }
-                val result = MihonNooirExporter.sendToDevice(context, nooirDownloadProvider,
-                    s.manga, s.source, selected, host, folder, format, device, quickExport, options)
-                "Sent " + result.pageCount + " pages to XTEink (" + result.format.extension.uppercase() + ")"
-            }.getOrElse { "XTEink transfer failed: " + it.message }
-            feedback.cancel()
-            snackbarHostState.showSnackbar(message)
-        }
+        val selected = if (quickExport) s.selectedChapters.map { it.chapter }
+            else candidates.filter { it.isDownloaded }.map { it.chapter }
+        val result = runCatching {
+            require(selected.isNotEmpty()) { "Select chapters to export first" }
+            NooirMangaExportWorker.enqueue(context, s.manga.id, selected.map { it.id },
+                destination, null, "", format, device, quickExport, options)
+            "Manga export queued in background. Check More → Send & Convert for progress."
+        }.getOrElse { "Could not queue export: " + it.message }
+        viewModelScope.launch { snackbarHostState.showSnackbar(result) }
+    }
+
+    fun sendDownloadedToNooir(
+        context: Context, format: ExportFormat, device: String, host: String, folder: String,
+        quickExport: Boolean, options: MangaConversionOptions,
+    ) {
+        val s = successState ?: return
+        val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
+        val selected = if (quickExport) s.selectedChapters.map { it.chapter }
+            else candidates.filter { it.isDownloaded }.map { it.chapter }
+        val result = runCatching {
+            require(selected.isNotEmpty()) { "Select chapters to export first" }
+            NooirMangaExportWorker.enqueue(context, s.manga.id, selected.map { it.id },
+                null, host, folder, format, device, quickExport, options)
+            "Manga transfer queued. It continues after Back; check More → Send & Convert."
+        }.getOrElse { "Could not queue manga transfer: " + it.message }
+        viewModelScope.launch { snackbarHostState.showSnackbar(result) }
     }
 ''')
 
 screen = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaScreen.kt"
 replace_once(screen, "import androidx.compose.foundation.layout.systemBarsPadding\n",
-    "import androidx.compose.foundation.layout.systemBarsPadding\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.NooirExportDialog\nimport dev.nooir.mangabridge.MangaConversionOptions\n")
+    "import androidx.compose.foundation.layout.systemBarsPadding\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.NooirExportDialog\nimport dev.nooir.mangabridge.MangaConversionOptions\nimport dev.nooir.mangabridge.NooirMangaExportWorker\n")
 replace_once(screen, "        MangaScreen(\n            state = successState,", '''        var showNooirExport by remember { mutableStateOf(false) }
         var nooirSaveFormat by remember { mutableStateOf(ExportFormat.AUTO) }
         var nooirSaveDevice by remember { mutableStateOf("X4") }
@@ -154,6 +142,13 @@ toolbar.write_text(toolbar_text)
 i18n = upstream / "i18n/src/commonMain/moko-resources/base/strings.xml"
 replace_once(i18n, '<string name="app_name" translatable="false">Mihon</string>',
     '<string name="app_name" translatable="false">MangaNooir</string>')
+# New WorkManager worker needs Metro graph injection just as Mihon's own workers do.
+app_graph = upstream / "app/src/main/java/mihon/app/di/AppGraph.kt"
+replace_once(app_graph, "import eu.kanade.tachiyomi.data.download.DownloadWorker\n",
+    "import eu.kanade.tachiyomi.data.download.DownloadWorker\nimport dev.nooir.mangabridge.NooirMangaExportWorker\n")
+replace_once(app_graph, "    fun inject(downloadWorker: DownloadWorker)\n",
+    "    fun inject(downloadWorker: DownloadWorker)\n    fun inject(nooirMangaExportWorker: NooirMangaExportWorker)\n")
+
 # A distinct file workflow is available from More, not only from a manga screen.
 more_tab = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/MoreTab.kt"
 replace_once(more_tab, "import eu.kanade.presentation.more.MoreScreen\n",
