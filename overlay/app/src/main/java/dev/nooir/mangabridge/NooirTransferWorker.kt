@@ -68,6 +68,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         phase: String, index: Int, count: Int, file: String,
         sent: Long = 0L, total: Long = 0L, percent: Int = -1,
     ) {
+        if (lastPercent != percent || lastPhase != phase || lastIndex != index) {
         setProgressAsync(
             Data.Builder()
                 .putString(KEY_PHASE, phase)
@@ -79,7 +80,6 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                 .putInt(KEY_PERCENT, percent)
                 .build()
         )
-        if (lastPercent != percent || lastPhase != phase || lastIndex != index) {
             lastPercent = percent
             lastPhase = phase
             lastIndex = index
