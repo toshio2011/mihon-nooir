@@ -45,6 +45,13 @@ object XtcCodec {
         val h = page.height
         val depth = page.depth
         val rowLength = (w + 7) / 8
+        // Folio Nooir reads XTCH planes as ceil(width*height/8) bytes each,
+        // while the column-major writer needs width*ceil(height/8). Those
+        // layouts differ for non-8-aligned heights; fail rather than emit a
+        // deceptively valid image whose two gray planes will be misread.
+        require(depth != 2 || h % 8 == 0) {
+            "XTCH height must be divisible by 8 for Folio/CrossPoint-compatible decoding"
+        }
         val columnLength = (h + 7) / 8
         val bitmapSize = if (depth == 1) rowLength.toLong() * h else 2L * w * columnLength
         require(bitmapSize <= Int.MAX_VALUE - 22) { "Page too large" }
