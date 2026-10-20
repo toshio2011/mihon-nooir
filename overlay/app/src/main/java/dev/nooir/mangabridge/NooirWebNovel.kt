@@ -19,7 +19,6 @@ object NooirWebNovel {
     data class Chapter(val url: String, val title: String)
     data class Result(val title: String, val exportedChapters: Int, val discoveredChapters: Int)
 
-    const val MAX_CHAPTERS = 80
 
     /** Returns TOC entries from existing, publicly returned HTML only.
      * Site-specific/dynamic JS chapters may not be discoverable.
@@ -51,7 +50,6 @@ object NooirWebNovel {
             if (!likely) continue
             val target = URI("https", null, uri.host, -1, uri.path, uri.query, null).toASCIIString()
             found.putIfAbsent(target, Chapter(target, text))
-            if (found.size > 300) error("Over 300 linked chapters. Select a smaller volume on the source website.")
         }
         return found.values.toList()
     }
@@ -82,10 +80,10 @@ object NooirWebNovel {
     /** One EPUB per URL. Individual chapters become EPUB sections with a TOC. */
     fun convert(
         storyUrl: String, output: File,
-        startAt: Int = 1, endAt: Int = MAX_CHAPTERS,
+        startAt: Int = 1, endAt: Int = Int.MAX_VALUE,
         onStage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ): Result {
-        require(startAt in 1..300 && endAt in startAt..300) { "Invalid chapter range" }
+        require(startAt >= 1 && endAt >= startAt) { "Invalid chapter range" }
         onStage(0, 0, "Checking publicly available story")
         val page = NooirWebArticle.load(storyUrl)
         val meta = NooirWebArticle.metadata(page)
@@ -105,9 +103,8 @@ object NooirWebNovel {
         require(chosen.isNotEmpty()) {
             "No chapters in the selected range. This site may load its chapter list with JavaScript."
         }
-        require(chosen.size <= MAX_CHAPTERS) {
-            "Convert at most $MAX_CHAPTERS chapters in one EPUB. Split a long story into ranges."
-        }
+        // "All chapters" means every chapter discoverable from public HTML, without a count limit.
+        // Failed chapters stop this book rather than silently creating a truncated EPUB.
         // Never silently omit undiscovered chapters or pretend locked text is readable.
         ReflowEpubWriter.write(output, meta) { epub ->
             embedCover(page, epub)
