@@ -3,7 +3,7 @@
 [← MangaNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
 
 > [!IMPORTANT]
-> These steps describe the **v1.0.11 experimental Android preview**, not the **v1.0.1 code on `main`**. The [v1.0.11 APK build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed automated checks, **not physical phone/XTEink testing**. There is no stable MangaNooir release yet.
+> These steps describe the **v1.0.11 experimental Android preview**, not the **v1.0.1 code on `main`**. The [published v1.0.11 experimental APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks, **not physical phone/XTEink testing**. The experimental v1.0.11 prerelease is available; it is not a stable build.
 
 **Already using normal Mihon?** MangaNooir is a separate test app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
 
@@ -32,7 +32,7 @@ Open **MangaNooir → More → Nooir Tools**. Inside the hub:
 
 No selection + Normal Export means **all downloaded chapters** of that manga. Quick Export requires **at least one selected chapter**. Original Mihon downloads are not replaced.
 
-**Missing XTC/XTCH cover?** The experimental exporter requires a decodable manga cover at the beginning of the book; if the source cover is unavailable it should show an error rather than quietly claim success. Check whether the cover is present in Mihon, then retry to a **new filename**. If page 1 has the cover but the reader **shelf** doesn't, use **Retrieve All Book Details** on Folio Nooir to create missing thumbnails.
+**Missing XTC/XTCH cover?** The experimental exporter requires a decodable manga cover at the beginning of the book; if the source cover is unavailable it should show an error rather than quietly claim success. Check whether the cover is present in Mihon, then retry to a **new filename**. If page 1 has the cover but the reader **shelf** doesn't, try the reader's cache refresh (Folio Nooir: **Retrieve All Book Details**).
 
 [Chapter selection](CHAPTER_SELECTION.md) · [Conversion formats](CONVERSION.md) · [Orientation/overlap](ORIENTATION_OVERLAP.md) · [Cover and metadata](XTC_METADATA.md)
 
