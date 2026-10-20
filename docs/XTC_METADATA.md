@@ -1,10 +1,10 @@
 # XTC/XTCH cover and synopsis (experimental)
 
-This work is tracked in [MangaNooir PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) and the companion [Folio Nooir firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). Neither change has been merged into a stable release.
+This work is tracked in [MangaNooir PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) and the companion [Folio Nooir firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). Neither change has been merged into a stable release. The newer [v1.0.11 draft APK](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed automated compilation, but physical XTC/XTCH cover tests remain pending. `main` still contains v1.0.1.
 
 ## Cover
 
-For manga exported from Mihon, we look for the **custom cover** first, then a **cached library cover**, and then the source extension's artwork URL. If the artwork is readable, it becomes a separate first page of the XTC/XTCH output; the manga chapters follow with chapter navigation adjusted accordingly. Existing Folio Nooir firmware builds its XTC shelf cover from page 0, so this works without a new parser. If the artwork cannot be obtained, the first manga chapter page remains the fallback.
+For manga exported from Mihon, the experimental v1.0.11 converter looks for the **custom cover** first, then a readable **cached library cover**, and then the source extension's public artwork URL. A decodable cover is required as **page 0** for XTC/XTCH, and the manga chapters follow with their indices adjusted. If the cover is unavailable, the export now reports a **cover error** rather than claiming success with an accidental first-chapter cover. The Folio Nooir reader makes shelf thumbnails from page 0; an extra JPG file or a new reader parser is not required. After a new transfer, use **Retrieve All Book Details** on Folio Nooir if the shelf thumbnail cache is missing.
 
 The same first-page cover improvement applies to EPUB and CBZ exports from Mihon.
 
@@ -32,6 +32,6 @@ The JSON is bounded to 8192 bytes and carries available title, author, artist, s
 3. Transfer to an X4 running Folio Nooir and verify title, author, cover thumbnail and synopsis after refreshing book metadata if necessary.
 4. Copy a file manually to an SD card and verify synopsis **only on the companion firmware branch**.
 5. Confirm that ordinary legacy XTC files without the trailer still open.
-6. Check a title with no cover or synopsis; export should not fail or fabricate these fields.
+6. Check a title with **no readable cover**: experimental v1.0.11 XTC/XTCH export should **fail with a helpful message** rather than fabricate a cover. A missing synopsis must not be invented; optional Wi-Fi metadata sync can warn if unavailable.
 
-These changes have not yet been physically tested on the maintainer's X4 or independently verified on other firmware.
+These changes have not yet been physically verified on the maintainer's X4 or independently verified on other firmware. See [the reader cover / queue guide](DEVICE_FILES_AND_QUEUE.md) and [Nooir Tools quick start](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md).
