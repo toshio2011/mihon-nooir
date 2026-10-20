@@ -45,3 +45,13 @@ The current implementation finds chapter links **already visible in a site's pub
 - [ ] Test sites where HTML is dynamic/locked; show clear non-success rather than fabricated content.
 - [ ] Confirm cover, real text, inline illustrations and TOC in Folio Nooir.
 - [ ] Confirm device receives a *single* upload at a time when manga and novel jobs are queued.
+
+## Troubleshooting two real public links (20 October 2026)
+
+**Wattpad story link** (`https://www.wattpad.com/story/350193740`, including optional sharing query parameters): a story URL is a **landing page**, not necessarily an HTML page containing its chapters. The importer now recognizes numeric Wattpad chapter URLs *when the public returned HTML visibly lists them*. If the site only provides its chapter list through JavaScript/login, MangaNooir reports that limitation and does not generate a misleading empty EPUB. This feature is **not a Wattpad login, scraping-bypass or premium unlock client**.
+
+**Rengkang article/page** (`https://syazwandaniial.com/rengkang`): a page can have a readable title while the selected HTML contains no actual novel paragraphs. The web article tool now checks additional WordPress/Elementor and classic chapter containers, then explicitly says when a page appears to be a landing/catalog page. It cannot turn a preview, product listing or script-only page into full novel prose. For single-page conversion, open the page that actually **displays readable text** and paste that public chapter URL.
+
+**Error display:** Nooir Tools → Activity Queue distinguishes a failed task from a failed queue. Older WorkManager records may say only `Failed` if the previous build did not save an error message. The newer preview records the per-story failure reason without aborting later queued books.
+
+These are **code/diagnostic changes**, not a claim that both URLs are accessible or working. Direct live HTML was not retrievable from the development environment; phone-side testing is required.
