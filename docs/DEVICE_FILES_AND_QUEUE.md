@@ -3,7 +3,7 @@
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 > [!IMPORTANT]
-> The built-in **Nooir Tools** screen and shared **Activity Queue** are features of the **experimental v1.0.11 APK**, not the v1.0.1 app on `main`. The [build passed Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), but on-reader verification is pending.
+> The built-in **Nooir Tools** screen and shared **Activity Queue** are features of the **experimental v1.0.11 APK**, not the v1.0.1 app on `main`. The [build passed Android CI](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but on-reader verification is pending.
 
 ## The built-in reader file browser
 
@@ -48,7 +48,7 @@ Folio Nooir generates XTC/XTCH cover thumbnails from **the first page of the boo
 
 1. Confirm that the manga's actual cover is visible in Mihon. A new preview export should report an error if it can't obtain/decode the cover, instead of silently putting the first chapter on the cover.
 2. Export to a **new filename**, open the book, and check whether its **first displayed page** is the cover.
-3. If the first book page is correct but the **library shelf** has no thumbnail, run **Retrieve All Book Details** on Folio Nooir to create missing cover thumbnails.
+3. If page one is correct but a reader's **library shelf** lacks a thumbnail, refresh its thumbnail cache (on Folio Nooir: **Retrieve All Book Details**). MangaNooir-generated XTCH covers have been reported working on Folio Nooir.
 4. If the first book page is incorrect, please report the source, format (XTC or XTCH), phone build and Folio Nooir firmware version. Refreshing thumbnails won't fix a wrongly exported first page.
 
 This needs a physical X4/X3 test; the current automated XTC/XTCH tests only check the byte format and first-page/chapter indexing.
