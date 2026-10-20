@@ -46,10 +46,12 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         const val KEY_SENT = "sent"
         const val KEY_TOTAL = "total"
         const val KEY_ERROR = "error"
+        const val KEY_OUTPUT_NAME = "output_name"
 
         fun enqueue(context: Context, mangaId: Long, mangaTitle: String, chapterIds: List<Long>,
             destination: Uri?, host: String?, folder: String, format: ExportFormat,
-            device: String, quick: Boolean, options: MangaConversionOptions): UUID {
+            device: String, quick: Boolean, options: MangaConversionOptions,
+            outputName: String = ""): UUID {
             require(chapterIds.isNotEmpty()) { "Select at least one chapter" }
             require(destination != null || !host.isNullOrBlank()) { "Missing destination" }
             // Avoid WorkManager's 10KB Data limit with a private, durable chapter ID manifest.
@@ -64,7 +66,8 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                     "output_uri" to (destination?.toString() ?: ""),
                     "host" to host.orEmpty(), "folder" to folder,
                     "format" to format.name, "device" to device,
-                    "quick" to quick, "options" to options.token()
+                    "quick" to quick, "options" to options.token(),
+                    KEY_OUTPUT_NAME to outputName
                 )).build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
@@ -144,6 +147,14 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             val host = inputData.getString("host").orEmpty()
             val folder = inputData.getString("folder").orEmpty()
             val count = chapters.size
+            val desiredName = inputData.getString(KEY_OUTPUT_NAME).orEmpty().ifBlank { manga.title }
+            if (output.isEmpty()) {
+                progress("Checking existing XTEink filenames", 0, count)
+                withContext(Dispatchers.IO) {
+                    NooirDestinationGuard.requireOnReader(host, folder,
+                        NooirDestinationGuard.forManga(desiredName, format, device))
+                }
+            }
             progress("Preparing chapters", 0, count)
             withContext(Dispatchers.IO) {
                 if (output.isNotEmpty()) {
@@ -161,7 +172,8 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                             progress(if (sent >= total) "Waiting for XTEink confirmation"
                                 else "Uploading to XTEink", count, count, sent, total, pct)
                         },
-                        coverCache = coverCache)
+                        coverCache = coverCache,
+                        outputName = desiredName)
                 }
             }
             manager.notify(notificationId, notif(if (output.isNotEmpty()) "Manga file saved"
