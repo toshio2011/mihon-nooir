@@ -234,3 +234,19 @@ Another documentation handover commit was pushed while this audit was being prep
 - [ ] Public 100+ chapter web novel test, TOC and illustrations, long EPUB validity and large transfer boundary.
 - [ ] Do not merge, release or modify Folio firmware without explicit permission.
 
+
+## 11. Public docs refresh — 20 October 2026
+
+**Documentation-only updates to `main`; no feature code merged and no stable release published.**
+
+- Replaced the stale GitHub [homepage README](../README.md) with an approachable latest-feature map, up-to-date installation link, 5-step Wi-Fi flow, release-vs-preview disclaimers and links to current user guides.
+- Added a single user-facing [Nooir Tools quick-start](NOOIR_TOOLS_QUICK_START.md) for manga export, all six hub entries, single/multiple web links, novels, PDF, background queue, collisions, covers and the existing XTEink file manager.
+- Updated [the guide index](README.md), [Getting Started](GETTING_STARTED.md), [FAQ](FAQ.md), [Chapter Selection](CHAPTER_SELECTION.md), [Conversion](CONVERSION.md) and [Wi-Fi Transfer](WIFI_TRANSFER.md) to remove outdated navigation and feature/status claims.
+- Published previously preview-branch-only user guides to normal `main/docs/` paths: [Web Link](WEB_TO_READER.md), [Web Novels / combined links](WEB_NOVELS.md), [PDF](PDF_TO_EPUB.md), [Device Files / Activity Queue](DEVICE_FILES_AND_QUEUE.md), [Orientation / Overlap](ORIENTATION_OVERLAP.md) and [XTC Metadata](XTC_METADATA.md). Every guide explicitly warns that these controls are in the **v1.0.11 preview**, **not v1.0.1 main code**.
+- Updated the draft #18 branch README to point to public main-branch guides and reconciled its newest preview guides with those published on main.
+- Last **verified successful code-bearing preview workflow at the time of docs refresh**: [run 39363272479](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), matching code head `c802dbf0e8b2e9dce548004b14b86dc8b8a02966`. Subsequent **documentation-only commits** change the PR HEAD SHA and trigger more Actions runs. **Check the latest exact HEAD outcome separately**; do not claim a latest docs-only run green while pending.
+- Combined public web-link EPUB is reachable from **both** Web Link → EPUB (multi-link button) and Web Novels (combine checkbox), sharing `NooirWebPageBook` and `NooirNovelBatchWorker` instead of having two implementations.
+- XTC/XTCH exports in #18 now require readable manga cover page 0, with separate Folio Nooir shelf-thumbnail generation. Actual hardware has not confirmed this yet.
+- Remaining verification: phone workflows, actual accessible public URL extraction, illustrated PDF fidelity vs private reference, reliable XTC/XTCH covers and real X4 transfers. **No merges, firmware flashes, public APK releases or copyrighted source files committed.**
+
+Older sections above are retained for historical ancestry and may describe statuses before the subsequent updates. Treat this section and live GitHub refs as the latest checkpoint.
