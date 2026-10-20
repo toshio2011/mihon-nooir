@@ -13,11 +13,12 @@ Inspired by the setting ideas from [MangaPoint](https://github.com/W1seGit/Manga
 1. In MangaNooir, open a manga, **long-press** a chapter, and select the chapters you want.
 2. Tap **Export** in the manga toolbar (or open **More → Nooir Tools → Send & Convert files** for local CBZ/images).
 3. Expand **More conversion settings**.
-4. Pick **Portrait** (normal upright X3/X4 reading) or **Landscape** (hold the reader sideways).
-5. When using **Landscape**, choose the **Rotate content clockwise** direction. Turn it off if you prefer the opposite physical turn.
-6. Select **Auto / Pages / Webtoon** layout. For a long strip or a portrait page being read in landscape, choose **Overlapping page cuts** from **0% (no repeat)** to **50%**. Start around **8–12%**.
-7. Optionally set white-margin trimming, split spreads, manga reading direction, contrast and dithering.
-8. Save as XTC, XTCH, EPUB or CBZ, or send to your XTEink through Folio Nooir's File Transfer mode.
+4. Choose **Include separate series cover** if you want the actual cover ahead of the first selected manga page; disable it to read directly from the chapter.
+5. Pick **Portrait** (normal upright X3/X4 reading) or **Landscape** (hold the reader sideways).
+6. When using **Landscape**, choose the **Rotate content clockwise** direction. Turn it off if you prefer the opposite physical turn.
+7. Select **Auto / Pages / Webtoon** layout. For a long strip or a portrait page being read in landscape, choose **Overlapping page cuts** from **0% (no repeat)** to **50%**. Start around **8–12%**.
+8. Optionally set white-margin trimming, split spreads, manga reading direction, contrast and dithering.
+9. Save as XTC, XTCH, EPUB 2 Classic, EPUB 3 Modern or CBZ, or send to your XTEink through Folio Nooir's File Transfer mode.
 
 The settings are saved for your next export, including a legacy migration path for jobs/settings created in 1.0.4/1.0.5. The chapter selection and format/device are separate from these image settings.
 
@@ -58,3 +59,7 @@ This does **not** add all MangaPoint settings. In particular: fixed manual margi
 - [ ] Physical device battery/memory/performance looks acceptable.
 
 These are experimental image settings until the actual phone and XTEink tests pass.
+
+## v1.0.12 format support
+
+The experimental [EPUB 2 / EPUB 3 / XTC / XTCH guide](EXPORT_FORMATS_EPUB2.md) explains the new format selection and reader-specific presets. EPUB 2 uses the same chapter-image slicing and orientation controls as EPUB 3; dedicated covers stay upright and unsplit. The EPUB 2 standard does not define the EPUB 3 `page-progression-direction` OPF spine attribute, so it is **not emitted**: navigation remains in selected chapter order, while right-to-left reading behavior must be tested/configured in each EPUB 2 reader.
