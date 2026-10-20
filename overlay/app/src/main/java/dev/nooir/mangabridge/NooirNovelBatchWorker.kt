@@ -17,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import org.json.JSONArray
 
 /** Sequential multi-story EPUB export: never overload the reader with parallel uploads. */
 class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -27,6 +28,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         const val BOOK_TITLE = "combined_book_title"
         const val BOOK_AUTHOR = "combined_book_author"
         const val BOOK_FILENAME = "combined_book_filename"
+        const val URL_MANIFEST = "combined_urls_manifest"
         const val OUTPUT_TREE = "novel_output_tree"
         const val HOST = "novel_host"
         const val FOLDER = "novel_folder"
@@ -47,18 +49,44 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             .setOnlyAlertOnce(true).setProgress(0, 0, true).build()
 
     override suspend fun doWork(): Result {
-        val urls = inputData.getStringArray(URLS)?.map { it.trim() }?.filter { it.isNotBlank() }?.distinct().orEmpty()
-        val customNames = inputData.getStringArray(NAMES).orEmpty()
         val combinePages = inputData.getBoolean(COMBINE_PAGES, false)
+        val manifestName = inputData.getString(URL_MANIFEST).orEmpty()
+        // Keep WorkManager Data small: only open our app-private file.
+        val manifestFile = if (combinePages && manifestName.isNotBlank() &&
+            Regex("^nooir-webpages-[a-f0-9-]{36}\\.json$").matches(manifestName))
+            File(applicationContext.filesDir, manifestName) else null
+        val entries = if (combinePages) try {
+            requireNotNull(manifestFile) { "Missing chapter-list manifest" }
+            require(manifestFile.isFile && manifestFile.length() in 1..(128 * 1024)) {
+                "Chapter-list manifest is missing or too large"
+            }
+            val json = JSONArray(manifestFile.readText(Charsets.UTF_8))
+            (0 until json.length()).map { index ->
+                val item = json.getJSONObject(index)
+                item.getString("url").trim() to item.optString("title").trim()
+            }
+        } catch (e: Exception) {
+            manifestFile?.delete()
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERRORS,
+                "Could not read combined chapter URLs: " + (e.message ?: "Invalid manifest")))
+        } else emptyList()
+        val urls = if (combinePages) entries.map { it.first } else
+            inputData.getStringArray(URLS)?.map { it.trim() }
+                ?.filter { it.isNotBlank() }?.distinct().orEmpty()
+        val customNames = if (combinePages) entries.map { it.second }.toTypedArray() else
+            inputData.getStringArray(NAMES).orEmpty()
         val destination = inputData.getString(OUTPUT_TREE)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
         val first = inputData.getInt(FIRST, 1)
         val last = inputData.getInt(LAST, Int.MAX_VALUE)
-        if (urls.isEmpty() || urls.size > 10 || urls.any { it.length > 600 } ||
+        if (urls.isEmpty() || (!combinePages && urls.size > 10) ||
+            urls.any { it.length > 600 || !it.startsWith("https://", true) } ||
             first < 1 || last < first ||
             (destination == null && (host.isBlank() || !folder.startsWith("/") || folder.contains("..")))) {
-            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERRORS, "Invalid URLs, chapter range or destination"))
+            manifestFile?.delete()
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERRORS,
+                "Invalid URLs, chapter range or destination"))
         }
         if (Build.VERSION.SDK_INT >= 26) notices.createNotificationChannel(
             NotificationChannel(NooirTransferWorker.CHANNEL_ID,
@@ -219,6 +247,8 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         catch (e: Exception) {
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder().putInt(DONE, done),
                 ERRORS, e.message ?: "Novel batch failed"))
+        } finally {
+            manifestFile?.delete()
         }
     }
 }
