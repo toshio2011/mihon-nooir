@@ -61,8 +61,8 @@ fun main() {
         val firstOffset = le64(bytes, 32).toInt()
         check(result.pageCount == 2)
         check(le16(bytes, 56 + 244) == 0) // metadata coverPage is zero-based
-        check(le16(bytes, chapterOffset + 80) == 1) // first chapter skips cover
-        check(le16(bytes, chapterOffset + 82) == 1)
+        check(le16(bytes, chapterOffset + 80) == 2) // on-disk 1-based: chapter starts at zero-based page 1
+        check(le16(bytes, chapterOffset + 82) == 2)
         check(le64(bytes, pageTableOffset) == firstOffset.toLong())
         check(bytes.copyOfRange(firstOffset, firstOffset + XtcCodec.encodePage(first).size)
             .contentEquals(XtcCodec.encodePage(first)))
