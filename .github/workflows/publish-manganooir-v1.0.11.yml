@@ -1,0 +1,80 @@
+name: Publish MangaNooir v1.0.11 preview
+
+# Explicit owner action only. This never auto-releases or merges the draft PR.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-preview:
+    name: Publish verified experimental APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: manganooir-preview-v1.0.11-release
+      cancel-in-progress: false
+    steps:
+      - name: Checkout release notes from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Checkout exact CI-tested candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 343fb29c04c7053c50741d5c844cf7e564f7c996
+          path: candidate
+          persist-credentials: false
+
+      - name: Verify source commit and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "343fb29c04c7053c50741d5c844cf7e564f7c996"
+          test "$(tr -d '\r\n' < candidate/config/version.txt)" = "1.0.11"
+          test -s docs/releases/v1.0.11.md
+
+      - name: Download successful v1.0.11 CI build #39375003996
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 39375003996 --repo "$GITHUB_REPOSITORY" --name mihon-nooir-foss-apk --dir dist
+
+      - name: Check artifact hashes and archive integrity before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          cat > /tmp/manganooir-v1.0.11-sha256.txt <<'SUMS'
+          ce8155c9430684707202a47f5cdacd3c12509527945896da2630da2963746e0e  app-arm64-v8a-foss.apk
+          7149558ae53818ed6ab0188a89b3db28c9a1207dbcf6c8ae05dc5a88479d54ba  app-universal-foss.apk
+          89180717ae6fad03c18593238409e3009fc2797bd003dcdc6d465fe0ea1c093e  app-x86-foss.apk
+          3b6c8c44fcc83b8c1fb8dae4695fe6140b8e934bb74ca4f7499fcc0075e1f1c4  app-armeabi-v7a-foss.apk
+          0ab51222fe2e0b0ea7690da339a79078332d1506b52411097683cd7d2f27715d  app-x86_64-foss.apk
+          SUMS
+          sha256sum --check /tmp/manganooir-v1.0.11-sha256.txt
+          for apk in *.apk; do unzip -t "$apk" > /dev/null; done
+
+      - name: Create GitHub experimental prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.0.11 --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "v1.0.11 release already exists; refusing to overwrite."
+            exit 1
+          fi
+          gh release create v1.0.11 dist/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "MangaNooir v1.0.11 — Experimental Preview" \
+            --notes-file docs/releases/v1.0.11.md \
+            --target "343fb29c04c7053c50741d5c844cf7e564f7c996" \
+            --prerelease
