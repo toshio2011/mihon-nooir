@@ -38,16 +38,20 @@ import org.json.JSONObject
 
 /** Simple manual multi-link importer. All work runs in the phone and shared IO queue. */
 @Composable
-fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
+fun NooirNovelBatchDialog(
+    onDismiss: () -> Unit,
+    initialCombinePages: Boolean = false,
+    initialUrls: String = "",
+) {
     val context = LocalContext.current
     val manager = remember { WorkManager.getInstance(context) }
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
-    var links by remember { mutableStateOf("") }
+    var links by remember(initialUrls) { mutableStateOf(initialUrls) }
     var customNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var first by remember { mutableStateOf("1") }
     var last by remember { mutableStateOf("80") }
     var allChapters by remember { mutableStateOf(true) }
-    var combinePages by remember { mutableStateOf(false) }
+    var combinePages by remember(initialCombinePages) { mutableStateOf(initialCombinePages) }
     var combinedTitle by remember { mutableStateOf("") }
     var combinedAuthor by remember { mutableStateOf("") }
     var combinedFilename by remember { mutableStateOf("") }
