@@ -11,6 +11,7 @@ import dev.nooir.bridge.NooirUpload
 import java.util.UUID
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
+import dev.nooir.bridge.NooirDeviceProfiles
 import dev.nooir.bridge.xtcRichJson
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import android.graphics.Bitmap
@@ -72,6 +73,9 @@ object MihonNooirExporter {
         coverCache: CoverCache? = null,
         outputName: String = "",
     ): ExportResult {
+        require(NooirDeviceProfiles.forId(device).xteinkWifi) {
+            "This preset does not support the XTEink Wi-Fi transfer API. Save the export to your phone."
+        }
         // Check the Nooir transfer server before spending time processing images.
         withContext(Dispatchers.IO) { NooirUpload.checkConnected(deviceHost) }
         return renderExport(context, provider, manga, source, chapters,
@@ -100,10 +104,8 @@ object MihonNooirExporter {
             )
         }
         val actual = format.resolved(device)
-        val (width, height) = when (device) {
-            "X3" -> 528 to 792
-            else -> 480 to 800
-        }
+        val profile = NooirDeviceProfiles.forId(device)
+        val (width, height) = profile.width to profile.height
         val meta = ExtendedMetadata(
             title = manga.title, author = manga.author.orEmpty(), artist = manga.artist.orEmpty(),
             description = manga.description.orEmpty(), genres = manga.genre.orEmpty(),
@@ -204,7 +206,7 @@ object MihonNooirExporter {
                     }
                     require(uris.isNotEmpty()) { "No readable images in " + chapter.name }
                     // EPUB/CBZ can carry genuinely sideways 800x480 images.
-                    // XTC/XTCH must retain physical panel dimensions 480x800.
+                    // XTC/XTCH must retain each target profile's portrait panel dimensions.
                     val frameWidth = if (archiveLandscape) height else width
                     val frameHeight = if (archiveLandscape) width else height
                     for (page in pageSource.pages(uris, frameWidth, frameHeight, depth, options)) {
