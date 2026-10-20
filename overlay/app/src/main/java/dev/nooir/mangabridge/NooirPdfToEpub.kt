@@ -166,9 +166,14 @@ object NooirPdfToEpub {
                             val sectionTitle = "Page " + (index + 1)
                             if (fallback) {
                                 onPage(index + 1, total, "Preserving complex/scanned page as image")
+                                // For a page consisting of one large embedded picture,
+                                // preserve its native resolution instead of rasterizing the
+                                // whole PDF page at the lower PdfRenderer display scale.
+                                val pagePicture = if (mode == Mode.MIXED) text?.pictures
+                                    ?.firstOrNull { it.coversPage }?.jpeg else null
                                 val image = epub.addImage(ReflowEpubWriter.ImageAsset(
-                                    renderPage(renderer, index), "jpg", "image/jpeg",
-                                ))
+                                    pagePicture ?: renderPage(renderer, index), "jpg", "image/jpeg",
+                                ), isCover = index == 0)
                                 epub.addSection(sectionTitle,
                                     "<figure><img src=\"${ReflowEpubWriter.xml(image)}\" alt=\"PDF page ${index+1} (image content)\"/></figure>")
                             } else {
