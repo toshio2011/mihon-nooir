@@ -186,14 +186,15 @@ object NooirPdfToEpub {
                                     .sorted()
                                 val typicalFont = bodySizes.getOrNull(bodySizes.size / 2) ?: 12f
                                 val capitals = rows.flatMap { it }.filter {
-                                    it.text.length == 1 && it.text[0].isLetter() &&
+                                    it.text.trimStart('“', '‘', '"').length == 1 &&
+                                        it.text.lastOrNull()?.isUpperCase() == true &&
                                         it.fontSize > typicalFont * 2.3f
                                 }
                                 for (initial in capitals) {
                                     val target = rows.flatMap { it }.filter {
                                         it !== initial && it.x > initial.x &&
                                             abs(it.y - initial.y) < typicalFont * 3.5f &&
-                                            it.text.firstOrNull()?.isLowerCase() == true
+                                            it.text.firstOrNull()?.isLetter() == true
                                     }.minByOrNull { abs(it.y - initial.y) + (it.x - initial.x) * 0.05f }
                                     if (target != null) {
                                         val group = rows.firstOrNull { it.contains(target) }
