@@ -15,6 +15,7 @@ import com.tom_roush.pdfbox.text.PDFTextStripper
 import com.tom_roush.pdfbox.text.TextPosition
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowMetadata
+import dev.nooir.bridge.PdfReflowLines
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.abs
@@ -31,14 +32,13 @@ import kotlin.math.min
  */
 object NooirPdfToEpub {
     enum class Mode { MIXED, ORIGINAL_PAGES }
-    private data class WordLine(val y: Float, val text: String)
     private data class PlacedImage(val y: Float, val jpeg: ByteArray, val coversPage: Boolean)
-    private data class Content(val lines: List<WordLine>, val pictures: List<PlacedImage>,
+    private data class Content(val lines: List<PdfReflowLines.Line>, val pictures: List<PlacedImage>,
         val vectorMarks: Int, val hadImageErrors: Boolean)
 
     /** One PDF page's positioned text/image blocks, using the native PDF text layer. */
     private class PageCollector(private val pageWidth: Float, private val pageHeight: Float) : PDFTextStripper() {
-        val lines = mutableListOf<WordLine>()
+        val lines = mutableListOf<PdfReflowLines.Line>()
         val pictures = mutableListOf<PlacedImage>()
         var vectorMarks: Int = 0
         var hadImageErrors = false
@@ -48,7 +48,11 @@ object NooirPdfToEpub {
         override fun writeString(text: String, positions: MutableList<TextPosition>) {
             val clean = text.trim()
             if (clean.isNotEmpty()) {
-                lines += WordLine(positions.firstOrNull()?.yDirAdj ?: 0f, clean)
+                val first = positions.firstOrNull()
+                lines += PdfReflowLines.Line(
+                    clean, first?.xDirAdj ?: 0f, first?.yDirAdj ?: 0f,
+                    first?.fontSizeInPt ?: 12f,
+                )
             }
         }
 
@@ -144,8 +148,12 @@ object NooirPdfToEpub {
                                 Content(collector.lines.toList(), collector.pictures.toList(),
                                     collector.vectorMarks, collector.hadImageErrors)
                             }.getOrNull() else null
-                            val enoughText = text != null &&
-                                text.lines.sumOf { it.text.length } >= 45
+                            // Do not include printed folio numbers, lose decorative initials,
+                            // or turn every visually justified line into a separate paragraph.
+                            val paragraphs = if (text != null) PdfReflowLines.paragraphs(
+                                text.lines, page.cropBox.width, page.cropBox.height,
+                            ) else emptyList()
+                            val enoughText = paragraphs.sumOf { it.text.length } >= 45
                             // For pages with extensive vector graphics or failed image
                             // decoding, preserve the whole page rather than dropping a
                             // floor plan or diagram. Other pages can still reflow.
@@ -163,28 +171,10 @@ object NooirPdfToEpub {
                             } else {
                                 onPage(index + 1, total, "Converting real text and illustrations")
                                 val blocks = mutableListOf<Pair<Float, String>>()
-                                val sortedLines = text!!.lines.sortedBy { it.y }
-                                // Preserve paragraph order without artificially ending
-                                // each book line with a hard break.
-                                var textBuffer = StringBuilder()
-                                var lastY = -1000f
-                                var firstY = 0f
-                                fun finishParagraph() {
-                                    if (textBuffer.isNotEmpty()) {
-                                        blocks += firstY to "<p>" +
-                                            ReflowEpubWriter.xml(textBuffer.toString()) + "</p>"
-                                        textBuffer = StringBuilder()
-                                    }
+                                for (paragraph in paragraphs) {
+                                    blocks += paragraph.y to "<p>" +
+                                        ReflowEpubWriter.xml(paragraph.text) + "</p>"
                                 }
-                                for (line in sortedLines) {
-                                    if (textBuffer.isNotEmpty() && line.y - lastY > 22f) finishParagraph()
-                                    if (textBuffer.isEmpty()) firstY = line.y
-                                    else if (!textBuffer.endsWith("-")) textBuffer.append(' ')
-                                    else textBuffer.deleteCharAt(textBuffer.length - 1)
-                                    textBuffer.append(line.text)
-                                    lastY = line.y
-                                }
-                                finishParagraph()
                                 text.pictures.forEach { picture ->
                                     val image = epub.addImage(ReflowEpubWriter.ImageAsset(
                                         picture.jpeg, "jpg", "image/jpeg"))
