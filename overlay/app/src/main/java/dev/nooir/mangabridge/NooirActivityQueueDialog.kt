@@ -147,8 +147,11 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                         WorkInfo.State.ENQUEUED -> "Queued; will start when previous job finishes"
                         WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
                         WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(job)) "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
-                        WorkInfo.State.FAILED -> "Failed" +
-                            error(job).takeIf { it.isNotBlank() }?.let { ": " + it }.orEmpty()
+                        WorkInfo.State.FAILED -> "Failed: " +
+                            error(job).ifBlank {
+                                "This older task did not save an error message. Retry in the latest preview " +
+                                    "and check the task notification for the failing step."
+                            }
                         WorkInfo.State.CANCELLED -> "Cancelled"
                     })
                     if (job.state == WorkInfo.State.RUNNING) {
