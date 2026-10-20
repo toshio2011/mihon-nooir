@@ -90,3 +90,14 @@ The current implementation finds chapter links **already visible in a site's pub
 **Error display:** Nooir Tools → Activity Queue distinguishes a failed task from a failed queue. Older WorkManager records may say only `Failed` if the previous build did not save an error message. The newer preview records the per-story failure reason without aborting later queued books.
 
 These are **code/diagnostic changes**, not a claim that both URLs are accessible or working. Direct live HTML was not retrievable from the development environment; phone-side testing is required.
+
+## Why WebToEpub can find Wattpad chapters when MangaNooir cannot
+
+**Reported during preview testing (20 October 2026):** The Firefox [WebToEpub extension](https://github.com/dteviot/WebToEpub) showed **54 chapters** for the user-tested public story `/story/416913803-the-malfory-heir`, while an earlier MangaNooir preview reported no public chapter links.
+
+**Cause:** WebToEpub has a dedicated **WattpadParser** that can read story metadata separately from chapter links in the story webpage. Our earlier generic HTML-only parser had no equivalent. An experimental improvement is being developed in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18): a distinct public Wattpad story-metadata reader, falling back to page links where appropriate. It **does not use Firefox cookies, bypass sign-in, or request paid/unlocked chapter text**. WebToEpub is GPLv3, so MangaNooir implements its own code rather than copying that parser.
+
+**Important:** Finding a full list of publicly described chapter titles does **not guarantee the Android app can retrieve full readable text** for every chapter. Wattpad may display additional content through browser-specific rendering or requests. If the public HTML does not contain the requested prose, the EPUB should fail with an actionable error rather than silently creating an incomplete book. For existing purchases or author-supplied files, use an authorized EPUB directly through **Send & Convert files**.
+
+**How to report:** Retry the story in the latest preview after its Android CI completes. Use the **Copy error details** option on the web-novel screen and share the *error text only* (no cookies or chapter content). Please record whether the failure occurred during **chapter discovery** or **fetching a particular chapter**.
+
