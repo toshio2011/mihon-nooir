@@ -45,9 +45,14 @@ object NooirWebArticle {
         var current = publicHttps(url)
         repeat(4) {
             val response = Jsoup.connect(current)
-                .userAgent("MangaNooir/1.0 (offline article export)")
-                .timeout(15000)
-                .maxBodySize(3_000_000)
+                // Many ordinary websites return a JavaScript shell to
+                // unknown bot user-agents. Ask for the same public HTML a
+                // mobile browser receives; never attach session cookies.
+                .userAgent("Mozilla/5.0 (Linux; Android 14; Mobile) " +
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
+                .timeout(20000)
+                .maxBodySize(8_000_000)
                 .followRedirects(false)
                 .execute()
             if (response.statusCode() in 300..399) {
