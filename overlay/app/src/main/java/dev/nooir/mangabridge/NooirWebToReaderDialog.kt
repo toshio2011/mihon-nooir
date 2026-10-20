@@ -40,6 +40,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
     val manager = remember { WorkManager.getInstance(context) }
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
     var url by remember { mutableStateOf(prefs.getString("last_article_url", "") ?: "") }
+    var outputName by remember { mutableStateOf("Article") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var workId by remember {
@@ -57,6 +58,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
         val request = OneTimeWorkRequestBuilder<NooirWebExportWorker>()
             .setInputData(workDataOf(
                 NooirWebExportWorker.URL to url.trim(),
+                NooirWebExportWorker.OUTPUT_NAME to outputName.trim(),
                 NooirWebExportWorker.SAVE_URI to saveUri?.toString(),
                 NooirWebExportWorker.HOST to host.trim(),
                 NooirWebExportWorker.FOLDER to folder.trim(),
@@ -86,17 +88,26 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text("Paste a public HTTPS article URL. MangaNooir saves readable text and supported inline images as a reflowable EPUB, locally on your phone.")
-                OutlinedTextField(value = url, onValueChange = { url = it },
+                OutlinedTextField(value = url, onValueChange = {
+                    url = it
+                    if (outputName == "Article") {
+                        val slug = it.substringBefore('?').trimEnd('/').substringAfterLast('/')
+                        if (slug.isNotBlank()) outputName = NooirDestinationGuard.base(slug, "Article")
+                    }
+                },
                     label = { Text("Article URL") }, modifier = Modifier.fillMaxWidth(),
                     singleLine = true, supportingText = { Text("https://example.com/article") })
+                OutlinedTextField(value = outputName, onValueChange = { outputName = it.take(70) },
+                    label = { Text("EPUB filename (without extension)") }, singleLine = true,
+                    supportingText = { Text("Change this name before starting if the EPUB already exists on XTEink.") })
                 OutlinedTextField(value = host, onValueChange = { host = it },
                     label = { Text("XTEink IP or hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
                     label = { Text("XTEink destination folder") }, singleLine = true)
-                Button(enabled = validUrl && !busy, onClick = {
-                    savePicker.launch("Article.epub")
+                Button(enabled = validUrl && outputName.isNotBlank() && !busy, onClick = {
+                    savePicker.launch(NooirDestinationGuard.filename(outputName, "epub"))
                 }) { Text("Save article EPUB to phone") }
-                Button(enabled = validUrl && !busy && host.isNotBlank() &&
+                Button(enabled = validUrl && outputName.isNotBlank() && !busy && host.isNotBlank() &&
                     folder.startsWith("/") && !folder.contains(".."),
                     onClick = { submit(null) }) { Text("Convert article & send to XTEink") }
                 val phase = state?.progress?.getString(NooirWebExportWorker.PHASE).orEmpty()
