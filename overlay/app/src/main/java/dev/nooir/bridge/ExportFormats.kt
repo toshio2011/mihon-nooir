@@ -41,30 +41,3 @@ data class ExtendedMetadata(
         coverPage = 0,
     )
 }
-/** Optional compact metadata extension for XTC/XTCH.
- * Bounded to fit low-memory readers; legacy readers can ignore the trailer.
- */
-fun ExtendedMetadata.xtcRichJson(): String {
-    val base = copy(
-        title = title.take(240),
-        author = author.take(160),
-        artist = artist.take(160),
-        publisher = publisher.take(120),
-        series = series.take(240),
-        genres = genres.take(20).map { it.take(80) },
-        sourceUrl = sourceUrl.take(400),
-        identifier = identifier.take(200),
-        status = status.take(100),
-        rights = rights.take(120),
-        description = description.take(2048),
-    )
-    var synopsis = base.description
-    while (true) {
-        val json = BookArchiveWriter.jsonMetadata(base.copy(description = synopsis))
-        if (json.toByteArray(Charsets.UTF_8).size <= 8192) return json
-        if (synopsis.isEmpty()) return BookArchiveWriter.jsonMetadata(
-            ExtendedMetadata(title = base.title.take(80), author = base.author.take(60))
-        )
-        synopsis = synopsis.take(synopsis.length / 2)
-    }
-}
