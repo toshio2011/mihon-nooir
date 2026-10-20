@@ -1,6 +1,6 @@
 # Web link → EPUB (experimental v1.0.11)
 
-> **Preview only:** The v1.0.11 [Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed automated checks. This workflow is **not on the v1.0.1 main app**, and phone/XTEink testing is still pending. Conversion runs on the Android phone; no AI/OCR API.
+> **Preview only:** The v1.0.11 [published experimental Android prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks. This workflow is **not on the v1.0.1 main app**, and phone/XTEink testing is still pending. Conversion runs on the Android phone; no AI/OCR API.
 
 ## Convert a website link to EPUB
 
