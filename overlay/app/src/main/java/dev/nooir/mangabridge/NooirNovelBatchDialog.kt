@@ -32,6 +32,9 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.UUID
+import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** Simple manual multi-link importer. All work runs in the phone and shared IO queue. */
 @Composable
@@ -48,6 +51,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     var combinedTitle by remember { mutableStateOf("") }
     var combinedAuthor by remember { mutableStateOf("") }
     var combinedFilename by remember { mutableStateOf("") }
+    var inputError by remember { mutableStateOf("") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var jobId by remember {
@@ -63,7 +67,11 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     val urls = links.lines().map(String::trim).filter(String::isNotBlank).distinct()
     val start = first.toIntOrNull()
     val end = last.toIntOrNull()
-    val good = urls.isNotEmpty() && urls.size <= 10 &&
+    // A combined book can use hundreds of public chapter links. The manifest
+    // is stored privately on the phone, avoiding WorkManager's 10 KiB input cap.
+    val good = urls.isNotEmpty() &&
+        (if (combinePages) links.toByteArray(Charsets.UTF_8).size <= 120_000
+            else urls.size <= 10) &&
         urls.all { it.length <= 600 && it.startsWith("https://", true) } &&
         (combinePages || allChapters || (start != null && end != null && start >= 1 && end >= start))
     val busy = jobState?.state == WorkInfo.State.ENQUEUED ||
@@ -72,11 +80,33 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
 
     fun enqueue(treeUri: Uri?) {
         if (!good) return
+        inputError = ""
+        // Only the small manifest filename goes into WorkManager Data.
+        // The complete ordered chapter list stays in our app-private files.
+        val manifest = if (combinePages) try {
+            val json = JSONArray()
+            urls.forEach { url ->
+                json.put(JSONObject().put("url", url)
+                    .put("title", customNames[url].orEmpty()))
+            }
+            val bytes = json.toString().toByteArray(Charsets.UTF_8)
+            require(bytes.size <= 128 * 1024) {
+                "The pasted chapter list exceeds the 128 KiB import-manifest budget"
+            }
+            File(context.filesDir, "nooir-webpages-" + UUID.randomUUID() + ".json").also {
+                it.writeBytes(bytes)
+            }
+        } catch (e: Exception) {
+            inputError = e.message ?: "Cannot save chapter list"
+            return
+        } else null
         prefs.edit().putString("host", host.trim()).putString("destination", folder.trim()).apply()
         val job = OneTimeWorkRequestBuilder<NooirNovelBatchWorker>()
             .setInputData(workDataOf(
-                NooirNovelBatchWorker.URLS to urls.toTypedArray(),
-                NooirNovelBatchWorker.NAMES to urls.map { customNames[it].orEmpty() }.toTypedArray(),
+                NooirNovelBatchWorker.URLS to (if (combinePages) emptyArray<String>() else urls.toTypedArray()),
+                NooirNovelBatchWorker.NAMES to (if (combinePages) emptyArray<String>()
+                    else urls.map { customNames[it].orEmpty() }.toTypedArray()),
+                NooirNovelBatchWorker.URL_MANIFEST to manifest?.name,
                 NooirNovelBatchWorker.COMBINE_PAGES to combinePages,
                 NooirNovelBatchWorker.BOOK_TITLE to combinedTitle.trim(),
                 NooirNovelBatchWorker.BOOK_AUTHOR to combinedAuthor.trim(),
@@ -111,7 +141,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Paste public HTTPS story or chapter links, one per line (up to 10 pasted URLs in this preview). Auto-discover all chapters of a story, or combine manually selected webpages into one EPUB.")
+                Text("Paste public HTTPS story or chapter links, one per line. Auto-discover all chapters of a story, or combine manually selected webpages into one EPUB. Separate-story batches allow up to 10 stories; combined books use a private on-phone chapter list.")
                 androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     androidx.compose.material3.Checkbox(
                         checked = combinePages, onCheckedChange = { combinePages = it },
@@ -128,7 +158,8 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                     minLines = 3, maxLines = 7,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text((if (combinePages) "Selected chapters: " else "Selected stories: ") + urls.size + " / 10")
+                Text((if (combinePages) "Selected chapters: " else "Selected stories: ") + urls.size +
+                    if (combinePages) " · no fixed chapter count (128 KiB list budget)" else " / 10")
                 if (combinePages) {
                     OutlinedTextField(value = combinedTitle,
                         onValueChange = { combinedTitle = it.take(180) },
@@ -173,8 +204,9 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                     }
                 }
                 Text(if (combinePages)
-                    "All selected pages go into one reflowable EPUB, with a navigable chapter list. If one page is unreadable, the whole book stops instead of silently omitting that chapter."
+                    "All selected pages go into one reflowable EPUB, with a navigable chapter list. If one page is unreadable, the whole book stops instead of silently omitting that chapter. Extremely long imports remain subject to battery, network and file-size limits."
                     else "All chapters uses every publicly discoverable chapter. Large stories may exceed the XTEink 180 MiB limit. Existing EPUB filenames are rejected before downloading chapters.")
+                if (inputError.isNotBlank()) Text("Could not queue: " + inputError)
                 OutlinedTextField(value = host, onValueChange = { host = it },
                     label = { Text("XTEink IP/hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
