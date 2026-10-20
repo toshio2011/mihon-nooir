@@ -42,6 +42,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     var links by remember { mutableStateOf("") }
     var first by remember { mutableStateOf("1") }
     var last by remember { mutableStateOf("80") }
+    var allChapters by remember { mutableStateOf(true) }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var jobId by remember {
@@ -59,8 +60,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     val end = last.toIntOrNull()
     val good = urls.isNotEmpty() && urls.size <= 10 &&
         urls.all { it.length <= 600 && it.startsWith("https://", true) } &&
-        start != null && end != null && start in 1..300 && end in start..300 &&
-        end - start + 1 <= NooirWebNovel.MAX_CHAPTERS
+        (allChapters || (start != null && end != null && start >= 1 && end >= start))
     val busy = jobState?.state == WorkInfo.State.ENQUEUED ||
         jobState?.state == WorkInfo.State.BLOCKED ||
         jobState?.state == WorkInfo.State.RUNNING
@@ -74,8 +74,8 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                 NooirNovelBatchWorker.OUTPUT_TREE to treeUri?.toString(),
                 NooirNovelBatchWorker.HOST to host.trim(),
                 NooirNovelBatchWorker.FOLDER to folder.trim(),
-                NooirNovelBatchWorker.FIRST to start,
-                NooirNovelBatchWorker.LAST to end,
+                NooirNovelBatchWorker.FIRST to (if (allChapters) 1 else start),
+                NooirNovelBatchWorker.LAST to (if (allChapters) Int.MAX_VALUE else end),
             )).build()
         manager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, job)
         jobId = job.id
@@ -110,14 +110,21 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text("Selected stories: " + urls.size + " / 10")
-                Text("Chapter range (from the site's publicly visible chapter list)")
-                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = first, onValueChange = { first = it.take(3) },
-                        label = { Text("First") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(value = last, onValueChange = { last = it.take(3) },
-                        label = { Text("Last") }, modifier = Modifier.weight(1f), singleLine = true)
+                androidx.compose.material3.Checkbox(
+                    checked = allChapters, onCheckedChange = { allChapters = it },
+                    label = null,
+                )
+                Text("Download all chapters found in the public chapter list")
+                if (!allChapters) {
+                    Text("Chapter range (from the site's publicly visible chapter list)")
+                    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(value = first, onValueChange = { first = it.take(9) },
+                            label = { Text("First") }, modifier = Modifier.weight(1f), singleLine = true)
+                        OutlinedTextField(value = last, onValueChange = { last = it.take(9) },
+                            label = { Text("Last") }, modifier = Modifier.weight(1f), singleLine = true)
+                    }
                 }
-                Text("Up to 80 chapters per EPUB. Save a long novel in successive ranges. Each book receives its own EPUB and navigation.")
+                Text("All chapters uses every publicly discoverable chapter. Large stories can take a long time or exceed XTEink's 180 MiB upload limit; save to phone if necessary.")
                 OutlinedTextField(value = host, onValueChange = { host = it },
                     label = { Text("XTEink IP/hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
@@ -142,9 +149,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                     })
                     if (busy) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        TextButton(onClick = { jobId?.let(manager::cancelWorkById) }) {
-                            Text("Cancel novel batch")
-                        }
+                        Text("Use Nooir Tools → Activity Queue to cancel the entire chain with confirmation.")
                     }
                 }
                 Text("Publicly readable stories only. No paywall bypass, DRM removal, login-cookie collection or premium unlocking. Wattpad and other script-heavy sites may not expose chapters to this experimental HTML importer.")
