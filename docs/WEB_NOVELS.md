@@ -13,6 +13,34 @@ MangaNooir's first **web novel importer** is an experimental extension of [Web t
 5. The phone creates each EPUB **sequentially**. While uploading, MangaNooir shares one queue with manga, file, PDF, and article conversions—no simultaneous XTEink transfers.
 6. Review the job's output and any failed links before assuming all books were exported. An invalid/locked chapter is an error, not a silently missing chapter.
 
+## New: combine individual webpages into ONE EPUB (experimental v1.0.11)
+
+Inspired by [Genebook's multiple-webpage converter](https://genebook.de/en/converter/multiple-web-to-ebook/). Our implementation is independent and **runs offline on Android after fetching the public webpages directly**; it does not upload your book to Genebook or any external conversion provider.
+
+1. Open **MangaNooir → More → Nooir Tools → Web novels / batch EPUB**.
+2. Check **Combine pasted webpages into ONE EPUB**.
+3. Paste each publicly readable **chapter URL on its own line**, in the order you want them in the book. You can reorder chapters by reordering the lines before processing.
+4. Optionally set a combined **book title**, **author**, **EPUB filename**, and individual **chapter titles**. Otherwise webpage titles become TOC entries and the first page supplies book metadata.
+5. Choose **Save combined EPUB to phone** or **Combine & send one EPUB to XTEink**. The app checks for a duplicate filename in the chosen destination **before downloading the rest of the chapters**, and once more before upload/save.
+6. All pages become **one real reflowable EPUB** with a navigable table of contents and embedded public images. If a chapter cannot be read, conversion fails with an explanation; the app **does not silently save a partial book**. Other queued jobs continue.
+
+The combined mode does **not automatically expand each submitted URL into an entire book**: a URL is treated as one chapter/page. For an automatically discoverable story with hundreds of chapters, leave combined mode off and use **Download all chapters** instead. Importing a Wattpad story landing page does not bypass its dynamically loaded or login-only chapters.
+
+Combined mode has **no fixed number of pasted chapters**; the public URL list is stored privately in an app-local manifest (maximum 128 KiB of list metadata, individual URLs up to 600 characters). It avoids WorkManager's 10 KiB job-input restriction. Very large EPUBs still depend on network availability, Android background-work limits, storage, and the XTEink safe upload limit of 180 MiB. Separate-story mode keeps its 10-story-per-batch limit.
+
+**Privacy:** URL manifests stay in the app's private storage and are removed when the associated worker finishes or fails. No EPUB content is committed to GitHub and no public conversion website receives your imported pages.
+
+## Combined mode acceptance checks
+
+- [ ] Three public article/chapter URLs produce exactly one EPUB; TOC matches input order.
+- [ ] Optional chapter titles override the source headings correctly.
+- [ ] Output title/author and selected filename are applied.
+- [ ] Broken/locked second chapter aborts the EPUB without saving an incomplete result.
+- [ ] Destination duplicate fails before remaining chapter requests; rename works.
+- [ ] 20+ public URLs work from a private manifest (without WorkManager input-data overflow).
+- [ ] A combined-book failure does not poison the shared export queue.
+- [ ] Android FOSS APK CI and real phone/X4 tests pass.
+
 ## What works and what doesn't
 
 The current implementation finds chapter links **already visible in a site's public HTML**, using common table-of-contents and chapter link markup. It then fetches each publicly accessible chapter, embeds supported images, and writes each chapter into an EPUB navigation section. Requests are spaced out; no high-concurrency crawling.
