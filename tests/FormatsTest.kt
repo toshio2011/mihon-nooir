@@ -47,6 +47,8 @@ fun main() {
  check(runCatching { ExportFormat.XTCH.resolved("KINDLE_PW12") }.isFailure)
  check(runCatching { ExportFormat.EPUB.resolved("MISSING") }.isFailure)
  check(runCatching { NooirDeviceProfiles.custom(4096,4096) }.isFailure)
+ check(runCatching { ExportFormat.XTCH.resolved("CUSTOM:480x801") }.isFailure)
+ check(ExportFormat.EPUB2.resolved("CUSTOM:480x801")==ExportFormat.EPUB2)
  check(!NooirDeviceProfiles.forId("KINDLE_PW12").xteinkWifi)
  check(NooirDeviceProfiles.forId("X4").xteinkWifi)
  println("EPUB/CBZ metadata and TOC tests passed")
