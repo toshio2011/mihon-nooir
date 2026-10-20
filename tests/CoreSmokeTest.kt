@@ -45,6 +45,29 @@ fun main() {
         check(data.copyOfRange(le64(data, 32).toInt(), le64(data, 32).toInt() + XtcCodec.encodePage(page).size)
             .contentEquals(XtcCodec.encodePage(page)))
     }
+    // Reader cover contract: Folio Nooir renders page zero for XTC/XTCH.
+    // A dedicated cover must occupy page zero, while chapter navigation starts at one.
+    for ((fmt, first) in listOf(XtcFormat.XTC to p, XtcFormat.XTCH to gray)) {
+        val second = QuantizedPage(first.width, first.height,
+            first.levels.map { (fmt.depth - (it.toInt() and 255)).toByte() }.toByteArray(),
+            fmt.depth)
+        val output = ByteArrayOutputStream()
+        val result = XtcCodec.write(fmt, sequenceOf(first, second), output, work,
+            BookMetadata("Cover QA", coverPage = 0),
+            chapters = listOf(BookChapter("Chapter 1", 1, 1)))
+        val bytes = output.toByteArray()
+        val chapterOffset = 56 + 256
+        val pageTableOffset = le64(bytes, 24).toInt()
+        val firstOffset = le64(bytes, 32).toInt()
+        check(result.pageCount == 2)
+        check(le16(bytes, 56 + 244) == 0) // metadata coverPage is zero-based
+        check(le16(bytes, chapterOffset + 80) == 1) // first chapter skips cover
+        check(le16(bytes, chapterOffset + 82) == 1)
+        check(le64(bytes, pageTableOffset) == firstOffset.toLong())
+        check(bytes.copyOfRange(firstOffset, firstOffset + XtcCodec.encodePage(first).size)
+            .contentEquals(XtcCodec.encodePage(first)))
+        check(!XtcCodec.encodePage(first).contentEquals(XtcCodec.encodePage(second)))
+    }
     val white = ByteArray(480*800) { 255.toByte() }
     val q = GrayscaleConverter.dither(480,800,white,1)
     check(q.levels.all { it == 1.toByte() })
