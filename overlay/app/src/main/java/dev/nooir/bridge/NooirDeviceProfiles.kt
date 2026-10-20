@@ -26,9 +26,9 @@ data class NooirDeviceProfile(
 }
 
 object NooirDeviceProfiles {
-    private val xteink = setOf(ExportFormat.XTC, ExportFormat.XTCH, ExportFormat.EPUB, ExportFormat.CBZ)
-    private val archive = setOf(ExportFormat.EPUB, ExportFormat.CBZ)
-    private val kindle = setOf(ExportFormat.EPUB)
+    private val xteink = setOf(ExportFormat.XTC, ExportFormat.XTCH, ExportFormat.EPUB, ExportFormat.EPUB2, ExportFormat.CBZ)
+    private val archive = setOf(ExportFormat.EPUB, ExportFormat.EPUB2, ExportFormat.CBZ)
+    private val kindle = setOf(ExportFormat.EPUB, ExportFormat.EPUB2)
 
     // Preserve the old X3/X4 resolution and XTCH Auto behaviour.
     val builtins: List<NooirDeviceProfile> = listOf(
