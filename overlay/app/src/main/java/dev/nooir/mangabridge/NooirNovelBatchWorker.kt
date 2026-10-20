@@ -22,6 +22,7 @@ import java.io.File
 class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     companion object {
         const val URLS = "novel_urls"
+        const val NAMES = "novel_output_names"
         const val OUTPUT_TREE = "novel_output_tree"
         const val HOST = "novel_host"
         const val FOLDER = "novel_folder"
@@ -43,6 +44,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
 
     override suspend fun doWork(): Result {
         val urls = inputData.getStringArray(URLS)?.map { it.trim() }?.filter { it.isNotBlank() }?.distinct().orEmpty()
+        val customNames = inputData.getStringArray(NAMES).orEmpty()
         val destination = inputData.getString(OUTPUT_TREE)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
@@ -60,6 +62,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0))
         var done = 0
         val errors = mutableListOf<String>()
+        val reservedNames = mutableSetOf<String>()
         try {
             withContext(Dispatchers.IO) {
                 if (destination == null) NooirUpload.checkConnected(host)
@@ -74,13 +77,22 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                         notices.notify(notificationId, notice(stage))
                     }
                     try {
-                        val result = NooirWebNovel.convert(url, temp, first, last) { chapter, total, message ->
+                        // Inspect title and destination BEFORE fetching chapters or building an EPUB.
+                        progress("Inspecting story title and destination")
+                        val page = NooirWebArticle.load(url)
+                        val metadata = NooirWebArticle.metadata(page)
+                        val requestedBase = customNames.getOrNull(index)?.trim().orEmpty()
+                            .ifBlank { metadata.title + "_" + url.hashCode().toUInt().toString(16) }
+                        val filename = NooirDestinationGuard.filename(requestedBase, "epub")
+                        check(reservedNames.add(filename.lowercase())) {
+                            "Two selected stories use '$filename'. Rename one story before starting."
+                        }
+                        if (destination != null) NooirDestinationGuard.requireInPhoneFolder(
+                            applicationContext, destination, filename)
+                        else NooirDestinationGuard.requireOnReader(host, folder, filename)
+                        val result = NooirWebNovel.convert(url, temp, first, last, page) { chapter, total, message ->
                             progress(message + if (total > 0) " (" + chapter + "/" + total + ")" else "")
                         }
-                        val filename = result.title.take(65)
-                            .map { c -> if (c.isLetterOrDigit() && c.code < 128 || c == '-') c else '_' }
-                            .joinToString("").trim('_').ifBlank { "Novel" } +
-                            "_" + url.hashCode().toUInt().toString(16) + ".epub"
                         if (destination != null) {
                             val resolver = applicationContext.contentResolver
                             val parent = DocumentsContract.buildDocumentUriUsingTree(
@@ -98,11 +110,11 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                             }
                         } else {
                             progress("Uploading to XTEink")
-                            NooirUpload.upload(temp, host, folder) { sent, size ->
+                            NooirUpload.upload(temp, host, folder, onProgress = { sent, size ->
                                 if (isStopped) throw CancellationException("Upload cancelled")
                                 progress(if (sent >= size) "Waiting for reader confirmation"
                                     else "Uploading " + sent/1024 + "/" + size/1024 + " KiB")
-                            }
+                            }, filenameOverride = filename)
                         }
                         done++
                         progress("Saved " + result.exportedChapters + " chapter(s)")
