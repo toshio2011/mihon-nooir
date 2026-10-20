@@ -104,7 +104,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         val options = MangaConversionOptions.fromToken(inputData.getString(KEY_OPTIONS))
         if (files.isEmpty() || (treeUri == null && host.isBlank()) ||
             (treeUri == null && (!folder.startsWith('/') || folder.contains("..")))) {
-            return Result.failure(Data.Builder().putString(KEY_ERROR, "Invalid files, host or folder").build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), KEY_ERROR, "Invalid files, host or folder"))
         }
         if (Build.VERSION.SDK_INT >= 26) {
             notifications.createNotificationChannel(
@@ -220,7 +220,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     .setContentText(completed.toString() + "/" + files.size + " complete · " + msg.take(100))
                     .setAutoCancel(true).build()
             )
-            return Result.failure(Data.Builder().putString(KEY_ERROR, msg).putInt(KEY_COUNT, completed).build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder().putInt(KEY_COUNT, completed), KEY_ERROR, msg))
         }
     }
 }
