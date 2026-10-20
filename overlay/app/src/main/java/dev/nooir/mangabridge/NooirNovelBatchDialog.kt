@@ -120,11 +120,14 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                         placeholder = { Text("Book title (without .epub)") },
                         singleLine = true)
                 }
-                androidx.compose.material3.Checkbox(
-                    checked = allChapters, onCheckedChange = { allChapters = it },
-                    label = null,
-                )
-                Text("Download all chapters found in the public chapter list")
+                androidx.compose.foundation.layout.Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    androidx.compose.material3.Checkbox(
+                        checked = allChapters, onCheckedChange = { allChapters = it },
+                    )
+                    Text("Download all chapters found in the public chapter list")
+                }
                 if (!allChapters) {
                     Text("Chapter range (from the site's publicly visible chapter list)")
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
