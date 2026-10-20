@@ -125,9 +125,8 @@ object MihonNooirExporter {
             orientation = "PORTRAIT", overlapPercent = 0,
         )
         fun coverPage(depth: Int): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
-            runCatching {
-                pageSource.pages(listOf(uri), width, height, depth, coverOptions).singleOrNull()
-            }.getOrNull()
+            pageSource.pages(listOf(uri), width, height, depth, coverOptions).singleOrNull()
+                ?: error("Mihon cover image produced no XTC/XTCH page")
         }
         val safeTitle = manga.title.take(70).map { c ->
             if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-' || c == '_') c else '_'
@@ -228,12 +227,13 @@ object MihonNooirExporter {
                     var activeId: Long? = null
                     var activeName = ""
                     var sectionStart = 0
-                    val cover = coverPage(xtcFormat.depth)
+                    onStage("Preparing actual book cover", 0, ordered.size)
+                    val cover = requireNotNull(coverPage(xtcFormat.depth)) {
+                        "Manga cover is unavailable. Open this manga in Mihon to download/refresh its cover, then retry; export was stopped rather than silently sending a book with no cover."
+                    }
                     val stream = sequence {
-                        if (cover != null) {
-                            yield(cover)
-                            total++
-                        }
+                        yield(cover)
+                        total++
                         for ((chapter, page) in chapterFrames(xtcFormat.depth)) {
                             if (activeId != chapter.id) {
                                 if (activeId != null && total > sectionStart) {
