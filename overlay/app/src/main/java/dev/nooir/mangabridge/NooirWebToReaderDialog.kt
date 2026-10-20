@@ -15,6 +15,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,6 +42,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
     var url by remember { mutableStateOf(prefs.getString("last_article_url", "") ?: "") }
     var outputName by remember { mutableStateOf("Article") }
+    var multipleLinks by remember { mutableStateOf(false) }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var workId by remember {
@@ -52,6 +54,18 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
     LaunchedEffect(workId) {
         workId?.let { key -> manager.getWorkInfoByIdFlow(key).collect { state = it } }
     }
+    // Both public web articles and novels use the same ordered multi-page
+    // EPUB builder. Switching modes reuses the existing queue, filename checks,
+    // offline EPUB writer and phone/XTEink delivery rather than duplicating them.
+    if (multipleLinks) {
+        NooirNovelBatchDialog(
+            onDismiss = { multipleLinks = false },
+            initialCombinePages = true,
+            initialUrls = url.trim().takeIf { it.startsWith("https://", true) }.orEmpty(),
+        )
+        return
+    }
+
     fun submit(saveUri: Uri?) {
         prefs.edit().putString("last_article_url", url.trim())
             .putString("host", host.trim()).putString("destination", folder.trim()).apply()
@@ -87,7 +101,11 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Paste a public HTTPS article URL. MangaNooir saves readable text and supported inline images as a reflowable EPUB, locally on your phone.")
+                Text("Convert one public webpage, or combine several public articles and chapter links into one reflowable EPUB. Processing happens on your phone.")
+                OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { multipleLinks = true }) {
+                    Text("Multiple web links → one EPUB")
+                }
+                Text("Or paste one public article URL below:")
                 OutlinedTextField(value = url, onValueChange = {
                     url = it
                     if (outputName == "Article") {
@@ -128,7 +146,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
                     )
                     Text("Cancel requests are managed in Nooir Tools → Activity Queue; whole-queue cancellation requires confirmation.")
                 }
-                Text("Experimental: works best on ordinary HTML articles. Script-only pages, paywalls and unsupported web image types may not import. EPUB text stays selectable and resizable. No AI or OCR is used.")
+                Text("Multiple links opens the shared ordered-chapter editor. Choose one combined EPUB or separate EPUBs there; normal webpages and novel chapters use the same public-HTML extractor. No AI/OCR, login bypass or paywall unlocking.")
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
