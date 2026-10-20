@@ -20,10 +20,19 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate overlay structure
         run: python3 -m unittest discover -s tests -p "test_*.py" -v
-      - name: Validate XTC, XTCH, EPUB and CBZ export formats
+      - name: Validate XTC, XTCH, EPUB 2, EPUB 3 and CBZ export formats
+        env:
+          NOOIR_OUTPUT_DIR: tests/generated
         run: |
           command -v kotlinc
           bash tests/run.sh
+      - name: Retain synthetic host-verified interoperability fixtures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manganooir-epub2-xtc-xtch-interop-fixtures
+          path: tests/generated/*
+          if-no-files-found: warn
       - name: Read upstream pin
         id: pin
         run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
