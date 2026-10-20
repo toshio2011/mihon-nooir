@@ -49,6 +49,8 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     val manager = remember { WorkManager.getInstance(context) }
     var chosen by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var displayNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var outputNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showRename by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var workId by remember {
         mutableStateOf(
@@ -96,6 +98,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
         val req = OneTimeWorkRequestBuilder<NooirTransferWorker>()
             .setInputData(workDataOf(
                 NooirTransferWorker.KEY_URIS to chosen.map(Uri::toString).toTypedArray(),
+                NooirTransferWorker.KEY_OUTPUT_NAMES to outputNames.toTypedArray(),
                 NooirTransferWorker.KEY_HOST to host.trim(),
                 NooirTransferWorker.KEY_FOLDER to destination.trim(),
                 NooirTransferWorker.KEY_FORMAT to format.name,
@@ -145,14 +148,15 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         if (cursor.moveToFirst()) cursor.getString(0) else null
                     } ?: (file.lastPathSegment ?: "Document")
                 }
-                message = "Selected " + files.size + " file(s)."
+                outputNames = displayNames
+                message = "Selected " + files.size + " file(s). Edit output names before starting if any already exist."
             }
         }
     }
     val valid = host.trim().isNotEmpty() && !host.contains('/') &&
         destination.startsWith("/") && !destination.contains("..")
     val running = workInfo?.state == WorkInfo.State.RUNNING || workInfo?.state == WorkInfo.State.ENQUEUED
-    val canQueue = chosen.isNotEmpty() && valid && !running
+    val canQueue = chosen.isNotEmpty() && valid && !running && outputNames.size == chosen.size && outputNames.all { it.isNotBlank() }
     val progress = workInfo?.progress
     val phase = progress?.getString(NooirTransferWorker.KEY_PHASE).orEmpty()
     val item = progress?.getInt(NooirTransferWorker.KEY_INDEX, 0) ?: 0
@@ -176,6 +180,15 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                     Text("Selected " + displayNames.size + " file(s):")
                     displayNames.take(5).forEach { Text("• " + it, maxLines = 1) }
                     if (displayNames.size > 5) Text("…and " + (displayNames.size - 5) + " more")
+                    TextButton(onClick = { showRename = !showRename }) { Text(if (showRename) "Hide output names" else "Rename output files before processing") }
+                    if (showRename) {
+                        outputNames.forEachIndexed { index, value ->
+                            OutlinedTextField(value = value,
+                                onValueChange = { updated -> outputNames = outputNames.toMutableList().also { it[index] = updated.take(150) } },
+                                label = { Text("File " + (index + 1) + " · output name") },
+                                singleLine = true)
+                        }
+                    }
                 }
                 if (message.isNotBlank()) Text(message)
                 if (workInfo != null) {
@@ -310,6 +323,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                     onClick = { persist(); chooseFolder.launch(null) }) {
                     Text("Convert & save selected to phone folder")
                 }
+                Text("Existing names are checked in the destination before each conversion. Rename above if needed; a conflict skips only that file and later books continue. For converted manga the selected format extension is used.")
                 Text("Convert mode converts CBZ/images and copies unsupported documents unchanged. Each file is saved or sent separately.")
                 TextButton(
                     enabled = chosen.isNotEmpty(),
