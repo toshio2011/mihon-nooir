@@ -2,12 +2,14 @@
 
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [First-time setup](GETTING_STARTED.md) · [Folio Nooir web-server docs](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
 
-MangaNooir can send converted manga to an XTEink running **Folio Nooir's File Transfer server**. The experimental v1.0.11 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
+MangaNooir can send converted manga to XTEink readers with a **compatible HTTP/WebSocket File Transfer API**. The documented integration uses Folio Nooir's server; other firmware may have different endpoints. The experimental v1.0.11 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
 
 > [!WARNING]
 > Folio Nooir's web server has **no authentication** and serves local HTTP. Use a trusted private network or the reader's short-lived hotspot. Turn off File Transfer when finished.
 
-> **Version note:** v1.0.1 supports basic manga Wi-Fi sending; v1.0.11's **Nooir Tools**, file browser, shared queue and pre-conversion duplicate-name checks are experimental. [Getting started](GETTING_STARTED.md).\n\n## Option A — Use your home Wi-Fi
+> **Version note:** v1.0.1 supports basic manga Wi-Fi sending; v1.0.11's **Nooir Tools**, file browser, shared queue and pre-conversion duplicate-name checks are experimental. [Getting started](GETTING_STARTED.md).
+
+## Option A — Use your home Wi-Fi
 
 1. On XTEink, navigate to **Home → File Transfer → Join Network**.
 2. Select and connect to your **2.4 GHz Wi-Fi** network. The XTEink uses 2.4 GHz; your phone can use a router's 5 GHz band *if both bands are on the same local network and devices can reach one another*.
