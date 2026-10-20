@@ -167,6 +167,25 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('allChapters', novel_dialog)
             self.assertIn('Int.MAX_VALUE', novel_dialog)
             self.assertIn('NooirNovelBatchWorker.NAMES', novel_dialog)
+            # Genebook-inspired manual URL combination is opt-in and does not
+            # replace auto-discovery or one-EPUB-per-story workflows.
+            combined = (work_dir/'NooirWebPageBook.kt')
+            self.assertTrue(combined.exists())
+            combined_source = combined.read_text()
+            self.assertIn('ReflowEpubWriter.write', combined_source)
+            self.assertIn('NooirWebArticle.appendChapter', combined_source)
+            self.assertIn('chapterTitles.getOrNull(index)', combined_source)
+            self.assertIn('Thread.sleep(1300L)', combined_source)
+            self.assertIn('combinePages', novel_dialog)
+            self.assertIn('NooirNovelBatchWorker.COMBINE_PAGES', novel_dialog)
+            self.assertIn('NooirNovelBatchWorker.URL_MANIFEST', novel_dialog)
+            self.assertIn('nooir-webpages-', novel_dialog)
+            worker = (work_dir/'NooirNovelBatchWorker.kt').read_text()
+            self.assertIn('NooirWebPageBook.convert', worker)
+            self.assertIn('NooirDestinationGuard.requireInPhoneFolder', worker)
+            self.assertIn('NooirDestinationGuard.requireOnReader', worker)
+            self.assertIn('manifestFile?.delete()', worker)
+            self.assertIn('128 * 1024', worker)
             # Regression from user feedback: missing XTC/XTCH book covers
             # must not be silently omitted while the manga job reports success.
             manga_export = (work_dir/'MihonNooirExporter.kt').read_text()
