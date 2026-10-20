@@ -13,6 +13,13 @@ MangaNooir's first **web novel importer** is an experimental extension of [Web t
 5. The phone creates each EPUB **sequentially**. While uploading, MangaNooir shares one queue with manga, file, PDF, and article conversions—no simultaneous XTEink transfers.
 6. Review the job's output and any failed links before assuming all books were exported. An invalid/locked chapter is an error, not a silently missing chapter.
 
+## Two entry points, same multi-link converter
+
+- **More → Nooir Tools → Web link → EPUB:** for ordinary public webpages/articles. Tap **Multiple web links → one EPUB** to open the shared multi-link editor, prefilled with the current article URL if available. Paste multiple public HTTPS webpages (or novel chapter URLs), one per line, and export them as one EPUB.
+- **More → Nooir Tools → Web novels · Batch EPUB:** opens the same editor in separate-story mode by default; switch on **Combine pasted webpages into ONE EPUB** for a manual chapter list.
+
+Both routes ultimately use **NooirWebPageBook + NooirNovelBatchWorker** for the combined export, the same sequential Nooir Activity Queue, destination filename preflight and optional phone/XTEink upload. The default **single web article** conversion remains available on the Web Link screen, and the usual **one EPUB per novel** workflow is unchanged.
+
 ## New: combine individual webpages into ONE EPUB (experimental v1.0.11)
 
 Inspired by [Genebook's multiple-webpage converter](https://genebook.de/en/converter/multiple-web-to-ebook/). Our implementation is independent and **runs offline on Android after fetching the public webpages directly**; it does not upload your book to Genebook or any external conversion provider.
