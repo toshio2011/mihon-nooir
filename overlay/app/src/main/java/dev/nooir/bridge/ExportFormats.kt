@@ -8,9 +8,14 @@ enum class ExportFormat(val extension: String, val mime: String, val label: Stri
     EPUB("epub", "application/epub+zip", "EPUB · broadly compatible"),
     CBZ("cbz", "application/vnd.comicbook+zip", "CBZ · image archive");
 
-    fun resolved(device: String = "X4"): ExportFormat = if (this == AUTO) {
-        if (device.startsWith("X", true)) XTCH else EPUB
-    } else this
+    fun resolved(device: String = "X4"): ExportFormat {
+        val profile = NooirDeviceProfiles.forId(device)
+        val result = if (this == AUTO) profile.autoFormat else this
+        require(profile.accepts(result)) {
+            "${result.name} is not a supported export choice for ${profile.name}. Choose Auto or another supported format."
+        }
+        return result
+    }
 }
 
 /** Different formats have fundamentally different native metadata capabilities. */
