@@ -118,6 +118,7 @@ object NooirPdfToEpub {
         context: Context, pdf: File, output: File,
         mode: Mode = Mode.MIXED,
         titleHint: String? = null,
+        authorHint: String? = null,
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ) {
         require(pdf.isFile && pdf.length() in 1..(100L * 1024 * 1024)) {
@@ -132,7 +133,9 @@ object NooirPdfToEpub {
             val title = info.title?.takeIf { it.isNotBlank() }
                 ?: titleHint?.substringBeforeLast('.', titleHint).orEmpty()
                     .ifBlank { pdf.nameWithoutExtension.ifBlank { "Imported PDF" } }
-            val author = info.author.orEmpty()
+            // PDF metadata may contain the PDF editor instead of the book author.
+            val author = authorHint?.trim()?.takeIf { it.isNotEmpty() }
+                ?: info.author.orEmpty()
             ParcelFileDescriptor.open(pdf, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
                 PdfRenderer(fd).use { renderer ->
                     ReflowEpubWriter.write(output, ReflowMetadata(title, author,
