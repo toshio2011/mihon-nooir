@@ -23,6 +23,10 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
     companion object {
         const val URLS = "novel_urls"
         const val NAMES = "novel_output_names"
+        const val COMBINE_PAGES = "combine_webpages"
+        const val BOOK_TITLE = "combined_book_title"
+        const val BOOK_AUTHOR = "combined_book_author"
+        const val BOOK_FILENAME = "combined_book_filename"
         const val OUTPUT_TREE = "novel_output_tree"
         const val HOST = "novel_host"
         const val FOLDER = "novel_folder"
@@ -45,6 +49,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
     override suspend fun doWork(): Result {
         val urls = inputData.getStringArray(URLS)?.map { it.trim() }?.filter { it.isNotBlank() }?.distinct().orEmpty()
         val customNames = inputData.getStringArray(NAMES).orEmpty()
+        val combinePages = inputData.getBoolean(COMBINE_PAGES, false)
         val destination = inputData.getString(OUTPUT_TREE)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
@@ -66,6 +71,73 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         try {
             withContext(Dispatchers.IO) {
                 if (destination == null) NooirUpload.checkConnected(host)
+                if (combinePages) {
+                    val temp = File(applicationContext.cacheDir, "nooir-combined-" + id + ".epub")
+                    fun progress(message: String) {
+                        if (isStopped) throw CancellationException("Combined conversion cancelled")
+                        val stage = "Combined EPUB · " + message
+                        setProgressAsync(Data.Builder().putString(STAGE, stage)
+                            .putInt(DONE, done).build())
+                        notices.notify(notificationId, notice(stage))
+                    }
+                    try {
+                        // Inspect the first page and target filename before downloading
+                        // all the remaining chapters, preserving a safe rename path.
+                        progress("Inspecting first webpage and destination")
+                        val firstPage = NooirWebArticle.load(urls.first())
+                        val firstMeta = NooirWebArticle.metadata(firstPage)
+                        val title = inputData.getString(BOOK_TITLE).orEmpty().trim()
+                            .ifBlank { firstMeta.title }
+                        val author = inputData.getString(BOOK_AUTHOR).orEmpty().trim()
+                        val filename = NooirDestinationGuard.filename(
+                            inputData.getString(BOOK_FILENAME).orEmpty().trim()
+                                .ifBlank { title }, "epub")
+                        if (destination != null) NooirDestinationGuard.requireInPhoneFolder(
+                            applicationContext, destination, filename)
+                        else NooirDestinationGuard.requireOnReader(host, folder, filename)
+                        val converted = NooirWebPageBook.convert(
+                            urls = urls, output = temp, bookTitle = title,
+                            bookAuthor = author, chapterTitles = customNames.toList(),
+                            firstPage = firstPage,
+                        ) { index, total, message ->
+                            progress("Chapter " + index + "/" + total + " · " + message)
+                        }
+                        if (destination != null) {
+                            // Never expose a partly converted book to Android SAF.
+                            val resolver = applicationContext.contentResolver
+                            NooirDestinationGuard.requireInPhoneFolder(
+                                applicationContext, destination, filename)
+                            val parent = DocumentsContract.buildDocumentUriUsingTree(
+                                destination, DocumentsContract.getTreeDocumentId(destination))
+                            val out = DocumentsContract.createDocument(
+                                resolver, parent, "application/epub+zip", filename)
+                                ?: error("Cannot create combined EPUB in selected folder")
+                            try {
+                                resolver.openOutputStream(out, "w")?.use { stream ->
+                                    temp.inputStream().use { it.copyTo(stream, 32768) }
+                                } ?: error("Cannot save combined EPUB")
+                            } catch (e: Exception) {
+                                runCatching { DocumentsContract.deleteDocument(resolver, out) }
+                                throw e
+                            }
+                        } else {
+                            progress("Uploading combined EPUB to XTEink")
+                            NooirUpload.upload(temp, host, folder, onProgress = { sent, size ->
+                                if (isStopped) throw CancellationException("Upload cancelled")
+                                progress(if (sent >= size) "Waiting for reader confirmation"
+                                    else "Uploading " + sent/1024 + "/" + size/1024 + " KiB")
+                            }, filenameOverride = filename)
+                        }
+                        done = 1
+                        progress("Saved one EPUB with " + converted.pages + " chapters")
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) {
+                        errors += "Combined EPUB: " + (e.message ?: "Failed").take(300)
+                        progress("Failed; no incomplete EPUB was saved")
+                    } finally {
+                        temp.delete()
+                    }
+                } else {
                 urls.forEachIndexed { index, url ->
                     if (isStopped) throw CancellationException("Batch cancelled")
                     val temp = File(applicationContext.cacheDir, "nooir-novel-" + id + "-" + index + ".epub")
@@ -127,8 +199,11 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                         progress("Failed; continuing to next story")
                     } finally { temp.delete() }
                 }
+                } // separate-story mode
             }
-            val message = done.toString() + "/" + urls.size + " stories saved" +
+            val totalBooks = if (combinePages) 1 else urls.size
+            val message = done.toString() + "/" + totalBooks +
+                (if (combinePages) " combined EPUB saved" else " stories saved") +
                 if (errors.isEmpty()) "" else "; " + errors.size + " failed"
             notices.notify(notificationId, NotificationCompat.Builder(applicationContext,
                 NooirTransferWorker.CHANNEL_ID)
