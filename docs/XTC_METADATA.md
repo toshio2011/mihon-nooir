@@ -1,6 +1,6 @@
 # XTC/XTCH cover and synopsis (experimental)
 
-This work is tracked in [MangaNooir PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) and the companion [Folio Nooir firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). Neither change has been merged into a stable release. The newer [v1.0.11 draft APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated compilation, but physical XTC/XTCH cover tests remain pending. `main` still contains v1.0.1.
+This work is tracked in [MangaNooir PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) and the companion [Folio Nooir firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). The [MangaNooir v1.0.11 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is publicly available; a user reports its XTCH cover displaying correctly on Folio Nooir. Its source and the optional companion firmware PR have **not** been merged into the stable/main application path. Broader XTEink firmware compatibility is still being tested; `main` application code remains v1.0.1.
 
 ## Cover
 
