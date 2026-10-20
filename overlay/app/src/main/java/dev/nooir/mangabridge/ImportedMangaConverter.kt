@@ -13,7 +13,6 @@ import dev.nooir.bridge.NooirUpload
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
 import dev.nooir.bridge.NooirDeviceProfiles
-import dev.nooir.bridge.xtcRichJson
 import android.graphics.Bitmap
 import android.graphics.Color
 import kotlinx.coroutines.Dispatchers
