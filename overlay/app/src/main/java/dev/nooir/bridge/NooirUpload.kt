@@ -12,6 +12,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import org.json.JSONObject
+import dev.nooir.mangabridge.NooirDestinationGuard
 
 /** Native HTTP uploader for Folio Nooir / CrossPoint's existing POST /upload endpoint.
  * Device must be in File Transfer mode and phone on the same LAN / device hotspot.
@@ -28,6 +29,7 @@ object NooirUpload {
     fun uploadDocument(
         context: Context, document: Uri, deviceHost: String, destination: String = "/Books",
         onProgress: (Long, Long) -> Unit = { _, _ -> },
+        filenameOverride: String? = null,
     ): String {
         val resolver = context.contentResolver
         var filename = "document"
@@ -40,7 +42,8 @@ object NooirUpload {
                 if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) length = cursor.getLong(sizeIndex)
             }
         }
-        val safeName = sanitizeFileName(filename)
+        val safeName = sanitizeFileName(filenameOverride?.takeIf { it.isNotBlank() } ?: filename)
+        NooirDestinationGuard.requireOnReader(deviceHost, destination, safeName)
         if (length != null && length!! > MAX_SAFE_UPLOAD_BYTES) {
             error("File is over 180 MB. Split it into smaller files for reliable XTEink transfer.")
         }
@@ -95,6 +98,7 @@ object NooirUpload {
         onProgress: (Long, Long) -> Unit,
         open: () -> InputStream,
     ): String {
+        NooirDestinationGuard.requireOnReader(deviceHost, destination, filename)
         require(fileLength in 1..MAX_SAFE_UPLOAD_BYTES) {
             "File is over 180 MB. Split it into smaller files before sending to XTEink."
         }
@@ -215,13 +219,15 @@ object NooirUpload {
     fun upload(
         file: File, deviceHost: String, destination: String = "/",
         onProgress: (Long, Long) -> Unit = { _, _ -> },
+        filenameOverride: String? = null,
     ): String {
         require(file.isFile && file.length() > 0) { "Missing export file" }
         require(file.length() <= MAX_SAFE_UPLOAD_BYTES) { "Manga is over 180 MB; export fewer chapters per file." }
-        require(file.name.matches(Regex("[A-Za-z0-9_.() -]{1,160}\\.(xtc|xtch|epub|cbz)", RegexOption.IGNORE_CASE))) {
-            "Unsupported manga output name"
+        val outputName = sanitizeFileName(filenameOverride?.takeIf { it.isNotBlank() } ?: file.name)
+        require(outputName.matches(Regex("[A-Za-z0-9_.() -]{1,160}\\.(xtc|xtch|epub|cbz)", RegexOption.IGNORE_CASE))) {
+            "Unsupported export filename"
         }
-        return uploadContent(file.name, file.length(), deviceHost, destination, onProgress) {
+        return uploadContent(outputName, file.length(), deviceHost, destination, onProgress) {
             file.inputStream()
         }
     }
