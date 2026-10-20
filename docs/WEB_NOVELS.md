@@ -1,8 +1,8 @@
-# Web novels and batch EPUBs — experimental 1.0.10
+# Web novels, multiple webpages and batch EPUBs — experimental v1.0.11
 
 MangaNooir's first **web novel importer** is an experimental extension of [Web to E-reader](WEB_TO_READER.md). The goal is to read longer publicly available web stories as **real, reflowable EPUB books**, keeping individual chapters, a table of contents, an available cover, and inline illustrations.
 
-**This is not a stable feature**. It needs a green build, real website tests, and reader testing. The working main release is unchanged.
+> **Preview only:** The [v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed automated tests, but actual website and XTEink testing remains outstanding. The code on `main` is still v1.0.1.
 
 ## How to download several novels
 
@@ -22,7 +22,7 @@ Both routes ultimately use **NooirWebPageBook + NooirNovelBatchWorker** for the 
 
 ## New: combine individual webpages into ONE EPUB (experimental v1.0.11)
 
-Inspired by [Genebook's multiple-webpage converter](https://genebook.de/en/converter/multiple-web-to-ebook/). Our implementation is independent and **runs offline on Android after fetching the public webpages directly**; it does not upload your book to Genebook or any external conversion provider.
+Inspired by [Genebook's multiple-webpage converter](https://genebook.de/en/converter/multiple-web-to-ebook/). Our implementation is independent and **runs on Android, processing downloaded public HTML locally**; it does not upload your book to Genebook or any external conversion provider.
 
 1. Open **MangaNooir → More → Nooir Tools → Web novels / batch EPUB**.
 2. Check **Combine pasted webpages into ONE EPUB**.
@@ -46,7 +46,7 @@ Combined mode has **no fixed number of pasted chapters**; the public URL list is
 - [ ] Destination duplicate fails before remaining chapter requests; rename works.
 - [ ] 20+ public URLs work from a private manifest (without WorkManager input-data overflow).
 - [ ] A combined-book failure does not poison the shared export queue.
-- [ ] Android FOSS APK CI and real phone/X4 tests pass.
+- [x] Android FOSS APK CI checks pass.\n- [ ] Real phone/X4 tests pass.
 
 ## What works and what doesn't
 
@@ -73,7 +73,7 @@ The current implementation finds chapter links **already visible in a site's pub
 
 ## Validation before merge
 
-- [ ] Build Android FOSS APK and pass overlay/smoke tests.
+- [x] Build Android FOSS APK and pass overlay/smoke tests.
 - [ ] Test public story website with 5–10 chapter links and a real cover.
 - [ ] Test multiple independent novels to phone storage, with one failure between successful books and a name conflict before chapter download.
 - [ ] Test chapter range 2–5, All chapters on a 100+ chapter publicly readable novel and interrupted conversions; ensure no silent truncation.
