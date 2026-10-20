@@ -31,7 +31,7 @@ import kotlin.math.min
  */
 object NooirPdfToEpub {
     enum class Mode { MIXED, ORIGINAL_PAGES }
-    private data class WordLine(val y: Float, val text: String)
+    private data class WordLine(val y: Float, val x: Float, val fontSize: Float, val text: String)
     private data class PlacedImage(val y: Float, val jpeg: ByteArray, val coversPage: Boolean)
     private data class Content(val lines: List<WordLine>, val pictures: List<PlacedImage>,
         val vectorMarks: Int, val hadImageErrors: Boolean)
@@ -48,7 +48,9 @@ object NooirPdfToEpub {
         override fun writeString(text: String, positions: MutableList<TextPosition>) {
             val clean = text.trim()
             if (clean.isNotEmpty()) {
-                lines += WordLine(positions.firstOrNull()?.yDirAdj ?: 0f, clean)
+                val first = positions.firstOrNull()
+                lines += WordLine(first?.yDirAdj ?: 0f, first?.xDirAdj ?: 0f,
+                    first?.fontSizeInPt ?: 12f, clean)
             }
         }
 
@@ -163,9 +165,57 @@ object NooirPdfToEpub {
                             } else {
                                 onPage(index + 1, total, "Converting real text and illustrations")
                                 val blocks = mutableListOf<Pair<Float, String>>()
-                                val sortedLines = text!!.lines.sortedBy { it.y }
-                                // Preserve paragraph order without artificially ending
-                                // each book line with a hard break.
+                                // Group PDFTextStripper's positioned fragments into visual lines.
+                                // PDF justification often emits multiple fragments at the same Y.
+                                // Ignore only isolated, centered numeric page labels near the foot.
+                                val body = text!!.lines.filterNot { part ->
+                                    part.y > page.cropBox.height * 0.84f &&
+                                        part.text.matches(Regex("[0-9]{1,5}")) &&
+                                        abs(part.x - page.cropBox.width / 2f) < page.cropBox.width * 0.08f
+                                }.sortedWith(compareBy<WordLine> { it.y }.thenBy { it.x })
+                                val rows = mutableListOf<MutableList<WordLine>>()
+                                for (part in body) {
+                                    if (rows.isNotEmpty() && abs(part.y - rows.last()[0].y) < 3.5f) {
+                                        rows.last() += part
+                                    } else rows += mutableListOf(part)
+                                }
+                                // A decorative dropped initial is real PDF text, not body copy.
+                                // Rejoin it with its first body line instead of making a separate
+                                // giant paragraph or silently deleting the initial letter.
+                                val bodySizes = body.filter { it.text.length > 3 }.map { it.fontSize }
+                                    .sorted()
+                                val typicalFont = bodySizes.getOrNull(bodySizes.size / 2) ?: 12f
+                                val capitals = rows.flatMap { it }.filter {
+                                    it.text.length == 1 && it.text[0].isLetter() &&
+                                        it.fontSize > typicalFont * 2.3f
+                                }
+                                for (initial in capitals) {
+                                    val target = rows.flatMap { it }.filter {
+                                        it !== initial && it.x > initial.x &&
+                                            abs(it.y - initial.y) < typicalFont * 3.5f &&
+                                            it.text.firstOrNull()?.isLowerCase() == true
+                                    }.minByOrNull { abs(it.y - initial.y) + (it.x - initial.x) * 0.05f }
+                                    if (target != null) {
+                                        val group = rows.firstOrNull { it.contains(target) }
+                                        val idx = group?.indexOf(target) ?: -1
+                                        if (idx >= 0) group!![idx] = target.copy(text = initial.text + target.text)
+                                        rows.firstOrNull { it.contains(initial) }?.remove(initial)
+                                    }
+                                }
+                                val normalized = rows.filter { it.isNotEmpty() }.map { group ->
+                                    val ordered = group.sortedBy { it.x }
+                                    WordLine(ordered.first().y, ordered.first().x, typicalFont,
+                                        ordered.joinToString(" ") { it.text.trim() }.trim())
+                                }.sortedBy { it.y }
+                                val diffs = normalized.zipWithNext { a, b -> b.y - a.y }
+                                    .filter { it > typicalFont * 0.7f && it < typicalFont * 4f }
+                                    .sorted()
+                                // In the user-supplied illustrated Malay novel, lines were
+                                // ~28pt apart and real paragraph breaks ~36pt. A fixed 22pt
+                                // threshold would incorrectly split every printed line.
+                                val linePitch = diffs.getOrNull(diffs.size / 4)
+                                    ?: typicalFont * 1.75f
+                                val paragraphGap = linePitch * 1.17f
                                 var textBuffer = StringBuilder()
                                 var lastY = -1000f
                                 var firstY = 0f
@@ -176,8 +226,9 @@ object NooirPdfToEpub {
                                         textBuffer = StringBuilder()
                                     }
                                 }
-                                for (line in sortedLines) {
-                                    if (textBuffer.isNotEmpty() && line.y - lastY > 22f) finishParagraph()
+                                for (line in normalized) {
+                                    if (textBuffer.isNotEmpty() && line.y - lastY > paragraphGap)
+                                        finishParagraph()
                                     if (textBuffer.isEmpty()) firstY = line.y
                                     else if (!textBuffer.endsWith("-")) textBuffer.append(' ')
                                     else textBuffer.deleteCharAt(textBuffer.length - 1)
