@@ -2,12 +2,12 @@
 
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [First-time setup](GETTING_STARTED.md) · [Folio Nooir web-server docs](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
 
-MangaNooir can send converted manga to an XTEink running **Folio Nooir's File Transfer server**. The experimental 1.0.4 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
+MangaNooir can send converted manga to an XTEink running **Folio Nooir's File Transfer server**. The experimental v1.0.11 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
 
 > [!WARNING]
 > Folio Nooir's web server has **no authentication** and serves local HTTP. Use a trusted private network or the reader's short-lived hotspot. Turn off File Transfer when finished.
 
-## Option A — Use your home Wi-Fi
+> **Version note:** v1.0.1 supports basic manga Wi-Fi sending; v1.0.11's **Nooir Tools**, file browser, shared queue and pre-conversion duplicate-name checks are experimental. [Getting started](GETTING_STARTED.md).\n\n## Option A — Use your home Wi-Fi
 
 1. On XTEink, navigate to **Home → File Transfer → Join Network**.
 2. Select and connect to your **2.4 GHz Wi-Fi** network. The XTEink uses 2.4 GHz; your phone can use a router's 5 GHz band *if both bands are on the same local network and devices can reach one another*.
@@ -39,15 +39,15 @@ No router nearby? You can connect your phone directly to the reader.
 6. Set the device folder to an **existing** path such as `/Books`. If you're unsure whether that folder exists, choose `/` to send to the SD-card root.
 7. Start with one **small EPUB or CBZ** and wait for confirmation.
 
-### From your phone files (experimental 1.0.4 only)
+### From your phone files (experimental v1.0.11 only)
 
-Open **More → Send & Convert files**, select up to **25 files**, then choose:
+Open **More → Nooir Tools → Send & Convert files**, select up to **25 files**, then choose:
 
 - **Send originals** — copy the selected files unchanged.
 - **Convert manga & send** — convert recognized CBZ/image manga; pass other documents through unchanged.
 - **Share selected** — invoke the Android share sheet for other installed apps/services.
 
-The 1.0.4 preview uses background WorkManager jobs for file transfers and manga-detail exports. You may navigate Back or switch apps; check progress under **More → Send & Convert** or in the Android foreground notification. **Conversion** and **uploading** are different stages:
+The v1.0.11 preview uses one **sequential** WorkManager queue for manga, phone files, PDF, web and novel transfers. You may navigate Back or switch apps; check progress under **More → Nooir Tools → Activity Queue** or in the Android foreground notification. **Conversion** and **uploading** are different stages:
 
 | Status | Meaning |
 |---|---|
@@ -84,3 +84,7 @@ For initial testing, send a **5–20 MB** file, confirm it appears in the reader
 The reader's browser File Manager can also **upload a file manually** if you're troubleshooting MangaNooir.
 
 Related implementation details: [Folio Nooir web server](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md) · [HTTP API](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver-endpoints.md).
+
+## Multiple exports and existing filenames — experimental v1.0.11
+
+For the latest preview, open **More → Nooir Tools → Activity Queue** to see running/waiting/finished jobs. A failed book should not poison the next queued book. Set a different **output filename before conversion** if one already exists in the destination; the app checks names before processing and once more before upload. Choosing **Cancel entire Nooir queue** cancels waiting work too. If an XTC/XTCH cover is missing only on the *library shelf*, run **Retrieve All Book Details** in Folio Nooir after verifying the first book page is correct. [Full guide](DEVICE_FILES_AND_QUEUE.md).
