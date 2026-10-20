@@ -59,7 +59,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
             WorkInfo.State.BLOCKED -> 2
             WorkInfo.State.FAILED -> 3
             WorkInfo.State.CANCELLED -> 4
-            WorkInfo.State.SUCCEEDED -> 5
+            WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(it)) 3 else 5
         }
     }).take(40)
 
@@ -128,6 +128,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text("Running: " + running + " · Waiting: " + waiting + " · Finished: " + finished)
+                Text("A failed export is recorded as failed here, but the shared FIFO queue continues with the next book.")
                 Text("All Nooir manga, local files, PDFs, web articles and novel batches use one sequential background queue. No extra processing runs on the e-reader.")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("Current", "History", "All").forEach { name ->
@@ -145,7 +146,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                         WorkInfo.State.RUNNING -> stage(job).ifBlank { "Running" }
                         WorkInfo.State.ENQUEUED -> "Queued; will start when previous job finishes"
                         WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
-                        WorkInfo.State.SUCCEEDED -> "Completed"
+                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(job)) "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
                         WorkInfo.State.FAILED -> "Failed" +
                             error(job).takeIf { it.isNotBlank() }?.let { ": " + it }.orEmpty()
                         WorkInfo.State.CANCELLED -> "Cancelled"
