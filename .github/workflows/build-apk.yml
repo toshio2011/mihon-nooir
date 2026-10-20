@@ -3,7 +3,8 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main]
+    # Temporary experimental-branch build until this stacked draft is validated.
+    branches: [main, feature/pdf-reflow-paragraph-dropcap]
 permissions:
   contents: read
 jobs:
