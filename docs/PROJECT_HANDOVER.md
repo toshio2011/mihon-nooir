@@ -5,6 +5,8 @@
 > **Master roadmap:** https://github.com/toshio2011/mihon-nooir/issues/8  
 > **Reader firmware:** https://github.com/toshio2011/folio-nooir  
 > **Status:** Active experimental development; **not a stable release**. This handover documents observations, not proof of hardware compatibility.
+> **Continuation update — experimental v1.0.11:** New stacked draft [PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) on top of #17 implements per-book failure isolation, XTEink/SAF filename preflight, editable output names across converters, and **All public chapters** for web novels. Branch: `feature/queue-isolation-filename-preflight-novel-all`. A previous experimental [CI run 39355414871](https://github.com/toshio2011/mihon-nooir/actions/runs/39355414871) passed and produced an APK; **check the latest v1.0.11 branch SHA and Actions before claiming the final build green**. No source merged to main and no real X4/phone regression tests completed.
+
 
 > **Continuation update (20 October 2026):** Draft [PR #16 — web novel batches](https://github.com/toshio2011/mihon-nooir/pull/16) and [PR #17 — Nooir Tools Hub](https://github.com/toshio2011/mihon-nooir/pull/17) have now been opened on the correct experimental stacked bases. The initial #17 CI failed due to obsolete menu assertions in the overlay smoke test; corrected at [3a7501d](https://github.com/toshio2011/mihon-nooir/commit/3a7501de97b1dc63c2130b0bc1fd68309a57c46d), with the updated tests passing. [#16 Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39340353433) and [#17 Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39340524938) were still in progress when this note was written. Historical references below to both branches being unPR'd now refer to the earlier snapshot. Verify latest run, SHA and artifact before declaring either build verified; no merge, release or physical device test has occurred.
 
@@ -213,3 +215,22 @@ Another documentation handover commit was pushed while this audit was being prep
 - Outstanding: confirm both final Android CI runs have passing conclusions and APK artifacts; real phone/X4 tests and actual EPUB fidelity remain outstanding.
 - Known UX review item: the novel batch dialog exposes single-job cancellation, which may cascade through the WorkManager dependency chain. Align its behavior with explicit queue-cancel warnings.
 - Preserve the newer main user guides when eventually integrating the experimental stack. Do not merge or release without explicit approval.
+
+## 10. Queue isolation, filename collisions and all-chapters preview (draft PR #18)
+
+**Requested 20 October 2026:** one failed book must not poison later queued jobs; check names before conversion/upload and give a rename path; web novels need an All chapters option rather than a hard 80-chapter cap.
+
+- Branch: `feature/queue-isolation-filename-preflight-novel-all`, stacked **#15 → #16 → #17 → #18**. Version bumped on this branch to **1.0.11**; **main remains 1.0.1**.
+- Ordinary worker failures now record `nooir_job_failed=true` with error details while completing the WorkManager dependency node successfully so later queued jobs can start. App Activity Queue and tool-specific dialogs interpret that flag to display **Failed**, rather than misleading **Completed**. Unexpected process termination / Android worker cancellation may still require dedicated recovery testing.
+- Local-file batch: continue after per-file errors and report which filenames failed. Removed dangerous one-job cancellation affordances from individual tool dialogs; cancel-all remains explicitly confirmed from Activity Queue.
+- XTEink destination preflight: uses one target-folder `GET /api/files` request before converting, plus a second preflight at actual HTTP upload. Existing names (case-insensitive) are rejected without upload. A remote listing failure also fails closed. **The check is not an atomic reservation**; firmware no-overwrite behavior still needs verification with concurrent browser uploads.
+- Android SAF folder output: read child document display names before converting. Explicit `CreateDocument` picker saves still use Android's own chosen URI behavior.
+- Editable filenames: manga details, local multi-select (per file), web article, PDF and web novel batch (per story) pass names into real upload paths. If a conflict occurs, edit the output name and retry; there is no automatic mid-job prompt.
+- Web novels: **All chapters** default, manual First/Last optional; removed 80-chapter, 300-TOC-entry and 3000-EPUB-section artificial caps. This means all **publicly discoverable HTML chapters**, not bypassed/protected or JavaScript-inaccessible chapters. EPUB size, network restrictions, cancellation, local storage and the existing reader upload limit still apply.
+- Documentation updated in experimental `docs/WEB_NOVELS.md` and `docs/DEVICE_FILES_AND_QUEUE.md`. Source smoke assertions added for queue failure sentinel, duplicate check and no artificial chapter cap.
+- [ ] Confirm latest **matching** #18 head Android CI and FOSS APK artifact after subsequent commits; do not rely on prior green SHA.
+- [ ] Install/UX test on Android: export A success, B name-conflict/failure, C continues; multi-file independent errors; correct queue summary and notifications.
+- [ ] Physical X4: name collision, rename, duplicate-case handling, interrupted/parallel browser transfers, SD-full and safe non-overwrite; confirm firmware atomic no-replace behavior.
+- [ ] Public 100+ chapter web novel test, TOC and illustrations, long EPUB validity and large transfer boundary.
+- [ ] Do not merge, release or modify Folio firmware without explicit permission.
+
