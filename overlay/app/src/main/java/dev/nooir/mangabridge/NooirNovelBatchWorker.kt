@@ -51,7 +51,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         if (urls.isEmpty() || urls.size > 10 || urls.any { it.length > 600 } ||
             first !in 1..300 || last !in first..300 ||
             (destination == null && (host.isBlank() || !folder.startsWith("/") || folder.contains("..")))) {
-            return Result.failure(Data.Builder().putString(ERRORS, "Invalid URLs, chapter range or destination").build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERRORS, "Invalid URLs, chapter range or destination"))
         }
         if (Build.VERSION.SDK_INT >= 26) notices.createNotificationChannel(
             NotificationChannel(NooirTransferWorker.CHANNEL_ID,
@@ -122,11 +122,13 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                 .setAutoCancel(true).build())
             val output = Data.Builder().putInt(DONE, done)
                 .putString(ERRORS, errors.joinToString("\n").take(4000)).build()
-            return if (errors.isEmpty()) Result.success(output) else Result.failure(output)
+            return if (errors.isEmpty()) Result.success(output) else Result.success(
+                NooirDeviceWorkQueue.failed(Data.Builder().putInt(DONE, done), ERRORS,
+                    errors.joinToString("\n").take(4000)))
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {
-            return Result.failure(Data.Builder().putInt(DONE, done)
-                .putString(ERRORS, e.message ?: "Novel batch failed").build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder().putInt(DONE, done),
+                ERRORS, e.message ?: "Novel batch failed"))
         }
     }
 }
