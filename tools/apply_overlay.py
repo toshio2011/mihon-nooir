@@ -44,7 +44,7 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
 
     fun sendDownloadedToNooir(
         context: Context, format: ExportFormat, device: String, host: String, folder: String,
-        quickExport: Boolean, options: MangaConversionOptions,
+        quickExport: Boolean, options: MangaConversionOptions, outputName: String,
     ) {
         val s = successState ?: return
         val candidates = if (s.isAnySelected) s.selectedChapters else s.chapters
@@ -53,7 +53,7 @@ replace_once(vm, "    val snackbarHostState: SnackbarHostState = SnackbarHostSta
         val result = runCatching {
             require(selected.isNotEmpty()) { "Select chapters to export first" }
             NooirMangaExportWorker.enqueue(context, s.manga.id, s.manga.title, selected.map { it.id },
-                null, host, folder, format, device, quickExport, options)
+                null, host, folder, format, device, quickExport, options, outputName)
             "Manga transfer queued. It continues after Back; check More → Send & Convert."
         }.getOrElse { "Could not queue manga transfer: " + it.message }
         viewModelScope.launch { snackbarHostState.showSnackbar(result) }
@@ -100,8 +100,8 @@ replace_once(screen, "        MangaScreen(\n            state = successState,", 
                         .map { c -> if (c.isLetterOrDigit() || c == ' ' || c == '-' || c == '_') c else '_' }.joinToString("")
                     nooirSaveLauncher.launch(filename + "." + format.resolved(device).extension)
                 },
-                onSend = { format, device, host, folder, quickExport, options ->
-                    viewModel.sendDownloadedToNooir(context, format, device, host, folder, quickExport, options)
+                onSend = { format, device, host, folder, quickExport, options, outputName ->
+                    viewModel.sendDownloadedToNooir(context, format, device, host, folder, quickExport, options, outputName)
                 },
             )
         }
