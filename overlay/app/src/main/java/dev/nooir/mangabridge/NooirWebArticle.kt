@@ -86,16 +86,30 @@ object NooirWebArticle {
         doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
         maxImages: Int = 25,
     ) {
-        val root = doc.select("article, main, [itemprop=articleBody], .post-content, .entry-content," +
-            " .reading-content, .chapter-content, [data-page-number]")
-            .maxByOrNull { it.text().length }
-            ?: doc.body()
-            ?: error("Cannot find readable article content")
-        val article = root.clone()
-        article.select("script,style,nav,header,footer,aside,form,button,iframe,video,audio,canvas,svg, noscript," +
-            ".advertisement,.ads,.social-share,.newsletter,.cookie-banner").remove()
-        require(article.text().length >= 60) {
-            "No readable text for '$chapterTitle'. The page may require sign-in, a subscription or JavaScript; no restricted content was accessed."
+        // Keep the actual text of a publicly served WordPress/Elementor page,
+        // rather than relying only on traditional <article>/<main> wrappers.
+        // Strip menus and scripts before choosing the best readable candidate.
+        val contentSelectors = "article, main, [role=main], [itemprop=articleBody], " +
+            ".post-content, .entry-content, .reading-content, .chapter-content, " +
+            ".elementor-widget-theme-post-content, .elementor-widget-text-editor, " +
+            ".et_pb_post, .single-post-content, .novel-content, #chapter-content, " +
+            ".prose, [data-page-number]"
+        fun stripped(element: org.jsoup.nodes.Element): org.jsoup.nodes.Element =
+            element.clone().also { item ->
+                item.select("script,style,nav,header,footer,aside,form,button,iframe," +
+                    "video,audio,canvas,svg,noscript,.advertisement,.ads,.social-share," +
+                    ".newsletter,.cookie-banner,.related-posts,.sidebar").remove()
+            }
+        val candidates = doc.select(contentSelectors).map(::stripped)
+        val article = candidates.maxByOrNull { it.text().length }
+            ?.takeIf { it.text().length >= 60 }
+            ?: stripped(doc.body() ?: error("Cannot find a readable HTML page"))
+        val textLength = article.text().trim().length
+        require(textLength >= 60) {
+            "This URL appears to be a story landing/catalog page rather than a readable chapter " +
+                "('$chapterTitle': $textLength text characters). Open a public chapter with actual " +
+                "prose and paste that chapter URL. JavaScript-only or sign-in-only pages " +
+                "cannot be converted without an authorized source."
         }
         var images = 0
         article.select("img").forEach { img ->
