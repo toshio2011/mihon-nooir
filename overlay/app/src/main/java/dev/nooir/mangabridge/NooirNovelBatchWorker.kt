@@ -81,8 +81,11 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                         progress("Inspecting story title and destination")
                         val page = NooirWebArticle.load(url)
                         val metadata = NooirWebArticle.metadata(page)
-                        val requestedBase = customNames.getOrNull(index)?.trim().orEmpty()
-                            .ifBlank { metadata.title + "_" + url.hashCode().toUInt().toString(16) }
+                        val customBase = customNames.getOrNull(index)?.trim().orEmpty()
+                        val suffix = url.hashCode().toUInt().toString(16)
+                        val requestedBase = customBase.ifBlank {
+                            NooirDestinationGuard.base(metadata.title.take(55), "Novel") + "_" + suffix
+                        }
                         val filename = NooirDestinationGuard.filename(requestedBase, "epub")
                         check(reservedNames.add(filename.lowercase())) {
                             "Two selected stories use '$filename'. Rename one story before starting."
