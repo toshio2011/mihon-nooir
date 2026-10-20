@@ -2,7 +2,7 @@
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)
 
-> **Version:** Main-branch code is **v1.0.1**. The newer [published experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed CI, but **physical phone/XTEink testing is still pending**. Features under **Nooir Tools** require the experimental build.
+> **Version:** Main-branch code is **v1.0.1**. The newer [published experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed CI, but **broader phone/XTEink compatibility testing is still pending**. Features under **Nooir Tools** require the experimental build.
 
 ### Where is the chapter picker?
 
