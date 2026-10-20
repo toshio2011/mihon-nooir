@@ -28,6 +28,8 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         const val FOLDER = "pdf_folder"
         const val MODE = "pdf_mode"
         const val OUTPUT_NAME = "pdf_output_name"
+        const val BOOK_TITLE = "pdf_book_title"
+        const val BOOK_AUTHOR = "pdf_book_author"
         const val PHASE = "pdf_phase"
         const val PERCENT = "pdf_percent"
         const val ERROR = "pdf_error"
@@ -99,7 +101,8 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                 val epubFile = File(applicationContext.cacheDir, shortName + "-" +
                     id.toString().take(8) + ".epub")
                 try {
-                    NooirPdfToEpub.convert(applicationContext, inputFile, epubFile, mode, name) { page, total, stage ->
+                    NooirPdfToEpub.convert(applicationContext, inputFile, epubFile, mode, name,
+                        inputData.getString(BOOK_TITLE), inputData.getString(BOOK_AUTHOR)) { page, total, stage ->
                         if (isStopped) throw CancellationException("PDF conversion cancelled")
                         val percent = page * 100 / total.coerceAtLeast(1)
                         val info = "Page " + page + "/" + total + " · " + stage
