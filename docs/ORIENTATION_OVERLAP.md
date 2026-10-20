@@ -1,6 +1,6 @@
 # Landscape, portrait and overlapping page cuts — experimental preview
 
-> **Preview only:** Included in the [v1.0.11 draft build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), which passed Android CI but needs real device testing. The v1.0.1 main app does not expose these settings.
+> **Preview only:** Included in the [published v1.0.11 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), which passed Android CI but needs real device testing. The v1.0.1 main app does not expose these settings.
 
 ## Why this exists
 
