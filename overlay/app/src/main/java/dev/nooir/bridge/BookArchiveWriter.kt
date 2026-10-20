@@ -30,10 +30,12 @@ object BookArchiveWriter {
             }
             val sections = linkedMapOf<String, MutableList<Int>>()
             var count = 0
+            var dedicatedCover = false
             for (page in pages) {
                 require(page.width > 0 && page.height > 0 && page.imagePng.isNotEmpty()) { "Invalid image page" }
                 require(count < 65535) { "Too many pages" }
                 count++
+                if (count == 1 && page.isCover) dedicatedCover = true
                 sections.getOrPut(page.chapter) { mutableListOf() }.add(count)
                 val imagePath = if (format == ExportFormat.EPUB) "OEBPS/images/p%05d.png".format(count)
                                 else "pages/p%05d.png".format(count)
@@ -45,7 +47,7 @@ object BookArchiveWriter {
             }
             require(count > 0) { "At least one manga page is required" }
             if (format == ExportFormat.EPUB) {
-                writeEpubIndex(zip, sections, count, meta)
+                writeEpubIndex(zip, sections, count, meta, dedicatedCover)
             } else {
                 writeComicInfo(zip, sections, count, meta)
             }
@@ -64,13 +66,13 @@ object BookArchiveWriter {
         entry(zip, "nooir-metadata.json", jsonMetadata(m)) // richer metadata for later round-trip; readers may ignore it
     }
 
-    private fun writeEpubIndex(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata) {
+    private fun writeEpubIndex(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata, dedicatedCover: Boolean) {
         val uuid = m.identifier.ifBlank { "urn:uuid:${UUID.randomUUID()}" }
         val manifest = buildString {
             append("<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>")
             for (i in 1..count) {
                 append("<item id=\"i$i\" href=\"images/p%05d.png\" media-type=\"image/png\"".format(i))
-                if (i == 1) append(" properties=\"cover-image\"")
+                if (i == 1 && dedicatedCover) append(" properties=\"cover-image\"")
                 append("/>")
                 append("<item id=\"p$i\" href=\"text/p%05d.xhtml\" media-type=\"application/xhtml+xml\"/>".format(i))
             }
