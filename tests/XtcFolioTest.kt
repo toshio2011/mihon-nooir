@@ -30,8 +30,7 @@ private fun verify(fmt: XtcFormat) {
     val white = QuantizedPage(w,h,ByteArray(w*h) { if(planes == 1) 1 else 3 },planes)
     val out = ByteArrayOutputStream()
     XtcCodec.write(fmt, sequenceOf(cover, white, white), out, File(System.getProperty("java.io.tmpdir")),
-        metadata = BookMetadata("A & ☆ 漫画", author = "著者
-& B", coverPage = 0),
+        metadata = BookMetadata("A & ☆ 漫画", author = "著者\n& B", coverPage = 0),
         chapters = listOf(BookChapter("第1章",1,1),BookChapter("第2章",2,2)),
         direction = ReadingDirection.RIGHT_TO_LEFT)
     val b = out.toByteArray()
