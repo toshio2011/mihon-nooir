@@ -6,7 +6,7 @@
 
 Read manga on Android · Choose chapters · Convert books · Send to XTEink over Wi-Fi
 
-**[Start here](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) · [All guides](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md) · [FAQ](https://github.com/toshio2011/mihon-nooir/blob/main/docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+**[Four export formats in v1.0.12](docs/EXPORT_FORMATS_EPUB2.md)** · **[Start here](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) · [All guides](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md) · [FAQ](https://github.com/toshio2011/mihon-nooir/blob/main/docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
 
 ![Android](https://img.shields.io/badge/platform-Android-blue)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,18 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MangaNooir is experimental and unofficial.** The `main` branch currently contains the **v1.0.1 baseline**, while **this feature branch includes the v1.0.11 code under [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18)**. The [v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed automated tests and produced an APK, but real-world source compatibility, PDF layout fidelity, phone operations and physical X3/X4 transfer/reading are **not yet verified**. There is no published stable GitHub Release. **Back up before replacing any test APK.**
+> **MangaNooir is experimental and unofficial.** The latest public APK is [v1.0.11 Experimental Preview](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). The **unreleased v1.0.12 changes on this branch** add EPUB 2 Classic and expanded reader profiles under [draft PR #21](https://github.com/toshio2011/mihon-nooir/pull/21). The `main` application source remains v1.0.1; this feature stack is not merged. No v1.0.12 APK has been published.
+
+## Experimental v1.0.12 export improvements (not released)
+
+- **EPUB 2 Classic**: genuine EPUB 2.0.1, OPF 2.0, NCX chapters, traditional cover-image metadata, author/synopsis when available.
+- **EPUB 3 Modern**: existing modern fixed-image EPUB export remains a separate choice.
+- **XTC Fast**: portable XTC 1-bit row-major bitmap pages and chapter records.
+- **XTCH High Quality**: portable 2-bit, four-level grayscale with correct first-page cover and chapter indexing.
+- **Reader presets**: X3, X4, X4 Pro, select Kindle, Kobo, Boox and PocketBook models, or a safe custom resolution. XTEink-only Wi-Fi delivery is disabled for other readers.
+- **Cover choice**: include a real series cover, or start directly with the first selected chapter page. Portable XTC/XTCH exports no longer contain an undocumented JSON trailer.
+
+[**Detailed compatibility, image encoding, synopsis, cover and reconversion guide →**](docs/EXPORT_FORMATS_EPUB2.md)
 
 ## What can MangaNooir do?
 
@@ -37,10 +48,10 @@ MangaNooir is built as a minimal Android overlay on the **full [Mihon](https://g
 
 ## Install the experimental Android APK
 
-There are **no stable Releases to install yet**. For testing:
+The publicly available [v1.0.11 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is available for installing; it does **not** include the v1.0.12 changes. For v1.0.11:
 
-1. Open the [latest verified v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) (you may need to sign into GitHub).
-2. Scroll to **Artifacts**, download **`mihon-nooir-foss-apk`**, and extract the ZIP.
+1. Open the [v1.0.11 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11).
+2. Under **Assets**, download an `.apk` directly; no ZIP extraction is required.
 3. Choose a suitable **signed** APK for your Android architecture (normally `arm64-v8a` on recent phones), then install it using Android's file manager.
 4. Open **MangaNooir**. It has a separate app identity and can coexist with ordinary Mihon.
 5. If installing over an older MangaNooir test APK fails, **back up your data first**; different CI signing keys can block an in-place update. Do not uninstall ordinary Mihon just to test this fork.
