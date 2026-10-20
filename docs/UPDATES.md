@@ -2,6 +2,9 @@
 
 ## Keeping the app up to date
 
+The [v1.0.11 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is public with ARM64, ARMv7, x86, x86_64 and universal APK assets. Its build comes from the unmerged experimental PR #18, whereas `main` application code is still v1.0.1. This CI-signed preview is **not** a stable-signing or automatic-update guarantee.
+
+
 The fork will reuse Mihon's existing in-app update checker and installer, but its APK releases must come from **toshio2011/mihon-nooir**, not upstream Mihon. The fork's package ID is `dev.nooir.mihon.foss`. Android always requires matching signing certificates to install an update over an earlier APK.
 
 The integrated build must redirect `AppUpdateChecker.GITHUB_REPO` to this fork, enable updater through `-Pdist=foss`, and use numeric three-part independent versions from `config/version.txt`. Its GitHub releases must publish `vX.Y.Z` with a `-foss.apk` asset so the existing Mihon release parser can discover the download.
