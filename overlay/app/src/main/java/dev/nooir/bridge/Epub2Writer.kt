@@ -101,7 +101,6 @@ img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:a
                     append("<item id=\"p$i\" href=\"text/p$idx.xhtml\" media-type=\"application/xhtml+xml\"/>")
                 }
             }
-            val direction = if (metadata.direction == ReadingDirection.RIGHT_TO_LEFT) "rtl" else "ltr"
             val spine = (1..count).joinToString("") { "<itemref idref=\"p$it\"/>" }
             val guide = if (hasRealCover)
                 "<guide><reference type=\"cover\" title=\"Cover\" href=\"text/p00001.xhtml\"/>" +
@@ -110,7 +109,7 @@ img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:a
             val opf = """<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">$dc</metadata>
-<manifest>$manifest</manifest><spine toc="ncx" page-progression-direction="$direction">$spine</spine>$guide</package>"""
+<manifest>$manifest</manifest><spine toc="ncx">$spine</spine>$guide</package>"""
             require(opf.toByteArray(StandardCharsets.UTF_8).size <= MAX_OPF_BYTES) {
                 "EPUB 2 OPF exceeds Folio Nooir 512 KiB metadata limit; export smaller chapter ranges"
             }
