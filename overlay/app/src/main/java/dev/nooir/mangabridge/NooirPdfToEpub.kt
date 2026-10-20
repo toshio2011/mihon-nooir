@@ -168,13 +168,13 @@ object NooirPdfToEpub {
                                 // Group PDFTextStripper's positioned fragments into visual lines.
                                 // PDF justification often emits multiple fragments at the same Y.
                                 // Ignore only isolated, centered numeric page labels near the foot.
-                                val body = text!!.lines.filterNot { part ->
+                                val positionedParts = text!!.lines.filterNot { part ->
                                     part.y > page.cropBox.height * 0.84f &&
                                         part.text.matches(Regex("[0-9]{1,5}")) &&
                                         abs(part.x - page.cropBox.width / 2f) < page.cropBox.width * 0.08f
                                 }.sortedWith(compareBy<WordLine> { it.y }.thenBy { it.x })
                                 val rows = mutableListOf<MutableList<WordLine>>()
-                                for (part in body) {
+                                for (part in positionedParts) {
                                     if (rows.isNotEmpty() && abs(part.y - rows.last()[0].y) < 3.5f) {
                                         rows.last() += part
                                     } else rows += mutableListOf(part)
@@ -182,7 +182,7 @@ object NooirPdfToEpub {
                                 // A decorative dropped initial is real PDF text, not body copy.
                                 // Rejoin it with its first body line instead of making a separate
                                 // giant paragraph or silently deleting the initial letter.
-                                val bodySizes = body.filter { it.text.length > 3 }.map { it.fontSize }
+                                val bodySizes = positionedParts.filter { it.text.length > 3 }.map { it.fontSize }
                                     .sorted()
                                 val typicalFont = bodySizes.getOrNull(bodySizes.size / 2) ?: 12f
                                 val capitals = rows.flatMap { it }.filter {
