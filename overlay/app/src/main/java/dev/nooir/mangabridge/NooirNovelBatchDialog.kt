@@ -133,7 +133,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                 jobState?.let { info ->
                     val stage = info.progress.getString(NooirNovelBatchWorker.STAGE).orEmpty()
                     Text(when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> "All selected novels exported"
+                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Some exports failed: " + info.outputData.getString(NooirNovelBatchWorker.ERRORS).orEmpty() else "All selected novels exported"
                         WorkInfo.State.FAILED -> "Some exports failed: " +
                             info.outputData.getString(NooirNovelBatchWorker.ERRORS).orEmpty()
                         WorkInfo.State.CANCELLED -> "Cancelled"
