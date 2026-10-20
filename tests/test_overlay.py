@@ -120,5 +120,53 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('getWorkInfoByIdFlow', (root/'app/src/main/java/dev/nooir/mangabridge/AnyFileTransferDialog.kt').read_text())
             self.assertIn('MangaConversionSettings', (root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').read_text())
             self.assertIn('onProgress', (root/'app/src/main/java/dev/nooir/bridge/NooirUpload.kt').read_text())
+            # Regression: a failed book should not poison the WorkManager FIFO chain.
+            work_dir = root/'app/src/main/java/dev/nooir/mangabridge'
+            queue_source = (work_dir/'NooirDeviceWorkQueue.kt').read_text()
+            self.assertIn('nooir_job_failed', queue_source)
+            self.assertIn('hasFailed', queue_source)
+            worker_names = (
+                'NooirMangaExportWorker.kt', 'NooirTransferWorker.kt',
+                'NooirWebExportWorker.kt', 'NooirPdfExportWorker.kt',
+                'NooirNovelBatchWorker.kt',
+            )
+            for filename in worker_names:
+                content = (work_dir/filename).read_text()
+                self.assertIn('NooirDeviceWorkQueue.failed', content, filename)
+                self.assertNotIn('Result.failure(', content, filename)
+            activity = (work_dir/'NooirActivityQueueDialog.kt').read_text()
+            self.assertIn('NooirDeviceWorkQueue.hasFailed(job)', activity)
+            self.assertIn('cancelUniqueWork', activity)
+            self.assertIn('confirmCancelAll', activity)
+            for filename in (
+                'AnyFileTransferDialog.kt', 'NooirNovelBatchDialog.kt',
+                'NooirWebToReaderDialog.kt', 'NooirPdfToEpubDialog.kt',
+            ):
+                self.assertNotIn('cancelWorkById', (work_dir/filename).read_text(), filename)
+
+            # Destination names must be checked before conversion, not only at upload.
+            guard = (work_dir/'NooirDestinationGuard.kt').read_text()
+            self.assertIn('requireOnReader', guard)
+            self.assertIn('requireInPhoneFolder', guard)
+            upload = (root/'app/src/main/java/dev/nooir/bridge/NooirUpload.kt').read_text()
+            self.assertIn('NooirDestinationGuard.requireOnReader', upload)
+            self.assertIn('filenameOverride', upload)
+            for filename in ('NooirMangaExportWorker.kt', 'NooirTransferWorker.kt',
+                             'NooirWebExportWorker.kt', 'NooirPdfExportWorker.kt',
+                             'NooirNovelBatchWorker.kt'):
+                self.assertIn('NooirDestinationGuard.requireOnReader',
+                              (work_dir/filename).read_text(), filename)
+            self.assertIn('KEY_OUTPUT_NAMES', (work_dir/'AnyFileTransferDialog.kt').read_text())
+            self.assertIn('outputBaseOverride', (work_dir/'ImportedMangaConverter.kt').read_text())
+
+            # Users can choose every discoverable public novel chapter without 80-chapter truncation.
+            novel = (work_dir/'NooirWebNovel.kt').read_text()
+            self.assertIn('endAt: Int = Int.MAX_VALUE', novel)
+            self.assertNotIn('MAX_CHAPTERS', novel)
+            novel_dialog = (work_dir/'NooirNovelBatchDialog.kt').read_text()
+            self.assertIn('allChapters', novel_dialog)
+            self.assertIn('Int.MAX_VALUE', novel_dialog)
+            self.assertIn('NooirNovelBatchWorker.NAMES', novel_dialog)
+
 
 if __name__=='__main__': unittest.main()
