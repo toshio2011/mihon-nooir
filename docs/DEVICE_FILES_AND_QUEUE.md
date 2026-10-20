@@ -1,82 +1,69 @@
-# Managing files already on your XTEink (experimental 1.0.9)
+# Browse XTEink files, Activity Queue and filename conflicts
 
-**You can already manage the XTEink's SD-card files using existing Folio Nooir firmware**, without installing any new reader firmware or waiting for MangaNooir 1.0.9.
+[← All guides](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md) · [Nooir Tools quick start](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi transfer](https://github.com/toshio2011/mihon-nooir/blob/main/docs/WIFI_TRANSFER.md)
 
-## Available now: existing Folio Nooir web file manager
+> [!IMPORTANT]
+> The built-in **Nooir Tools** screen and shared **Activity Queue** are features of the **experimental v1.0.11 APK**, not the v1.0.1 app on `main`. The [build passed Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), but on-reader verification is pending.
 
-1. On your XTEink, open **File Transfer**.
-2. Choose **Join Network** or **Create Hotspot**. Connect your Android phone to the same reachable Wi-Fi; use the actual IP address displayed on the reader.
-3. Open your phone's browser and visit `http://READER-IP/files` (example: `http://192.168.4.1/files`, if that is the IP shown).
-4. Browse folders, upload or download books, create folders, rename, move, or delete items using the existing firmware web interface.
-5. Close File Transfer when you finish; the normal reader stays focused on reading.
+## The built-in reader file browser
 
-**Be careful with Delete:** it removes SD-card content, not merely a MangaNooir library reference. Confirm the exact filename before deleting. Never rename/delete a file while uploading it. The firmware protects some hidden/system file names, but do not rely on that as a backup.
+1. On the XTEink, start **File Transfer → Join Network** or **Create Hotspot**.
+2. Connect your Android phone so it can reach the reader. Confirm the browser opens the IP shown on XTEink.
+3. In MangaNooir choose **More → Nooir Tools → Browse XTEink files**.
+4. Enter the device **IP/hostname only**, not `http://`. Tap **Connect & browse**, enter folders, use **Up folder**, or **Refresh**.
+5. The in-app view is **read-only** by design. To rename, move, create folders, download or delete files, choose **Open full file manager in browser**.
 
-## Experimental: MangaNooir built-in XTEink Device Files
+**Without MangaNooir:** Folio Nooir already has a full web file manager at `http://READER-IP/files` when File Transfer is enabled. You can use that directly from your phone browser. It does not need this experimental APK.
 
-In the upcoming experimental **MangaNooir 1.0.9** build:
+**Delete** removes actual SD-card contents. Double-check filenames and stop transfers before changing existing files. Nooir uses local HTTP without a password, so use a trusted network and close File Transfer afterward.
 
-1. Open **MangaNooir → More → XTEink Device Files**.
-2. Enter the same XTEink IP/hostname used for upload (without `http://`), then tap **Connect & browse**.
-3. Tap a folder to open it, **Up folder** to return, or **Refresh** to request that folder again.
-4. File names and approximate sizes are shown. For full create/download/rename/move/delete actions, select **Open full file manager in browser**. That opens the existing Folio Nooir website.
-5. The built-in view is intentionally **read-only** for now. Editing actions remain in the firmware web manager, avoiding a second set of destructive code and duplicated file-management logic.
+## Track conversions and transfers in Activity Queue
 
-### Why this should stay light on X3/X4
+Open **MangaNooir → More → Nooir Tools → Activity Queue · All current jobs**.
 
-- Uses only the **existing** `GET /api/files?path=...` endpoint and `/files` website—**no firmware patch required**.
-- **No background polling, recursive scans, cover thumbnail generation, content downloads, or storage copies** from the reader. Each explicit folder Browse/Refresh fetches only that folder's file names and sizes.
-- Pauses built-in folder refresh when it can detect an active manga or local-file transfer, reducing simultaneous SD reads during uploads.
-- Handles HTTP response limits and networking in the **phone**. It does not launch a service in the normal e-reader UI.
-- The existing `/api/files` server streams its response and yields while walking entries. Giant directories should be split into smaller folders to keep the ESP32 responsive.
+- **Current** shows the running job and waiting jobs.
+- **History** shows completed, failed or cancelled jobs.
+- **All** shows both. Jobs are sequential: manga, phone files, PDF, webpages and web-novel batches share one queue.
+- WorkManager records each job. A book that fails in the new preview is marked **Failed** with an error reason **without causing later queued books to fail automatically**. A local multi-file batch can also continue after an individual-file error.
+- **100% upload** reflects bytes sent. Treat an upload as complete only when **XTEink confirms** receiving the book.
+- **Cancel entire Nooir queue** asks for confirmation and stops waiting jobs too. Individual WorkManager dependency cancellation is not offered because it can cascade.
+- **Mihon's own chapter Download Queue is separate** and remains unchanged.
 
-## Multiple manga exports and their queue
+Background work may still be interrupted by power/battery restrictions, revoked permissions, network loss, Android force-stop or full SD storage. Don't mistake a successful queued conversion for a physically verified reader upload.
 
-**You can queue manga A, manga B, manga C while A is still uploading.** The Manga Details exporter already uses WorkManager's unique **sequential** queue, so the next manga waits until the previous one has finished.
+## What if the filename already exists?
 
-**Why a book seemed to disappear:** versions through 1.0.8 showed **only the last queued manga job**. The first job can remain running even while the More screen shows the second queued job.
+For experimental v1.0.11, **manga exports, phone-file transfers, PDF EPUBs, web articles and web-novel EPUBs** allow an output filename to be chosen before processing.
 
-The experimental 1.0.9 More → Send & Convert screen fixes that display:
+1. Set the destination folder (for example `/Books`) and output name.
+2. The exporter checks the reader's existing filenames before expensive conversion. If a matching name exists, **only that book** receives an error rather than silently overwriting it.
+3. Edit the name in the relevant tool and enqueue it again, or pick another folder.
+4. The app checks again at upload time in case something else was added while the book was queued.
 
-- Shows **running, enqueued, waiting, completed and failed manga exports** as separate named rows, sorted by status.
-- Shows the current chapter/transfer progress for the running manga and **Waiting for previous manga to finish** for queued items.
-- Allows cancelling an individual job. **Important:** cancelling a job in a WorkManager dependency chain may also affect later dependent jobs; check their status and requeue as needed.
-- The old sender still has a separate **local file transfer** queue; do not start unrelated file uploads and multiple manga transfers simultaneously on a resource-constrained ESP32. Full device-wide IO coordination is a planned improvement.
+For phone-folder batch saves, the app can inspect names in the chosen Android document tree. Android's normal Save As picker remains in control of explicit target names. The preflight-and-recheck design **does not prove atomic race protection** when another user uploads a same-named file simultaneously: the firmware should also reject overwrites.
+
+## Missing XTC / XTCH covers
+
+Folio Nooir generates XTC/XTCH cover thumbnails from **the first page of the book** and caches them on its SD card.
+
+1. Confirm that the manga's actual cover is visible in Mihon. A new preview export should report an error if it can't obtain/decode the cover, instead of silently putting the first chapter on the cover.
+2. Export to a **new filename**, open the book, and check whether its **first displayed page** is the cover.
+3. If the first book page is correct but the **library shelf** has no thumbnail, run **Retrieve All Book Details** on Folio Nooir to create missing cover thumbnails.
+4. If the first book page is incorrect, please report the source, format (XTC or XTCH), phone build and Folio Nooir firmware version. Refreshing thumbnails won't fix a wrongly exported first page.
+
+This needs a physical X4/X3 test; the current automated XTC/XTCH tests only check the byte format and first-page/chapter indexing.
+
+[More XTC metadata detail](XTC_METADATA.md)
 
 ## Troubleshooting
 
-- **Can't open `/files`:** turn on **File Transfer** and check the IP shown by the device. Test the URL in your phone browser.
-- **Works in browser but not the app:** check the host without `http://`; allow MangaNooir network access; use Wi-Fi rather than unrelated cellular/mobile networks.
-- **Reader transfer is active:** the in-app folder list intentionally pauses new refreshes until that transfer ends. The previously loaded folder stays visible.
-- **Old manga still isn't visible:** old builds only remember the most recently queued job. Do not immediately queue the same book twice; inspect the XTEink after the transfer finishes, and check Android's MangaNooir notification.
-- **A folder has a large number of files:** switch to the reader's `/files` web manager or organize books into subfolders.
-- **A copied XTC/XTCH title appears without its synopsis:** see the separate experimental [XTC metadata guide](https://github.com/toshio2011/mihon-nooir/blob/feature/xtc-cover-synopsis/docs/XTC_METADATA.md).
+| Issue | Check |
+|---|---|
+| Can't open reader's `/files` in Chrome | File Transfer enabled, correct on-screen IP, same LAN/hotspot, VPN/router isolation |
+| Phone app can upload but folder list fails | Enter IP without `http://`; folder must exist; very large directories may exceed list budget |
+| Queue History says **Failed** with no reason | Older preview jobs may not have stored error output; retry with v1.0.11 to get better diagnostics |
+| A batch has one bad book | Check that item's error; subsequent items should continue in the current preview |
+| Existing name prevents export | Edit filename before requeuing; don't force an overwrite |
+| Reader shows no cover on shelf | First check page one; then use **Retrieve All Book Details** if first page is correct |
 
-This guide covers in-progress code; Android CI and physical device checks must pass before treating experimental 1.0.9 as a ready-to-install APK.
-
-## Experimental follow-up — isolated failures and safe filenames (draft PR #18)
-
-- **A conversion/upload failure is not a queue-wide failure.** The task's output records the error while the sequential dependency continues. In the Nooir Activity Queue, the book is shown as failed even though WorkManager considers its dependency node complete. Check each book, not only the overall queue status.
-- **Before expensive conversion**, MangaNooir requests the exact destination folder's existing filenames and rejects a collision. It also checks again immediately before HTTP upload. If it cannot safely read the target folder, it stops instead of guessing. The check is not an atomic reader-side reservation; external file manager races still require firmware's own no-overwrite rule.
-- Set a **different filename** in manga export, local Send & Convert, web article, PDF or per-story web novel dialogs before queuing. For converted output, the selected output format's extension is added.
-- In a batch of phone files, an individual file collision/error is reported without stopping later selected files.
-- Tool dialogs no longer suggest that canceling an individual WorkManager dependency is safe. **Nooir Tools → Activity Queue** offers a confirmed **cancel entire queue** action. Cancellation still stops waiting jobs.
-- Existing files are never intentionally overwritten by the new destination-check path; Android's Save As document picker remains in control of explicitly chosen phone filenames.
-
-**Still experimental:** Android CI and real X4 tests must pass. Device-side atomic no-overwrite behavior, duplicate-case handling, SD-full failures and simultaneous browser uploads need testing.
-
-## Troubleshooting XTC/XTCH covers (20 October preview)
-
-Folio Nooir's XTC/XTCH reader builds its shelf cover **from page 0** of the exported file. An XTC header thumbnail-offset field or a separately uploaded JPEG is **not** required for the existing reader. However, the XTEink **shelf thumbnail** is also cached: on the reader, use **Retrieve All Book Details** to generate missing thumbnails for newly uploaded files.
-
-For new MangaNooir previews, XTC/XTCH exports now require the manga's actual cover to decode and become first page. If Mihon's custom, cached or public source cover cannot be decoded, the job returns an actionable cover error instead of being marked complete with the first chapter page as an accidental cover.
-
-When verifying:
-
-1. Make sure the manga cover is visible in Mihon first. For a missing cover, revisit/refresh its manga details, then retry.
-2. Export **one** XTC or XTCH book to a **new filename**. Existing names are not overwritten by the experimental collision guard.
-3. Open the generated book on XTEink: **page 1 should be the series cover**, followed by selected chapters.
-4. In Folio Nooir's Library, run **Retrieve All Book Details** if the shelf still shows no thumbnail. Existing thumbnail cache entries may need a refresh.
-5. Verify both formats separately, with X3/X4 output settings, and record if the cover is missing in the book versus missing *only on the shelf*.
-
-The existing reader calculates thumbnails from first-page data using native cache storage. This has not yet been physically confirmed with a new MangaNooir build; no firmware-side changes were merged.
+For experiments not yet verified on hardware and remaining tasks, see [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) and the [project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
