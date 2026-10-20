@@ -84,6 +84,11 @@ private fun verify(fmt: XtcFormat) {
 fun main() {
     verify(XtcFormat.XTC)
     verify(XtcFormat.XTCH)
+    // Folio Nooir uses ceil(width*height/8) per XTCH plane; non-8-aligned
+    // custom heights would produce a different plane boundary. Reject early.
+    val irregular = QuantizedPage(13, 15, ByteArray(13 * 15), 2)
+    check(runCatching { XtcCodec.encodePage(irregular) }.isFailure)
+    check(XtcCodec.encodePage(QuantizedPage(13, 15, ByteArray(13 * 15), 1)).isNotEmpty())
     val tooMany = sequence {
         val sample = QuantizedPage(8,8,ByteArray(64),1)
         repeat(65536) { yield(sample) }
