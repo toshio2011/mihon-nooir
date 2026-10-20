@@ -53,3 +53,14 @@ The experimental 1.0.9 More → Send & Convert screen fixes that display:
 - **A copied XTC/XTCH title appears without its synopsis:** see the separate experimental [XTC metadata guide](https://github.com/toshio2011/mihon-nooir/blob/feature/xtc-cover-synopsis/docs/XTC_METADATA.md).
 
 This guide covers in-progress code; Android CI and physical device checks must pass before treating experimental 1.0.9 as a ready-to-install APK.
+
+## Experimental follow-up — isolated failures and safe filenames (draft PR #18)
+
+- **A conversion/upload failure is not a queue-wide failure.** The task's output records the error while the sequential dependency continues. In the Nooir Activity Queue, the book is shown as failed even though WorkManager considers its dependency node complete. Check each book, not only the overall queue status.
+- **Before expensive conversion**, MangaNooir requests the exact destination folder's existing filenames and rejects a collision. It also checks again immediately before HTTP upload. If it cannot safely read the target folder, it stops instead of guessing. The check is not an atomic reader-side reservation; external file manager races still require firmware's own no-overwrite rule.
+- Set a **different filename** in manga export, local Send & Convert, web article, PDF or per-story web novel dialogs before queuing. For converted output, the selected output format's extension is added.
+- In a batch of phone files, an individual file collision/error is reported without stopping later selected files.
+- Tool dialogs no longer suggest that canceling an individual WorkManager dependency is safe. **Nooir Tools → Activity Queue** offers a confirmed **cancel entire queue** action. Cancellation still stops waiting jobs.
+- Existing files are never intentionally overwritten by the new destination-check path; Android's Save As document picker remains in control of explicitly chosen phone filenames.
+
+**Still experimental:** Android CI and real X4 tests must pass. Device-side atomic no-overwrite behavior, duplicate-case handling, SD-full failures and simultaneous browser uploads need testing.
