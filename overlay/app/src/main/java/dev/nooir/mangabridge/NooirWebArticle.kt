@@ -158,8 +158,17 @@ object NooirWebArticle {
             // Prose with several paragraphs beats a large navigation menu.
             it.text().length + paras * 60
         }?.takeIf { it.text().length >= 60 }
-        val article = fromMarkup ?: publicArticleBody(doc)
-            ?: stripped(doc.body() ?: error("Cannot find a readable HTML page"))
+        val structured = publicArticleBody(doc)
+        // A navigational <main> can have 100+ characters while the real
+        // article is present as public JSON-LD. Prefer much richer structured
+        // prose in that case; otherwise retain the HTML to preserve images.
+        val article = when {
+            fromMarkup == null -> structured ?:
+                stripped(doc.body() ?: error("Cannot find a readable HTML page"))
+            structured != null && structured.text().length > fromMarkup.text().length * 2 ->
+                structured
+            else -> fromMarkup
+        }
         val textLength = article.text().trim().length
         require(textLength >= 60) {
             "Received the webpage '$chapterTitle' but only $textLength readable " +
