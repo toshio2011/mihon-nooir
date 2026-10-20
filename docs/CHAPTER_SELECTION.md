@@ -4,7 +4,9 @@
 
 **The most important step:** choose chapters **on the manga details screen before opening Export**. The Export dialog chooses the device, format and destination; it does **not** contain a separate chapter picker. In this context, “import chapters” usually means **export chapters out of MangaNooir** for your e-reader.
 
-> **Version note:** This chapter-selection flow exists in the baseline app, but **Quick Export, Nooir Tools and its Activity Queue** require experimental v1.0.11; [download/installation guide](GETTING_STARTED.md).\n\n## Select exactly the chapters you want
+> **Version note:** This chapter-selection flow exists in the baseline app, but **Quick Export, Nooir Tools and its Activity Queue** require experimental v1.0.11; [download/installation guide](GETTING_STARTED.md).
+
+## Select exactly the chapters you want
 
 1. Open **MangaNooir → Library** (or browse a source) and open the manga's **details page**, where its chapter list appears.
 2. **Long-press** the first chapter you want. This enters Mihon's chapter-selection mode; the chapter becomes selected.
