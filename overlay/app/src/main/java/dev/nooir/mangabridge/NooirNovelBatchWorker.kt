@@ -47,9 +47,9 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
         val first = inputData.getInt(FIRST, 1)
-        val last = inputData.getInt(LAST, 80)
+        val last = inputData.getInt(LAST, Int.MAX_VALUE)
         if (urls.isEmpty() || urls.size > 10 || urls.any { it.length > 600 } ||
-            first !in 1..300 || last !in first..300 ||
+            first < 1 || last < first ||
             (destination == null && (host.isBlank() || !folder.startsWith("/") || folder.contains("..")))) {
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERRORS, "Invalid URLs, chapter range or destination"))
         }
