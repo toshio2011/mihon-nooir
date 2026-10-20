@@ -27,23 +27,16 @@ fun main() {
         check(book[result.fileBytes.toInt()-1] == XtcCodec.encodePage(page).last())
         check(String(book.copyOfRange(56,66)).startsWith("A 漫画"))
     }
-    // Optional rich-metadata tail must not change legacy page/chapter offsets.
+    // Portable XTC/XTCH ends at the final encoded image, with no private trailer.
     for ((fmt, page) in listOf(XtcFormat.XTC to p, XtcFormat.XTCH to gray)) {
         val output = ByteArrayOutputStream()
-        val synopsisJson = """{"title":"Test","description":"A manga synopsis and proper cover."}"""
         val result = XtcCodec.write(fmt, sequenceOf(page), output, work,
-            BookMetadata("Test", coverPage = 0), richMetadataJson = synopsisJson)
+            BookMetadata("Test", coverPage = 0))
         val data = output.toByteArray()
-        val magic = "NOOIRMD1".toByteArray()
-        check(data.takeLast(8).toByteArray().contentEquals(magic))
-        val n = data.size - 12
-        val payloadLength = (0..3).fold(0) { a, i -> a or ((data[n + i].toInt() and 255) shl (8*i)) }
-        check(payloadLength == synopsisJson.toByteArray().size)
-        check(String(data.copyOfRange(n - payloadLength, n)) == synopsisJson)
-        check(le64(data, 32) == 56L + 256L + 16L)
+        val firstOffset = le64(data, 32).toInt()
+        check(data.size == firstOffset + XtcCodec.encodePage(page).size)
         check(result.fileBytes == data.size.toLong())
-        check(data.copyOfRange(le64(data, 32).toInt(), le64(data, 32).toInt() + XtcCodec.encodePage(page).size)
-            .contentEquals(XtcCodec.encodePage(page)))
+        check(!data.takeLast(8).toByteArray().contentEquals("NOOIRMD1".toByteArray()))
     }
     // Reader cover contract: Folio Nooir renders page zero for XTC/XTCH.
     // A dedicated cover must occupy page zero, while chapter navigation starts at one.
