@@ -1,6 +1,6 @@
-# Landscape, portrait and overlapping page cuts — experimental 1.0.6
+# Landscape, portrait and overlapping page cuts — experimental preview
 
-This feature is developed in [MangaNooir's orientation/overlap PR](https://github.com/toshio2011/mihon-nooir/pulls). It builds on the v1.0.5 XTC cover/synopsis preview, and is **not yet in the stable main APK**.
+> **Preview only:** Included in the [v1.0.11 draft build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), which passed Android CI but needs real device testing. The v1.0.1 main app does not expose these settings.
 
 ## Why this exists
 
@@ -11,7 +11,7 @@ Inspired by the setting ideas from [MangaPoint](https://github.com/W1seGit/Manga
 ## Choose the settings
 
 1. In MangaNooir, open a manga, **long-press** a chapter, and select the chapters you want.
-2. Tap **Export** in the manga toolbar (or open **More → Send & Convert files** for local CBZ/images).
+2. Tap **Export** in the manga toolbar (or open **More → Nooir Tools → Send & Convert files** for local CBZ/images).
 3. Expand **More conversion settings**.
 4. Pick **Portrait** (normal upright X3/X4 reading) or **Landscape** (hold the reader sideways).
 5. When using **Landscape**, choose the **Rotate content clockwise** direction. Turn it off if you prefer the opposite physical turn.
@@ -43,7 +43,7 @@ The settings are saved for your next export, including a legacy migration path f
 
 This does **not** add all MangaPoint settings. In particular: fixed manual margins, sensitivity/padding controls, rotation per page, interactive before/after crop preview, zoom and tiling, auto-levels/histogram stretch, content-aware quiet-row cutting, additional dithering kernels, arrows, and fully remembered per-manga/series presets remain on the roadmap.
 
-**PDF → reflowable mixed text-and-images EPUB** is a separate agreed future feature; these options currently apply to the existing manga image/CBZ conversion pipeline, not PDF text extraction.
+**PDF → reflowable mixed text-and-images EPUB** is available in the experimental preview as a **separate tool**. These manga image/CBZ settings do not automatically apply to PDF text extraction.
 
 ## Validate on device
 
