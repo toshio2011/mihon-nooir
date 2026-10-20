@@ -4,7 +4,7 @@
 
 **The most important step:** choose chapters **on the manga details screen before opening Export**. The Export dialog chooses the device, format and destination; it does **not** contain a separate chapter picker. In this context, “import chapters” usually means **export chapters out of MangaNooir** for your e-reader.
 
-## Select exactly the chapters you want
+> **Version note:** This chapter-selection flow exists in the baseline app, but **Quick Export, Nooir Tools and its Activity Queue** require experimental v1.0.11; [download/installation guide](GETTING_STARTED.md).\n\n## Select exactly the chapters you want
 
 1. Open **MangaNooir → Library** (or browse a source) and open the manga's **details page**, where its chapter list appears.
 2. **Long-press** the first chapter you want. This enters Mihon's chapter-selection mode; the chapter becomes selected.
@@ -22,7 +22,7 @@ MangaNooir exports the chosen chapters into **one output book** with chapter nav
 |---|---|
 | **Normal Export**, some chapters selected | **Only selected chapters that are already downloaded** in Mihon. Selected chapters that aren't downloaded are skipped. |
 | **Normal Export**, **nothing selected** | **All downloaded chapters** of that manga. This can be a lot more than you intended. |
-| **Quick Export**, some chapters selected (experimental 1.0.4 / 1.0.5) | **The selected chapters**, whether already downloaded or online. Missing pages are fetched temporarily through that manga source. |
+| **Quick Export**, some chapters selected (experimental v1.0.11) | **The selected chapters**, whether already downloaded or online. Missing pages are fetched temporarily through that manga source. |
 | **Quick Export**, **nothing selected** | Cannot start: **select at least one chapter** in the chapter list first. |
 
 **Quick Export isn't a separate “import chapters” screen.** Choose the chapter selection first, then turn on **Quick Export · fetch missing pages** in the Export dialog. That checkbox only works for an **online source**; it is disabled for a local/non-online source.
@@ -41,9 +41,9 @@ For non-downloaded online chapters, MangaNooir uses the installed source extensi
 
 ## Where to check progress
 
-In experimental 1.0.4/1.0.5, the chapter export and Wi-Fi send use background WorkManager jobs. You can return to Mihon or switch apps; open **More → Send & Convert files** to see the most recent manga-export job or cancel it. The Android notification can show activity if notifications are allowed. **100% sent** refers to the bytes uploaded; wait for the reader to confirm success.
+In experimental v1.0.11, the chapter export and Wi-Fi send use the shared background Nooir Activity Queue. You can return to Mihon or switch apps; open **More → Nooir Tools → Activity Queue** to see current and completed jobs, progress, and per-book failures. One ordinary failed book shouldn't block later jobs. **Cancel entire queue** cancels waiting jobs as well; individual dependency cancellation is not offered. The Android notification can show activity if allowed. **100% sent** refers only to bytes uploaded; wait for the reader to confirm success.
 
-The **More → Send & Convert files** picker is *different* from chapter selection: it chooses existing documents, CBZ archives or images **from Android storage**, not online chapters from a manga details page.
+The **More → Nooir Tools → Send & Convert files** picker is *different* from chapter selection: it chooses existing documents, CBZ archives or images **from Android storage**, not online chapters from a manga details page.
 
 ## If you can't find the chapter selection
 
