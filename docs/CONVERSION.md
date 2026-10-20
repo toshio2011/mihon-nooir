@@ -4,7 +4,9 @@
 
 MangaNooir exports manga into e-reader-oriented formats while keeping the source chapters and library information in Mihon.
 
-> **Version note:** Normal downloaded-manga export is on v1.0.1; **Quick Export, local files, advanced settings, shared queue, web and PDF tools** are only in the experimental v1.0.11 preview. [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).\n\n## Pick an output
+> **Version note:** Normal downloaded-manga export is on v1.0.1; **Quick Export, local files, advanced settings, shared queue, web and PDF tools** are only in the experimental v1.0.11 preview. [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
+
+## Pick an output
 
 | Format | Image/color approach | Navigation and metadata | Typical use |
 |---|---|---|---|
@@ -14,7 +16,7 @@ MangaNooir exports manga into e-reader-oriented formats while keeping the source
 | **CBZ** | Ordered image archive | `ComicInfo.xml` plus optional JSON metadata | Comic-capable readers and conversion workflows |
 | **Auto** | Preset chosen from device selection | Varies with chosen output | Convenient start; not always the best choice for every comic |
 
-The main branch and the experimental preview both support **X4** (480 × 800) and **X3** (528 × 792) presets. These targets are screen-size presets, **not universal guarantees** for every XTEink production panel or firmware.
+The v1.0.1 main code and [published experimental v1.0.11 preview](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) both support **X4** (480 × 800) and **X3** (528 × 792) presets. These targets are screen-size presets, **not universal guarantees** for every XTEink production panel or firmware.
 
 ## Convert from downloaded manga
 
