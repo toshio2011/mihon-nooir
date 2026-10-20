@@ -246,6 +246,18 @@ fun NooirNovelBatchDialog(
                         WorkInfo.State.BLOCKED -> "Waiting in the device queue"
                         else -> stage.ifBlank { "Queued / preparing" }
                     })
+                    val failureDetails = info.outputData.getString(NooirNovelBatchWorker.ERRORS)
+                        .orEmpty()
+                    if ((info.state == WorkInfo.State.FAILED ||
+                            NooirDeviceWorkQueue.hasFailed(info)) &&
+                        failureDetails.isNotBlank()) {
+                        TextButton(onClick = {
+                            val clip = android.content.ClipData.newPlainText(
+                                "MangaNooir web importer error", failureDetails)
+                            (context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager).setPrimaryClip(clip)
+                        }) { Text("Copy error details") }
+                    }
                     if (busy) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                         Text("Use Nooir Tools → Activity Queue to cancel the entire chain with confirmation.")
