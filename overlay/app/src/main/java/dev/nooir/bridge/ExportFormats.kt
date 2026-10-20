@@ -5,7 +5,8 @@ enum class ExportFormat(val extension: String, val mime: String, val label: Stri
     AUTO("", "", "Automatic (for device)"),
     XTC("xtc", "application/octet-stream", "XTC · crisp black & white"),
     XTCH("xtch", "application/octet-stream", "XTCH · 4 gray levels"),
-    EPUB("epub", "application/epub+zip", "EPUB · broadly compatible"),
+    EPUB("epub", "application/epub+zip", "EPUB 3 · Modern"),
+    EPUB2("epub", "application/epub+zip", "EPUB 2 · Classic / e-reader compatible"),
     CBZ("cbz", "application/vnd.comicbook+zip", "CBZ · image archive");
 
     fun resolved(device: String = "X4"): ExportFormat {
