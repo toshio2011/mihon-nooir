@@ -29,7 +29,7 @@ fun main() {
     val page = image(480, 800, false)
     val meta = ExtendedMetadata(
         title = "星と & <Book> — 漫画", author = "A & B / 田中", description = "Summary <diagram> & detail 😀",
-        language = "ja", identifier = "urn:uuid:aabb-001", direction = ReadingDirection.RIGHT_TO_LEFT
+        language = "ja", identifier = "urn:uuid:12345678-1234-4123-8123-123456789abc", direction = ReadingDirection.RIGHT_TO_LEFT
     )
     val chapters = sequenceOf(
         ArchivePage("Cover", cover, 480, 800, isCover = true),
@@ -62,7 +62,8 @@ fun main() {
             check(!opf.contains("properties=\"nav\""))
             check(opf.contains("<meta name=\"cover\" content=\"cover-image\"/>"))
             check(opf.contains("id=\"cover-image\" href=\"images/p00001.png\" media-type=\"image/png\""))
-            check(opf.contains("<spine toc=\"ncx\" page-progression-direction=\"rtl\""))
+            check(opf.contains("<spine toc=\"ncx\">"))
+            check(!opf.contains("page-progression-direction"))
             check(opf.contains("type=\"cover\" title=\"Cover\" href=\"text/p00001.xhtml\""))
             check(opf.contains("A &amp; B / 田中"))
             check(opf.contains("Summary &lt;diagram&gt; &amp; detail 😀"))
