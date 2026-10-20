@@ -36,6 +36,8 @@ The user can still send **original unchanged files** using Android's Share sheet
 
 The X3 and X4 legacy IDs and resolutions are preserved so existing queued jobs still select the same canvas and XTCH output. X4 Pro uses X4 dimensions; it is **not** a guarantee that its stock firmware supports XTC/XTCH or a local Wi-Fi server.
 
+XTCH custom dimensions require a **height divisible by 8 pixels** (for example 800 or 792, not 801). This is a safety check: Folio/CrossPoint bitmap-reading conventions would otherwise disagree with the XTCH column-major plane sizes. Choose XTC, EPUB or CBZ for an irregular custom height. Built-in X3/X4 sizes are unaffected.
+
 The larger non-XTEink EPUB/CBZ pages consume more Android memory during conversion. Try a short volume first. Device dimensions and basic format guidance were crosschecked with [MangaPoint's public device profiles](https://github.com/W1seGit/MangaPoint/blob/main/crates/device-profiles/src/lib.rs), but this UI is independently implemented and real-device validation is still required.
 
 **Status:** experimental branch only, not part of the published v1.0.11 APK.
