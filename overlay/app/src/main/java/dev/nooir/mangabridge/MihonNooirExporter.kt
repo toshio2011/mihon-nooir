@@ -121,7 +121,7 @@ object MihonNooirExporter {
         // Folio Nooir uses the *first XTC page* to generate its shelf thumbnail.
         // Use the actual Mihon series artwork if we can obtain it; otherwise leave
         // original page ordering intact rather than fabricating a cover.
-        val coverUri = NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder)
+        val coverUri = if (options.includeCover) NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder) else null
         val coverOptions = options.copy(
             layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
             orientation = "PORTRAIT", overlapPercent = 0,
@@ -230,12 +230,11 @@ object MihonNooirExporter {
                     var activeName = ""
                     var sectionStart = 0
                     onStage("Preparing actual book cover", 0, ordered.size)
-                    val cover = requireNotNull(coverPage(xtcFormat.depth)) {
-                        "Manga cover is unavailable. Open this manga in Mihon to download/refresh its cover, then retry; export was stopped rather than silently sending a book with no cover."
-                    }
+                    val cover = if (options.includeCover) requireNotNull(coverPage(xtcFormat.depth)) {
+                        "Series cover unavailable. Open this manga in Mihon to refresh its cover, or disable Include separate series cover."
+                    } else null
                     val stream = sequence {
-                        yield(cover)
-                        total++
+                        if (cover != null) { yield(cover); total++ }
                         for ((chapter, page) in chapterFrames(xtcFormat.depth)) {
                             if (activeId != chapter.id) {
                                 if (activeId != null && total > sectionStart) {
@@ -254,17 +253,16 @@ object MihonNooirExporter {
                     }
                     pageCount = XtcCodec.write(
                         xtcFormat, stream, output, context.cacheDir,
-                        metadata = meta.xtc(), direction = meta.direction,
-                        richMetadataJson = meta.xtcRichJson(),
+                        metadata = meta.xtc().copy(coverPage = if (cover != null) 0 else null), direction = meta.direction,
                         chapterResolver = { written ->
                             check(total == written) { "Chapter navigation mismatch" }
                             sections.toList()
                         },
                     ).pageCount
                 } else {
-                    val cover = coverPage(2)
+                    val cover = if (options.includeCover) coverPage(2) else null
                     val stream = sequence {
-                        if (cover != null) yield(ArchivePage("Cover", png(cover), cover.width, cover.height))
+                        if (cover != null) yield(ArchivePage("Cover", png(cover), cover.width, cover.height, isCover = true))
                         for ((chapter, page) in chapterFrames(2, options.orientation == "LANDSCAPE")) {
                             yield(ArchivePage(chapter.name, png(page), page.width, page.height))
                         }
