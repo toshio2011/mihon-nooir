@@ -167,6 +167,16 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('allChapters', novel_dialog)
             self.assertIn('Int.MAX_VALUE', novel_dialog)
             self.assertIn('NooirNovelBatchWorker.NAMES', novel_dialog)
+            # The representative 313-page illustrated text PDF has ~28pt line
+            # spacing and ~36pt paragraph gaps. A hardcoded 22pt break splits
+            # almost every real book line into its own EPUB paragraph.
+            pdf_converter = (work_dir/'NooirPdfToEpub.kt').read_text()
+            self.assertIn('fontSizeInPt', pdf_converter)
+            self.assertIn('paragraphGap = linePitch * 1.17f', pdf_converter)
+            self.assertIn('val normalized = rows.filter', pdf_converter)
+            self.assertIn('first?.xDirAdj', pdf_converter)
+            self.assertIn('part.text.matches(Regex("[0-9]{1,5}"))', pdf_converter)
+            self.assertNotIn('line.y - lastY > 22f', pdf_converter)
 
 
 if __name__=='__main__': unittest.main()
