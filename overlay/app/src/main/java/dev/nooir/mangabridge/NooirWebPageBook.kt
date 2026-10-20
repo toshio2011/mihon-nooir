@@ -3,6 +3,7 @@ package dev.nooir.mangabridge
 import dev.nooir.bridge.ReflowEpubWriter
 import org.jsoup.nodes.Document
 import java.io.File
+import java.net.URI
 
 /**
  * Turn an ordered collection of publicly readable HTTPS pages into ONE EPUB.
@@ -39,6 +40,12 @@ object NooirWebPageBook {
                 if (index > 0) Thread.sleep(1300L) // polite sequential requests
                 onPage(index + 1, safeUrls.size, "Reading public webpage")
                 val page = if (index == 0) first else NooirWebArticle.load(url)
+                val pageUri = URI(page.location())
+                require(!(pageUri.host.orEmpty().lowercase().endsWith("wattpad.com") &&
+                    pageUri.path.startsWith("/story/"))) {
+                    "Webpage ${index + 1} is a Wattpad story overview, not a readable chapter. " +
+                        "Paste public chapter URLs instead; no partial EPUB was generated."
+                }
                 val title = chapterTitles.getOrNull(index)?.trim()
                     ?.takeIf { it.isNotBlank() } ?: NooirWebArticle.title(page)
                 require(title.isNotBlank()) { "Page ${index + 1} has no chapter title" }
