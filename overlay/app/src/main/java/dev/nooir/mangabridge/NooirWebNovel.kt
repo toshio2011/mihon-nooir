@@ -27,7 +27,9 @@ object NooirWebNovel {
         val origin = URI(doc.location())
         val selectors = "ul.table-of-contents a[href], .chapter-list a[href], " +
             ".chapter-listing a[href], .chapters a[href], #toc a[href], " +
-            "[class*=toc] a[href], a[href*='/chapter/'], a[href*='/chapter-'], " +
+            "[class*=toc] a[href], [class*=part-list] a[href], " +
+            "[data-testid*=part] a[href], #story-parts a[href], " +
+            "a[href*='/chapter/'], a[href*='/chapter-'], " +
             "a[href*='/episode/'], a[href*='/part-']"
         val found = linkedMapOf<String, Chapter>()
         for (node in doc.select(selectors)) {
@@ -42,11 +44,23 @@ object NooirWebNovel {
             if (node.hasAttr("aria-disabled") ||
                 node.classNames().any { it.contains("locked", true) || it.contains("disabled", true) }) continue
             val path = uri.path.lowercase()
+            val withinChapterList = node.parents().any { ancestor ->
+                listOf("toc", "chapter", "parts", "part-list", "episode").any {
+                    marker -> ancestor.className().contains(marker, true) ||
+                        ancestor.id().contains(marker, true) ||
+                        ancestor.attr("data-testid").contains(marker, true)
+                }
+            }
+            // Wattpad exposes some *public* chapter links as /12345678-slug,
+            // not /chapter/123. Only accept these when inside a visible parts
+            // list; random story recommendations must never become chapters.
+            val visibleWattpadPart = origin.host.lowercase().endsWith("wattpad.com") &&
+                Regex("^/[0-9]{6,}(?:-[^/]+)?/?$").matches(path) &&
+                withinChapterList
             val likely = Regex("(?i)\\b(chapter|chapitre|episode|part|prologue|epilogue|ch\\.?\\s*[0-9]+|bab\\s*[0-9]+|capítulo)\\b")
                 .containsMatchIn(text) ||
                 listOf("/chapter/", "/chapter-", "/episode/", "/part-").any { path.contains(it) } ||
-                node.parents().any { it.className().contains("toc", true) ||
-                    it.className().contains("chapters", true) }
+                withinChapterList || visibleWattpadPart
             if (!likely) continue
             val target = URI("https", null, uri.host, -1, uri.path, uri.query, null).toASCIIString()
             found.putIfAbsent(target, Chapter(target, text))
