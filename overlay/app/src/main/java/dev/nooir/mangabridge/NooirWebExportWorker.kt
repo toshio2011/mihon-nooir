@@ -21,6 +21,7 @@ import java.io.File
 class NooirWebExportWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     companion object {
         const val URL = "web_url"
+        const val OUTPUT_NAME = "web_output_name"
         const val SAVE_URI = "web_save_uri"
         const val HOST = "web_host"
         const val FOLDER = "web_folder"
@@ -41,6 +42,8 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
 
     override suspend fun doWork(): Result {
         val link = inputData.getString(URL).orEmpty()
+        val outputName = NooirDestinationGuard.filename(
+            inputData.getString(OUTPUT_NAME).orEmpty().ifBlank { "Article" }, "epub")
         val destination = inputData.getString(SAVE_URI)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
@@ -58,7 +61,11 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
         val temp = File(applicationContext.cacheDir, "web-to-reader-" + id + ".epub")
         try {
             withContext(Dispatchers.IO) {
-                if (destination == null) NooirUpload.checkConnected(host)
+                if (destination == null) {
+                    NooirUpload.checkConnected(host)
+                    setProgressAsync(Data.Builder().putString(PHASE, "Checking existing XTEink filenames").build())
+                    NooirDestinationGuard.requireOnReader(host, folder, outputName)
+                }
                 NooirWebArticle.convert(link, temp) { stage ->
                     if (isStopped) throw CancellationException("Article conversion cancelled")
                     setProgressAsync(Data.Builder().putString(PHASE, stage).build())
@@ -72,12 +79,12 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
                     }
                 } else {
                     setProgressAsync(Data.Builder().putString(PHASE, "Sending EPUB to XTEink").build())
-                    NooirUpload.upload(temp, host, folder) { sent, total ->
+                    NooirUpload.upload(temp, host, folder, onProgress = { sent, total ->
                         if (isStopped) throw CancellationException("Article transfer cancelled")
                         setProgressAsync(Data.Builder().putString(PHASE,
                             if (sent >= total) "Waiting for XTEink confirmation" else "Uploading EPUB")
                             .putInt(PERCENT, (sent * 100 / total.coerceAtLeast(1L)).toInt()).build())
-                    }
+                    }, filenameOverride = outputName)
                 }
             }
             notices.notify(notification, NotificationCompat.Builder(
