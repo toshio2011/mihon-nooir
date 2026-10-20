@@ -43,6 +43,8 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
     val workManager = remember { WorkManager.getInstance(context) }
     var document by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("No PDF selected") }
+    var bookTitle by remember { mutableStateOf("") }
+    var bookAuthor by remember { mutableStateOf("") }
     var outputName by remember { mutableStateOf("Converted-PDF") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
@@ -67,6 +69,8 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 NooirPdfExportWorker.HOST to host.trim(),
                 NooirPdfExportWorker.FOLDER to folder.trim(),
                 NooirPdfExportWorker.MODE to mode,
+                NooirPdfExportWorker.BOOK_TITLE to bookTitle.trim(),
+                NooirPdfExportWorker.BOOK_AUTHOR to bookAuthor.trim(),
                 NooirPdfExportWorker.OUTPUT_NAME to outputName.trim(),
             )).build()
         workManager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, job)
@@ -85,6 +89,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 if (it.moveToFirst()) {
                     fileName = it.getString(0) ?: "Selected PDF"
                     outputName = fileName.substringBeforeLast('.', fileName)
+                    bookTitle = outputName
                 }
             }
         }
@@ -113,6 +118,12 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     Text("Choose PDF from phone")
                 }
                 Text(fileName)
+                OutlinedTextField(value = bookTitle, onValueChange = { bookTitle = it.take(192) },
+                    label = { Text("EPUB book title") }, singleLine = true,
+                    supportingText = { Text("Used inside the EPUB, separately from the output filename.") })
+                OutlinedTextField(value = bookAuthor, onValueChange = { bookAuthor = it.take(128) },
+                    label = { Text("Book author (optional)") }, singleLine = true,
+                    supportingText = { Text("If blank, use PDF metadata; the PDF editor's name may not be the actual author.") })
                 OutlinedTextField(value = outputName, onValueChange = { outputName = it.take(70) },
                     label = { Text("EPUB filename (without extension)") }, singleLine = true,
                     supportingText = { Text("Rename before conversion if the name already exists on XTEink.") })
