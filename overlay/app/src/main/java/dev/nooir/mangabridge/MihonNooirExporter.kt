@@ -70,11 +70,12 @@ object MihonNooirExporter {
         onStage: (String, Int, Int) -> Unit = { _, _, _ -> },
         onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
         coverCache: CoverCache? = null,
+        outputName: String = "",
     ): ExportResult {
         // Check the Nooir transfer server before spending time processing images.
         withContext(Dispatchers.IO) { NooirUpload.checkConnected(deviceHost) }
         return renderExport(context, provider, manga, source, chapters,
-            null, deviceHost, destinationFolder, format, device, quickExport, options, onStage, onUploadProgress, coverCache)
+            null, deviceHost, destinationFolder, format, device, quickExport, options, onStage, onUploadProgress, coverCache, outputName)
     }
 
     /** Stream one source chapter at a time; only the active chapter is temporarily cached. */
@@ -86,6 +87,7 @@ object MihonNooirExporter {
         onStage: (String, Int, Int) -> Unit,
         onUploadProgress: (Long, Long) -> Unit,
         coverCache: CoverCache?,
+        outputName: String = "",
     ): ExportResult = withContext(Dispatchers.IO) {
         require(chapters.isNotEmpty()) { "Select at least one chapter" }
         val ownerJob = coroutineContext[kotlinx.coroutines.Job]
@@ -131,6 +133,8 @@ object MihonNooirExporter {
             if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-' || c == '_') c else '_'
         }.joinToString("").ifBlank { "Manga" }
         val tmp = File(tempFolder, safeTitle + "." + actual.extension)
+        val renamed = if (outputName.isBlank()) tmp.name else
+            NooirDestinationGuard.forManga(outputName, format, device)
 
         fun chapterFrames(
             depth: Int, archiveLandscape: Boolean = false,
@@ -276,11 +280,11 @@ object MihonNooirExporter {
                 }
                 onStage("Uploading to XTEink", locations.size, locations.size)
                 NooirUpload.upload(tmp, requireNotNull(deviceHost),
-                    requireNotNull(destinationFolder), onUploadProgress)
+                    requireNotNull(destinationFolder), onUploadProgress, filenameOverride = renamed)
                 if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
                     onStage("Syncing synopsis", locations.size, locations.size)
                     val synced = runCatching {
-                        NooirUpload.updateBookInfo(deviceHost, destinationFolder, tmp.name,
+                        NooirUpload.updateBookInfo(deviceHost, destinationFolder, renamed,
                             meta.title, meta.author, meta.description)
                     }.getOrDefault(false)
                     if (!synced) onStage("Book sent; synopsis sync unavailable",
