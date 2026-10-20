@@ -49,3 +49,25 @@ You can have a **single EPUB** containing genuinely reflowable text chapters **a
 - [ ] Memory use, file cleanup, cancel during large document conversion.
 
 For Android-source details, see the experimental [PDF conversion PR](https://github.com/toshio2011/mihon-nooir/pulls). Track follow-up layout improvements at the [roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
+
+
+## Experimental 1.0.12 — real-novel layout fixes
+
+A locally supplied, **313-page Malay novel PDF** was inspected privately as a fidelity test. The book itself was **not** committed to the repository. Source document characteristics:
+
+- **7 full-image pages** (illustrated front matter and closing artwork); these need full-page image preservation.
+- **25 mixed text+image pages**, including illustrated chapter/prologue headers and oversized decorative first letters.
+- **281 text-only pages**, which should remain selectable/reflowable in EPUB.
+- Source text includes centered printed page numbers and justified Malay paragraphs with line hyphenation.
+
+The previous fixed 22-point line-gap threshold could split normal 28-point-spaced visual lines into dozens of false EPUB paragraphs. PDFBox may also yield oversized initial letters out of their natural order, making first words appear truncated. The v1.0.12 layout helper addresses these cases without OCR:
+
+- Infer paragraph spacing from each page's actual text-line geometry rather than a hardcoded 22 pt.
+- Reattach large initial drop caps to an overlapping opening line; preserve an opening quotation mark where present.
+- Remove only probable **centered page-number footers**, retaining ordinary numbers within the text.
+- Preserve true hyphens in Malay reduplications rather than deleting every end-of-line hyphen.
+- Preserve extracted decorative image blocks with nearby real text; image-only pages continue through page-render fallback.
+- Run pure-JVM synthetic geometry regression tests in CI without publishing copyrighted book pages or content.
+
+**Still to test on Android hardware:** output EPUB body order, 313-page runtime and memory use, decorative heading image placement, rendered text and original artwork quality, and physical X4 reader compatibility. Current generated TOC still lists PDF pages, not semantic chapter titles; automatic chapter detection and editor preview remain future work.
+
