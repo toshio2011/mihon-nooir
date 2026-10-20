@@ -2,7 +2,7 @@
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)
 
-> **Version:** Main-branch code is **v1.0.1**. The newer [experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed CI, but **physical phone/XTEink testing is still pending**. Features under **Nooir Tools** require the experimental build.
+> **Version:** Main-branch code is **v1.0.1**. The newer [published experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed CI, but **physical phone/XTEink testing is still pending**. Features under **Nooir Tools** require the experimental build.
 
 ### Where is the chapter picker?
 
@@ -14,7 +14,7 @@ In the preview, yes: select chapters first and turn on **Quick Export · fetch m
 
 ### I can't find “Nooir Tools” under More.
 
-You're likely running the older **v1.0.1 main APK**. The newer Tools hub exists in **experimental v1.0.11**, built from [PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). There is no stable release of it yet. [Installation](GETTING_STARTED.md)
+You're likely running the older **v1.0.1 main APK**. The newer Tools hub exists in **experimental v1.0.11**, built from [PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). It is [published as an experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), not a stable version. [Installation](GETTING_STARTED.md)
 
 ### Can I send CBZ, PDF, EPUB, FB2 or other files from my phone?
 
@@ -50,7 +50,7 @@ The current preview checks output filenames **before converting** and again befo
 
 ### Why does XTC/XTCH show the wrong cover or no cover?
 
-Folio Nooir builds the shelf thumbnail from **the first page of the XTC/XTCH file**. The v1.0.11 preview requires a readable cover first; an unavailable source cover should cause a clear export error. If first book page is correct but the shelf image is missing, run **Retrieve All Book Details** on Folio Nooir. Synopsis metadata from manually copied XTC files may depend on a separate experimental firmware change. [Covers and metadata](XTC_METADATA.md)
+Compatible firmware builds a shelf thumbnail from the **first page of an XTC/XTCH book**. MangaNooir v1.0.11 exports the series cover first, and its XTCH cover has been reported working on Folio Nooir. If a shelf thumbnail is missing, check the actual first page and refresh the reader's cache (Folio Nooir: **Retrieve All Book Details**). Reader synopsis support varies by firmware. [Covers and metadata](XTC_METADATA.md)
 
 ### What output format should I choose?
 
@@ -66,7 +66,7 @@ The experimental tools use background WorkManager jobs, and you can navigate awa
 
 ### Where can I get the app? Can it replace regular Mihon?
 
-There are **no published stable GitHub Releases** yet. Download the [successful v1.0.11 GitHub Actions APK artifact](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996). MangaNooir has a separate package identity and can coexist with normal Mihon. Back up MangaNooir before changing debug builds, because signing keys may differ. [Install guide](GETTING_STARTED.md)
+There is **no stable release yet**, but [v1.0.11 is published as an experimental GitHub prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Download the APK from **Assets**. MangaNooir has a separate package identity and can coexist with normal Mihon. Back up MangaNooir before changing debug builds, because signing keys may differ. [Install guide](GETTING_STARTED.md)
 
 ### Is MangaNooir official, and does it include free manga?
 
@@ -74,4 +74,4 @@ No. This is an independent project based on Mihon, inspired by MangaPoint and bu
 
 ### My problem isn't listed. What should I report?
 
-Share your **build/commit, Android version, input format/source, XTEink model/Folio Nooir firmware, destination folder and exact error message**, without posting private documents, credentials or copyrighted manga pages. [Roadmap and issues](https://github.com/toshio2011/mihon-nooir/issues/8)
+Share your **build/commit, Android version, input format/source, XTEink model and installed firmware, destination folder and exact error message**, without posting private documents, credentials or copyrighted manga pages. [Roadmap and issues](https://github.com/toshio2011/mihon-nooir/issues/8)
