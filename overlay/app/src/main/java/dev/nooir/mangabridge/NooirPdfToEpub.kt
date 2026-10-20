@@ -15,6 +15,7 @@ import com.tom_roush.pdfbox.text.PDFTextStripper
 import com.tom_roush.pdfbox.text.TextPosition
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowMetadata
+import dev.nooir.bridge.PdfReflowLines
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.abs
@@ -31,14 +32,13 @@ import kotlin.math.min
  */
 object NooirPdfToEpub {
     enum class Mode { MIXED, ORIGINAL_PAGES }
-    private data class WordLine(val y: Float, val x: Float, val fontSize: Float, val text: String)
     private data class PlacedImage(val y: Float, val jpeg: ByteArray, val coversPage: Boolean)
-    private data class Content(val lines: List<WordLine>, val pictures: List<PlacedImage>,
+    private data class Content(val lines: List<PdfReflowLines.Line>, val pictures: List<PlacedImage>,
         val vectorMarks: Int, val hadImageErrors: Boolean)
 
     /** One PDF page's positioned text/image blocks, using the native PDF text layer. */
     private class PageCollector(private val pageWidth: Float, private val pageHeight: Float) : PDFTextStripper() {
-        val lines = mutableListOf<WordLine>()
+        val lines = mutableListOf<PdfReflowLines.Line>()
         val pictures = mutableListOf<PlacedImage>()
         var vectorMarks: Int = 0
         var hadImageErrors = false
@@ -49,8 +49,8 @@ object NooirPdfToEpub {
             val clean = text.trim()
             if (clean.isNotEmpty()) {
                 val first = positions.firstOrNull()
-                lines += WordLine(first?.yDirAdj ?: 0f, first?.xDirAdj ?: 0f,
-                    first?.fontSizeInPt ?: 12f, clean)
+                lines += PdfReflowLines.Line(clean, first?.xDirAdj ?: 0f,
+                    first?.yDirAdj ?: 0f, first?.fontSizeInPt ?: 12f)
             }
         }
 
@@ -165,8 +165,10 @@ object NooirPdfToEpub {
                                 Content(collector.lines.toList(), collector.pictures.toList(),
                                     collector.vectorMarks, collector.hadImageErrors)
                             }.getOrNull() else null
-                            val enoughText = text != null &&
-                                text.lines.sumOf { it.text.length } >= 45
+                            val paragraphs = if (text != null) PdfReflowLines.paragraphs(
+                                text.lines, page.cropBox.width, page.cropBox.height,
+                            ) else emptyList()
+                            val enoughText = paragraphs.sumOf { it.text.length } >= 45
                             // For pages with extensive vector graphics or failed image
                             // decoding, preserve the whole page rather than dropping a
                             // floor plan or diagram. Other pages can still reflow.
@@ -185,78 +187,16 @@ object NooirPdfToEpub {
                             } else {
                                 onPage(index + 1, total, "Converting real text and illustrations")
                                 val blocks = mutableListOf<Pair<Float, String>>()
-                                // Group PDFTextStripper's positioned fragments into visual lines.
-                                // PDF justification often emits multiple fragments at the same Y.
-                                // Ignore only isolated, centered numeric page labels near the foot.
-                                val positionedParts = text!!.lines.filterNot { part ->
-                                    part.y > page.cropBox.height * 0.84f &&
-                                        part.text.matches(Regex("[0-9]{1,5}")) &&
-                                        abs(part.x - page.cropBox.width / 2f) < page.cropBox.width * 0.08f
-                                }.sortedWith(compareBy<WordLine> { it.y }.thenBy { it.x })
-                                val rows = mutableListOf<MutableList<WordLine>>()
-                                for (part in positionedParts) {
-                                    if (rows.isNotEmpty() && abs(part.y - rows.last()[0].y) < 3.5f) {
-                                        rows.last() += part
-                                    } else rows += mutableListOf(part)
+                                // PDF layout semantics are tested independently of Android.
+                                // Preserve the section-sized EPUB3 grouping below; only
+                                // replace the line/paragraph detection and drop-cap handling.
+                                for (paragraph in paragraphs) {
+                                    blocks += paragraph.y to "<p>" +
+                                        ReflowEpubWriter.xml(paragraph.text) + "</p>"
                                 }
-                                // A decorative dropped initial is real PDF text, not body copy.
-                                // Rejoin it with its first body line instead of making a separate
-                                // giant paragraph or silently deleting the initial letter.
-                                val bodySizes = positionedParts.filter { it.text.length > 3 }.map { it.fontSize }
-                                    .sorted()
+                                val bodySizes = text.lines.filter { it.text.length > 3 }
+                                    .map { it.fontSize }.sorted()
                                 val typicalFont = bodySizes.getOrNull(bodySizes.size / 2) ?: 12f
-                                val capitals = rows.flatMap { it }.filter {
-                                    it.text.trimStart('“', '‘', '"').length == 1 &&
-                                        it.text.lastOrNull()?.isUpperCase() == true &&
-                                        it.fontSize > typicalFont * 2.3f
-                                }
-                                for (initial in capitals) {
-                                    val target = rows.flatMap { it }.filter {
-                                        it !== initial && it.x > initial.x &&
-                                            abs(it.y - initial.y) < typicalFont * 3.5f &&
-                                            it.text.firstOrNull()?.isLetter() == true
-                                    }.minByOrNull { abs(it.y - initial.y) + (it.x - initial.x) * 0.05f }
-                                    if (target != null) {
-                                        val group = rows.firstOrNull { it.contains(target) }
-                                        val idx = group?.indexOf(target) ?: -1
-                                        if (idx >= 0) group!![idx] = target.copy(text = initial.text + target.text)
-                                        rows.firstOrNull { it.contains(initial) }?.remove(initial)
-                                    }
-                                }
-                                val normalized = rows.filter { it.isNotEmpty() }.map { group ->
-                                    val ordered = group.sortedBy { it.x }
-                                    WordLine(ordered.first().y, ordered.first().x, typicalFont,
-                                        ordered.joinToString(" ") { it.text.trim() }.trim())
-                                }.sortedBy { it.y }
-                                val diffs = normalized.zipWithNext { a, b -> b.y - a.y }
-                                    .filter { it > typicalFont * 0.7f && it < typicalFont * 4f }
-                                    .sorted()
-                                // In the user-supplied illustrated Malay novel, lines were
-                                // ~28pt apart and real paragraph breaks ~36pt. A fixed 22pt
-                                // threshold would incorrectly split every printed line.
-                                val linePitch = diffs.getOrNull(diffs.size / 4)
-                                    ?: typicalFont * 1.75f
-                                val paragraphGap = linePitch * 1.17f
-                                var textBuffer = StringBuilder()
-                                var lastY = -1000f
-                                var firstY = 0f
-                                fun finishParagraph() {
-                                    if (textBuffer.isNotEmpty()) {
-                                        blocks += firstY to "<p>" +
-                                            ReflowEpubWriter.xml(textBuffer.toString()) + "</p>"
-                                        textBuffer = StringBuilder()
-                                    }
-                                }
-                                for (line in normalized) {
-                                    if (textBuffer.isNotEmpty() && line.y - lastY > paragraphGap)
-                                        finishParagraph()
-                                    if (textBuffer.isEmpty()) firstY = line.y
-                                    else if (textBuffer.endsWith("\u00ad")) textBuffer.deleteCharAt(textBuffer.length - 1)
-                                    else if (!textBuffer.endsWith("-")) textBuffer.append(' ')
-                                    textBuffer.append(line.text)
-                                    lastY = line.y
-                                }
-                                finishParagraph()
                                 text.pictures.forEach { picture ->
                                     val image = epub.addImage(ReflowEpubWriter.ImageAsset(
                                         picture.jpeg, "jpg", "image/jpeg"))
