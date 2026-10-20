@@ -6,10 +6,10 @@ MangaNooir's first **web novel importer** is an experimental extension of [Web t
 
 ## How to download several novels
 
-1. In MangaNooir, go to **More → Web novels & batch EPUB**.
+1. In MangaNooir, go to **More → Nooir Tools → Web novels · Batch EPUB**.
 2. Paste **one public HTTPS story URL per line**, up to **10 stories**. Each story becomes its **own EPUB**.
-3. Optionally select **First / Last chapter** (default 1–80, max 80 chapters per EPUB). Split long novels into separate ranges.
-4. Tap **Download EPUBs to phone folder** and choose an Android storage folder, or connect the XTEink to Folio Nooir File Transfer and tap **Convert novels & send to XTEink**.
+3. Leave **Download all chapters** checked (default) to export every chapter discoverable in public HTML. Or uncheck it to supply **First / Last chapter** when you only want a range. There is no artificial 80-chapter cap. Large novels can take a long time and may exceed the 180 MiB XTEink upload limit; use Save to phone when needed.
+4. Before starting, optionally type an output name for each story; the importer checks for collisions in the selected destination folder *before* fetching its chapters. If the name exists, that story is skipped with an error, and subsequent stories continue. Tap **Download EPUBs to phone folder** and choose an Android storage folder, or connect the XTEink to Folio Nooir File Transfer and tap **Convert novels & send to XTEink**.
 5. The phone creates each EPUB **sequentially**. While uploading, MangaNooir shares one queue with manga, file, PDF, and article conversions—no simultaneous XTEink transfers.
 6. Review the job's output and any failed links before assuming all books were exported. An invalid/locked chapter is an error, not a silently missing chapter.
 
@@ -30,7 +30,7 @@ The current implementation finds chapter links **already visible in a site's pub
 ## Current safety limits
 
 - Up to 10 distinct public HTTPS story links per batch.
-- Up to 80 discovered chapters per output EPUB; chapter range may be 1–300.
+- No artificial chapter-count maximum: **All chapters** uses the complete list discoverable from public HTML. Missing/locked/dynamic content cannot be magically fetched, and every chapter must still be readable. Large EPUBs are constrained by the device/storage/runtime and XTEink upload safety limits.
 - 1.3-second pause between chapter requests; no subscription bypass or credential harvesting.
 - Existing Android extraction caps for HTML and image sizes.
 - No recursive device scans, no additional XTEink firmware APIs, and one-at-a-time Wi-Fi transfers.
@@ -40,8 +40,8 @@ The current implementation finds chapter links **already visible in a site's pub
 
 - [ ] Build Android FOSS APK and pass overlay/smoke tests.
 - [ ] Test public story website with 5–10 chapter links and a real cover.
-- [ ] Test multiple independent novels to phone storage, with one failure between successful books.
-- [ ] Test chapter range 2–5 and an over-limit selection, ensuring no silent truncation.
+- [ ] Test multiple independent novels to phone storage, with one failure between successful books and a name conflict before chapter download.
+- [ ] Test chapter range 2–5, All chapters on a 100+ chapter publicly readable novel and interrupted conversions; ensure no silent truncation.
 - [ ] Test sites where HTML is dynamic/locked; show clear non-success rather than fabricated content.
 - [ ] Confirm cover, real text, inline illustrations and TOC in Folio Nooir.
 - [ ] Confirm device receives a *single* upload at a time when manga and novel jobs are queued.
