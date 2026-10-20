@@ -43,6 +43,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
     val workManager = remember { WorkManager.getInstance(context) }
     var document by remember { mutableStateOf<Uri?>(null) }
     var fileName by remember { mutableStateOf("No PDF selected") }
+    var outputName by remember { mutableStateOf("Converted-PDF") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var mode by remember { mutableStateOf("MIXED") }
@@ -66,6 +67,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 NooirPdfExportWorker.HOST to host.trim(),
                 NooirPdfExportWorker.FOLDER to folder.trim(),
                 NooirPdfExportWorker.MODE to mode,
+                NooirPdfExportWorker.OUTPUT_NAME to outputName.trim(),
             )).build()
         workManager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, job)
         workId = job.id
@@ -80,7 +82,10 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } catch (_: SecurityException) { }
             context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-                if (it.moveToFirst()) fileName = it.getString(0) ?: "Selected PDF"
+                if (it.moveToFirst()) {
+                    fileName = it.getString(0) ?: "Selected PDF"
+                    outputName = fileName.substringBeforeLast('.', fileName)
+                }
             }
         }
     }
@@ -108,6 +113,9 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     Text("Choose PDF from phone")
                 }
                 Text(fileName)
+                OutlinedTextField(value = outputName, onValueChange = { outputName = it.take(70) },
+                    label = { Text("EPUB filename (without extension)") }, singleLine = true,
+                    supportingText = { Text("Rename before conversion if the name already exists on XTEink.") })
                 Text("How should pages be converted?")
                 FilterChip(selected = mode == "MIXED", onClick = { mode = "MIXED" },
                     label = { Text("Reflowable text + illustrations") })
@@ -121,12 +129,10 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     label = { Text("XTEink IP or hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
                     label = { Text("XTEink destination folder") }, singleLine = true)
-                Button(enabled = document != null && !busy, onClick = {
-                    val file = fileName.substringBeforeLast('.', fileName)
-                        .ifBlank { "Converted-PDF" }
-                    saveEpub.launch(file + ".epub")
+                Button(enabled = document != null && !busy && outputName.isNotBlank(), onClick = {
+                    saveEpub.launch(NooirDestinationGuard.filename(outputName, "epub"))
                 }) { Text("Convert PDF & save EPUB to phone") }
-                Button(enabled = document != null && !busy && host.isNotBlank() &&
+                Button(enabled = document != null && !busy && outputName.isNotBlank() && host.isNotBlank() &&
                     folder.startsWith("/") && !folder.contains(".."),
                     onClick = { enqueue(null) }) { Text("Convert PDF & send EPUB to XTEink") }
                 val phase = state?.progress?.getString(NooirPdfExportWorker.PHASE).orEmpty()
