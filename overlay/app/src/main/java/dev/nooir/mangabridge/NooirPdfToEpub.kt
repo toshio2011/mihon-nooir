@@ -135,6 +135,21 @@ object NooirPdfToEpub {
                 PdfRenderer(fd).use { renderer ->
                     ReflowEpubWriter.write(output, ReflowMetadata(title, author,
                         description = "Converted locally from PDF, without OCR")) { epub ->
+                        // Reflowable novel paragraphs should span PDF source pages.
+                        // Only split at visible drop-cap section openings or image-only
+                        // front/back pages, rather than adding hundreds of PDF pages
+                        // as separate EPUB TOC entries.
+                        val pendingBody = StringBuilder()
+                        var pendingStart = 1
+                        var pendingLast = 1
+                        fun finishSection() {
+                            if (pendingBody.isNotEmpty()) {
+                                val label = if (pendingStart == pendingLast) "PDF page $pendingStart"
+                                    else "PDF pages $pendingStart–$pendingLast"
+                                epub.addSection(label, pendingBody.toString())
+                                pendingBody.setLength(0)
+                            }
+                        }
                         for (index in 0 until total) {
                             onPage(index + 1, total, "Inspecting text and figures")
                             val page = book.getPage(index)
@@ -156,10 +171,11 @@ object NooirPdfToEpub {
                                 text.pictures.any { it.coversPage }
                             val sectionTitle = "Page " + (index + 1)
                             if (fallback) {
+                                finishSection()
                                 onPage(index + 1, total, "Preserving complex/scanned page as image")
                                 val image = epub.addImage(ReflowEpubWriter.ImageAsset(
                                     renderPage(renderer, index), "jpg", "image/jpeg",
-                                ))
+                                ), isCover = index == 0)
                                 epub.addSection(sectionTitle,
                                     "<figure><img src=\"${ReflowEpubWriter.xml(image)}\" alt=\"PDF page ${index+1} (image content)\"/></figure>")
                             } else {
@@ -243,13 +259,26 @@ object NooirPdfToEpub {
                                     blocks += picture.y to "<figure><img src=\"${ReflowEpubWriter.xml(image)}\" alt=\"Illustration on PDF page ${index+1}\"/></figure>"
                                 }
                                 val body = blocks.sortedBy { it.first }.joinToString("\n") { it.second }
-                                epub.addSection(sectionTitle, body)
+                                val hasOpening = text.lines.any {
+                                    it.fontSize > typicalFont * 2.3f &&
+                                        it.text.trimStart('“', '‘', '"').length == 1 &&
+                                        it.text.lastOrNull()?.isUpperCase() == true
+                                }
+                                if (hasOpening && pendingBody.isNotEmpty()) finishSection()
+                                if (pendingBody.isEmpty()) pendingStart = index + 1
+                                pendingLast = index + 1
+                                pendingBody.append("<!-- source PDF page ").append(index + 1)
+                                    .append(" -->\n").append(body).append('\n')
+                                // Prevent pathological documents from growing an
+                                // unbounded XHTML section on a small Android device.
+                                if (pendingBody.length > 300_000) finishSection()
                             }
                             require(output.length() < 300L * 1024 * 1024) {
                                 "Generated EPUB is larger than 300 MiB; split the PDF into smaller sections"
                             }
                             onPage(index + 1, total, "Added to EPUB")
                         }
+                        finishSection()
                     }
                 }
             }
