@@ -51,6 +51,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     var combinedTitle by remember { mutableStateOf("") }
     var combinedAuthor by remember { mutableStateOf("") }
     var combinedFilename by remember { mutableStateOf("") }
+    var orderedChapterTitles by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf("") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
@@ -73,6 +74,8 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
         (if (combinePages) links.toByteArray(Charsets.UTF_8).size <= 120_000
             else urls.size <= 10) &&
         urls.all { it.length <= 600 && it.startsWith("https://", true) } &&
+        (!combinePages || orderedChapterTitles.isBlank() ||
+            orderedChapterTitles.lines().size <= urls.size) &&
         (combinePages || allChapters || (start != null && end != null && start >= 1 && end >= start))
     val busy = jobState?.state == WorkInfo.State.ENQUEUED ||
         jobState?.state == WorkInfo.State.BLOCKED ||
@@ -85,9 +88,10 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
         // The complete ordered chapter list stays in our app-private files.
         val manifest = if (combinePages) try {
             val json = JSONArray()
-            urls.forEach { url ->
+            val labels = orderedChapterTitles.lines()
+            urls.forEachIndexed { index, url ->
                 json.put(JSONObject().put("url", url)
-                    .put("title", customNames[url].orEmpty()))
+                    .put("title", labels.getOrNull(index).orEmpty().trim()))
             }
             val bytes = json.toString().toByteArray(Charsets.UTF_8)
             require(bytes.size <= 128 * 1024) {
@@ -175,14 +179,23 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                         supportingText = { Text("Duplicate names are checked before downloading the remaining pages.") },
                         singleLine = true)
                 }
-                Text(if (combinePages) "Optional: override chapter titles; otherwise use each webpage title."
-                    else "Optional: rename each EPUB before conversion. Leave blank to use the story title.")
-                urls.forEach { story ->
-                    OutlinedTextField(value = customNames[story].orEmpty(),
-                        onValueChange = { value -> customNames = customNames + (story to value.take(70)) },
-                        label = { Text((if (combinePages) "Chapter title · " else "Output name · ") + story.take(38)) },
-                        placeholder = { Text("Book title (without .epub)") },
-                        singleLine = true)
+                if (combinePages) {
+                    Text("Optional chapter titles, one per line in the same order as the URLs. Leave blank to use the actual webpage titles.")
+                    OutlinedTextField(value = orderedChapterTitles,
+                        onValueChange = { orderedChapterTitles = it },
+                        label = { Text("Optional chapter titles (one per line)") },
+                        placeholder = { Text("Prologue\\nChapter One\\nChapter Two") },
+                        minLines = 2, maxLines = 6,
+                        modifier = Modifier.fillMaxWidth())
+                } else {
+                    Text("Optional: rename each EPUB before conversion. Leave blank to use the story title.")
+                    urls.forEach { story ->
+                        OutlinedTextField(value = customNames[story].orEmpty(),
+                            onValueChange = { value -> customNames = customNames + (story to value.take(70)) },
+                            label = { Text("Output name · " + story.take(38)) },
+                            placeholder = { Text("Book title (without .epub)") },
+                            singleLine = true)
+                    }
                 }
                 if (!combinePages) {
                     androidx.compose.foundation.layout.Row(
