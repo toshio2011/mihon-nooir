@@ -3,7 +3,7 @@
 [← Repository homepage](../README.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The [**experimental v1.0.11 APK is published**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); its unmerged source is in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996), but **real phone and XTEink validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
+> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The [**experimental v1.0.11 APK is published**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); its unmerged source is in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996), but **broader phone and XTEink compatibility validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
 
 ## If this is your first time
 
@@ -37,4 +37,4 @@
 | [Draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) | Current experimental changes, code reviews, tests |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |
 
-**Reminder:** A successful CI build doesn't establish that an individual public website exposes readable chapters, that PDF text reflows flawlessly, or that XTC/XTCH covers are visible on physical XTEink hardware. The app contains no manga, bundled manga extensions, AI OCR or access-control bypass.
+**Reminder:** A successful CI build doesn't establish that an individual public website exposes readable chapters, that PDF text reflows flawlessly, or that XTC/XTCH covers behave identically on every XTEink firmware. The app contains no manga, bundled manga extensions, AI OCR or access-control bypass.
