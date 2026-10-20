@@ -118,7 +118,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
     override suspend fun doWork(): Result {
         val name = inputData.getString("ids_file").orEmpty()
         if (!name.matches(Regex("[0-9a-f-]{36}\\.txt"))) {
-            return Result.failure(workDataOf(KEY_ERROR to "Invalid export selection"))
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), KEY_ERROR, "Invalid export selection"))
         }
         val manifest = File(applicationContext.filesDir, "manganooir_export_jobs/" + name)
         if (Build.VERSION.SDK_INT >= 26) {
@@ -172,7 +172,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         } catch (e: Exception) {
             val error = e.message ?: "Manga export failed"
             manager.notify(notificationId, notif("Export failed: " + error.take(85), ongoing = false))
-            return Result.failure(workDataOf(KEY_ERROR to error))
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), KEY_ERROR, error))
         } finally {
             manifest.delete()
         }
