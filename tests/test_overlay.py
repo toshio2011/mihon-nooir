@@ -126,8 +126,7 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('PdfReflowLines.paragraphs', pdf)
             helper = root/'app/src/main/java/dev/nooir/bridge/PdfReflowLines.kt'
             self.assertTrue(helper.exists())
-            self.assertIn('Printed page number', helper.read_text() if False else
-                          helper.read_text().replace('printed', 'Printed'))
+            self.assertIn('printed', helper.read_text().lower())
             self.assertIn('PdfReflowLinesTest.kt', (ROOT/'tests/run.sh').read_text())
 
             # Regression: a failed book should not poison the WorkManager FIFO chain.
