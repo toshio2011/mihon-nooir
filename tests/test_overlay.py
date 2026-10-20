@@ -179,6 +179,16 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('combinePages', novel_dialog)
             self.assertIn('NooirNovelBatchWorker.COMBINE_PAGES', novel_dialog)
             self.assertIn('NooirNovelBatchWorker.URL_MANIFEST', novel_dialog)
+            # Both Web Link → EPUB and Web Novels must expose the same
+            # multi-link mode; no duplicated conversion or WorkManager path.
+            web_dialog = (work_dir/'NooirWebToReaderDialog.kt').read_text()
+            self.assertIn('Multiple web links → one EPUB', web_dialog)
+            self.assertIn('NooirNovelBatchDialog(', web_dialog)
+            self.assertIn('initialCombinePages = true', web_dialog)
+            self.assertIn('initialUrls = url.trim()', web_dialog)
+            self.assertIn('initialCombinePages: Boolean = false', novel_dialog)
+            self.assertIn('initialUrls: String = ""', novel_dialog)
+            self.assertIn('NooirWebExportWorker.URL to url.trim()', web_dialog)
             self.assertIn('nooir-webpages-', novel_dialog)
             worker = (work_dir/'NooirNovelBatchWorker.kt').read_text()
             self.assertIn('NooirWebPageBook.convert', worker)
