@@ -63,11 +63,21 @@ class TestOverlay(unittest.TestCase):
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirMangaExportWorker.kt').exists())
             self.assertIn('fun inject(nooirMangaExportWorker', (graph/'AppGraph.kt').read_text())
             self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionName = "1.0.11"',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionCode = 1000011',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionName = "1.0.12"',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionCode = 1000012',(app/'build.gradle.kts').read_text())
             self.assertIn('toshio2011/mihon-nooir',(updater/'AppUpdateChecker.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').exists())
+            profiles = root/'app/src/main/java/dev/nooir/bridge/NooirDeviceProfiles.kt'
+            picker = root/'app/src/main/java/dev/nooir/mangabridge/NooirDevicePicker.kt'
+            self.assertTrue(profiles.exists())
+            self.assertTrue(picker.exists())
+            self.assertIn('X4_PRO', profiles.read_text())
+            self.assertIn('KINDLE_PW12', profiles.read_text())
+            self.assertIn('NooirDevicePicker(', (root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').read_text())
+            self.assertIn('NooirDevicePicker(', (root/'app/src/main/java/dev/nooir/mangabridge/AnyFileTransferDialog.kt').read_text())
+            self.assertIn('profile.width to profile.height', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
+
             self.assertIn('Quick Export', (root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').read_text())
             self.assertIn('online.getPageList', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
             self.assertIn('onClickExport = onExportClicked', (presentation/'MangaScreen.kt').read_text())
