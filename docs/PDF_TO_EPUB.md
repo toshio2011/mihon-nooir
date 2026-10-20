@@ -2,12 +2,12 @@
 
 This feature targets the **mixed-content novel** use case: extract **real, selectable/resizable text** from a PDF, while preserving diagrams, floor plans and pictures near their original paragraphs where possible. Think of a mystery novel with text above and below floor-plan drawings, rather than turning the entire book into page screenshots.
 
-**Status:** Experimental stacked draft; NOT in MangaNooir's released/main APK. The implementation requires a successful full Android build, representative book tests and physical XTEink EPUB verification before release.
+> **Preview only:** [v1.0.11 Android CI passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), but mixed-content PDF fidelity and physical XTEink EPUB reading still need real testing. This converter is **not in main v1.0.1**.
 
 ## Steps
 
-1. Open **MangaNooir → More → PDF to EPUB** (only in the experimental PDF branch/build).
-2. Choose a PDF from your phone's file picker.
+1. Open **MangaNooir → More → Nooir Tools → PDF → EPUB · Text + illustrations** (experimental v1.0.11).
+2. Choose a PDF from your phone's file picker, then optionally edit the resulting **book title, author and EPUB filename**.
 3. Select **Reflowable text + illustrations** (the intended default) or **Keep original pages as images**.
 4. Tap **Convert PDF & save EPUB to phone**, select a destination, then check the progress notification.
 5. Or turn on **Folio Nooir → File Transfer** on your XTEink, enter its IP/destination and choose **Convert PDF & send EPUB to XTEink**.
