@@ -15,3 +15,6 @@ java -jar "$tmp/slicing.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
 java -jar "$tmp/reflow.jar"
+
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/PdfReflowLines.kt tests/PdfReflowLinesTest.kt -include-runtime -d "$tmp/pdf-lines.jar"
+java -jar "$tmp/pdf-lines.jar"
