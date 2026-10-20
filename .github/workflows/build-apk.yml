@@ -6,6 +6,11 @@ on:
     branches: [main]
 permissions:
   contents: read
+# Keep only the latest APK build for a rapidly updated draft PR.
+# Other PRs and main use separate refs and remain unaffected.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
