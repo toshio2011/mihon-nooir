@@ -167,6 +167,22 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('allChapters', novel_dialog)
             self.assertIn('Int.MAX_VALUE', novel_dialog)
             self.assertIn('NooirNovelBatchWorker.NAMES', novel_dialog)
+            # Regression from user feedback: missing XTC/XTCH book covers
+            # must not be silently omitted while the manga job reports success.
+            manga_export = (work_dir/'MihonNooirExporter.kt').read_text()
+            self.assertIn('requireNotNull(coverPage(xtcFormat.depth))', manga_export)
+            self.assertIn('yield(cover)', manga_export)
+            self.assertIn('Preparing actual book cover', manga_export)
+            cover_source = (work_dir/'NooirMangaCover.kt').read_text()
+            self.assertIn('imageLooksValid', cover_source)
+            self.assertIn('inJustDecodeBounds = true', cover_source)
+            # Public HTML pages may be WordPress / Elementor or a story's
+            # landing page, which must be distinguished from chapter content.
+            web = (work_dir/'NooirWebArticle.kt').read_text()
+            self.assertIn('elementor-widget-text-editor', web)
+            self.assertIn('story landing/catalog page', web)
+            novel = (work_dir/'NooirWebNovel.kt').read_text()
+            self.assertIn('visibleWattpadPart', novel)
             # The representative 313-page illustrated text PDF has ~28pt line
             # spacing and ~36pt paragraph gaps. A hardcoded 22pt break splits
             # almost every real book line into its own EPUB paragraph.
