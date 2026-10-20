@@ -3,11 +3,11 @@
 [← Repository homepage](../README.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The newest **experimental v1.0.11 APK** lives in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996), but **real phone and XTEink validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
+> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The [**experimental v1.0.11 APK is published**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); its unmerged source is in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996), but **real phone and XTEink validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
 
 ## If this is your first time
 
-1. [**Install MangaNooir and export your first book**](GETTING_STARTED.md) — APK ZIP, Android installation, selection.
+1. [**Install MangaNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.
 2. [**Nooir Tools: six features explained**](NOOIR_TOOLS_QUICK_START.md) — short v1.0.11 user walkthrough.
 3. [**Connect your phone and XTEink over Wi-Fi**](WIFI_TRANSFER.md) — trusted LAN/hotspot and recipient confirmation.
 4. [**FAQ and troubleshooting**](FAQ.md) — solve common mistakes without digging through code.
@@ -33,7 +33,7 @@
 |---|---|
 | [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
 | [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
-| [Illustrated-novel PDF QA checklist](https://github.com/toshio2011/mihon-nooir/blob/feature/queue-isolation-filename-preflight-novel-all/docs/PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
+| [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
 | [Draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) | Current experimental changes, code reviews, tests |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |
 
