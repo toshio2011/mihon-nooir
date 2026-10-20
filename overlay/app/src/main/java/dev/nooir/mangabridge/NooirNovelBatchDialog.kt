@@ -40,6 +40,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     val manager = remember { WorkManager.getInstance(context) }
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
     var links by remember { mutableStateOf("") }
+    var customNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var first by remember { mutableStateOf("1") }
     var last by remember { mutableStateOf("80") }
     var allChapters by remember { mutableStateOf(true) }
@@ -71,6 +72,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
         val job = OneTimeWorkRequestBuilder<NooirNovelBatchWorker>()
             .setInputData(workDataOf(
                 NooirNovelBatchWorker.URLS to urls.toTypedArray(),
+                NooirNovelBatchWorker.NAMES to urls.map { customNames[it].orEmpty() }.toTypedArray(),
                 NooirNovelBatchWorker.OUTPUT_TREE to treeUri?.toString(),
                 NooirNovelBatchWorker.HOST to host.trim(),
                 NooirNovelBatchWorker.FOLDER to folder.trim(),
@@ -110,6 +112,14 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text("Selected stories: " + urls.size + " / 10")
+                Text("Optional: rename each EPUB before conversion. Leave blank to use the story title.")
+                urls.forEach { story ->
+                    OutlinedTextField(value = customNames[story].orEmpty(),
+                        onValueChange = { value -> customNames = customNames + (story to value.take(70)) },
+                        label = { Text("Output name · " + story.take(38)) },
+                        placeholder = { Text("Book title (without .epub)") },
+                        singleLine = true)
+                }
                 androidx.compose.material3.Checkbox(
                     checked = allChapters, onCheckedChange = { allChapters = it },
                     label = null,
@@ -124,7 +134,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                             label = { Text("Last") }, modifier = Modifier.weight(1f), singleLine = true)
                     }
                 }
-                Text("All chapters uses every publicly discoverable chapter. Large stories can take a long time or exceed XTEink's 180 MiB upload limit; save to phone if necessary.")
+                Text("All chapters uses every publicly discoverable chapter. Large stories can take a long time or exceed XTEink's 180 MiB upload limit; save to phone if necessary. Existing EPUB filenames are rejected before any chapters download.")
                 OutlinedTextField(value = host, onValueChange = { host = it },
                     label = { Text("XTEink IP/hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
