@@ -49,7 +49,7 @@ fun main() {
     // A dedicated cover must occupy page zero, while chapter navigation starts at one.
     for ((fmt, first) in listOf(XtcFormat.XTC to p, XtcFormat.XTCH to gray)) {
         val second = QuantizedPage(first.width, first.height,
-            first.levels.map { (fmt.depth - (it.toInt() and 255)).toByte() }.toByteArray(),
+            first.levels.map { ((if (fmt.depth == 1) 1 else 3) - (it.toInt() and 255)).toByte() }.toByteArray(),
             fmt.depth)
         val output = ByteArrayOutputStream()
         val result = XtcCodec.write(fmt, sequenceOf(first, second), output, work,
