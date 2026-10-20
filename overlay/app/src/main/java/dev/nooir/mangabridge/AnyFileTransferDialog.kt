@@ -35,6 +35,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dev.nooir.bridge.ExportFormat
+import dev.nooir.bridge.NooirDeviceProfiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -155,8 +156,9 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     }
     val valid = host.trim().isNotEmpty() && !host.contains('/') &&
         destination.startsWith("/") && !destination.contains("..")
+    val profile = NooirDeviceProfiles.forId(device)
     val running = workInfo?.state == WorkInfo.State.RUNNING || workInfo?.state == WorkInfo.State.ENQUEUED
-    val canQueue = chosen.isNotEmpty() && valid && !running && outputNames.size == chosen.size && outputNames.all { it.isNotBlank() }
+    val canQueue = chosen.isNotEmpty() && profile.xteinkWifi && valid && !running && outputNames.size == chosen.size && outputNames.all { it.isNotBlank() }
     val progress = workInfo?.progress
     val phase = progress?.getString(NooirTransferWorker.KEY_PHASE).orEmpty()
     val item = progress?.getInt(NooirTransferWorker.KEY_INDEX, 0) ?: 0
@@ -292,15 +294,12 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                     singleLine = true,
                     supportingText = { Text("Use / if no Books folder exists.") },
                 )
-                Text("Device")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("X4", "X3").forEach { name ->
-                        FilterChip(selected = device == name,
-                            onClick = { device = name }, label = { Text(name) })
-                    }
+                NooirDevicePicker(device) { id ->
+                    device = id
+                    if (!NooirDeviceProfiles.forId(id).accepts(format)) format = ExportFormat.AUTO
                 }
                 Text("Manga output format")
-                ExportFormat.entries.forEach { option ->
+                ExportFormat.entries.filter(profile::accepts).forEach { option ->
                     FilterChip(
                         selected = format == option,
                         onClick = { format = option },
@@ -313,6 +312,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 if (sendSettings) {
                     MangaConversionSettings(options, onChange = { options = it })
                 }
+                if (!profile.xteinkWifi) Text("Direct Wi-Fi upload is only offered for compatible XTEink firmware. Save/export to the phone, then use the reader’s supported transfer method.")
                 Button(enabled = canQueue, onClick = { enqueue(false) }) {
                     Text("Send " + chosen.size + " original file(s)")
                 }
