@@ -17,6 +17,9 @@ java -jar "$tmp/formats.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt} tests/Epub2Test.kt -include-runtime -d "$tmp/epub2.jar"
 java -jar "$tmp/epub2.jar"
 
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/PdfReflowLines.kt tests/PdfReflowLinesTest.kt -include-runtime -d "$tmp/pdf-reflow.jar"
+java -jar "$tmp/pdf-reflow.jar"
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PageSlicePlanner.kt tests/PageSlicePlannerTest.kt -include-runtime -d "$tmp/slicing.jar"
 java -jar "$tmp/slicing.jar"
 
