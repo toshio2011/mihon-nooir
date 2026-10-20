@@ -33,6 +33,18 @@ jobs:
           name: manganooir-epub2-xtc-xtch-interop-fixtures
           path: tests/generated/*
           if-no-files-found: warn
+      - name: EPUBCheck 5.4.0 on synthetic EPUB 2 output
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 3 -fsSL -o "$RUNNER_TEMP/epubcheck.zip" https://github.com/w3c/epubcheck/releases/download/v5.4.0/epubcheck-5.4.0.zip
+          echo "33350c61038e71dfb3d45a76aed04bf5481e6d5500cb780f6e98db8bbd15a28c  $RUNNER_TEMP/epubcheck.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/epubcheck"
+          unzip -q "$RUNNER_TEMP/epubcheck.zip" -d "$RUNNER_TEMP/epubcheck"
+          JAR=$(find "$RUNNER_TEMP/epubcheck" -name epubcheck.jar -print -quit)
+          test -n "$JAR"
+          java -jar "$JAR" tests/generated/MangaNooir_Epub2_folio_sample.epub
+
       - name: Read upstream pin
         id: pin
         run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
