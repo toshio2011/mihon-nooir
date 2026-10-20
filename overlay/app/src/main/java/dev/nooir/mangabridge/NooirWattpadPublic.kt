@@ -69,8 +69,9 @@ internal object NooirWattpadPublic {
 
     internal fun discover(storyUrl: String): List<NooirWebNovel.Chapter> {
         val id = storyId(storyUrl) ?: return emptyList()
-        val endpoint = "https://www.wattpad.com/api/v3/stories/$id" +
-            "?fields=id,title,parts(id,title,url,draft)"
+        // Public story metadata only. Avoid query-field projections that
+        // may vary between Wattpad deployments or omit public part URLs.
+        val endpoint = "https://www.wattpad.com/api/v3/stories/$id"
         val response = try {
             Jsoup.connect(endpoint).ignoreContentType(true)
                 .userAgent("Mozilla/5.0 (compatible; MangaNooir experimental reader)")
