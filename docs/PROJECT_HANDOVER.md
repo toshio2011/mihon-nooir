@@ -4,7 +4,9 @@
 > **Authoritative repository:** https://github.com/toshio2011/mihon-nooir  
 > **Master roadmap:** https://github.com/toshio2011/mihon-nooir/issues/8  
 > **Reader firmware:** https://github.com/toshio2011/folio-nooir  
-> **Status:** Active experimental development; **not a stable release**. This handover documents observations, not proof of hardware compatibility.
+> **CURRENT STATUS — 20 October 2026:** [**v1.0.11 is publicly released as an experimental prerelease**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). The published APKs come from [successful CI run #39375003996](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) at source commit `343fb29c`. **Draft PR #18 remains unmerged**; the `main` application code is still v1.0.1. User feedback confirms the MangaNooir-generated XTCH cover now displays on Folio Nooir. Cross-firmware, PDF and web-source validation is still incomplete.
+>
+> **Historical snapshot:** The older version, CI, branch and “no release” statements below describe earlier development snapshots, **not the current published prerelease**. Verify new claims against the live release, branches and CI.
 > **Continuation update — experimental v1.0.11:** New stacked draft [PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) on top of #17 implements per-book failure isolation, XTEink/SAF filename preflight, editable output names across converters, and **All public chapters** for web novels. Branch: `feature/queue-isolation-filename-preflight-novel-all`. A previous experimental [CI run 39355414871](https://github.com/toshio2011/mihon-nooir/actions/runs/39355414871) passed and produced an APK; **check the latest v1.0.11 branch SHA and Actions before claiming the final build green**. No source merged to main and no real X4/phone regression tests completed.
 
 
@@ -13,9 +15,9 @@
 
 ## New-chat handoff — start here
 
-Paste this into a new ChatGPT conversation:
+For a new project session, use this current handover:
 
-> Continue **MangaNooir** development from https://github.com/toshio2011/mihon-nooir. **First read `docs/PROJECT_HANDOVER.md` on `main` in full**, then inspect the live GitHub PRs, latest branch commits and CI logs before changing any code. The newest experimental work is `feature/nooir-tools-hub-activity-queue` (1.0.10, not yet PR/CI verified), based on `feature/web-novel-batch-export`; both extend successful 1.0.9 PR #15. Preserve all original Mihon features, the working `main` release and existing docs. Fix and validate the new 1.0.10 tools hub, activity queue and web novel importer; keep web URL → reflowable EPUB and PDF → mixed-content reflowable EPUB work moving. Do not merge/release/flash firmware without permission. Update the roadmap/docs, perform meaningful code batches, check actual Android CI and be clear about remaining physical X4 tests. Do not assume the previous chat's older status is current.
+> Continue **MangaNooir** at https://github.com/toshio2011/mihon-nooir. [Experimental v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is publicly available from APKs compiled at commit `343fb29c` ([draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18)). The `main` application code is still v1.0.1 with the published user guides. Keep Mihon's functionality and existing MangaNooir conversion/queue features intact. No Folio Nooir firmware changes are requested. A user has confirmed an XTCH cover now displays correctly in Folio Nooir. Continue investigating actual app/firmware compatibility, conversions and web/PDF quality on feature branches; do not merge/release/flash without user approval. Inspect live CI before describing a build as successful.
 
 **This file is the handover snapshot; the repository/CI are the source of truth.** GitHub state can change immediately. Check the branch SHA and build results again in your new session.
 
