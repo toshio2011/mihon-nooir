@@ -180,7 +180,9 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 if (message.isNotBlank()) Text(message)
                 if (workInfo != null) {
                     Text("Transfer: " + when (workInfo?.state) {
-                        WorkInfo.State.SUCCEEDED -> "All files finished successfully"
+                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(workInfo!!))
+                            "Finished with errors: " + workInfo!!.outputData.getString(NooirTransferWorker.KEY_ERROR).orEmpty()
+                            else "All files finished successfully"
                         WorkInfo.State.FAILED -> "Failed: " + workInfo?.outputData
                             ?.getString(NooirTransferWorker.KEY_ERROR).orEmpty()
                         WorkInfo.State.CANCELLED -> "Cancelled"
@@ -198,9 +200,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             Text("Preparing / converting. No accurate percentage available yet.")
                         }
-                        TextButton(onClick = { workId?.let(manager::cancelWorkById) }) {
-                            Text("Cancel transfer")
-                        }
+                        Text("To cancel processing, use Nooir Tools → Activity Queue. Cancelling the entire chain requires confirmation.")
                         Text("You can press Back or switch apps. The transfer continues in the background.")
                     }
                 }
@@ -239,7 +239,9 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                                     if (chapters > 0) " · chapter " + currentChapter + "/" + chapters else ""
                             WorkInfo.State.ENQUEUED -> "Queued · waiting for worker"
                             WorkInfo.State.BLOCKED -> "Waiting for previous manga to finish"
-                            WorkInfo.State.SUCCEEDED -> "Completed successfully"
+                            WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(manga))
+                                "Failed: " + manga.outputData.getString(NooirMangaExportWorker.KEY_ERROR).orEmpty()
+                                else "Completed successfully"
                             WorkInfo.State.FAILED -> "Failed: " +
                                 manga.outputData.getString(NooirMangaExportWorker.KEY_ERROR)
                                     .orEmpty().ifBlank { "Please retry" }
@@ -257,19 +259,11 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                                 Text("  Processing; total page count may not yet be known")
                             }
                         }
-                        if (manga.state == WorkInfo.State.RUNNING ||
-                            manga.state == WorkInfo.State.ENQUEUED ||
-                            manga.state == WorkInfo.State.BLOCKED
-                        ) {
-                            TextButton(onClick = { manager.cancelWorkById(manga.id) }) {
-                                Text("Cancel this manga export")
-                            }
-                        }
                     }
                     if (ordered.size > 12) {
                         Text("…and " + (ordered.size - 12) + " older queue records")
                     }
-                    Text("Note: Canceling a job in a dependent queue can also stop later waiting jobs. If that happens, add them again.")
+                    Text("Use Nooir Tools → Activity Queue to cancel the whole chain with confirmation. A failed export no longer blocks later books.")
                 }
                 OutlinedTextField(
                     value = host,
