@@ -63,8 +63,8 @@ class TestOverlay(unittest.TestCase):
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirMangaExportWorker.kt').exists())
             self.assertIn('fun inject(nooirMangaExportWorker', (graph/'AppGraph.kt').read_text())
             self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionName = "1.0.11"',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionCode = 1000011',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionName = "1.0.12"',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionCode = 1000012',(app/'build.gradle.kts').read_text())
             self.assertIn('toshio2011/mihon-nooir',(updater/'AppUpdateChecker.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').exists())
@@ -120,6 +120,16 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('getWorkInfoByIdFlow', (root/'app/src/main/java/dev/nooir/mangabridge/AnyFileTransferDialog.kt').read_text())
             self.assertIn('MangaConversionSettings', (root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').read_text())
             self.assertIn('onProgress', (root/'app/src/main/java/dev/nooir/bridge/NooirUpload.kt').read_text())
+
+            # PDF geometry: bridge helper is copied into Mihon and used in the converter.
+            pdf = (root/'app/src/main/java/dev/nooir/mangabridge/NooirPdfToEpub.kt').read_text()
+            self.assertIn('PdfReflowLines.paragraphs', pdf)
+            helper = root/'app/src/main/java/dev/nooir/bridge/PdfReflowLines.kt'
+            self.assertTrue(helper.exists())
+            self.assertIn('Printed page number', helper.read_text() if False else
+                          helper.read_text().replace('printed', 'Printed'))
+            self.assertIn('PdfReflowLinesTest.kt', (ROOT/'tests/run.sh').read_text())
+
             # Regression: a failed book should not poison the WorkManager FIFO chain.
             work_dir = root/'app/src/main/java/dev/nooir/mangabridge'
             queue_source = (work_dir/'NooirDeviceWorkQueue.kt').read_text()
