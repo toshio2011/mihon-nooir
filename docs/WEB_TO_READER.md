@@ -1,6 +1,6 @@
 # Web link → EPUB (experimental v1.0.11)
 
-> **Preview only:** The v1.0.11 [Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed automated checks. This workflow is **not on the v1.0.1 main app**, and phone/XTEink testing is still pending. Conversion runs on the Android phone; no AI/OCR API.
+> **Preview only:** The v1.0.11 [Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed automated checks. This workflow is **not on the v1.0.1 main app**, and phone/XTEink testing is still pending. Conversion runs on the Android phone; no AI/OCR API.
 
 ## Convert a website link to EPUB
 
@@ -60,7 +60,7 @@ See [all documentation](https://github.com/toshio2011/mihon-nooir/blob/main/docs
 
 A site such as `https://syazwandaniial.com/rengkang` may look readable in a normal browser while a direct public-HTML request to the converter contains very little text. This can happen when the content lives inside JavaScript-rendered components, a logged-in session, a separate embedded frame, or a site-builder layout the generic parser doesn't recognize. **Seeing text in your browser doesn't by itself establish that the same text is available in public HTML.**
 
-Draft [PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) expands the public HTML extractor with ordinary mobile-browser request headers, additional site-builder article containers and openly supplied structured `articleBody` text. It also reports approximately how much readable HTML text arrived, which helps separate "missing content" from a conversion defect. These changes need a fresh phone-side test; the live Rengkang page could not be independently inspected from the development environment.
+The latest preview build passed Android CI, but Rengkang still needs an actual phone-side test. Draft [PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) expands the public HTML extractor with ordinary mobile-browser request headers, additional site-builder article containers and openly supplied structured `articleBody` text. It also reports approximately how much readable HTML text arrived, which helps separate "missing content" from a conversion defect. These changes need a fresh phone-side test; the live Rengkang page could not be independently inspected from the development environment.
 
 No sign-in session, site protection or paid access is bypassed. If a provider offers an authorized EPUB, save it and use **Send & Convert files** instead. If the latest preview still cannot read an ordinary publicly visible article, send a screenshot showing its page layout and the **copied error message** (not its private content or cookies), so a specific extractor can be tested.
 

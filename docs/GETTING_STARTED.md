@@ -9,13 +9,13 @@ MangaNooir is an **experimental Android app based on the full Mihon reader**. Br
 | Build | Features you can expect | Status |
 |---|---|---|
 | **Main code, v1.0.1** | Mihon plus downloaded-manga export, Save file and basic XTEink Wi-Fi send | Baseline integration; **not a stable release** |
-| **Experimental v1.0.11 (draft PR #18)** | Adds **Nooir Tools** hub: phone files, queue, PDF, web links, multiple links into one EPUB, public web novels, advanced manga settings and device browser | [**Android CI green + APK artifact**](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479); **physical tests pending** |
+| **Experimental v1.0.11 (draft PR #18)** | Adds **Nooir Tools** hub: phone files, queue, PDF, web links, multiple links into one EPUB, public web novels, advanced manga settings and device browser | [**Android CI green + APK artifact**](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996); **physical tests pending** |
 
 **There are no published stable MangaNooir GitHub Releases yet.** An Android CI success confirms the build and automated format checks, **not** that every website, PDF or e-reader behaves correctly.
 
 ### Install the experimental APK
 
-1. Open the [v1.0.11 GitHub Actions run](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479). Sign in to GitHub if the Artifacts section asks you to.
+1. Open the [v1.0.11 GitHub Actions run](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996). Sign in to GitHub if the Artifacts section asks you to.
 2. Scroll to **Artifacts** and download `mihon-nooir-foss-apk`. It's a ZIP of Android build output.
 3. Extract the ZIP on your phone. Install the suitable **signed** APK (commonly `arm64-v8a` for recent Android phones), not an unsigned variant.
 4. Let Android grant temporary **Install unknown apps** permission to your chosen file manager when prompted.

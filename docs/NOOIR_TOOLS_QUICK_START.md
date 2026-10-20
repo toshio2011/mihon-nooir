@@ -3,7 +3,7 @@
 [← MangaNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
 
 > [!IMPORTANT]
-> These steps describe the **v1.0.11 experimental Android preview**, not the **v1.0.1 code on `main`**. The [v1.0.11 APK build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed automated checks, **not physical phone/XTEink testing**. There is no stable MangaNooir release yet.
+> These steps describe the **v1.0.11 experimental Android preview**, not the **v1.0.1 code on `main`**. The [v1.0.11 APK build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed automated checks, **not physical phone/XTEink testing**. There is no stable MangaNooir release yet.
 
 **Already using normal Mihon?** MangaNooir is a separate test app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
 
@@ -97,6 +97,6 @@ The confirmed **Cancel entire Nooir queue** action stops queued jobs too; cancel
 
 ## Still being verified
 
-A successful [Android CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) confirms the preview compiled and its automated format/overlay tests passed. It **does not prove** real Wattpad/Rengkang extraction, accurate output from every PDF, correct e-ink thumbnails, or transfer safety on a physical X3/X4. Please report your build, input format/source, device firmware, destination and exact error message (without sharing copyrighted pages or credentials).
+A successful [Android CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) confirms the preview compiled and its automated format/overlay tests passed. It **does not prove** real Wattpad/Rengkang extraction, accurate output from every PDF, correct e-ink thumbnails, or transfer safety on a physical X3/X4. Please report your build, input format/source, device firmware, destination and exact error message (without sharing copyrighted pages or credentials).
 
 [Draft PR #18 / development status](https://github.com/toshio2011/mihon-nooir/pull/18) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)

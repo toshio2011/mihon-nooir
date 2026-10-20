@@ -2,7 +2,7 @@
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)
 
-> **Version:** Main-branch code is **v1.0.1**. The newer [experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed CI, but **physical phone/XTEink testing is still pending**. Features under **Nooir Tools** require the experimental build.
+> **Version:** Main-branch code is **v1.0.1**. The newer [experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed CI, but **physical phone/XTEink testing is still pending**. Features under **Nooir Tools** require the experimental build.
 
 ### Where is the chapter picker?
 
@@ -66,7 +66,7 @@ The experimental tools use background WorkManager jobs, and you can navigate awa
 
 ### Where can I get the app? Can it replace regular Mihon?
 
-There are **no published stable GitHub Releases** yet. Download the [successful v1.0.11 GitHub Actions APK artifact](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479). MangaNooir has a separate package identity and can coexist with normal Mihon. Back up MangaNooir before changing debug builds, because signing keys may differ. [Install guide](GETTING_STARTED.md)
+There are **no published stable GitHub Releases** yet. Download the [successful v1.0.11 GitHub Actions APK artifact](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996). MangaNooir has a separate package identity and can coexist with normal Mihon. Back up MangaNooir before changing debug builds, because signing keys may differ. [Install guide](GETTING_STARTED.md)
 
 ### Is MangaNooir official, and does it include free manga?
 

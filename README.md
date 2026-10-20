@@ -15,7 +15,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MangaNooir is experimental and unofficial.** The `main` branch currently contains the **v1.0.1 baseline**, while the newer **v1.0.11 feature set is in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18)**. The [v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed automated tests and produced an APK, but real-world source compatibility, PDF layout fidelity, phone operations and physical X3/X4 transfer/reading are **not yet verified**. There is no published stable GitHub Release. **Back up before replacing any test APK.**
+> **MangaNooir is experimental and unofficial.** The `main` branch currently contains the **v1.0.1 baseline**, while the newer **v1.0.11 feature set is in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18)**. The [v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed automated tests and produced an APK, but real-world source compatibility, PDF layout fidelity, phone operations and physical X3/X4 transfer/reading are **not yet verified**. There is no published stable GitHub Release. **Back up before replacing any test APK.**
 
 ## What can MangaNooir do?
 
@@ -39,7 +39,7 @@ MangaNooir is built as a minimal Android overlay on the **full [Mihon](https://g
 
 There are **no stable Releases to install yet**. For testing:
 
-1. Open the [latest verified v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) (you may need to sign into GitHub).
+1. Open the [latest verified v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) (you may need to sign into GitHub).
 2. Scroll to **Artifacts**, download **`mihon-nooir-foss-apk`**, and extract the ZIP.
 3. Choose a suitable **signed** APK for your Android architecture (normally `arm64-v8a` on recent phones), then install it using Android's file manager.
 4. Open **MangaNooir**. It has a separate app identity and can coexist with ordinary Mihon.

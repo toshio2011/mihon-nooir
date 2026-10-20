@@ -3,7 +3,7 @@
 [← Repository homepage](../README.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The newest **experimental v1.0.11 APK** lives in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), but **real phone and XTEink validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
+> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The newest **experimental v1.0.11 APK** lives in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996), but **real phone and XTEink validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
 
 ## If this is your first time
 
