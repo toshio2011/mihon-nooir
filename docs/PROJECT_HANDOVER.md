@@ -1,5 +1,11 @@
 # MangaNooir — project handover and continuation guide
 
+
+> [!IMPORTANT]
+> **LATEST HANDOVER — 21 OCTOBER 2026:** Read **[docs/HANDOVER_2026-10-21.md](HANDOVER_2026-10-21.md)** first. It contains the current PR, branch, CI, EPUB 2, XTC/XTCH, device-profile, test and next-step status. The summary and status table later in **this** file are a historical snapshot and must NOT be interpreted as the current state.
+>
+> **Current facts:** Public prerelease remains **v1.0.11**; `main` application source remains v1.0.1. [Draft PR #21](https://github.com/toshio2011/mihon-nooir/pull/21) (experimental v1.0.12 multiprovider + EPUB 2/XTC/XTCH) is **NOT merged**, and its parent [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) is **NOT merged**. The latest v1.0.12 head `df151e9` passed [full Android build + EPUBCheck CI #39452868331](https://github.com/toshio2011/mihon-nooir/actions/runs/39452868331). **Do not merge/release or modify Folio Nooir without approval.**
+
 > **Last audited:** 20 October 2026 (GitHub state observed after the 19 October development session).  
 > **Authoritative repository:** https://github.com/toshio2011/mihon-nooir  
 > **Master roadmap:** https://github.com/toshio2011/mihon-nooir/issues/8  
@@ -13,11 +19,9 @@
 > **Continuation update (20 October 2026):** Draft [PR #16 — web novel batches](https://github.com/toshio2011/mihon-nooir/pull/16) and [PR #17 — Nooir Tools Hub](https://github.com/toshio2011/mihon-nooir/pull/17) have now been opened on the correct experimental stacked bases. The initial #17 CI failed due to obsolete menu assertions in the overlay smoke test; corrected at [3a7501d](https://github.com/toshio2011/mihon-nooir/commit/3a7501de97b1dc63c2130b0bc1fd68309a57c46d), with the updated tests passing. [#16 Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39340353433) and [#17 Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39340524938) were still in progress when this note was written. Historical references below to both branches being unPR'd now refer to the earlier snapshot. Verify latest run, SHA and artifact before declaring either build verified; no merge, release or physical device test has occurred.
 
 
-## New-chat handoff — start here
+## New-chat handoff — start here (updated 21 October 2026)
 
-For a new project session, use this current handover:
-
-> Continue **MangaNooir** at https://github.com/toshio2011/mihon-nooir. [Experimental v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is publicly available from APKs compiled at commit `343fb29c` ([draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18)). The `main` application code is still v1.0.1 with the published user guides. Keep Mihon's functionality and existing MangaNooir conversion/queue features intact. No Folio Nooir firmware changes are requested. A user has confirmed an XTCH cover now displays correctly in Folio Nooir. Continue investigating actual app/firmware compatibility, conversions and web/PDF quality on feature branches; do not merge/release/flash without user approval. Inspect live CI before describing a build as successful.
+**For new development sessions, use the [standalone current handover](HANDOVER_2026-10-21.md).** It includes a self-contained copy-and-paste prompt, precise PR #21 SHA and green CI link, test boundaries and a prioritized continuation plan. This older document preserves historical experiments and decisions only.
 
 **This file is the handover snapshot; the repository/CI are the source of truth.** GitHub state can change immediately. Check the branch SHA and build results again in your new session.
 
