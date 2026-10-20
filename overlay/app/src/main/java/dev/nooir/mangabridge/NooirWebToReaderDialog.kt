@@ -103,7 +103,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
                 val percent = state?.progress?.getInt(NooirWebExportWorker.PERCENT, -1) ?: -1
                 state?.let { info ->
                     Text(when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> "Article EPUB saved successfully"
+                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Failed: " + info.outputData.getString(NooirWebExportWorker.ERROR).orEmpty() else "Article EPUB saved successfully"
                         WorkInfo.State.FAILED -> "Failed: " +
                             info.outputData.getString(NooirWebExportWorker.ERROR).orEmpty()
                         WorkInfo.State.CANCELLED -> "Canceled"
@@ -115,9 +115,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         progress = { if (percent >= 0) percent.coerceIn(0, 100) / 100f else 0f },
                     )
-                    TextButton(onClick = { workId?.let(manager::cancelWorkById) }) {
-                        Text("Cancel conversion")
-                    }
+                    Text("Cancel requests are managed in Nooir Tools → Activity Queue; whole-queue cancellation requires confirmation.")
                 }
                 Text("Experimental: works best on ordinary HTML articles. Script-only pages, paywalls and unsupported web image types may not import. EPUB text stays selectable and resizable. No AI or OCR is used.")
             }
