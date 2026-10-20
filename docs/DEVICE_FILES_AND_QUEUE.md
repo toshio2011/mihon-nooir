@@ -64,3 +64,19 @@ This guide covers in-progress code; Android CI and physical device checks must p
 - Existing files are never intentionally overwritten by the new destination-check path; Android's Save As document picker remains in control of explicitly chosen phone filenames.
 
 **Still experimental:** Android CI and real X4 tests must pass. Device-side atomic no-overwrite behavior, duplicate-case handling, SD-full failures and simultaneous browser uploads need testing.
+
+## Troubleshooting XTC/XTCH covers (20 October preview)
+
+Folio Nooir's XTC/XTCH reader builds its shelf cover **from page 0** of the exported file. An XTC header thumbnail-offset field or a separately uploaded JPEG is **not** required for the existing reader. However, the XTEink **shelf thumbnail** is also cached: on the reader, use **Retrieve All Book Details** to generate missing thumbnails for newly uploaded files.
+
+For new MangaNooir previews, XTC/XTCH exports now require the manga's actual cover to decode and become first page. If Mihon's custom, cached or public source cover cannot be decoded, the job returns an actionable cover error instead of being marked complete with the first chapter page as an accidental cover.
+
+When verifying:
+
+1. Make sure the manga cover is visible in Mihon first. For a missing cover, revisit/refresh its manga details, then retry.
+2. Export **one** XTC or XTCH book to a **new filename**. Existing names are not overwritten by the experimental collision guard.
+3. Open the generated book on XTEink: **page 1 should be the series cover**, followed by selected chapters.
+4. In Folio Nooir's Library, run **Retrieve All Book Details** if the shelf still shows no thumbnail. Existing thumbnail cache entries may need a refresh.
+5. Verify both formats separately, with X3/X4 output settings, and record if the cover is missing in the book versus missing *only on the shelf*.
+
+The existing reader calculates thumbnails from first-page data using native cache storage. This has not yet been physically confirmed with a new MangaNooir build; no firmware-side changes were merged.
