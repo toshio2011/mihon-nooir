@@ -1,24 +1,40 @@
-# MangaNooir guides
+# MangaNooir — user guides
 
-[← Main README](../README.md)
+[← Repository homepage](../README.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
-Choose the walkthrough that matches what you're trying to do:
+> [!IMPORTANT]
+> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The newest **experimental v1.0.11 APK** lives in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), but **real phone and XTEink validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
 
-| Guide | Covers |
+## If this is your first time
+
+1. [**Install MangaNooir and export your first book**](GETTING_STARTED.md) — APK ZIP, Android installation, selection.
+2. [**Nooir Tools: six features explained**](NOOIR_TOOLS_QUICK_START.md) — short v1.0.11 user walkthrough.
+3. [**Connect your phone and XTEink over Wi-Fi**](WIFI_TRANSFER.md) — trusted LAN/hotspot and recipient confirmation.
+4. [**FAQ and troubleshooting**](FAQ.md) — solve common mistakes without digging through code.
+
+## Guides by what you want to do
+
+| I want to… | Read this |
 |---|---|
-| **[Project handover — live development status](PROJECT_HANDOVER.md)** | Current branches/PRs/CI, newest 1.0.10 work, known gaps and new-chat continuation instructions |
-| [Getting started](GETTING_STARTED.md) | Choose a build, install the APK, and export a first book |
-| **[Select chapters for export](CHAPTER_SELECTION.md)** | Long-press/tap selection, select-all, normal vs Quick Export, example ranges, common mistakes |
-| [Wi-Fi transfer to XTEink](WIFI_TRANSFER.md) | Same LAN or reader hotspot, IP setup, progress stages, failure troubleshooting |
-| [Formats and conversion](CONVERSION.md) | XTC, XTCH, EPUB, CBZ, metadata, presets, reading order |
-| [FAQ](FAQ.md) | Fast answers to common questions |
-| [Build/update policy](UPDATES.md) | Versioning, pinned upstream, APK signing and app updates |
-| [Experimental landscape & page overlap](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/ORIENTATION_OVERLAP.md) | Portrait/landscape and adjustable overlapping page cuts |
-| [Experimental web link to EPUB](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/WEB_TO_READER.md) | Paste a public article URL, reflow text/images and save/send |
-| [Experimental PDF to EPUB](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/PDF_TO_EPUB.md) | Real selectable PDF text + inline illustrations, scanned-page fallback, no AI/OCR |
-| [Experimental XTEink file browsing](https://github.com/toshio2011/mihon-nooir/blob/feature/device-files-browser-and-queue/docs/DEVICE_FILES_AND_QUEUE.md) | Read-only SD folder view and existing full browser file manager |
-| [Experimental XTC cover/synopsis design](https://github.com/toshio2011/mihon-nooir/blob/feature/xtc-cover-synopsis/docs/XTC_METADATA.md) | Experimental 1.0.5 cover page, embedded synopsis and firmware interoperability |
+| Pick certain manga chapters instead of the entire series | [Chapter selection and Quick Export](CHAPTER_SELECTION.md) |
+| Convert manga into XTC, XTCH, EPUB or CBZ | [Formats and conversion](CONVERSION.md) |
+| Read portrait/landscape and overlapping manga pages | [Orientation and overlap](ORIENTATION_OVERLAP.md) |
+| Convert one public webpage/article to EPUB | [Web link → EPUB](WEB_TO_READER.md) |
+| **Combine multiple webpages into one EPUB** | [Multi-link EPUB / web novels](WEB_NOVELS.md#new-combine-individual-webpages-into-one-epub-experimental-v1011) |
+| Turn all discoverable public web-novel chapters into EPUB | [Web novels, batch import and All chapters](WEB_NOVELS.md) |
+| Convert PDF novels with **selectable text + illustrations** | [PDF → EPUB guide](PDF_TO_EPUB.md) |
+| Send phone files or monitor conversions | [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) |
+| See queue history, rename an existing destination file, fix missing cover | [Queue / XTEink files / covers](DEVICE_FILES_AND_QUEUE.md) |
+| Understand XTC/XTCH cover and synopsis fields | [XTC/XTCH metadata and Folio Nooir](XTC_METADATA.md) |
 
-**Version reminder:** `main` still contains the working **1.0.1** feature set. Experimental **1.0.4–1.0.9** branch builds have passed GitHub CI, but are not stable or hardware-verified. **1.0.10 web novel and Nooir Tools branches exist but have no verified CI runs or released APKs yet.** Start from the [current audited handover](PROJECT_HANDOVER.md). Features listed in preview guides may not be available in 1.0.1.
+## For contributors and testers
 
-For open features, device compatibility testing, and planned automatic chapter/volume splitting, see [roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8).
+| Document | Purpose |
+|---|---|
+| [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
+| [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
+| [Illustrated-novel PDF QA checklist](https://github.com/toshio2011/mihon-nooir/blob/feature/queue-isolation-filename-preflight-novel-all/docs/PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
+| [Draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) | Current experimental changes, code reviews, tests |
+| [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |
+
+**Reminder:** A successful CI build doesn't establish that an individual public website exposes readable chapters, that PDF text reflows flawlessly, or that XTC/XTCH covers are visible on physical XTEink hardware. The app contains no manga, bundled manga extensions, AI OCR or access-control bypass.
