@@ -26,7 +26,7 @@ object NooirWebPageBook {
         require(urls.isNotEmpty()) { "Add at least one public chapter URL" }
         require(bookTitle.isNotBlank()) { "Enter a book title" }
         require(urls.distinct().size == urls.size) { "Remove repeated chapter URLs" }
-        val safeUrls = urls.map(NooirWebArticle::publicHttps)
+        val safeUrls = urls.map { NooirWebArticle.publicHttps(it) }
         val first = firstPage ?: NooirWebArticle.load(safeUrls.first())
         val existing = NooirWebArticle.metadata(first)
         val meta = existing.copy(
