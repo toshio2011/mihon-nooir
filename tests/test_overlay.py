@@ -209,7 +209,21 @@ class TestOverlay(unittest.TestCase):
             # landing page, which must be distinguished from chapter content.
             web = (work_dir/'NooirWebArticle.kt').read_text()
             self.assertIn('elementor-widget-text-editor', web)
-            self.assertIn('story landing/catalog page', web)
+            self.assertIn('additional text using JavaScript', web)
+            self.assertIn('application/ld+json', web)
+            self.assertIn('articleBody', web)
+            self.assertIn('w-richtext', web)
+            # Wattpad: public story metadata may list chapters that the
+            # JS-powered HTML landing page does not expose.
+            wattpad = (work_dir/'NooirWattpadPublic.kt').read_text()
+            self.assertIn('/api/v3/stories/', wattpad)
+            self.assertIn('fromPublicStoryJson', wattpad)
+            self.assertIn('optJSONArray("parts")', wattpad)
+            self.assertIn('!part.optBoolean("draft")', wattpad)
+            self.assertIn('NooirWattpadPublic.discover(storyUrl)', novel)
+            self.assertIn('NooirWebArticle.appendChapter', novel)
+            self.assertNotIn('storytext?id=', wattpad)
+            self.assertNotIn('Cookie', wattpad)
             novel = (work_dir/'NooirWebNovel.kt').read_text()
             self.assertIn('visibleWattpadPart', novel)
             # The representative 313-page illustrated text PDF has ~28pt line
