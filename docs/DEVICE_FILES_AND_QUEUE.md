@@ -51,7 +51,7 @@ Folio Nooir generates XTC/XTCH cover thumbnails from **the first page of the boo
 3. If page one is correct but a reader's **library shelf** lacks a thumbnail, refresh its thumbnail cache (on Folio Nooir: **Retrieve All Book Details**). MangaNooir-generated XTCH covers have been reported working on Folio Nooir.
 4. If the first book page is incorrect, please report the source, format (XTC or XTCH), phone build and Folio Nooir firmware version. Refreshing thumbnails won't fix a wrongly exported first page.
 
-This needs a physical X4/X3 test; the current automated XTC/XTCH tests only check the byte format and first-page/chapter indexing.
+A MangaNooir XTCH shelf cover is now reported visible on Folio Nooir. Continue testing different firmware versions and actual reading/navigation; automated XTC/XTCH tests only check the byte format and first-page/chapter indexing.
 
 [More XTC metadata detail](XTC_METADATA.md)
 
