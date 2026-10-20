@@ -8,14 +8,15 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /** Already processed page image, not a manga-source URL. No server required. */
-data class ArchivePage(val chapter: String, val imagePng: ByteArray, val width: Int, val height: Int)
+data class ArchivePage(val chapter: String, val imagePng: ByteArray, val width: Int, val height: Int, val isCover: Boolean = false)
 
 /** EPUB 3 fixed-layout / CBZ writing with metadata embedded in the formats readers recognize.
  * Page arrays are processed one at a time so a long comic does not live in RAM.
  */
 object BookArchiveWriter {
     fun write(format: ExportFormat, pages: Sequence<ArchivePage>, output: OutputStream, meta: ExtendedMetadata): Int {
-        require(format == ExportFormat.EPUB || format == ExportFormat.CBZ)
+        require(format == ExportFormat.EPUB || format == ExportFormat.EPUB2 || format == ExportFormat.CBZ)
+        if (format == ExportFormat.EPUB2) return Epub2Writer.write(pages, output, meta)
         ZipOutputStream(output).use { zip ->
             if (format == ExportFormat.EPUB) {
                 val mimetype = "application/epub+zip".toByteArray(UTF_8)
