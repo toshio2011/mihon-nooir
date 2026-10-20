@@ -81,11 +81,12 @@ object NooirWebNovel {
     fun convert(
         storyUrl: String, output: File,
         startAt: Int = 1, endAt: Int = Int.MAX_VALUE,
+        preloadedPage: Document? = null,
         onStage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ): Result {
         require(startAt >= 1 && endAt >= startAt) { "Invalid chapter range" }
         onStage(0, 0, "Checking publicly available story")
-        val page = NooirWebArticle.load(storyUrl)
+        val page = preloadedPage ?: NooirWebArticle.load(storyUrl)
         val meta = NooirWebArticle.metadata(page)
         val chapterLinks = discover(page)
         if (chapterLinks.isEmpty()) {
