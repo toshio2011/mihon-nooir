@@ -102,12 +102,26 @@ object NooirWebNovel {
         onStage(0, 0, "Checking publicly available story")
         val page = preloadedPage ?: NooirWebArticle.load(storyUrl)
         val meta = NooirWebArticle.metadata(page)
-        val chapterLinks = discover(page)
+        val wattpadStory = NooirWattpadPublic.storyId(storyUrl) != null
+        // A Firefox WebToEpub parser can see Wattpad's chapter metadata even
+        // when the story HTML has no <a> chapter links. Try only the public
+        // metadata response; if it is blocked, use any truly visible HTML
+        // chapter links, not a fake synopsis-only EPUB.
+        val htmlChapters = discover(page)
+        val chapterLinks = if (wattpadStory) {
+            runCatching { NooirWattpadPublic.discover(storyUrl) }.getOrElse { err ->
+                if (htmlChapters.isNotEmpty()) htmlChapters
+                else error("Wattpad chapter discovery failed: " +
+                    (err.message ?: "public story metadata unavailable") +
+                    " No EPUB was generated.")
+            }
+        } else htmlChapters
         if (chapterLinks.isEmpty()) {
             require(startAt == 1) { "This page has no visible chapter list; use chapter 1 or a directly readable chapter link." }
-            if (URI(page.location()).host.lowercase().endsWith("wattpad.com") &&
-                URI(page.location()).path.startsWith("/story/")) {
-                error("Wattpad's story page does not expose its chapter list as public HTML to this importer. No book was generated; try publicly readable chapter URLs or an authorized EPUB export.")
+            if (wattpadStory) {
+                error("No publicly readable Wattpad chapters were found. " +
+                    "An in-browser extension may use the browser's page context; " +
+                    "this Android importer does not take Firefox sessions or login tokens.")
             }
         }
         val chosen = if (chapterLinks.isEmpty()) {
