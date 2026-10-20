@@ -116,6 +116,8 @@ object NooirPdfToEpub {
         context: Context, pdf: File, output: File,
         mode: Mode = Mode.MIXED,
         titleHint: String? = null,
+        titleOverride: String? = null,
+        authorOverride: String? = null,
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ) {
         require(pdf.isFile && pdf.length() in 1..(100L * 1024 * 1024)) {
@@ -127,10 +129,12 @@ object NooirPdfToEpub {
             val total = book.numberOfPages
             require(total in 1..600) { "PDF page count must be between 1 and 600" }
             val info = book.documentInformation
-            val title = info.title?.takeIf { it.isNotBlank() }
+            val title = titleOverride?.trim()?.takeIf { it.isNotBlank() }
+                ?: info.title?.takeIf { it.isNotBlank() }
                 ?: titleHint?.substringBeforeLast('.', titleHint).orEmpty()
                     .ifBlank { pdf.nameWithoutExtension.ifBlank { "Imported PDF" } }
-            val author = info.author.orEmpty()
+            val author = authorOverride?.trim()?.takeIf { it.isNotBlank() }
+                ?: info.author.orEmpty()
             ParcelFileDescriptor.open(pdf, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
                 PdfRenderer(fd).use { renderer ->
                     ReflowEpubWriter.write(output, ReflowMetadata(title, author,
