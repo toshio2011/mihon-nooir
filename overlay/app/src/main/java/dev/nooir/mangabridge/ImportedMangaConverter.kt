@@ -101,6 +101,7 @@ object ImportedMangaConverter {
         onStage: (String) -> Unit = {},
         onUploadProgress: (Long, Long) -> Unit = { _, _ -> },
         options: MangaConversionOptions = MangaConversionOptions(),
+        outputBaseOverride: String? = null,
     ): Result = withContext(Dispatchers.IO) {
         require(picked.isManga) { "This file is not a supported manga image or CBZ archive" }
         if (picked.bytes != null) require(picked.bytes <= 512L * 1024 * 1024) {
@@ -118,9 +119,7 @@ object ImportedMangaConverter {
         val tempFolder = File(context.cacheDir, "manganooir-import-" + UUID.randomUUID()).apply {
             check(mkdirs()) { "Cannot create conversion cache" }
         }
-        val filename = baseTitle.take(70).map { c ->
-            if (c.isLetterOrDigit() && c.code < 128 || c in listOf('-', '_')) c else '_'
-        }.joinToString("").ifBlank { "Manga" }
+        val filename = NooirDestinationGuard.base(outputBaseOverride?.takeIf { it.isNotBlank() } ?: baseTitle, "Manga")
         val output = File(tempFolder, filename + "." + actual.extension)
         try {
             val count: Int
