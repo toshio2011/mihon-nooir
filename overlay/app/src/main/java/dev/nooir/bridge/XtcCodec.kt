@@ -153,8 +153,11 @@ object XtcCodec {
             for (c in resolvedChapters) {
                 val bytes = ByteArray(96)
                 setFixedUtf8(bytes, 0, 80, c.name)
-                setU16(bytes, 80, c.firstPage)
-                setU16(bytes, 82, c.lastPage)
+                // Folio Nooir's parser expects 1-based chapter indexes and
+                // subtracts 1 during parsing. The zero-based page table and
+                // metadata coverPage index stay untouched.
+                setU16(bytes, 80, c.firstPage + 1)
+                setU16(bytes, 82, c.lastPage + 1)
                 output.write(bytes)
             }
             var pos = dataOffset
