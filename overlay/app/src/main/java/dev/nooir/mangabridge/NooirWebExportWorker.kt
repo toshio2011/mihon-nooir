@@ -46,7 +46,7 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
         val folder = inputData.getString(FOLDER) ?: "/Books"
         if (link.isBlank() || (destination == null && (host.isBlank() ||
             !folder.startsWith("/") || folder.contains("..")))) {
-            return Result.failure(Data.Builder().putString(ERROR, "Missing URL or destination").build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, "Missing URL or destination"))
         }
         if (Build.VERSION.SDK_INT >= 26) notices.createNotificationChannel(NotificationChannel(
             NooirTransferWorker.CHANNEL_ID, "MangaNooir file transfers", NotificationManager.IMPORTANCE_LOW,
@@ -97,7 +97,7 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
                 .setContentText(message.take(100))
                 .setSmallIcon(android.R.drawable.stat_notify_error)
                 .setAutoCancel(true).build())
-            return Result.failure(Data.Builder().putString(ERROR, message).build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, message))
         } finally { temp.delete() }
     }
 }
