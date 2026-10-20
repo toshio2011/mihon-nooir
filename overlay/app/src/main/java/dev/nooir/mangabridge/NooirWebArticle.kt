@@ -3,6 +3,11 @@ package dev.nooir.mangabridge
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowMetadata
 import org.jsoup.Jsoup
+import org.json.JSONArray
+import org.json.JSONObject
+import org.json.JSONTokener
+import org.jsoup.nodes.Element
+import org.jsoup.parser.Tag
 import org.jsoup.nodes.Document
 import org.jsoup.safety.Safelist
 import java.io.File
@@ -78,6 +83,46 @@ object NooirWebArticle {
         language = doc.selectFirst("html")?.attr("lang")?.take(16)?.ifBlank { "en" } ?: "en",
     )
 
+    /**
+     * Some public article pages put their complete prose in JSON-LD articleBody
+     * rather than classic article HTML. Read only the text the site delivered
+     * without authentication, scripts or browser-session access.
+     */
+    private fun publicArticleBody(doc: Document): Element? {
+        fun getBody(node: Any?, depth: Int = 0): String? {
+            if (depth > 8) return null
+            return when (node) {
+                is JSONObject -> {
+                    val value = node.optString("articleBody").trim()
+                    if (value.length >= 60) value
+                    else {
+                        val graph = node.opt("@graph")
+                        getBody(graph, depth + 1) ?:
+                            node.optJSONArray("mainEntity")?.let { getBody(it, depth + 1) } ?:
+                            node.optJSONObject("mainEntity")?.let { getBody(it, depth + 1) }
+                    }
+                }
+                is JSONArray -> (0 until node.length()).firstNotNullOfOrNull {
+                    getBody(node.opt(it), depth + 1)
+                }
+                else -> null
+            }
+        }
+        val content = doc.select("script[type=application/ld+json]").take(15)
+            .firstNotNullOfOrNull { node ->
+                val raw = node.data().trim()
+                if (raw.length !in 2..150_000) return@firstNotNullOfOrNull null
+                runCatching { getBody(JSONTokener(raw).nextValue()) }.getOrNull()
+            } ?: return null
+        val block = Element(Tag.valueOf("article"), "")
+        // Safe text nodes only; input HTML or script content is never executed.
+        val paras = content.split(Regex("\\n\\s*\\n")).take(2500)
+        for (part in paras) {
+            if (part.isNotBlank()) block.appendElement("p").text(part.trim().take(30_000))
+        }
+        return block.takeIf { it.text().length >= 60 }
+    }
+
     /** Append one already-accessible chapter, keeping genuine XHTML text and
      * embedded JPEG/PNG/GIF artwork, without taking full-page screenshots.
      * Images are capped for memory/size safety; no source scripts execute.
@@ -93,7 +138,9 @@ object NooirWebArticle {
             ".post-content, .entry-content, .reading-content, .chapter-content, " +
             ".elementor-widget-theme-post-content, .elementor-widget-text-editor, " +
             ".et_pb_post, .single-post-content, .novel-content, #chapter-content, " +
-            ".prose, [data-page-number]"
+            ".story-content, .story-text, .blog-post-content, .post-body, " +
+            ".w-richtext, .rich-text, [data-testid=story-content], " +
+            "#content, #main-content, .prose, [data-page-number]"
         fun stripped(element: org.jsoup.nodes.Element): org.jsoup.nodes.Element =
             element.clone().also { item ->
                 item.select("script,style,nav,header,footer,aside,form,button,iframe," +
@@ -101,15 +148,20 @@ object NooirWebArticle {
                     ".newsletter,.cookie-banner,.related-posts,.sidebar").remove()
             }
         val candidates = doc.select(contentSelectors).map(::stripped)
-        val article = candidates.maxByOrNull { it.text().length }
-            ?.takeIf { it.text().length >= 60 }
+        val fromMarkup = candidates.maxByOrNull {
+            val paras = it.select("p").count()
+            // Prose with several paragraphs beats a large navigation menu.
+            it.text().length + paras * 60
+        }?.takeIf { it.text().length >= 60 }
+        val article = fromMarkup ?: publicArticleBody(doc)
             ?: stripped(doc.body() ?: error("Cannot find a readable HTML page"))
         val textLength = article.text().trim().length
         require(textLength >= 60) {
-            "This URL appears to be a story landing/catalog page rather than a readable chapter " +
-                "('$chapterTitle': $textLength text characters). Open a public chapter with actual " +
-                "prose and paste that chapter URL. JavaScript-only or sign-in-only pages " +
-                "cannot be converted without an authorized source."
+            "Received the webpage '$chapterTitle' but only $textLength readable " +
+                "text characters in its public HTML. Your browser may display " +
+                "additional text using JavaScript or a logged-in session. " +
+                "MangaNooir does not load that session; try a direct, publicly " +
+                "readable article/chapter link or an authorized EPUB export."
         }
         var images = 0
         article.select("img").forEach { img ->
