@@ -1,6 +1,6 @@
 # XTC/XTCH cover and synopsis (experimental)
 
-This work is tracked in [MangaNooir PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) and the companion [Folio Nooir firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). Neither change has been merged into a stable release. The newer [v1.0.11 draft APK](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479) passed automated compilation, but physical XTC/XTCH cover tests remain pending. `main` still contains v1.0.1.
+This work is tracked in [MangaNooir PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) and the companion [Folio Nooir firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). Neither change has been merged into a stable release. The newer [v1.0.11 draft APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated compilation, but physical XTC/XTCH cover tests remain pending. `main` still contains v1.0.1.
 
 ## Cover
 
@@ -34,4 +34,4 @@ The JSON is bounded to 8192 bytes and carries available title, author, artist, s
 5. Confirm that ordinary legacy XTC files without the trailer still open.
 6. Check a title with **no readable cover**: experimental v1.0.11 XTC/XTCH export should **fail with a helpful message** rather than fabricate a cover. A missing synopsis must not be invented; optional Wi-Fi metadata sync can warn if unavailable.
 
-These changes have not yet been physically verified on the maintainer's X4 or independently verified on other firmware. See [the reader cover / queue guide](DEVICE_FILES_AND_QUEUE.md) and [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md).
+A MangaNooir XTCH cover has been reported visible on a Folio Nooir X4; a full multi-format/multi-firmware test matrix is still outstanding. See [the reader cover / queue guide](DEVICE_FILES_AND_QUEUE.md) and [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md).
