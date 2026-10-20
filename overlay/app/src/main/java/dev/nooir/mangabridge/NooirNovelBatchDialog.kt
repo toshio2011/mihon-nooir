@@ -44,6 +44,10 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     var first by remember { mutableStateOf("1") }
     var last by remember { mutableStateOf("80") }
     var allChapters by remember { mutableStateOf(true) }
+    var combinePages by remember { mutableStateOf(false) }
+    var combinedTitle by remember { mutableStateOf("") }
+    var combinedAuthor by remember { mutableStateOf("") }
+    var combinedFilename by remember { mutableStateOf("") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var jobId by remember {
@@ -61,7 +65,7 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
     val end = last.toIntOrNull()
     val good = urls.isNotEmpty() && urls.size <= 10 &&
         urls.all { it.length <= 600 && it.startsWith("https://", true) } &&
-        (allChapters || (start != null && end != null && start >= 1 && end >= start))
+        (combinePages || allChapters || (start != null && end != null && start >= 1 && end >= start))
     val busy = jobState?.state == WorkInfo.State.ENQUEUED ||
         jobState?.state == WorkInfo.State.BLOCKED ||
         jobState?.state == WorkInfo.State.RUNNING
@@ -73,11 +77,15 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
             .setInputData(workDataOf(
                 NooirNovelBatchWorker.URLS to urls.toTypedArray(),
                 NooirNovelBatchWorker.NAMES to urls.map { customNames[it].orEmpty() }.toTypedArray(),
+                NooirNovelBatchWorker.COMBINE_PAGES to combinePages,
+                NooirNovelBatchWorker.BOOK_TITLE to combinedTitle.trim(),
+                NooirNovelBatchWorker.BOOK_AUTHOR to combinedAuthor.trim(),
+                NooirNovelBatchWorker.BOOK_FILENAME to combinedFilename.trim(),
                 NooirNovelBatchWorker.OUTPUT_TREE to treeUri?.toString(),
                 NooirNovelBatchWorker.HOST to host.trim(),
                 NooirNovelBatchWorker.FOLDER to folder.trim(),
-                NooirNovelBatchWorker.FIRST to (if (allChapters) 1 else start),
-                NooirNovelBatchWorker.LAST to (if (allChapters) Int.MAX_VALUE else end),
+                NooirNovelBatchWorker.FIRST to (if (combinePages || allChapters) 1 else start),
+                NooirNovelBatchWorker.LAST to (if (combinePages || allChapters) Int.MAX_VALUE else end),
             )).build()
         manager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, job)
         jobId = job.id
@@ -96,39 +104,66 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Web novels → EPUB batch") },
+        title = { Text("Web pages & novels → EPUB") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Paste public story links, one per line (up to 10 books). MangaNooir checks each story's visible HTML chapter links, then builds one reflowable EPUB per novel.")
+                Text("Paste public HTTPS story or chapter links, one per line (up to 10 pasted URLs in this preview). Auto-discover all chapters of a story, or combine manually selected webpages into one EPUB.")
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    androidx.compose.material3.Checkbox(
+                        checked = combinePages, onCheckedChange = { combinePages = it },
+                    )
+                    Text("Combine pasted webpages into ONE EPUB")
+                }
+                Text(if (combinePages)
+                    "Each pasted URL becomes one chapter, in the order shown above. Move lines to rearrange chapters. The pages must contain readable public text."
+                    else "Each story link creates its own EPUB. Visible public chapters are discovered automatically.")
                 OutlinedTextField(
                     value = links, onValueChange = { links = it },
-                    label = { Text("Public story URLs (one per line)") },
+                    label = { Text(if (combinePages) "Public chapter/page URLs in reading order" else "Public story URLs (one per line)") },
                     placeholder = { Text("https://example.org/story-one\nhttps://example.org/story-two") },
                     minLines = 3, maxLines = 7,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Selected stories: " + urls.size + " / 10")
-                Text("Optional: rename each EPUB before conversion. Leave blank to use the story title.")
+                Text((if (combinePages) "Selected chapters: " else "Selected stories: ") + urls.size + " / 10")
+                if (combinePages) {
+                    OutlinedTextField(value = combinedTitle,
+                        onValueChange = { combinedTitle = it.take(180) },
+                        label = { Text("Combined book title (optional)") },
+                        placeholder = { Text("Uses first page title when blank") },
+                        singleLine = true)
+                    OutlinedTextField(value = combinedAuthor,
+                        onValueChange = { combinedAuthor = it.take(100) },
+                        label = { Text("Book author (optional)") }, singleLine = true)
+                    OutlinedTextField(value = combinedFilename,
+                        onValueChange = { combinedFilename = it.take(70) },
+                        label = { Text("Combined EPUB filename (without .epub)") },
+                        supportingText = { Text("Duplicate names are checked before downloading the remaining pages.") },
+                        singleLine = true)
+                }
+                Text(if (combinePages) "Optional: override chapter titles; otherwise use each webpage title."
+                    else "Optional: rename each EPUB before conversion. Leave blank to use the story title.")
                 urls.forEach { story ->
                     OutlinedTextField(value = customNames[story].orEmpty(),
                         onValueChange = { value -> customNames = customNames + (story to value.take(70)) },
-                        label = { Text("Output name · " + story.take(38)) },
+                        label = { Text((if (combinePages) "Chapter title · " else "Output name · ") + story.take(38)) },
                         placeholder = { Text("Book title (without .epub)") },
                         singleLine = true)
                 }
-                androidx.compose.foundation.layout.Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    androidx.compose.material3.Checkbox(
-                        checked = allChapters, onCheckedChange = { allChapters = it },
-                    )
-                    Text("Download all chapters found in the public chapter list")
+                if (!combinePages) {
+                    androidx.compose.foundation.layout.Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = allChapters, onCheckedChange = { allChapters = it },
+                        )
+                        Text("Download all chapters found in the public chapter list")
+                    }
                 }
-                if (!allChapters) {
+                if (!combinePages && !allChapters) {
                     Text("Chapter range (from the site's publicly visible chapter list)")
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(value = first, onValueChange = { first = it.take(9) },
@@ -137,23 +172,25 @@ fun NooirNovelBatchDialog(onDismiss: () -> Unit) {
                             label = { Text("Last") }, modifier = Modifier.weight(1f), singleLine = true)
                     }
                 }
-                Text("All chapters uses every publicly discoverable chapter. Large stories can take a long time or exceed XTEink's 180 MiB upload limit; save to phone if necessary. Existing EPUB filenames are rejected before any chapters download.")
+                Text(if (combinePages)
+                    "All selected pages go into one reflowable EPUB, with a navigable chapter list. If one page is unreadable, the whole book stops instead of silently omitting that chapter."
+                    else "All chapters uses every publicly discoverable chapter. Large stories may exceed the XTEink 180 MiB limit. Existing EPUB filenames are rejected before downloading chapters.")
                 OutlinedTextField(value = host, onValueChange = { host = it },
                     label = { Text("XTEink IP/hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
                     label = { Text("Reader destination folder") }, singleLine = true)
                 Button(enabled = good && !busy, onClick = { folderPicker.launch(null) }) {
-                    Text("Download EPUBs to phone folder")
+                    Text(if (combinePages) "Save combined EPUB to phone" else "Download EPUBs to phone folder")
                 }
                 Button(enabled = good && !busy && host.isNotBlank() &&
                     folder.startsWith("/") && !folder.contains(".."),
                     onClick = { enqueue(null) }) {
-                    Text("Convert novels & send to XTEink")
+                    Text(if (combinePages) "Combine & send one EPUB to XTEink" else "Convert novels & send to XTEink")
                 }
                 jobState?.let { info ->
                     val stage = info.progress.getString(NooirNovelBatchWorker.STAGE).orEmpty()
                     Text(when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Some exports failed: " + info.outputData.getString(NooirNovelBatchWorker.ERRORS).orEmpty() else "All selected novels exported"
+                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Export failed: " + info.outputData.getString(NooirNovelBatchWorker.ERRORS).orEmpty() else "Export completed"
                         WorkInfo.State.FAILED -> "Some exports failed: " +
                             info.outputData.getString(NooirNovelBatchWorker.ERRORS).orEmpty()
                         WorkInfo.State.CANCELLED -> "Cancelled"
