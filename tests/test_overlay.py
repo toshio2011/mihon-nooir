@@ -177,6 +177,13 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('first?.xDirAdj', pdf_converter)
             self.assertIn('part.text.matches(Regex("[0-9]{1,5}"))', pdf_converter)
             self.assertNotIn('line.y - lastY > 22f', pdf_converter)
+            self.assertIn('finishSection()', pdf_converter)
+            self.assertIn('isCover = index == 0', pdf_converter)
+            self.assertIn('titleOverride: String?', pdf_converter)
+            self.assertIn('authorOverride: String?', pdf_converter)
+            pdf_dialog = (work_dir/'NooirPdfToEpubDialog.kt').read_text()
+            self.assertIn('NooirPdfExportWorker.BOOK_TITLE', pdf_dialog)
+            self.assertIn('NooirPdfExportWorker.BOOK_AUTHOR', pdf_dialog)
 
 
 if __name__=='__main__': unittest.main()
