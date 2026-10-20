@@ -45,7 +45,6 @@ class ReflowEpubWriter private constructor(private val zip: ZipOutputStream, pri
 
     /** Body must already be sanitized, well-formed XHTML (no html/body root). */
     fun addSection(title: String, xhtmlBody: String) {
-        require(sections.size < 3000) { "Too many EPUB sections" }
         require(xhtmlBody.length <= 2_000_000) { "Section too long" }
         val index = sections.size + 1
         val name = "text/s%05d.xhtml".format(index)
