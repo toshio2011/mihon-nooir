@@ -135,8 +135,7 @@ object ImportedMangaConverter {
                     count = XtcCodec.write(
                         depth,
                         source.pages(listOf(input), width, height, depth.depth, options),
-                        target, context.cacheDir, metadata = metadata.xtc(),
-                        richMetadataJson = metadata.xtcRichJson(),
+                        target, context.cacheDir, metadata = metadata.xtc().copy(coverPage = null),
                         direction = metadata.direction,
                         chapterResolver = { pages ->
                             require(pages in 1..10000) { "Unsupported page count" }
