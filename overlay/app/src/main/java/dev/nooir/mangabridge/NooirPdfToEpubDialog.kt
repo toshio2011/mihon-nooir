@@ -133,7 +133,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 val percent = state?.progress?.getInt(NooirPdfExportWorker.PERCENT, -1) ?: -1
                 state?.let { info ->
                     Text(when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> "EPUB conversion complete"
+                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Failed: " + info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty() else "EPUB conversion complete"
                         WorkInfo.State.FAILED -> "Failed: " +
                             info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty()
                         WorkInfo.State.CANCELLED -> "Canceled"
@@ -144,9 +144,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     if (percent >= 0) LinearProgressIndicator(
                         progress = { percent.coerceIn(0, 100) / 100f }, modifier = Modifier.fillMaxWidth(),
                     ) else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    TextButton(onClick = { workId?.let(workManager::cancelWorkById) }) {
-                        Text("Cancel PDF conversion")
-                    }
+                    Text("Cancel requests are managed in Nooir Tools → Activity Queue; whole-queue cancellation requires confirmation.")
                 }
                 Text("No AI, OCR service, or paid API. Complex layouts, multi-column documents and vector drawings may need image fallback. Protected PDFs are not yet supported. Experimental 100 MiB / 600-page limit.")
             }
