@@ -49,16 +49,16 @@ object BookArchiveWriter {
             if (format == ExportFormat.EPUB) {
                 writeEpubIndex(zip, sections, count, meta, dedicatedCover)
             } else {
-                writeComicInfo(zip, sections, count, meta)
+                writeComicInfo(zip, sections, count, meta, dedicatedCover)
             }
             return count
         }
     }
 
-    private fun writeComicInfo(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata) {
+    private fun writeComicInfo(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata, dedicatedCover: Boolean) {
         val bookmarks = sections.mapValues { it.value.first() - 1 }.entries.associate { it.value to it.key }
         val pages = (0 until count).joinToString("") { p ->
-            "<Page Image=\"$p\"" + (if (p == 0) " Type=\"FrontCover\"" else "") +
+            "<Page Image=\"$p\"" + (if (p == 0 && dedicatedCover) " Type=\"FrontCover\"" else "") +
                 (bookmarks[p]?.let { " Bookmark=\"${xml(it)}\"" } ?: "") + "/>"
         }
         entry(zip, "ComicInfo.xml", """<?xml version="1.0" encoding="UTF-8"?>
