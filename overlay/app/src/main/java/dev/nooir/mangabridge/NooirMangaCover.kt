@@ -2,6 +2,7 @@ package dev.nooir.mangabridge
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.BitmapFactory
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -17,10 +18,20 @@ object NooirMangaCover {
         context: Context, manga: Manga, source: Source,
         cache: CoverCache?, exportDir: File,
     ): Uri? {
-        cache?.getCustomCoverFile(manga.id)?.takeIf { it.isFile && it.length() > 0 }?.let {
+        // A cached entry can be nonempty yet corrupt/stale. Never silently export
+        // a manga without a usable cover because the first cache file was broken.
+        fun imageLooksValid(file: File): Boolean {
+            if (!file.isFile || file.length() <= 0) return false
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            return runCatching {
+                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                bounds.outWidth > 0 && bounds.outHeight > 0
+            }.getOrDefault(false)
+        }
+        cache?.getCustomCoverFile(manga.id)?.takeIf(::imageLooksValid)?.let {
             return Uri.fromFile(it)
         }
-        cache?.getCoverFile(manga.thumbnailUrl)?.takeIf { it.isFile && it.length() > 0 }?.let {
+        cache?.getCoverFile(manga.thumbnailUrl)?.takeIf(::imageLooksValid)?.let {
             return Uri.fromFile(it)
         }
         val cover = manga.thumbnailUrl?.trim().orEmpty()
@@ -48,7 +59,7 @@ object NooirMangaCover {
                         }
                     }
                 }
-                require(target.length() > 0) { "Empty cover" }
+                require(imageLooksValid(target)) { "Manga source returned an unreadable cover image" }
                 Uri.fromFile(target)
             }
         }.getOrNull()
