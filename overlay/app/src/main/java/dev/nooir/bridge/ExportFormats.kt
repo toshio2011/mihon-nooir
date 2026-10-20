@@ -15,6 +15,9 @@ enum class ExportFormat(val extension: String, val mime: String, val label: Stri
         require(profile.accepts(result)) {
             "${result.name} is not a supported export choice for ${profile.name}. Choose Auto or another supported format."
         }
+        require(result != XTCH || profile.height % 8 == 0) {
+            "XTCH requires a canvas height divisible by 8 for Folio/CrossPoint-compatible bit planes. Change the custom height or choose XTC/EPUB/CBZ."
+        }
         return result
     }
 }
