@@ -12,6 +12,7 @@ import dev.nooir.bridge.ExtendedMetadata
 import dev.nooir.bridge.NooirUpload
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
+import dev.nooir.bridge.NooirDeviceProfiles
 import dev.nooir.bridge.xtcRichJson
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -108,8 +109,12 @@ object ImportedMangaConverter {
             "Manga conversion supports up to 512 MB per input. You can send the original file unchanged."
         }
         require(saveDestination != null || sendHost != null) { "Select a save location or a receiver" }
+        val profile = NooirDeviceProfiles.forId(device)
+        if (sendHost != null) require(profile.xteinkWifi) {
+            "This preset cannot be sent using the XTEink Wi-Fi API. Save to the phone instead."
+        }
         val actual = requestedFormat.resolved(device)
-        val (width, height) = if (device == "X3") (528 to 792) else (480 to 800)
+        val (width, height) = profile.width to profile.height
         val baseTitle = picked.name.substringBeforeLast('.', picked.name).ifBlank { "Manga" }
         onStage("Reading manga metadata")
         val metadata = loadMetadata(context, input, picked, baseTitle).copy(
