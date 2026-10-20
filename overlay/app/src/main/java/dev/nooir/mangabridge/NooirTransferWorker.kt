@@ -28,6 +28,7 @@ import kotlinx.coroutines.withContext
 class NooirTransferWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     companion object {
         const val KEY_URIS = "uris"
+        const val KEY_OUTPUT_NAMES = "output_names"
         const val KEY_HOST = "host"
         const val KEY_FOLDER = "folder"
         const val KEY_CONVERT = "convert"
@@ -94,6 +95,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
 
     override suspend fun doWork(): Result {
         val files = inputData.getStringArray(KEY_URIS).orEmpty()
+        val editedNames = inputData.getStringArray(KEY_OUTPUT_NAMES).orEmpty()
         val host = inputData.getString(KEY_HOST).orEmpty()
         val folder = inputData.getString(KEY_FOLDER).orEmpty()
         val convert = inputData.getBoolean(KEY_CONVERT, false)
@@ -117,6 +119,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         ))
         var completed = 0
+        val fileErrors = mutableListOf<String>()
         try {
             withContext(Dispatchers.IO) {
                 if (treeUri == null) NooirUpload.checkConnected(host)
@@ -124,17 +127,26 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     currentCoroutineContext().ensureActive()
                     if (isStopped) throw CancellationException("Transfer cancelled")
                     val index = offset + 1
+                    try {
                     val uri = Uri.parse(raw)
                     emit("Inspecting", index, files.size, "file " + index)
                     val selected = ImportedMangaConverter.inspect(applicationContext, uri)
                     val title = selected.name.take(70)
+                    val requestedName = editedNames.getOrNull(offset)?.trim().orEmpty()
+                        .ifBlank { selected.name }
+                    val convertThis = selected.isManga && (convert || treeUri != null)
+                    val outputName = if (convertThis) NooirDestinationGuard.forManga(
+                        requestedName.substringBeforeLast('.', requestedName), format, device)
+                        else NooirDestinationGuard.original(requestedName)
+                    // Fail before creating an output file, converting pages or uploading bytes.
+                    if (treeUri != null) NooirDestinationGuard.requireInPhoneFolder(
+                        applicationContext, treeUri, outputName)
+                    else NooirDestinationGuard.requireOnReader(host, folder, outputName)
                     if (treeUri != null) {
                         val resolver = applicationContext.contentResolver
                         val safeName = selected.name.substringBeforeLast('.', selected.name).take(70)
                             .map { c -> if (c.code < 128 && (c.isLetterOrDigit() || c == '_' || c == '-')) c else '_' }
                             .joinToString("").ifBlank { "Manga" }
-                        val outputName = if (selected.isManga) safeName + "." + format.resolved(device).extension
-                            else selected.name
                         val mime = if (selected.isManga) format.resolved(device).mime.ifBlank { "application/octet-stream" }
                             else resolver.getType(uri) ?: "application/octet-stream"
                         val parent = DocumentsContract.buildDocumentUriUsingTree(
@@ -148,6 +160,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                                 ImportedMangaConverter.convert(
                                     applicationContext, uri, selected, format, device,
                                     saveDestination = target, options = options,
+                                    outputBaseOverride = requestedName.substringBeforeLast('.', requestedName),
                                     onStage = { step -> emit(step, index, files.size, title) },
                                 )
                             } else {
@@ -180,6 +193,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                             sendHost = host, sendFolder = folder,
                             onStage = { step -> emit(step, index, files.size, title) },
                             options = options,
+                            outputBaseOverride = requestedName.substringBeforeLast('.', requestedName),
                             onUploadProgress = { sent, total ->
                                 if (isStopped) throw CancellationException("Transfer cancelled")
                                 val percent = (sent * 100L / total.coerceAtLeast(1L)).toInt()
@@ -189,26 +203,34 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                         )
                     } else {
                         emit("Uploading", index, files.size, title)
-                        NooirUpload.uploadDocument(applicationContext, uri, host, folder) { sent, total ->
+                        NooirUpload.uploadDocument(applicationContext, uri, host, folder, onProgress = { sent, total ->
                             if (isStopped) throw CancellationException("Transfer cancelled")
                             val percent = (sent * 100L / total.coerceAtLeast(1L)).toInt()
                             emit(if (sent >= total) "Waiting for XTEink confirmation" else "Uploading",
                                 index, files.size, title, sent, total, percent)
-                        }
+                        }, filenameOverride = outputName)
                     }
-                    completed = index
+                    completed++
                     emit(if (treeUri == null) "Confirmed by XTEink" else "Saved to folder",
                         index, files.size, title, percent = 100)
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) {
+                        val filename = editedNames.getOrNull(offset).orEmpty().ifBlank { "File $index" }
+                        fileErrors += filename + ": " + (e.message ?: "Transfer failed")
+                        emit("Failed — continuing with next file", index, files.size, filename)
+                    }
                 }
             }
             notifications.notify(notificationId,
                 NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.stat_sys_upload_done)
                     .setContentTitle("MangaNooir · transfer complete")
-                    .setContentText(completed.toString() + if (treeUri == null) " file(s) confirmed by XTEink" else " file(s) saved")
+                    .setContentText(completed.toString() + "/" + files.size + " file(s) completed; " + fileErrors.size + " failed")
                     .setOnlyAlertOnce(true).setAutoCancel(true).build()
             )
-            return Result.success(Data.Builder().putInt(KEY_COUNT, completed).build())
+            return if (fileErrors.isEmpty()) Result.success(Data.Builder().putInt(KEY_COUNT, completed).build())
+                else Result.success(NooirDeviceWorkQueue.failed(Data.Builder().putInt(KEY_COUNT, completed),
+                    KEY_ERROR, fileErrors.joinToString("\n").take(4000)))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
