@@ -14,6 +14,14 @@ object NooirDestinationGuard {
             if (ch.code < 128 && (ch.isLetterOrDigit() || ch == '-' || ch == '_')) ch else '_'
         }.joinToString("").trim('_').ifBlank { fallback }
 
+    fun original(value: String): String {
+        val ascii = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKD)
+            .replace(Regex("[^A-Za-z0-9_.() -]"), "_")
+            .trim().trim('.').take(150)
+        require(ascii.isNotBlank() && ascii != "." && ascii != "..") { "Invalid output filename" }
+        return ascii
+    }
+
     fun filename(title: String, extension: String): String =
         base(title) + "." + extension.lowercase()
 
