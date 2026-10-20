@@ -44,14 +44,14 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
 
     override suspend fun doWork(): Result {
         val pdfUri = inputData.getString(PDF)?.let(Uri::parse)
-            ?: return Result.failure(Data.Builder().putString(ERROR, "Select a PDF first").build())
+            ?: return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, "Select a PDF first"))
         val save = inputData.getString(SAVE_URI)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
         val mode = if (inputData.getString(MODE) == "ORIGINAL_PAGES")
             NooirPdfToEpub.Mode.ORIGINAL_PAGES else NooirPdfToEpub.Mode.MIXED
         if (save == null && (host.isBlank() || !folder.startsWith("/") || folder.contains(".."))) {
-            return Result.failure(Data.Builder().putString(ERROR, "Invalid XTEink address or folder").build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, "Invalid XTEink address or folder"))
         }
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(
             NooirTransferWorker.CHANNEL_ID, "MangaNooir file transfers", NotificationManager.IMPORTANCE_LOW,
@@ -130,7 +130,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
             ).setSmallIcon(android.R.drawable.stat_notify_error)
                 .setContentTitle("MangaNooir · PDF conversion failed")
                 .setContentText(message.take(100)).setAutoCancel(true).build())
-            return Result.failure(Data.Builder().putString(ERROR, message).build())
+            return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, message))
         } finally { inputFile.delete() }
     }
 }
