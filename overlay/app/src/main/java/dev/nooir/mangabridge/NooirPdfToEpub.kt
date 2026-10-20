@@ -251,8 +251,8 @@ object NooirPdfToEpub {
                                     if (textBuffer.isNotEmpty() && line.y - lastY > paragraphGap)
                                         finishParagraph()
                                     if (textBuffer.isEmpty()) firstY = line.y
+                                    else if (textBuffer.endsWith("\u00ad")) textBuffer.deleteCharAt(textBuffer.length - 1)
                                     else if (!textBuffer.endsWith("-")) textBuffer.append(' ')
-                                    else textBuffer.deleteCharAt(textBuffer.length - 1)
                                     textBuffer.append(line.text)
                                     lastY = line.y
                                 }
