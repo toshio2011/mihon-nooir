@@ -35,6 +35,19 @@ fun main() {
   }
  }
  check(ExportFormat.AUTO.resolved("X4")==ExportFormat.XTCH)
- check(ExportFormat.AUTO.resolved("Kobo")==ExportFormat.EPUB)
+ check(ExportFormat.AUTO.resolved("X3")==ExportFormat.XTCH)
+ check(ExportFormat.AUTO.resolved("X4_PRO")==ExportFormat.XTCH)
+ check(NooirDeviceProfiles.forId("X4_PRO").width==480)
+ check(NooirDeviceProfiles.forId("X4_PRO").height==800)
+ check(ExportFormat.AUTO.resolved("KINDLE_PW12")==ExportFormat.EPUB)
+ check(ExportFormat.AUTO.resolved("KOBO_CLARA_BW")==ExportFormat.CBZ)
+ check(ExportFormat.AUTO.resolved("BOOX_PALMA")==ExportFormat.CBZ)
+ check(NooirDeviceProfiles.forId("CUSTOM:600x800").width==600)
+ check(ExportFormat.AUTO.resolved("CUSTOM:600x800")==ExportFormat.EPUB)
+ check(runCatching { ExportFormat.XTCH.resolved("KINDLE_PW12") }.isFailure)
+ check(runCatching { ExportFormat.EPUB.resolved("MISSING") }.isFailure)
+ check(runCatching { NooirDeviceProfiles.custom(4096,4096) }.isFailure)
+ check(!NooirDeviceProfiles.forId("KINDLE_PW12").xteinkWifi)
+ check(NooirDeviceProfiles.forId("X4").xteinkWifi)
  println("EPUB/CBZ metadata and TOC tests passed")
 }
