@@ -13,6 +13,7 @@ import androidx.work.Data
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import dev.nooir.bridge.ExportFormat
+import dev.nooir.bridge.NooirDeviceProfiles
 import dev.nooir.bridge.NooirUpload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -104,7 +105,9 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         val device = inputData.getString(KEY_DEVICE) ?: "X4"
         val treeUri = inputData.getString(KEY_TREE_URI)?.let(Uri::parse)
         val options = MangaConversionOptions.fromToken(inputData.getString(KEY_OPTIONS))
-        if (files.isEmpty() || (treeUri == null && host.isBlank()) ||
+        val profile = runCatching { NooirDeviceProfiles.forId(device) }.getOrNull()
+        if (profile == null || (treeUri == null && !profile.xteinkWifi) ||
+            files.isEmpty() || (treeUri == null && host.isBlank()) ||
             (treeUri == null && (!folder.startsWith('/') || folder.contains("..")))) {
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), KEY_ERROR, "Invalid files, host or folder"))
         }
