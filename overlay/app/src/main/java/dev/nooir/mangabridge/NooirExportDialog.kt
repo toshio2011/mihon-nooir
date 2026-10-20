@@ -33,7 +33,7 @@ fun NooirExportDialog(
     onlineSource: Boolean,
     onDismiss: () -> Unit,
     onSave: (ExportFormat, String, Boolean, MangaConversionOptions) -> Unit,
-    onSend: (ExportFormat, String, String, String, Boolean, MangaConversionOptions) -> Unit,
+    onSend: (ExportFormat, String, String, String, Boolean, MangaConversionOptions, String) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
@@ -45,6 +45,7 @@ fun NooirExportDialog(
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var destination by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var quickExport by remember { mutableStateOf(false) }
+    var outputName by remember(mangaTitle) { mutableStateOf(mangaTitle) }
     var showAdvanced by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
 
@@ -58,7 +59,7 @@ fun NooirExportDialog(
         options.save(prefs)
     }
     val canExport = !quickExport || (onlineSource && selectedChapterCount >= 1)
-    val canSend = canExport && host.trim().isNotEmpty() &&
+    val canSend = canExport && outputName.isNotBlank() && host.trim().isNotEmpty() &&
         destination.trim().startsWith("/") && !destination.contains("..")
 
     AlertDialog(
@@ -123,7 +124,14 @@ fun NooirExportDialog(
                     label = { Text("Destination folder") },
                     singleLine = true,
                 )
-                Text("Start File Transfer on Nooir and connect both devices to the same Wi-Fi. Existing filenames are rejected by Nooir: rename or choose another folder. Original Mihon downloads are kept.")
+                OutlinedTextField(
+                    value = outputName,
+                    onValueChange = { outputName = it.take(70) },
+                    label = { Text("Output filename (without extension)") },
+                    singleLine = true,
+                    supportingText = { Text("Change this name if the book already exists on the reader. The format extension is added automatically.") },
+                )
+                Text("MangaNooir checks the destination filename before converting. If it exists, this book fails safely and the next queued book continues.")
             }
         },
         confirmButton = {
@@ -136,7 +144,7 @@ fun NooirExportDialog(
                 Button(enabled = canSend, onClick = {
                     saveSettings()
                     onDismiss()
-                    onSend(selectedFormat, device, host.trim(), destination.trim(), quickExport, options)
+                    onSend(selectedFormat, device, host.trim(), destination.trim(), quickExport, options, outputName.trim())
                 }) { Text("Send to XTEink") }
             }
         },
