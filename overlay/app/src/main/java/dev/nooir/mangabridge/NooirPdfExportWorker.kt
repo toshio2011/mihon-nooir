@@ -27,6 +27,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         const val HOST = "pdf_host"
         const val FOLDER = "pdf_folder"
         const val MODE = "pdf_mode"
+        const val OUTPUT_NAME = "pdf_output_name"
         const val PHASE = "pdf_phase"
         const val PERCENT = "pdf_percent"
         const val ERROR = "pdf_error"
@@ -67,6 +68,13 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                 val cursor = applicationContext.contentResolver.query(pdfUri,
                     arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                 cursor?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
+                val desiredName = inputData.getString(OUTPUT_NAME).orEmpty()
+                    .ifBlank { name.substringBeforeLast('.', name) }
+                val outputName = NooirDestinationGuard.filename(desiredName, "epub")
+                if (save == null) {
+                    setProgressAsync(Data.Builder().putString(PHASE, "Checking existing XTEink filenames").build())
+                    NooirDestinationGuard.requireOnReader(host, folder, outputName)
+                }
                 val incoming = applicationContext.contentResolver.openInputStream(pdfUri)
                     ?: error("Cannot open PDF")
                 incoming.use { input ->
@@ -105,12 +113,12 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                         } ?: error("Could not save EPUB file")
                     } else {
                         manager.notify(notificationId, notice("MangaNooir · PDF to EPUB", "Sending to XTEink"))
-                        NooirUpload.upload(epubFile, host, folder) { sent, total ->
+                        NooirUpload.upload(epubFile, host, folder, onProgress = { sent, total ->
                             if (isStopped) throw CancellationException("PDF transfer cancelled")
                             setProgressAsync(Data.Builder().putString(PHASE,
                                 if (sent >= total) "Waiting for XTEink confirmation" else "Uploading EPUB")
                                 .putInt(PERCENT, (sent * 100 / total.coerceAtLeast(1L)).toInt()).build())
-                        }
+                        }, filenameOverride = outputName)
                     }
                 } finally { epubFile.delete() }
             }
