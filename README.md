@@ -6,7 +6,7 @@
 
 Read manga on Android · Choose chapters · Convert books · Send to XTEink over Wi-Fi
 
-**[Start here](docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](docs/GETTING_STARTED.md) · [All guides](docs/README.md) · [FAQ](docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+**[Download v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11)** · **[Start here](docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](docs/GETTING_STARTED.md) · [All guides](docs/README.md) · [FAQ](docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
 
 ![Android](https://img.shields.io/badge/platform-Android-blue)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MangaNooir is experimental and unofficial.** The `main` branch currently contains the **v1.0.1 baseline**, while the newer **v1.0.11 feature set is in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18)**. The [v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) passed automated tests and produced an APK, but real-world source compatibility, PDF layout fidelity, phone operations and physical X3/X4 transfer/reading are **not yet verified**. There is no published stable GitHub Release. **Back up before replacing any test APK.**
+> **MangaNooir is experimental and unofficial.** [**v1.0.11 is published as an experimental GitHub prerelease**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), built from the verified [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). The `main` code still contains **v1.0.1** and the new feature stack is **not merged**. Test website, PDF and other XTEink firmware compatibility carefully. **Back up before replacing any test APK.**
 
 ## What can MangaNooir do?
 
@@ -33,17 +33,18 @@ MangaNooir is built as a minimal Android overlay on the **full [Mihon](https://g
 | Watch transfers and diagnose a failed book | **More → Nooir Tools → Activity Queue** | [Queue and conflicts](docs/DEVICE_FILES_AND_QUEUE.md) |
 | Browse your XTEink's SD-card files | **More → Nooir Tools → Browse XTEink files** | [Reader files](docs/DEVICE_FILES_AND_QUEUE.md) |
 
-**Version reminder:** The new **Nooir Tools** hub, web/PDF converters, shared queue, and advanced controls are **not in the v1.0.1 main-branch app**. Download the experimental v1.0.11 build to try those screens. Mihon's native chapter Download Queue is separate and unchanged.
+**Version reminder:** The new **Nooir Tools** hub, web/PDF converters, shared queue, and advanced controls are **not in the v1.0.1 main-branch app**. Install the [published v1.0.11 experimental APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) to use those screens. Mihon's native chapter Download Queue is separate and unchanged.
 
-## Install the experimental Android APK
+## Download and install v1.0.11
 
-There are **no stable Releases to install yet**. For testing:
+**[Download the official v1.0.11 experimental prerelease →](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11)** · [Direct ARM64 APK](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.11/app-arm64-v8a-foss.apk)
 
-1. Open the [latest verified v1.0.11 Android build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) (you may need to sign into GitHub).
-2. Scroll to **Artifacts**, download **`mihon-nooir-foss-apk`**, and extract the ZIP.
-3. Choose a suitable **signed** APK for your Android architecture (normally `arm64-v8a` on recent phones), then install it using Android's file manager.
-4. Open **MangaNooir**. It has a separate app identity and can coexist with ordinary Mihon.
-5. If installing over an older MangaNooir test APK fails, **back up your data first**; different CI signing keys can block an in-place update. Do not uninstall ordinary Mihon just to test this fork.
+1. Open the release and scroll to **Assets**.
+2. Download `app-arm64-v8a-foss.apk` for most modern Android phones, or `app-universal-foss.apk` if unsure.
+3. Install the downloaded APK directly from Android's file manager. **No ZIP extraction is necessary.**
+4. Launch MangaNooir; it can coexist with Mihon. **Back up your previous MangaNooir test data before reinstalling** because preview APK signing keys may differ.
+
+This is a published **experimental prerelease**, not a stable release.
 
 [**Full installation / first export tutorial →**](docs/GETTING_STARTED.md) · [Build and update policy](docs/UPDATES.md)
 
@@ -64,7 +65,7 @@ There are **no stable Releases to install yet**. For testing:
 - **Web links and novels:** Convert one public article, combine **multiple public webpages into one reflowable EPUB** in the order pasted, or create **separate EPUBs** from up to 10 public story links. For discoverable chapter indexes, choose **All chapters** rather than typing a fixed end number. Manual combination has no fixed chapter-count ceiling but uses a 128 KiB private URL-list budget. JavaScript-only, login-only and inaccessible chapters may fail; no paywall/DRM bypass is offered.
 - **PDF → EPUB:** Attempts to preserve genuine **selectable text alongside figures/illustrations** in the same ebook. Scan-only and difficult diagram pages stay as page images, without OCR or AI. Fancy typography, tables and image positioning still need human review.
 - **Safe file names and queue:** Choose names **before converting or transferring**. Existing destination names are checked and rejected instead of intentionally overwritten. One book's ordinary failure should **not stop later jobs** in the sequential Nooir Activity Queue. Cancelling the *entire queue* still cancels waiting jobs too.
-- **XTC/XTCH covers:** The preview requires a readable manga cover as the first book page; Folio Nooir separately caches shelf thumbnails. If page one has the cover but the shelf doesn't, use **Retrieve All Book Details** on the reader.
+- **XTC/XTCH covers:** The preview requires a readable manga cover as the first book page; Folio Nooir separately caches shelf thumbnails. If a book's first page is correct but its shelf thumbnail needs refreshing, use your reader's cache refresh (Folio Nooir: **Retrieve All Book Details**).
 - **Reader file browser:** A lightweight read-only folder view; full rename/move/delete features stay in Folio Nooir's existing browser-based file manager.
 
 These statements describe the current **compiled preview code**, not proven physical compatibility. The XTEink upload path currently has a conservative **180 MiB per-file** application-level safety limit. MangaPoint parity, automatic splitting, full JavaScript website extraction, firmware-independent metadata and more live previews remain unfinished.
