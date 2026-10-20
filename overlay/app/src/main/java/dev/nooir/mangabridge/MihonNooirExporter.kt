@@ -12,7 +12,6 @@ import java.util.UUID
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
 import dev.nooir.bridge.NooirDeviceProfiles
-import dev.nooir.bridge.xtcRichJson
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import android.graphics.Bitmap
 import android.graphics.Color
