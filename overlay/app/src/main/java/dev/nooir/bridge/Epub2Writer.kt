@@ -36,7 +36,7 @@ object Epub2Writer {
         writeEntry(zip, path, xml.toByteArray(StandardCharsets.UTF_8))
 
     fun write(pages: Sequence<ArchivePage>, output: OutputStream, metadata: ExtendedMetadata, pagesPerXhtml: Int = 1): Int {
-        require(pagesPerXhtml in 1..30)
+        require(pagesPerXhtml in 0..999)
         val identifier = metadata.identifier.ifBlank {
             "urn:uuid:" + UUID.nameUUIDFromBytes(
                 ("manganooir:" + metadata.series + ":" + metadata.title + ":" + metadata.author)
@@ -81,12 +81,12 @@ object Epub2Writer {
                 require(count < 65535) { "EPUB page count exceeds 65535; export smaller volumes" }
                 count++
                 if (page.isCover && count == 1) hasRealCover = true
-                if (pagesPerXhtml > 1 && grouped.isNotEmpty() && (groupChapter != page.chapter || grouped.size >= pagesPerXhtml)) flush()
+                if (pagesPerXhtml != 1 && grouped.isNotEmpty() && (groupChapter != page.chapter || (pagesPerXhtml != 0 && grouped.size >= pagesPerXhtml))) flush()
                 if (page.chapter != previousChapter) {
                     chapters += page.chapter to count
                     previousChapter = page.chapter
                 }
-                if (pagesPerXhtml > 1) { if (grouped.isEmpty()) groupChapter = page.chapter; grouped.add(count) }
+                if (pagesPerXhtml != 1) { if (grouped.isEmpty()) groupChapter = page.chapter; grouped.add(count) }
                 val idx = "%05d".format(count)
                 writeEntry(zip, "OEBPS/images/p$idx.png", page.imagePng)
                 if (pagesPerXhtml == 1) {
@@ -99,7 +99,7 @@ img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:a
 </head><body><div><img src="../images/p$idx.png" alt="Page $count"/></div></body></html>""")
                 }
             }
-            if (pagesPerXhtml > 1) flush()
+            if (pagesPerXhtml != 1) flush()
             require(count > 0) { "At least one manga page is required" }
             val dc = buildString {
                 append("<dc:identifier id=\"bookid\">${escape(identifier)}</dc:identifier>")
