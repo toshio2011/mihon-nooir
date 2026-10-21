@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Slider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,11 +33,11 @@ data class MangaConversionOptions(
     val landscapeClockwise: Boolean = true, // turn content clockwise for XTC/XTCH
     val includeCover: Boolean = true,
     val epubColor: Boolean = false, // EPUB/CBZ only; XTC and XTCH remain grayscale
-    val epubPagesPerXhtml: Int = 1, // EPUB2/EPUB3 only; 1 preserves proven page-based layout
+    val epubPagesPerXhtml: Int = 1, // 0 = entire chapter, 1 = original, 2..999 = custom
 ) {
     fun token() = listOf(preset, layout, cropWhiteMargins, splitSpreads, rightToLeft,
         contrast.coerceIn(0, 100), dither, orientation, overlapPercent.coerceIn(0, 50),
-        landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(1, 30)).joinToString("|")
+        landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(0, 999)).joinToString("|")
 
     companion object {
         fun preset(name: String): MangaConversionOptions = when (name) {
@@ -70,7 +73,7 @@ data class MangaConversionOptions(
                 landscapeClockwise = v.getOrNull(9)?.toBooleanStrictOrNull() ?: true,
                 includeCover = v.getOrNull(10)?.toBooleanStrictOrNull() ?: true,
                 epubColor = v.getOrNull(11)?.toBooleanStrictOrNull() ?: false,
-                epubPagesPerXhtml = (v.getOrNull(12)?.toIntOrNull() ?: 1).coerceIn(1, 30),
+                epubPagesPerXhtml = (v.getOrNull(12)?.toIntOrNull() ?: 1).coerceIn(0, 999),
             )
         }
 
@@ -120,11 +123,30 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
         }
         Text("XTC and XTCH always use 1-bit / 2-bit grayscale. Color EPUBs may use more storage and memory.")
         Text("EPUB 2 / EPUB 3 section grouping")
-        Text("Pages per XHTML · " + options.epubPagesPerXhtml + " (1 = original layout; try 5)")
-        Slider(value = options.epubPagesPerXhtml.toFloat(),
-            onValueChange = { onChange(options.copy(preset = "Custom", epubPagesPerXhtml = it.toInt().coerceIn(1, 30))) },
-            valueRange = 1f..30f, steps = 28)
-        Text("Experimental: groups pages within each chapter; larger sections may take longer to open on low-memory e-readers.")
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(1 to "One page", 5 to "Custom", 0 to "Entire chapter").forEach { (value, label) ->
+                FilterChip(
+                    selected = if (value == 5) options.epubPagesPerXhtml > 1 else options.epubPagesPerXhtml == value,
+                    onClick = { onChange(options.copy(preset = "Custom", epubPagesPerXhtml = value)) },
+                    label = { Text(label) },
+                )
+            }
+        }
+        if (options.epubPagesPerXhtml > 1) {
+            OutlinedTextField(
+                value = options.epubPagesPerXhtml.toString(),
+                onValueChange = { raw ->
+                    raw.toIntOrNull()?.takeIf { it in 2..999 }?.let {
+                        onChange(options.copy(preset = "Custom", epubPagesPerXhtml = it))
+                    }
+                },
+                label = { Text("Pages per XHTML (2–999)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Text("Entire chapter groups all its images in one XHTML. Experimental: larger sections may take longer to open on low-memory e-readers.")
         Text("Page orientation")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape").forEach { (value, title) ->
