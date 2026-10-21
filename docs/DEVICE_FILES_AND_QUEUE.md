@@ -1,9 +1,11 @@
 # Browse XTEink files, Activity Queue and filename conflicts
 
+> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 > [!IMPORTANT]
-> The built-in **Nooir Tools** screen and shared **Activity Queue** are features of the **experimental v1.0.11 APK**, not the v1.0.1 app on `main`. The [build passed Android CI](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but on-reader verification is pending.
+> The built-in **Nooir Tools** screen and shared **Activity Queue** are features of the **experimental v1.0.11 APK**, not older v1.0.1 APKs; the `main` source is now v1.0.12. The [build passed Android CI](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but on-reader verification is pending.
 
 ## The built-in reader file browser
 
@@ -66,4 +68,4 @@ A MangaNooir XTCH shelf cover is now reported visible on Folio Nooir. Continue t
 | Existing name prevents export | Edit filename before requeuing; don't force an overwrite |
 | Reader shows no cover on shelf | First check page one; then use **Retrieve All Book Details** if first page is correct |
 
-For experiments not yet verified on hardware and remaining tasks, see [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) and the [project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
+For experiments not yet verified on hardware and remaining tasks, see [merged integration PR #21](https://github.com/toshio2011/mihon-nooir/pull/21) and the [project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).

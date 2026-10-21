@@ -1,9 +1,11 @@
 # Nooir Tools — quick start (experimental v1.0.11)
 
+> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+
 [← MangaNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
 
 > [!IMPORTANT]
-> These steps describe the **v1.0.11 experimental Android preview**, not the **v1.0.1 code on `main`**. The [published v1.0.11 experimental APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks, **not physical phone/XTEink testing**. The experimental v1.0.11 prerelease is available; it is not a stable build.
+> These steps describe the **v1.0.11 experimental Android preview**, not the **older v1.0.1 APK** (`main` now has v1.0.12 source, not yet released). The [published v1.0.11 experimental APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks, **not physical phone/XTEink testing**. The experimental v1.0.11 prerelease is available; it is not a stable build.
 
 **Already using normal Mihon?** MangaNooir is a separate test app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
 
@@ -99,4 +101,4 @@ The confirmed **Cancel entire Nooir queue** action stops queued jobs too; cancel
 
 A successful [Android CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) confirms the preview compiled and its automated format/overlay tests passed. It **does not prove** real Wattpad/Rengkang extraction, accurate output from every PDF, correct e-ink thumbnails, or transfer safety on a physical X3/X4. Please report your build, input format/source, device firmware, destination and exact error message (without sharing copyrighted pages or credentials).
 
-[Draft PR #18 / development status](https://github.com/toshio2011/mihon-nooir/pull/18) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[Merged PR #21 / integration status](https://github.com/toshio2011/mihon-nooir/pull/21) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)

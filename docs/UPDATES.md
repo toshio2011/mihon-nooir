@@ -2,7 +2,7 @@
 
 ## Keeping the app up to date
 
-The [v1.0.11 prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is publicly available. The [v1.0.12 format/device changes](https://github.com/toshio2011/mihon-nooir/pull/21) are still an **unreleased draft** and have not been merged or tagged. Android experimental signing keys may differ, so back up MangaNooir before replacing older test builds.
+The [v1.0.11 prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is publicly available. The [v1.0.12 format/device changes](https://github.com/toshio2011/mihon-nooir/pull/21) are **merged into main source but remain unreleased and untagged**. The [CI FOSS APK](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011) is an experimental test artifact, not a signed public release. Android experimental signing keys may differ, so back up MangaNooir before replacing older test builds.
 
 
 The fork will reuse Mihon's existing in-app update checker and installer, but its APK releases must come from **toshio2011/mihon-nooir**, not upstream Mihon. The fork's package ID is `dev.nooir.mihon.foss`. Android always requires matching signing certificates to install an update over an earlier APK.

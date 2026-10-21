@@ -1,5 +1,7 @@
 # Getting started with MangaNooir
 
+> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+
 [← Homepage](../README.md) · [All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi guide](WIFI_TRANSFER.md)
 
 MangaNooir is an **experimental Android app based on the full Mihon reader**. Browse, organize and read manga as usual; MangaNooir adds ways to prepare and send books to e-ink readers.
@@ -8,10 +10,10 @@ MangaNooir is an **experimental Android app based on the full Mihon reader**. Br
 
 | Build | Features you can expect | Status |
 |---|---|---|
-| **Main code, v1.0.1** | Mihon plus downloaded-manga export, Save file and basic XTEink Wi-Fi send | Baseline integration; **not a stable release** |
+| **Main source, v1.0.12 — not released** | Full Mihon overlay, Nooir Tools, EPUB 2/3, XTC/XTCH, multiprovider profiles and older conversion workflows | [Successful integration build](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011); physical checks pending |
 | **Published experimental v1.0.11** (source in draft PR #18) | Adds **Nooir Tools** hub: phone files, queue, PDF, web links, multiple links into one EPUB, public web novels, advanced manga settings and device browser | [**Download prerelease APKs**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); broader reader validation pending |
 
-**v1.0.11 is published as an experimental prerelease, not a stable release.** CI success does not prove every website, PDF or e-reader behaves correctly. The `main` app code is still v1.0.1.
+**v1.0.11 is published as an experimental prerelease, not a stable release.** CI success does not prove every website, PDF or e-reader behaves correctly. The `main` source is now v1.0.12; its new APK is **not published**.
 
 ### Install the experimental APK
 
@@ -39,7 +41,7 @@ In experimental v1.0.11 open **More → Nooir Tools**:
 | **PDF → EPUB · Text + illustrations** | Selectable native PDF text mixed with preserved images/scans |
 | **Browse XTEink files** | Read-only folder browser and link to Folio Nooir's full file manager |
 
-**Where is manga export?** The **Export** icon is on the **manga details screen**, not under Nooir Tools. In the older **main v1.0.1** app, the Nooir Tools hub **won't be there**. This is the fastest way to tell the builds apart.
+**Where is manga export?** The **Export** icon is on the **manga details screen**, not under Nooir Tools. In the older **v1.0.1 APK**, the Nooir Tools hub **won't be there**. This is the fastest way to tell the builds apart.
 
 [Open the full illustrated-by-steps Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md)
 
@@ -99,4 +101,4 @@ The v1.0.11 preview uses a **shared sequential WorkManager queue** for manga, fi
 
 Please verify the output on your own phone and XTEink. Automated CI does not test your installed source extensions, protected/dynamic websites, scan-heavy PDFs, reader SD-card reliability or cover cache behavior. If something goes wrong, collect your **build SHA, input/source, file type, phone version, XTEink firmware and exact error** without sharing private credentials or copyrighted book pages.
 
-[Known work / draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[Merged v1.0.12 PR #21](https://github.com/toshio2011/mihon-nooir/pull/21) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)

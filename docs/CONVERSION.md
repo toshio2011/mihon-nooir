@@ -1,10 +1,12 @@
 # Formats, image conversion and metadata
 
+> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [Getting started](GETTING_STARTED.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 MangaNooir exports manga into e-reader-oriented formats while keeping the source chapters and library information in Mihon.
 
-> **Version note:** Normal downloaded-manga export is on v1.0.1; **Quick Export, local files, advanced settings, shared queue, web and PDF tools** are only in the experimental v1.0.11 preview. [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
+> **Version note:** Older v1.0.1 builds support basic downloaded-manga export; **Quick Export, local files, advanced settings, shared queue, web and PDF tools** were added in the published experimental v1.0.11 preview and are retained in the v1.0.12 main source (not yet released). [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
 
 ## Pick an output
 
@@ -16,7 +18,7 @@ MangaNooir exports manga into e-reader-oriented formats while keeping the source
 | **CBZ** | Ordered image archive | `ComicInfo.xml` plus optional JSON metadata | Comic-capable readers and conversion workflows |
 | **Auto** | Preset chosen from device selection | Varies with chosen output | Convenient start; not always the best choice for every comic |
 
-The v1.0.1 main code and [published experimental v1.0.11 preview](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) both support **X4** (480 × 800) and **X3** (528 × 792) presets. These targets are screen-size presets, **not universal guarantees** for every XTEink production panel or firmware.
+Older v1.0.1 builds, the [published experimental v1.0.11 preview](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) both support **X4** (480 × 800) and **X3** (528 × 792) presets. These targets are screen-size presets, **not universal guarantees** for every XTEink production panel or firmware.
 
 ## Convert from downloaded manga
 

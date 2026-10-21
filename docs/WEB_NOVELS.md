@@ -1,8 +1,10 @@
 # Web novels, multiple webpages and batch EPUBs — experimental v1.0.11
 
+> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+
 MangaNooir's first **web novel importer** is an experimental extension of [Web to E-reader](WEB_TO_READER.md). The goal is to read longer publicly available web stories as **real, reflowable EPUB books**, keeping individual chapters, a table of contents, an available cover, and inline illustrations.
 
-> **Preview only:** The [published experimental v1.0.11 prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated tests, but actual website and XTEink testing remains outstanding. The code on `main` is still v1.0.1.
+> **Preview only:** The [published experimental v1.0.11 prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated tests, but actual website and XTEink testing remains outstanding. The code on `main` is now v1.0.12, but that version has not been released.
 
 ## How to download several novels
 
@@ -95,7 +97,7 @@ These are **code/diagnostic changes**, not a claim that both URLs are accessible
 
 **Reported during preview testing (20 October 2026):** The Firefox [WebToEpub extension](https://github.com/dteviot/WebToEpub) showed **54 chapters** for the user-tested public story `/story/416913803-the-malfory-heir`, while an earlier MangaNooir preview reported no public chapter links.
 
-**Cause:** WebToEpub has a dedicated **WattpadParser** that can read story metadata separately from chapter links in the story webpage. Our earlier generic HTML-only parser had no equivalent. A **CI-tested but phone-unverified** improvement is implemented in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18): a distinct public Wattpad story-metadata reader, falling back to page links where appropriate. It **does not use Firefox cookies, bypass sign-in, or request paid/unlocked chapter text**. WebToEpub is GPLv3, so MangaNooir implements its own code rather than copying that parser.
+**Cause:** WebToEpub has a dedicated **WattpadParser** that can read story metadata separately from chapter links in the story webpage. Our earlier generic HTML-only parser had no equivalent. A **CI-tested but phone-unverified** improvement is implemented in the code on `main` via [merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21): a distinct public Wattpad story-metadata reader, falling back to page links where appropriate. It **does not use Firefox cookies, bypass sign-in, or request paid/unlocked chapter text**. WebToEpub is GPLv3, so MangaNooir implements its own code rather than copying that parser.
 
 **Important:** Finding a full list of publicly described chapter titles does **not guarantee the Android app can retrieve full readable text** for every chapter. Wattpad may display additional content through browser-specific rendering or requests. If the public HTML does not contain the requested prose, the EPUB should fail with an actionable error rather than silently creating an incomplete book. For existing purchases or author-supplied files, use an authorized EPUB directly through **Send & Convert files**.
 

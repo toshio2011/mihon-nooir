@@ -3,7 +3,7 @@
 [← Repository homepage](../README.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **Choose the guide for your installed version.** The `main` Android code is **v1.0.1**. The [**experimental v1.0.11 APK is published**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); its unmerged source is in [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). Its [CI build passed](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996), but **broader phone and XTEink compatibility validation is still pending**. New **Nooir Tools** screens aren't available in the older v1.0.1 app.
+> **Choose the guide for your installed version.** Source on `main` is now **v1.0.12** after the [merged integration PR #21](https://github.com/toshio2011/mihon-nooir/pull/21). The latest **public APK release remains v1.0.11**; v1.0.12's [successful Android CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011) is a test artifact, not a published release. Physical-device testing is still needed. Nooir Tools is absent from older v1.0.1 APKs.
 
 ## If this is your first time
 
@@ -34,7 +34,7 @@
 | [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
 | [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
 | [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
-| [Draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) | Current experimental changes, code reviews, tests |
+| [Merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21) | v1.0.12 integrated source, compatibility changes and tests |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |
 
 **Reminder:** A successful CI build doesn't establish that an individual public website exposes readable chapters, that PDF text reflows flawlessly, or that XTC/XTCH covers behave identically on every XTEink firmware. The app contains no manga, bundled manga extensions, AI OCR or access-control bypass.

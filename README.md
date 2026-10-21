@@ -15,7 +15,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MangaNooir is experimental and unofficial.** The latest public APK is [v1.0.11 Experimental Preview](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). The **unreleased v1.0.12 changes on this branch** add EPUB 2 Classic and expanded reader profiles under [draft PR #21](https://github.com/toshio2011/mihon-nooir/pull/21). The `main` application source remains v1.0.1; this feature stack is not merged. No v1.0.12 APK has been published.
+> **MangaNooir is experimental and unofficial.** The full v1.0.12 source (EPUB 2 Classic, EPUB 3, XTC/XTCH, multiprovider reader profiles, and existing Nooir Tools) has been merged into `main` via [PR #21](https://github.com/toshio2011/mihon-nooir/pull/21), with a successful [Android FOSS build](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 has NOT been published as a release.** The latest public prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Build artifacts are unsigned/CI-signed previews and may not install over prior test builds.
 
 ## Experimental v1.0.12 export improvements (not released)
 
@@ -44,7 +44,7 @@ MangaNooir is built as a minimal Android overlay on the **full [Mihon](https://g
 | Watch transfers and diagnose a failed book | **More → Nooir Tools → Activity Queue** | [Queue and conflicts](https://github.com/toshio2011/mihon-nooir/blob/main/docs/DEVICE_FILES_AND_QUEUE.md) |
 | Browse your XTEink's SD-card files | **More → Nooir Tools → Browse XTEink files** | [Reader files](https://github.com/toshio2011/mihon-nooir/blob/main/docs/DEVICE_FILES_AND_QUEUE.md) |
 
-**Version reminder:** The new **Nooir Tools** hub, web/PDF converters, shared queue, and advanced controls are **not in the v1.0.1 main-branch app**. Download the experimental v1.0.11 build to try those screens. Mihon's native chapter Download Queue is separate and unchanged.
+**Version reminder:** The new **Nooir Tools** hub, web/PDF converters, shared queue, and advanced controls are **in the v1.0.12 code on `main`**, and most are in the published experimental v1.0.11 preview. They are **not** in older v1.0.1 APKs. No v1.0.12 release has been published. Mihon's native chapter Download Queue is separate and unchanged.
 
 ## Install the experimental Android APK
 
@@ -101,7 +101,7 @@ These statements describe the current **compiled preview code**, not proven phys
 
 This repository contains an **integration overlay**, not an independent rewrite of Mihon. Its [GitHub Actions workflow](.github/workflows/build-apk.yml) checks out the pinned Mihon revision from `config/mihon-upstream.sha`, applies `tools/apply_overlay.py`, runs smoke tests, and assembles a FOSS Android APK. Automated CI is not the same as on-device testing.
 
-- [**Open experimental PR #18**](https://github.com/toshio2011/mihon-nooir/pull/18) — latest feature stack under testing (not merged).
+- [**Merged integration PR #21**](https://github.com/toshio2011/mihon-nooir/pull/21) — full source on `main`; real-device testing and v1.0.12 release pending.
 - [**Roadmap / feature requests**](https://github.com/toshio2011/mihon-nooir/issues/8) — improvements and known work.
 - [**Project handover**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/PROJECT_HANDOVER.md) — contributor context and technical status.
 

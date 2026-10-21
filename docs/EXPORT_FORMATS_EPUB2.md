@@ -1,5 +1,7 @@
 # MangaNooir: EPUB 2 Classic, EPUB 3 Modern, XTC Fast, XTCH High Quality
 
+> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+
 > **Development preview only — draft [PR #21](https://github.com/toshio2011/mihon-nooir/pull/21).** The publicly downloadable [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) predates EPUB 2. This v1.0.12 work has not been merged or released.
 
 ## Choose a format

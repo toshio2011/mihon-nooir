@@ -1,8 +1,10 @@
 # PDF → EPUB with real text and illustrations (experimental)
 
+> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+
 This feature targets the **mixed-content novel** use case: extract **real, selectable/resizable text** from a PDF, while preserving diagrams, floor plans and pictures near their original paragraphs where possible. Think of a mystery novel with text above and below floor-plan drawings, rather than turning the entire book into page screenshots.
 
-> **Preview only:** [v1.0.11 Android CI passed](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but mixed-content PDF fidelity and physical XTEink EPUB reading still need real testing. This converter is **not in main v1.0.1**.
+> **Preview only:** [v1.0.11 Android CI passed](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but mixed-content PDF fidelity and physical XTEink EPUB reading still need real testing. This converter is **not in older v1.0.1 APKs**; the merged main source now includes it.
 
 ## Steps
 

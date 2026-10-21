@@ -1,6 +1,8 @@
 # Landscape, portrait and overlapping page cuts — experimental preview
 
-> **Preview only:** Included in the [v1.0.11 draft build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), which passed Android CI but needs real device testing. The v1.0.1 main app does not expose these settings.
+> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+
+> **Preview only:** Included in the [v1.0.11 draft build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), which passed Android CI but needs real device testing. Older v1.0.1 APKs do not expose these settings; merged `main` source now supports them.
 
 ## Why this exists
 

@@ -1,8 +1,10 @@
 # MangaNooir FAQ
 
+> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)
 
-> **Version:** Main-branch code is **v1.0.1**. The newer [published experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed CI, but **broader phone/XTEink compatibility testing is still pending**. Features under **Nooir Tools** require the experimental build.
+> **Version:** Main-branch source is **v1.0.12** (unreleased); older builds may be v1.0.1. The newer [published experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed CI, but **broader phone/XTEink compatibility testing is still pending**. Features under **Nooir Tools** require the experimental build.
 
 ### Where is the chapter picker?
 
@@ -14,7 +16,7 @@ In the preview, yes: select chapters first and turn on **Quick Export · fetch m
 
 ### I can't find “Nooir Tools” under More.
 
-You're likely running the older **v1.0.1 main APK**. The newer Tools hub exists in **experimental v1.0.11**, built from [PR #18](https://github.com/toshio2011/mihon-nooir/pull/18). It is [published as an experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), not a stable version. [Installation](GETTING_STARTED.md)
+You're likely running an older **v1.0.1 APK**. The newer Tools hub exists in **experimental v1.0.11**, whose code is now included in [merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21). It is [published as an experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), not a stable version. [Installation](GETTING_STARTED.md)
 
 ### Can I send CBZ, PDF, EPUB, FB2 or other files from my phone?
 
