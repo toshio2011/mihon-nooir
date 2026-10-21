@@ -208,7 +208,8 @@ object MihonNooirExporter {
                     // XTC/XTCH must retain each target profile's portrait panel dimensions.
                     val frameWidth = if (archiveLandscape) height else width
                     val frameHeight = if (archiveLandscape) width else height
-                    for (page in pageSource.pages(uris, frameWidth, frameHeight, depth, options)) {
+                    for (page in pageSource.pages(uris, frameWidth, frameHeight, depth,
+                        if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) options.copy(epubColor = false) else options)) {
                         ownerJob.ensureActive()
                         yield(chapter to page)
                     }
