@@ -209,7 +209,7 @@ class TestOverlay(unittest.TestCase):
             # Regression from user feedback: missing XTC/XTCH book covers
             # must not be silently omitted while the manga job reports success.
             manga_export = (work_dir/'MihonNooirExporter.kt').read_text()
-            self.assertIn('requireNotNull(coverPage(xtcFormat.depth))', manga_export)
+            self.assertIn('requireNotNull(coverPage(xtcFormat.depth, coverOptions.copy(epubColor = false)))', manga_export)
             self.assertIn('yield(cover)', manga_export)
             self.assertIn('Preparing actual book cover', manga_export)
             cover_source = (work_dir/'NooirMangaCover.kt').read_text()
