@@ -269,7 +269,7 @@ private fun writeReflow(file: File, format: ReflowEpubFormat) {
     ZipFile(file).use { zip ->
         val opf = zip.getInputStream(zip.getEntry("OEBPS/package.opf")).readBytes()
             .toString(Charsets.UTF_8)
-        check(opf.contains("version=\"3.0\""))
+        check(opf.contains(if (format == ReflowEpubFormat.EPUB2) "version=\"2.0\"" else "version=\"3.0\""))
         for (tag in listOf("creator", "description", "source")) {
             check(!opf.contains("<dc:" + tag + ">")) { "Empty EPUB 3 metadata: " + tag }
         }
