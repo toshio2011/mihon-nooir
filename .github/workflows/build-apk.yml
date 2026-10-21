@@ -46,6 +46,7 @@ jobs:
           java -jar "$JAR" tests/generated/MangaNooir_Readable_EPUB2_X4.epub
           java -jar "$JAR" tests/generated/MangaNooir_Readable_EPUB3_X4.epub
           java -jar "$JAR" tests/generated/MangaNooir_Reflow_EPUB3_SelectableText.epub
+          java -jar "$JAR" tests/generated/MangaNooir_Reflow_EPUB2_SelectableText.epub
 
       - name: Read upstream pin
         id: pin
