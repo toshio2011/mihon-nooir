@@ -254,6 +254,7 @@ object MihonNooirExporter {
                     pageCount = XtcCodec.write(
                         xtcFormat, stream, output, context.cacheDir,
                         metadata = meta.xtc().copy(coverPage = if (cover != null) 0 else null), direction = meta.direction,
+                        extendedMetadataJson = if (options.xtcExtendedMetadata) BookArchiveWriter.jsonMetadata(meta) else null,
                         chapterResolver = { written ->
                             check(total == written) { "Chapter navigation mismatch" }
                             sections.toList()
