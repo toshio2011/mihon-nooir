@@ -13,6 +13,7 @@ import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.contentstream.operator.Operator
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import com.tom_roush.pdfbox.text.TextPosition
+import dev.nooir.bridge.ReflowEpubFormat
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowMetadata
 import dev.nooir.bridge.PdfReflowLines
@@ -126,6 +127,7 @@ object NooirPdfToEpub {
         titleOverride: String? = null,
         authorOverride: String? = null,
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
+        epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
     ) {
         require(pdf.isFile && pdf.length() in 1..(100L * 1024 * 1024)) {
             "PDF must be between 1 byte and 100 MiB for experimental conversion"
@@ -145,7 +147,7 @@ object NooirPdfToEpub {
             ParcelFileDescriptor.open(pdf, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
                 PdfRenderer(fd).use { renderer ->
                     ReflowEpubWriter.write(output, ReflowMetadata(title, author,
-                        description = "Converted locally from PDF, without OCR")) { epub ->
+                        description = "Converted locally from PDF, without OCR"), epubFormat) { epub ->
                         // Reflowable novel paragraphs should span PDF source pages.
                         // Only split at visible drop-cap section openings or image-only
                         // front/back pages, rather than adding hundreds of PDF pages
