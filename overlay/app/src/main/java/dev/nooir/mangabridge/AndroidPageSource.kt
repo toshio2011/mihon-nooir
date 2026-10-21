@@ -13,6 +13,7 @@ import android.provider.OpenableColumns
 import dev.nooir.bridge.GrayscaleConverter
 import dev.nooir.bridge.QuantizedPage
 import dev.nooir.bridge.PageSlicePlanner
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipFile
@@ -154,14 +155,19 @@ class AndroidPageSource(private val context: Context) {
                     val luminance = (Color.red(c) * 299 + Color.green(c) * 587 + Color.blue(c) * 114) / 1000
                     gray[i] = ((128f + (luminance - 128f) * boost).toInt().coerceIn(0, 255)).toByte()
                 }
-                result.add(if (options.dither) GrayscaleConverter.dither(width, height, gray, depth)
+                val colorPng = if (options.epubColor) ByteArrayOutputStream().use { buffer ->
+                    check(rendered.compress(Bitmap.CompressFormat.PNG, 100, buffer)) { "Color PNG encoding failed" }
+                    buffer.toByteArray()
+                } else null
+                val quantized = if (options.dither) GrayscaleConverter.dither(width, height, gray, depth)
                 else {
                     val highest = if (depth == 1) 1 else 3
                     val levels = ByteArray(gray.size) { i ->
                         (((gray[i].toInt() and 255) * highest + 127) / 255).toByte()
                     }
                     QuantizedPage(width, height, levels, depth)
-                })
+                }
+                result.add(if (colorPng == null) quantized else quantized.copy(colorPng = colorPng))
             } finally { rendered.recycle() }
         }
         return result
