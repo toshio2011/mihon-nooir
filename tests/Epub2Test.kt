@@ -141,6 +141,30 @@ fun main() {
             }
             check(entries.keys.count { it.startsWith("OEBPS/images/") } == 10)
         }
+        // Entire-chapter mode uses one XHTML per chapter, even above 30 pages.
+        for (format in listOf(ExportFormat.EPUB2, ExportFormat.EPUB)) {
+            val chapterOutput = ByteArrayOutputStream()
+            val chapterPages = sequence {
+                repeat(45) { yield(ArchivePage("Long chapter", page, 480, 800)) }
+                repeat(3) { yield(ArchivePage("Next chapter", page, 480, 800)) }
+            }
+            check(BookArchiveWriter.write(format, chapterPages, chapterOutput, meta, 0) == 48)
+            var xhtmlCount = 0
+            var spineCount = 0
+            java.util.zip.ZipInputStream(ByteArrayInputStream(chapterOutput.toByteArray())).use { zip ->
+                while (true) {
+                    val item = zip.nextEntry ?: break
+                    if (item.name.startsWith("OEBPS/text/") && item.name.endsWith(".xhtml")) {
+                        xhtmlCount++
+                        val content = String(zip.readBytes(), UTF_8)
+                        check(Regex("<img ").findAll(content).count() in setOf(45, 3))
+                    } else if (item.name == "OEBPS/package.opf") {
+                        spineCount = Regex("<itemref ").findAll(String(zip.readBytes(), UTF_8)).count()
+                    }
+                }
+            }
+            check(xhtmlCount == 2 && spineCount == 2)
+        }
         // Structural test only. A human-readable fixture is emitted
         // separately by ReadableFixturesTest.
     } finally {
