@@ -15,7 +15,7 @@ data class ArchivePage(val chapter: String, val imagePng: ByteArray, val width: 
  */
 object BookArchiveWriter {
     fun write(format: ExportFormat, pages: Sequence<ArchivePage>, output: OutputStream, meta: ExtendedMetadata, pagesPerXhtml: Int = 1): Int {
-        require(pagesPerXhtml in 1..30) { "EPUB pages per XHTML must be 1..30" }
+        require(pagesPerXhtml in 0..999) { "EPUB pages per XHTML must be 1..30" }
         require(format == ExportFormat.EPUB || format == ExportFormat.EPUB2 || format == ExportFormat.CBZ)
         if (format == ExportFormat.EPUB2) return Epub2Writer.write(pages, output, meta, pagesPerXhtml)
         ZipOutputStream(output).use { zip ->
@@ -53,8 +53,8 @@ object BookArchiveWriter {
                 count++
                 if (count == 1 && page.isCover) dedicatedCover = true
                 sections.getOrPut(page.chapter) { mutableListOf() }.add(count)
-                if (format == ExportFormat.EPUB && pagesPerXhtml > 1) {
-                    if (groupPages.isNotEmpty() && (groupChapter != page.chapter || groupPages.size >= pagesPerXhtml)) flushGroup()
+                if (format == ExportFormat.EPUB && pagesPerXhtml != 1) {
+                    if (groupPages.isNotEmpty() && (groupChapter != page.chapter || (pagesPerXhtml != 0 && groupPages.size >= pagesPerXhtml))) flushGroup()
                     if (groupPages.isEmpty()) groupStart = count
                     groupChapter = page.chapter
                     groupPages.add(count)
