@@ -49,7 +49,7 @@ class ReflowEpubWriter private constructor(private val zip: ZipOutputStream, pri
         val index = sections.size + 1
         val name = "text/s%05d.xhtml".format(index)
         val doc = """<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${xml(meta.language)}">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${xml(meta.language.ifBlank { "en" })}">
 <head><title>${xml(title)}</title><meta name="viewport" content="width=device-width"/>
 <style type="text/css">body{margin:4%;line-height:1.45;font-family:serif}p{margin:.7em 0}h1,h2,h3{break-after:avoid}img{display:block;max-width:100%;height:auto;margin:1em auto}figure{margin:1em 0;text-align:center}figcaption{font-size:.85em}pre{white-space:pre-wrap;overflow-wrap:anywhere}blockquote{margin:1em 4%}</style>
 </head><body>$xhtmlBody</body></html>"""
