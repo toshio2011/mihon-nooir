@@ -32,7 +32,10 @@ import kotlin.math.min
  */
 object NooirPdfToEpub {
     enum class Mode { MIXED, ORIGINAL_PAGES }
-    private data class PlacedImage(val y: Float, val jpeg: ByteArray, val coversPage: Boolean)
+    private data class PlacedImage(
+        val y: Float, val bottom: Float, val jpeg: ByteArray,
+        val coversPage: Boolean, val spansTextColumn: Boolean,
+    )
     private data class Content(val lines: List<PdfReflowLines.Line>, val pictures: List<PlacedImage>,
         val vectorMarks: Int, val hadImageErrors: Boolean)
 
@@ -72,7 +75,11 @@ object NooirPdfToEpub {
                             val coversPage = abs(ctm.scaleX) > pageWidth * 0.75f &&
                                 abs(ctm.scaleY) > pageHeight * 0.75f
                             if (jpeg.size <= 6 * 1024 * 1024) {
-                                pictures += PlacedImage(top, jpeg, coversPage)
+                                pictures += PlacedImage(
+                                    top, (top + abs(ctm.scaleY)).coerceAtMost(pageHeight),
+                                    jpeg, coversPage,
+                                    spansTextColumn = abs(ctm.scaleX) >= pageWidth * 0.28f,
+                                )
                             } else hadImageErrors = true
                         }
                     }
@@ -167,6 +174,9 @@ object NooirPdfToEpub {
                             }.getOrNull() else null
                             val paragraphs = if (text != null) PdfReflowLines.paragraphs(
                                 text.lines, page.cropBox.width, page.cropBox.height,
+                                text.pictures.filter { it.spansTextColumn }.map {
+                                    PdfReflowLines.FigureBand(it.y, it.bottom)
+                                },
                             ) else emptyList()
                             val enoughText = paragraphs.sumOf { it.text.length } >= 45
                             // For pages with extensive vector graphics or failed image
