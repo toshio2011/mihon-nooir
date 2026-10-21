@@ -267,7 +267,7 @@ object MihonNooirExporter {
                             yield(ArchivePage(chapter.name, archivePng(page), page.width, page.height))
                         }
                     }
-                    pageCount = BookArchiveWriter.write(actual, stream, output, meta)
+                    pageCount = BookArchiveWriter.write(actual, stream, output, meta, options.epubPagesPerXhtml)
                 }
             }
             if (destination != null) {
