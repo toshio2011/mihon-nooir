@@ -110,6 +110,37 @@ fun main() {
         check(runCatching {
             BookArchiveWriter.write(ExportFormat.EPUB2, tooMany, ByteArrayOutputStream(), meta)
         }.exceptionOrNull()?.message?.contains("512 KiB") == true)
+
+        // Five-page grouping must never cross chapter boundaries, and both
+        // EPUB versions must reference only real XHTML files in their spines.
+        for (format in listOf(ExportFormat.EPUB2, ExportFormat.EPUB)) {
+            val groupedOut = ByteArrayOutputStream()
+            val input = sequence {
+                repeat(7) { yield(ArchivePage("Chapter A", page, 480, 800)) }
+                repeat(3) { yield(ArchivePage("Chapter B", page, 480, 800)) }
+            }
+            check(BookArchiveWriter.write(format, input, groupedOut, meta, 5) == 10)
+            val entries = linkedMapOf<String, String>()
+            java.util.zip.ZipInputStream(ByteArrayInputStream(groupedOut.toByteArray())).use { zip ->
+                while (true) {
+                    val item = zip.nextEntry ?: break
+                    entries[item.name] = if (item.name.endsWith(".xhtml") || item.name.endsWith(".opf") || item.name.endsWith(".ncx")) String(zip.readBytes(), UTF_8) else ""
+                }
+            }
+            val docs = entries.keys.filter { it.startsWith("OEBPS/text/") && it.endsWith(".xhtml") }
+            check(docs.size == 3) { "Expected 5+2+3 pages in three XHTML files, got $docs" }
+            check(docs.any { it.endsWith("p00001.xhtml") })
+            check(docs.any { it.endsWith("p00006.xhtml") })
+            check(docs.any { it.endsWith("p00008.xhtml") })
+            val packageXml = entries.getValue("OEBPS/package.opf")
+            check(Regex("<itemref ").findAll(packageXml).count() == 3)
+            for (doc in docs) {
+                val xml = entries.getValue(doc)
+                val images = Regex("<img ").findAll(xml).count()
+                check(images in 2..5)
+            }
+            check(entries.keys.count { it.startsWith("OEBPS/images/") } == 10)
+        }
         // Structural test only. A human-readable fixture is emitted
         // separately by ReadableFixturesTest.
     } finally {
