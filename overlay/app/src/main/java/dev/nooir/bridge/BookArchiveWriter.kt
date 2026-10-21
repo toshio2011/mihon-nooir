@@ -72,7 +72,7 @@ object BookArchiveWriter {
             append("<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>")
             for (i in 1..count) {
                 append("<item id=\"i$i\" href=\"images/p%05d.png\" media-type=\"image/png\"".format(i))
-                if (i == 1 && dedicatedCover) append(" properties=\"cover-image\"")
+                if (i == 1) append(" properties=\"cover-image\"")
                 append("/>")
                 append("<item id=\"p$i\" href=\"text/p%05d.xhtml\" media-type=\"application/xhtml+xml\"/>".format(i))
             }
