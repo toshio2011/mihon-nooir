@@ -91,13 +91,13 @@ img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:a
                 if (metadata.description.isNotBlank()) append("<dc:description>${escape(metadata.description)}</dc:description>")
                 if (metadata.publisher.isNotBlank()) append("<dc:publisher>${escape(metadata.publisher)}</dc:publisher>")
                 metadata.genres.filter(String::isNotBlank).forEach { append("<dc:subject>${escape(it)}</dc:subject>") }
-                if (hasRealCover) append("<meta name=\"cover\" content=\"cover-image\"/>")
+                append("<meta name=\"cover\" content=\"cover-image\"/>")
             }
             val manifest = buildString {
                 append("<item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>")
                 for (i in 1..count) {
                     val idx = "%05d".format(i)
-                    append("<item id=\"${if (hasRealCover && i == 1) "cover-image" else "i$i"}\" href=\"images/p$idx.png\" media-type=\"image/png\"/>")
+                    append("<item id=\"${if (i == 1) "cover-image" else "i$i"}\" href=\"images/p$idx.png\" media-type=\"image/png\"/>")
                     append("<item id=\"p$i\" href=\"text/p$idx.xhtml\" media-type=\"application/xhtml+xml\"/>")
                 }
             }
