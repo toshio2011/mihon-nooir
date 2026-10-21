@@ -125,8 +125,8 @@ object MihonNooirExporter {
             layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
             orientation = "PORTRAIT", overlapPercent = 0,
         )
-        fun coverPage(depth: Int): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
-            pageSource.pages(listOf(uri), width, height, depth, coverOptions).singleOrNull()
+        fun coverPage(depth: Int, pageOptions: MangaConversionOptions = coverOptions): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
+            pageSource.pages(listOf(uri), width, height, depth, pageOptions).singleOrNull()
                 ?: error("Mihon cover image produced no XTC/XTCH page")
         }
         val safeTitle = manga.title.take(70).map { c ->
@@ -259,11 +259,11 @@ object MihonNooirExporter {
                         },
                     ).pageCount
                 } else {
-                    val cover = if (options.includeCover) coverPage(2) else null
+                    val cover = if (options.includeCover) coverPage(2, coverOptions.copy(epubColor = options.epubColor)) else null
                     val stream = sequence {
-                        if (cover != null) yield(ArchivePage("Cover", png(cover), cover.width, cover.height, isCover = true))
+                        if (cover != null) yield(ArchivePage("Cover", archivePng(cover), cover.width, cover.height, isCover = true))
                         for ((chapter, page) in chapterFrames(2, options.orientation == "LANDSCAPE")) {
-                            yield(ArchivePage(chapter.name, png(page), page.width, page.height))
+                            yield(ArchivePage(chapter.name, archivePng(page), page.width, page.height))
                         }
                     }
                     pageCount = BookArchiveWriter.write(actual, stream, output, meta)
@@ -300,6 +300,8 @@ object MihonNooirExporter {
      * MangaPoint encodes e-reader page images as low-bit-depth PNG; grayscale
      * avoids an unnecessary alpha channel and reduces decoder RAM pressure.
      */
+    private fun archivePng(page: dev.nooir.bridge.QuantizedPage): ByteArray = page.colorPng ?: png(page)
+
     private fun png(page: dev.nooir.bridge.QuantizedPage): ByteArray {
         val width = page.width
         val height = page.height
