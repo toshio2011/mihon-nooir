@@ -10,6 +10,7 @@ The revised CI fixture bundle is `manganooir-readable-reader-interop-fixtures`. 
 | --- | --- |
 | `MangaNooir_Readable_EPUB2_X4.epub` | Genuine EPUB 2.0.1 fixed-image manga with NCX, cover and real illustrated pages |
 | `MangaNooir_Readable_EPUB3_X4.epub` | EPUB 3 fixed-image manga with XHTML nav, cover and the same pages |
+| `MangaNooir_Reflow_EPUB3_SelectableText.epub` | Separate EPUB 3 PDF/web-style exporter, with real selectable paragraphs and an illustration |
 | `MangaNooir_Readable_XTC_X4_480x800.xtc` | Full-size X4, 1-bit B/W (48,000 bitmap bytes/page) |
 | `MangaNooir_Readable_XTCH_X4_480x800.xtch` | Full-size X4, four-level grayscale (96,000 bitmap bytes/page) |
 | `MangaNooir_LowMemDiagnostic_XTC_240x400.xtc` | Low-memory diagnostic, 1-bit (12,000 bitmap bytes/page) |
