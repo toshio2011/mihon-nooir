@@ -42,3 +42,9 @@ The CI workflow builds synthetic, freely redistributable EPUB 2, XTC and XTCH bo
 Reconvert existing manga only to **obtain EPUB 2** or to strip a prior private XTC/XTCH JSON trailer for portability. EPUB 3 exports and otherwise working reader files need not automatically be regenerated. Existing MangaNooir preferences and web/PDF converters remain separate.
 
 [Technical XTC synopsis and cover notes](XTC_METADATA.md) · [Orientation / overlap](ORIENTATION_OVERLAP.md) · [Draft PR #21](https://github.com/toshio2011/mihon-nooir/pull/21)
+
+## Experimental EPUB section grouping (draft PR #22)
+
+MangaNooir's **EPUB pages per XHTML** setting applies to EPUB 2 Classic and EPUB 3 only. The default is **1 page per XHTML**, preserving the previously device-tested layout. Select **5** to group up to five consecutive manga images into one XHTML document; groups always stop at chapter boundaries (for example, a 7-page chapter becomes 5 + 2, not 5 + 2 + pages from the next chapter). Images remain separate PNG assets. The OPF spine lists XHTML groups, while NCX (EPUB 2) or navigation XHTML (EPUB 3) links to the start of each chapter. Each image is wrapped in a page-break container.
+
+This option is experimental: readers may paginate multi-image XHTML differently or take longer to process larger sections. Test page turning, chapter navigation, cover thumbnails and first-open latency on your actual reader before preferring 5 over the default 1. XTC, XTCH and CBZ are unaffected. Existing saved preferences migrate to 1 automatically.
