@@ -246,12 +246,12 @@ private fun writeArchive(file: File, format: ExportFormat) {
     }
 }
 
-private fun writeReflow(file: File) {
+private fun writeReflow(file: File, format: ReflowEpubFormat) {
     // The PDF/web writer emits selectable XHTML prose, NOT fixed image-page text.
     // Leave author, summary and source URL blank to exercise optional EPUB 3 metadata.
     ReflowEpubWriter.write(file, ReflowMetadata(
         title = "MangaNooir - Selectable Text and Illustrations",
-    )) { epub ->
+    ), format) { epub ->
         val href = epub.addImage(
             ReflowEpubWriter.ImageAsset(StoryPages.png(480, 800, 1), "png", "image/png"),
             isCover = true,
@@ -260,7 +260,8 @@ private fun writeReflow(file: File) {
             "<p>On a quiet morning, Mira opened her e-reader and found a book with real words, " +
             "real sentences, and an illustration. Every paragraph in this chapter is selectable text.</p>" +
             "<figure><img src=\"" + href + "\" alt=\"An illustrated story page\"/></figure>" +
-            "<p>She turned the page. This EPUB did not pretend a white rectangle was a story.</p>")
+            "<p>She turned the page. This EPUB did not pretend a white rectangle was a story.</p>" +
+            "<table><tr><th>Room</th><th>Clue</th></tr><tr><td>Study</td><td>Floor plan</td></tr></table>")
         epub.addSection("Chapter Two", "<h1>Chapter Two: The Test</h1>" +
             "<p>Changing the font size should reflow this prose. The image remains separate " +
             "and correctly referenced through the EPUB manifest.</p>")
@@ -278,6 +279,11 @@ private fun writeReflow(file: File) {
             .toString(Charsets.UTF_8)
         check(body1.contains("Every paragraph in this chapter is selectable text."))
         check(body1.contains("../images/img00001.png"))
+        check(body1.contains("<table>") && body1.contains("Floor plan"))
+        if (format == ReflowEpubFormat.EPUB2) {
+            check(!body1.contains("<figure>") && body1.contains("class=\\"illustration\\""))
+            check(zip.getEntry("OEBPS/toc.ncx") != null)
+        } else check(zip.getEntry("OEBPS/nav.xhtml") != null)
         check(body2.contains("Changing the font size should reflow this prose."))
         check(zip.getEntry("OEBPS/images/img00001.png") != null)
     }
@@ -309,7 +315,8 @@ fun main() {
     try {
         writeArchive(File(folder, "MangaNooir_Readable_EPUB2_X4.epub"), ExportFormat.EPUB2)
         writeArchive(File(folder, "MangaNooir_Readable_EPUB3_X4.epub"), ExportFormat.EPUB)
-        writeReflow(File(folder, "MangaNooir_Reflow_EPUB3_SelectableText.epub"))
+        writeReflow(File(folder, "MangaNooir_Reflow_EPUB3_SelectableText.epub"), ReflowEpubFormat.EPUB3)
+        writeReflow(File(folder, "MangaNooir_Reflow_EPUB2_SelectableText.epub"), ReflowEpubFormat.EPUB2)
         for (fmt in XtcFormat.entries) {
             writeNative(File(folder, "MangaNooir_Readable_" + fmt.name + "_X4_480x800." + fmt.extension),
                 480, 800, fmt)
