@@ -11,6 +11,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -86,6 +91,7 @@ data class MangaConversionOptions(
 
 @Composable
 fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaConversionOptions) -> Unit) {
+    var epubExpanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Conversion preset")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -122,7 +128,11 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
             }
         }
         Text("XTC and XTCH always use 1-bit / 2-bit grayscale. Color EPUBs may use more storage and memory.")
-        Text("EPUB 2 / EPUB 3 section grouping")
+        TextButton(onClick = { epubExpanded = !epubExpanded }) {
+            Text(if (epubExpanded) "▾ EPUB section grouping (hide)" else "▸ EPUB section grouping (show)")
+        }
+        if (epubExpanded) {
+            Text("EPUB 2 / EPUB 3 section grouping")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(1 to "One page", 5 to "Custom", 0 to "Entire chapter").forEach { (value, label) ->
                 FilterChip(
@@ -147,6 +157,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
             )
         }
         Text("Entire chapter groups all its images in one XHTML. Experimental: larger sections may take longer to open on low-memory e-readers.")
+        }
         Text("Page orientation")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape").forEach { (value, title) ->
