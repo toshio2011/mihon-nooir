@@ -60,6 +60,15 @@ class ReflowEpubWriter private constructor(private val zip: ZipOutputStream, pri
 
     private fun finish() {
         require(sections.isNotEmpty()) { "No readable article or document content" }
+        // Metadata for articles/PDFs may be genuinely unavailable.
+        // EPUB 3 requires that any emitted Dublin Core element be non-empty.
+        val title = meta.title.ifBlank { "Untitled" }
+        val creatorTag = meta.author.takeIf { it.isNotBlank() }
+            ?.let { "<dc:creator>${xml(it)}</dc:creator>" }.orEmpty()
+        val descriptionTag = meta.description.takeIf { it.isNotBlank() }
+            ?.let { "<dc:description>${xml(it)}</dc:description>" }.orEmpty()
+        val sourceTag = meta.sourceUrl.takeIf { it.isNotBlank() }
+            ?.let { "<dc:source>${xml(it)}</dc:source>" }.orEmpty()
         val identifier = "urn:uuid:${UUID.randomUUID()}"
         val navItems = sections.joinToString("") { (name, title) ->
             "<li><a href=\"${xml(name)}\">${xml(title)}</a></li>"
@@ -72,10 +81,9 @@ class ReflowEpubWriter private constructor(private val zip: ZipOutputStream, pri
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="bookid">${xml(identifier)}</dc:identifier>
-<dc:title>${xml(meta.title)}</dc:title><dc:creator>${xml(meta.author)}</dc:creator>
+<dc:title>${xml(title)}</dc:title>$creatorTag
 <dc:language>${xml(meta.language.ifBlank { "en" })}</dc:language>
-<dc:description>${xml(meta.description)}</dc:description>
-<dc:source>${xml(meta.sourceUrl)}</dc:source><meta property="dcterms:modified">2026-10-19T00:00:00Z</meta>
+$descriptionTag$sourceTag<meta property="dcterms:modified">2026-10-19T00:00:00Z</meta>
 </metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 ${manifest.joinToString("")}</manifest><spine>$spine</spine></package>""".toByteArray(Charsets.UTF_8))
     }
