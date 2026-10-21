@@ -29,11 +29,12 @@ data class MangaConversionOptions(
     val overlapPercent: Int = 8,         // repeating rows on long WEBTOON strips, 0..50
     val landscapeClockwise: Boolean = true, // turn content clockwise for XTC/XTCH
     val includeCover: Boolean = true,
-    val epubColor: Boolean = false, // EPUB/CBZ only; XTC and XTCH remain panel grayscale       // optional dedicated series cover page
+    val epubColor: Boolean = false, // EPUB/CBZ only; XTC and XTCH remain grayscale
+    val epubPagesPerXhtml: Int = 1, // EPUB2/EPUB3 only; 1 preserves proven page-based layout
 ) {
     fun token() = listOf(preset, layout, cropWhiteMargins, splitSpreads, rightToLeft,
         contrast.coerceIn(0, 100), dither, orientation, overlapPercent.coerceIn(0, 50),
-        landscapeClockwise, includeCover, epubColor).joinToString("|")
+        landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(1, 30)).joinToString("|")
 
     companion object {
         fun preset(name: String): MangaConversionOptions = when (name) {
@@ -54,7 +55,7 @@ data class MangaConversionOptions(
             val v = raw.split("|")
             // Existing jobs/settings created by 1.0.4/1.0.5 stored seven tokens.
             // Preserve those values and migrate only the new options to defaults.
-            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12) return MangaConversionOptions()
+            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12 && v.size != 13) return MangaConversionOptions()
             return MangaConversionOptions(
                 preset = v[0].take(32),
                 layout = v[1].takeIf { it in setOf("AUTO", "PAGED", "WEBTOON") } ?: "AUTO",
@@ -69,6 +70,7 @@ data class MangaConversionOptions(
                 landscapeClockwise = v.getOrNull(9)?.toBooleanStrictOrNull() ?: true,
                 includeCover = v.getOrNull(10)?.toBooleanStrictOrNull() ?: true,
                 epubColor = v.getOrNull(11)?.toBooleanStrictOrNull() ?: false,
+                epubPagesPerXhtml = (v.getOrNull(12)?.toIntOrNull() ?: 1).coerceIn(1, 30),
             )
         }
 
@@ -117,6 +119,12 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
             }
         }
         Text("XTC and XTCH always use 1-bit / 2-bit grayscale. Color EPUBs may use more storage and memory.")
+        Text("EPUB 2 / EPUB 3 section grouping")
+        Text("Pages per XHTML · " + options.epubPagesPerXhtml + " (1 = original layout; try 5)")
+        Slider(value = options.epubPagesPerXhtml.toFloat(),
+            onValueChange = { onChange(options.copy(preset = "Custom", epubPagesPerXhtml = it.toInt().coerceIn(1, 30))) },
+            valueRange = 1f..30f, steps = 28)
+        Text("Experimental: groups pages within each chapter; larger sections may take longer to open on low-memory e-readers.")
         Text("Page orientation")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape").forEach { (value, title) ->
