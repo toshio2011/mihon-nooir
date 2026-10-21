@@ -49,6 +49,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var mode by remember { mutableStateOf("MIXED") }
+    var epubFormat by remember { mutableStateOf("EPUB3") }
     var workId by remember {
         mutableStateOf(prefs.getString(NooirPdfExportWorker.LAST_WORK, null)?.let {
             runCatching { UUID.fromString(it) }.getOrNull()
@@ -69,6 +70,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 NooirPdfExportWorker.HOST to host.trim(),
                 NooirPdfExportWorker.FOLDER to folder.trim(),
                 NooirPdfExportWorker.MODE to mode,
+                NooirPdfExportWorker.EPUB_FORMAT to epubFormat,
                 NooirPdfExportWorker.OUTPUT_NAME to outputName.trim(),
                 NooirPdfExportWorker.BOOK_TITLE to bookTitle.trim(),
                 NooirPdfExportWorker.BOOK_AUTHOR to bookAuthor.trim(),
@@ -128,6 +130,12 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 OutlinedTextField(value = outputName, onValueChange = { outputName = it.take(70) },
                     label = { Text("EPUB filename (without extension)") }, singleLine = true,
                     supportingText = { Text("Rename before conversion if the name already exists on XTEink.") })
+                Text("EPUB version")
+                FilterChip(selected = epubFormat == "EPUB2", onClick = { epubFormat = "EPUB2" },
+                    label = { Text("EPUB 2 · older readers") })
+                FilterChip(selected = epubFormat == "EPUB3", onClick = { epubFormat = "EPUB3" },
+                    label = { Text("EPUB 3 · newer readers") })
+                Text("Both formats support selectable text and embedded illustrations; reader support varies.")
                 Text("How should pages be converted?")
                 FilterChip(selected = mode == "MIXED", onClick = { mode = "MIXED" },
                     label = { Text("Reflowable text + illustrations") })
