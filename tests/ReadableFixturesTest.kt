@@ -281,7 +281,7 @@ private fun writeReflow(file: File, format: ReflowEpubFormat) {
         check(body1.contains("../images/img00001.png"))
         check(body1.contains("<table>") && body1.contains("Floor plan"))
         if (format == ReflowEpubFormat.EPUB2) {
-            check(!body1.contains("<figure>") && body1.contains("class=\\"illustration\\""))
+            check(!body1.contains("<figure>") && body1.contains("class=\"illustration\""))
             check(zip.getEntry("OEBPS/toc.ncx") != null)
         } else check(zip.getEntry("OEBPS/nav.xhtml") != null)
         check(body2.contains("Changing the font size should reflow this prose."))
