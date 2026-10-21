@@ -246,6 +246,43 @@ private fun writeArchive(file: File, format: ExportFormat) {
     }
 }
 
+private fun writeReflow(file: File) {
+    // The PDF/web writer emits selectable XHTML prose, NOT fixed image-page text.
+    // Leave author, summary and source URL blank to exercise optional EPUB 3 metadata.
+    ReflowEpubWriter.write(file, ReflowMetadata(
+        title = "MangaNooir - Selectable Text and Illustrations",
+    )) { epub ->
+        val href = epub.addImage(
+            ReflowEpubWriter.ImageAsset(StoryPages.png(480, 800, 1), "png", "image/png"),
+            isCover = true,
+        )
+        epub.addSection("Chapter One", "<h1>Chapter One: A Real Page</h1>" +
+            "<p>On a quiet morning, Mira opened her e-reader and found a book with real words, " +
+            "real sentences, and an illustration. Every paragraph in this chapter is selectable text.</p>" +
+            "<figure><img src=\"" + href + "\" alt=\"An illustrated story page\"/></figure>" +
+            "<p>She turned the page. This EPUB did not pretend a white rectangle was a story.</p>")
+        epub.addSection("Chapter Two", "<h1>Chapter Two: The Test</h1>" +
+            "<p>Changing the font size should reflow this prose. The image remains separate " +
+            "and correctly referenced through the EPUB manifest.</p>")
+    }
+    ZipFile(file).use { zip ->
+        val opf = zip.getInputStream(zip.getEntry("OEBPS/package.opf")).readBytes()
+            .toString(Charsets.UTF_8)
+        check(opf.contains("version=\"3.0\""))
+        for (tag in listOf("creator", "description", "source")) {
+            check(!opf.contains("<dc:" + tag + ">")) { "Empty EPUB 3 metadata: " + tag }
+        }
+        val body1 = zip.getInputStream(zip.getEntry("OEBPS/text/s00001.xhtml")).readBytes()
+            .toString(Charsets.UTF_8)
+        val body2 = zip.getInputStream(zip.getEntry("OEBPS/text/s00002.xhtml")).readBytes()
+            .toString(Charsets.UTF_8)
+        check(body1.contains("Every paragraph in this chapter is selectable text."))
+        check(body1.contains("../images/img00001.png"))
+        check(body2.contains("Changing the font size should reflow this prose."))
+        check(zip.getEntry("OEBPS/images/img00001.png") != null)
+    }
+}
+
 private fun writeNative(file: File, w: Int, h: Int, fmt: XtcFormat) {
     file.outputStream().use { out ->
         val result = XtcCodec.write(fmt, sequence {
@@ -272,6 +309,7 @@ fun main() {
     try {
         writeArchive(File(folder, "MangaNooir_Readable_EPUB2_X4.epub"), ExportFormat.EPUB2)
         writeArchive(File(folder, "MangaNooir_Readable_EPUB3_X4.epub"), ExportFormat.EPUB)
+        writeReflow(File(folder, "MangaNooir_Reflow_EPUB3_SelectableText.epub"))
         for (fmt in XtcFormat.entries) {
             writeNative(File(folder, "MangaNooir_Readable_" + fmt.name + "_X4_480x800." + fmt.extension),
                 480, 800, fmt)
