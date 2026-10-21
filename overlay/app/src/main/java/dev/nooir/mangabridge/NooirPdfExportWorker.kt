@@ -14,6 +14,7 @@ import androidx.work.Data
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import dev.nooir.bridge.NooirUpload
+import dev.nooir.bridge.ReflowEpubFormat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,6 +28,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         const val HOST = "pdf_host"
         const val FOLDER = "pdf_folder"
         const val MODE = "pdf_mode"
+        const val EPUB_FORMAT = "pdf_epub_format"
         const val OUTPUT_NAME = "pdf_output_name"
         const val BOOK_TITLE = "pdf_book_title"
         const val BOOK_AUTHOR = "pdf_book_author"
@@ -51,6 +53,8 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         val save = inputData.getString(SAVE_URI)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
+        val epubFormat = if (inputData.getString(EPUB_FORMAT) == "EPUB2")
+            ReflowEpubFormat.EPUB2 else ReflowEpubFormat.EPUB3
         val mode = if (inputData.getString(MODE) == "ORIGINAL_PAGES")
             NooirPdfToEpub.Mode.ORIGINAL_PAGES else NooirPdfToEpub.Mode.MIXED
         if (save == null && (host.isBlank() || !folder.startsWith("/") || folder.contains(".."))) {
@@ -102,7 +106,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                     id.toString().take(8) + ".epub")
                 try {
                     NooirPdfToEpub.convert(applicationContext, inputFile, epubFile, mode, name,
-                        inputData.getString(BOOK_TITLE), inputData.getString(BOOK_AUTHOR)) { page, total, stage ->
+                        inputData.getString(BOOK_TITLE), inputData.getString(BOOK_AUTHOR), epubFormat = epubFormat) { page, total, stage ->
                         if (isStopped) throw CancellationException("PDF conversion cancelled")
                         val percent = page * 100 / total.coerceAtLeast(1)
                         val info = "Page " + page + "/" + total + " · " + stage
