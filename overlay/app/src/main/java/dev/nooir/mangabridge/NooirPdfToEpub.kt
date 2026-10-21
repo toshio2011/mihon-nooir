@@ -126,8 +126,8 @@ object NooirPdfToEpub {
         titleHint: String? = null,
         titleOverride: String? = null,
         authorOverride: String? = null,
-        onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
+        onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ) {
         require(pdf.isFile && pdf.length() in 1..(100L * 1024 * 1024)) {
             "PDF must be between 1 byte and 100 MiB for experimental conversion"
