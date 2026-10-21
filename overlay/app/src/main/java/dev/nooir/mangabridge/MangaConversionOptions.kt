@@ -38,11 +38,12 @@ data class MangaConversionOptions(
     val landscapeClockwise: Boolean = true, // turn content clockwise for XTC/XTCH
     val includeCover: Boolean = true,
     val epubColor: Boolean = false, // EPUB/CBZ only; XTC and XTCH remain grayscale
+    val xtcExtendedMetadata: Boolean = false,
     val epubPagesPerXhtml: Int = 1, // 0 = entire chapter, 1 = original, 2..999 = custom
 ) {
     fun token() = listOf(preset, layout, cropWhiteMargins, splitSpreads, rightToLeft,
         contrast.coerceIn(0, 100), dither, orientation, overlapPercent.coerceIn(0, 50),
-        landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(0, 999)).joinToString("|")
+        landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(0, 999), xtcExtendedMetadata).joinToString("|")
 
     companion object {
         fun preset(name: String): MangaConversionOptions = when (name) {
@@ -63,7 +64,7 @@ data class MangaConversionOptions(
             val v = raw.split("|")
             // Existing jobs/settings created by 1.0.4/1.0.5 stored seven tokens.
             // Preserve those values and migrate only the new options to defaults.
-            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12 && v.size != 13) return MangaConversionOptions()
+            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12 && v.size != 13 && v.size != 14) return MangaConversionOptions()
             return MangaConversionOptions(
                 preset = v[0].take(32),
                 layout = v[1].takeIf { it in setOf("AUTO", "PAGED", "WEBTOON") } ?: "AUTO",
@@ -79,6 +80,7 @@ data class MangaConversionOptions(
                 includeCover = v.getOrNull(10)?.toBooleanStrictOrNull() ?: true,
                 epubColor = v.getOrNull(11)?.toBooleanStrictOrNull() ?: false,
                 epubPagesPerXhtml = (v.getOrNull(12)?.toIntOrNull() ?: 1).coerceIn(0, 999),
+                xtcExtendedMetadata = v.getOrNull(13)?.toBooleanStrictOrNull() ?: false,
             )
         }
 
@@ -92,6 +94,7 @@ data class MangaConversionOptions(
 @Composable
 fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaConversionOptions) -> Unit) {
     var epubExpanded by remember { mutableStateOf(false) }
+    var xtcExpanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Conversion preset")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -118,6 +121,18 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
                 onChange(options.copy(preset = "Custom", includeCover = it))
             })
             Text("Include separate series cover (if available)")
+        }
+        TextButton(onClick = { xtcExpanded = !xtcExpanded }) {
+            Text(if (xtcExpanded) "▾ XTC / XTCH metadata (hide)" else "▸ XTC / XTCH metadata (show)")
+        }
+        if (xtcExpanded) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Switch(checked = options.xtcExtendedMetadata, onCheckedChange = {
+                    onChange(options.copy(preset = "Custom", xtcExtendedMetadata = it))
+                })
+                Text("Include synopsis and extended metadata (experimental)")
+            }
+            Text("Off by default. Adds a JSON trailer; older readers may ignore it.")
         }
         Text("EPUB / CBZ image colors")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
