@@ -110,11 +110,8 @@ fun main() {
         check(runCatching {
             BookArchiveWriter.write(ExportFormat.EPUB2, tooMany, ByteArrayOutputStream(), meta)
         }.exceptionOrNull()?.message?.contains("512 KiB") == true)
-        val out = System.getenv("NOOIR_OUTPUT_DIR")
-        if (!out.isNullOrBlank()) {
-            File(out).mkdirs()
-            File(out, "MangaNooir_Epub2_folio_sample.epub").writeBytes(bytes.toByteArray())
-        }
+        // Structural test only. A human-readable fixture is emitted
+        // separately by ReadableFixturesTest.
     } finally {
         sample.delete()
     }
