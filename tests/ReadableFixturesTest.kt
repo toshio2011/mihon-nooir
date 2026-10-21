@@ -226,6 +226,8 @@ private fun writeArchive(file: File, format: ExportFormat) {
     ZipFile(file).use { zip ->
         val opf = zip.getInputStream(zip.getEntry("OEBPS/package.opf")).readBytes().toString(Charsets.UTF_8)
         check(opf.contains(if (format == ExportFormat.EPUB2) "version=\"2.0\"" else "version=\"3.0\""))
+        check(opf.contains("name=\"cover\"")) { "EPUB missing reader-compatible cover metadata: " + file.name }
+        check(opf.contains(if (format == ExportFormat.EPUB2) "id=\"cover-image\"" else "properties=\"cover-image\"")) { "EPUB cover manifest missing: " + file.name }
         check(opf.contains("MangaNooir - A Real Test Story"))
         check(zip.getEntry(if (format == ExportFormat.EPUB2) "OEBPS/toc.ncx" else "OEBPS/nav.xhtml") != null)
         var distinctPixels = 0
