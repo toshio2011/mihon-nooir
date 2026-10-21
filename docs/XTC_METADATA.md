@@ -1,37 +1,32 @@
-# XTC/XTCH cover and synopsis (experimental)
+# XTC and XTCH — format metadata, covers, and synopsis
 
-This work is tracked in [MangaNooir PR #11](https://github.com/toshio2011/mihon-nooir/pull/11) and the companion [Folio Nooir firmware PR](https://github.com/toshio2011/folio-nooir/pull/1). The [MangaNooir v1.0.11 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is publicly available; a user reports its XTCH cover displaying correctly on Folio Nooir. Its source and the optional companion firmware PR have **not** been merged into the stable/main application path. Broader XTEink firmware compatibility is still being tested; `main` application code remains v1.0.1.
+> **v1.0.12 experimental branch, not yet released** · [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Draft PR #21](https://github.com/toshio2011/mihon-nooir/pull/21)
 
-## Cover
+## Native data Folio Nooir actually reads
 
-For manga exported from Mihon, the experimental v1.0.11 converter looks for the **custom cover** first, then a readable **cached library cover**, and then the source extension's public artwork URL. A decodable cover is required as **page 0** for XTC/XTCH, and the manga chapters follow with their indices adjusted. If the cover is unavailable, the export now reports a **cover error** rather than claiming success with an accidental first-chapter cover. The Folio Nooir reader makes shelf thumbnails from page 0; an extra JPG file or a new reader parser is not required. After a new transfer, use **Retrieve All Book Details** on Folio Nooir if the shelf thumbnail cache is missing.
+The XTC/XTCH header contains title/author metadata and optional chapters. Folio Nooir reads a **128-byte UTF-8 title** and **64-byte UTF-8 author** from the 256-byte metadata block. Chapter table records are **96 bytes**, with start/end values **1-based**. A 16-byte page-table entry points to each uncompressed page.
 
-The same first-page cover improvement applies to EPUB and CBZ exports from Mihon.
+- **XTC 1-bit**: magic `XTC\\0`, page magic `XTG\\0`, MSB-first row-major bitmap; at 480×800 the page is **48,022 bytes** including the 22-byte image header.
+- **XTCH 2-bit**: magic `XTCH`, page magic `XTH\\0`, two right-to-left column-major vertical-bit planes; at 480×800 the page is **96,022 bytes**.
+- Both use binary format v1.0 and a 56-byte extended header. The reader expects valid absolute page offsets, image dimensions, and matching chapter indexes.
+- Folio Nooir uses **page 0** as its bookshelf thumbnail source; it does not require an embedded thumbnail payload.
 
-## Synopsis and other metadata
+## Choose whether to insert a dedicated cover
 
-XTC/XTCH's normal 256-byte metadata area does not have a native synopsis field. MangaNooir therefore stores an **optional extension after the final page**:
+**More conversion settings → Include separate series cover** defaults to on. MangaNooir takes genuine Mihon series artwork and adds it before the selected manga pages. The first selected chapter then starts at page index 1 (on-disk start number 2). No reading pages are discarded. When the option is off, the first selected manga page is page 0. If the cover was requested but no source artwork can be obtained, XTC/XTCH report a clear error rather than inventing artwork.
 
-```text
-[Unmodified XTC header, metadata, chapters, page table, images]
-[UTF-8 JSON payload] [4-byte little-endian JSON byte length] [NOOIRMD1]
-```
+MangaNooir XTCH output has been reported to display correctly on a repaired Folio Nooir X4; other firmware implementations need independent testing. Refresh thumbnails using the reader's **Refresh Book Cache** feature when appropriate.
 
-The JSON is bounded to 8192 bytes and carries available title, author, artist, synopsis, genres, publisher, language and identifier. Nothing is fabricated. No legacy image offset or page table is changed. Some third-party readers may reject trailing bytes; that remains to be tested.
+## Synopsis is not standard XTC/XTCH metadata
 
-### Folio Nooir support
+Folio Nooir's binary parser does not consume a standard synopsis field from XTC/XTCH. The earlier `NOOIRMD1` JSON trailer was private to MangaNooir and is **removed from normal v1.0.12 XTC/XTCH export** to keep books portable. The app still retains the source synopsis internally during conversion.
 
-- **Direct Wi-Fi upload:** after sending XTC/XTCH, the Android app can call Folio Nooir's **existing** `POST /api/book` endpoint to set title, author and synopsis as a stored bookshelf metadata override. That works independently of the new footer parser on firmware versions that support the API. If metadata sync fails, the transfer is still treated as successful but the UI reports a warning.
-- **SD card / USB / manual upload:** the [companion firmware PR](https://github.com/toshio2011/folio-nooir/pull/1) reads the optional footer and provides the synopsis to Library and Recent. Until that firmware is installed, an older reader ignores the synopsis payload.
-- **Cover:** Folio Nooir continues to use the first XTC page as its cover source.
+For compatible Folio Nooir versions, **direct Wi-Fi transfer** can independently call the reader's `POST /api/book` endpoint to store title, author and synopsis as a reader-side metadata override. That is **not embedded synopsis support**, and SD/USB copies cannot depend on it.
 
-## Testing
+A future optional, versioned `book.nooir.json` sidecar could associate synopsis with a filename/identifier, but **this is only a proposal**. The reader would need to implement sidecar lookup and validation. This project does **not** change Folio Nooir firmware.
 
-1. Export a manga with a known cached custom cover to XTC and XTCH.
-2. Check page 0 contains the cover, subsequent pages are in their original reading order, and chapter navigation starts at the right page.
-3. Transfer to an X4 running Folio Nooir and verify title, author, cover thumbnail and synopsis after refreshing book metadata if necessary.
-4. Copy a file manually to an SD card and verify synopsis **only on the companion firmware branch**.
-5. Confirm that ordinary legacy XTC files without the trailer still open.
-6. Check a title with **no readable cover**: experimental v1.0.11 XTC/XTCH export should **fail with a helpful message** rather than fabricate a cover. A missing synopsis must not be invented; optional Wi-Fi metadata sync can warn if unavailable.
+For cover and synopsis that work through standard EPUB metadata, choose **EPUB 2 Classic** or **EPUB 3 Modern**.
 
-A MangaNooir XTCH cover has been reported visible on a Folio Nooir X4; a full multi-format/multi-firmware test matrix is still outstanding. See [the reader cover / queue guide](DEVICE_FILES_AND_QUEUE.md) and [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md).
+## Re-exporting older books
+
+Previously exported XTC/XTCH files that open correctly can keep working. To obtain a strictly portable file **without the older private JSON footer**, re-export it with the v1.0.12 implementation once tested. Files transferred to other readers need the receiving firmware to understand XTC/XTCH regardless of their extension.

@@ -45,6 +45,13 @@ object XtcCodec {
         val h = page.height
         val depth = page.depth
         val rowLength = (w + 7) / 8
+        // Folio Nooir reads XTCH planes as ceil(width*height/8) bytes each,
+        // while the column-major writer needs width*ceil(height/8). Those
+        // layouts differ for non-8-aligned heights; fail rather than emit a
+        // deceptively valid image whose two gray planes will be misread.
+        require(depth != 2 || h % 8 == 0) {
+            "XTCH height must be divisible by 8 for Folio/CrossPoint-compatible decoding"
+        }
         val columnLength = (h + 7) / 8
         val bitmapSize = if (depth == 1) rowLength.toLong() * h else 2L * w * columnLength
         require(bitmapSize <= Int.MAX_VALUE - 22) { "Page too large" }
@@ -93,7 +100,7 @@ object XtcCodec {
         chapters: List<BookChapter> = emptyList(),
         chapterResolver: ((Int) -> List<BookChapter>)? = null,
         direction: ReadingDirection = ReadingDirection.RIGHT_TO_LEFT,
-        onPageEncoded: ((Int) -> Unit)? = null
+        onPageEncoded: ((Int) -> Unit)? = null,
     ): XtcWriteResult {
         require(spoolDirectory.isDirectory || spoolDirectory.mkdirs()) { "Cannot create spool directory" }
         val temp = File.createTempFile("nooir-pages-", ".bin", spoolDirectory)
@@ -123,6 +130,7 @@ object XtcCodec {
             val tableOffset = chapterOffset + chapterLength
             val dataOffset = tableOffset + entries.size * 16L
             require(dataOffset <= 0xffffffffL) { "XTC header too large" }
+            require(dataOffset <= Long.MAX_VALUE - dataLength) { "XTC output too large" }
             val header = ByteArray(56)
             val fileMagic = if (format == XtcFormat.XTC) byteArrayOf(0x58, 0x54, 0x43, 0) else byteArrayOf(0x58, 0x54, 0x43, 0x48)
             fileMagic.copyInto(header)
@@ -152,8 +160,11 @@ object XtcCodec {
             for (c in resolvedChapters) {
                 val bytes = ByteArray(96)
                 setFixedUtf8(bytes, 0, 80, c.name)
-                setU16(bytes, 80, c.firstPage)
-                setU16(bytes, 82, c.lastPage)
+                // Folio Nooir's parser expects 1-based chapter indexes and
+                // subtracts 1 during parsing. The zero-based page table and
+                // metadata coverPage index stay untouched.
+                setU16(bytes, 80, c.firstPage + 1)
+                setU16(bytes, 82, c.lastPage + 1)
                 output.write(bytes)
             }
             var pos = dataOffset

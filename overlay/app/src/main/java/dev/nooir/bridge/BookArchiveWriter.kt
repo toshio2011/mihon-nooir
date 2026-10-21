@@ -8,14 +8,15 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /** Already processed page image, not a manga-source URL. No server required. */
-data class ArchivePage(val chapter: String, val imagePng: ByteArray, val width: Int, val height: Int)
+data class ArchivePage(val chapter: String, val imagePng: ByteArray, val width: Int, val height: Int, val isCover: Boolean = false)
 
 /** EPUB 3 fixed-layout / CBZ writing with metadata embedded in the formats readers recognize.
  * Page arrays are processed one at a time so a long comic does not live in RAM.
  */
 object BookArchiveWriter {
     fun write(format: ExportFormat, pages: Sequence<ArchivePage>, output: OutputStream, meta: ExtendedMetadata): Int {
-        require(format == ExportFormat.EPUB || format == ExportFormat.CBZ)
+        require(format == ExportFormat.EPUB || format == ExportFormat.EPUB2 || format == ExportFormat.CBZ)
+        if (format == ExportFormat.EPUB2) return Epub2Writer.write(pages, output, meta)
         ZipOutputStream(output).use { zip ->
             if (format == ExportFormat.EPUB) {
                 val mimetype = "application/epub+zip".toByteArray(UTF_8)
@@ -29,10 +30,12 @@ object BookArchiveWriter {
             }
             val sections = linkedMapOf<String, MutableList<Int>>()
             var count = 0
+            var dedicatedCover = false
             for (page in pages) {
                 require(page.width > 0 && page.height > 0 && page.imagePng.isNotEmpty()) { "Invalid image page" }
                 require(count < 65535) { "Too many pages" }
                 count++
+                if (count == 1 && page.isCover) dedicatedCover = true
                 sections.getOrPut(page.chapter) { mutableListOf() }.add(count)
                 val imagePath = if (format == ExportFormat.EPUB) "OEBPS/images/p%05d.png".format(count)
                                 else "pages/p%05d.png".format(count)
@@ -44,18 +47,18 @@ object BookArchiveWriter {
             }
             require(count > 0) { "At least one manga page is required" }
             if (format == ExportFormat.EPUB) {
-                writeEpubIndex(zip, sections, count, meta)
+                writeEpubIndex(zip, sections, count, meta, dedicatedCover)
             } else {
-                writeComicInfo(zip, sections, count, meta)
+                writeComicInfo(zip, sections, count, meta, dedicatedCover)
             }
             return count
         }
     }
 
-    private fun writeComicInfo(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata) {
+    private fun writeComicInfo(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata, dedicatedCover: Boolean) {
         val bookmarks = sections.mapValues { it.value.first() - 1 }.entries.associate { it.value to it.key }
         val pages = (0 until count).joinToString("") { p ->
-            "<Page Image=\"$p\"" + (if (p == 0) " Type=\"FrontCover\"" else "") +
+            "<Page Image=\"$p\"" + (if (p == 0 && dedicatedCover) " Type=\"FrontCover\"" else "") +
                 (bookmarks[p]?.let { " Bookmark=\"${xml(it)}\"" } ?: "") + "/>"
         }
         entry(zip, "ComicInfo.xml", """<?xml version="1.0" encoding="UTF-8"?>
@@ -63,13 +66,13 @@ object BookArchiveWriter {
         entry(zip, "nooir-metadata.json", jsonMetadata(m)) // richer metadata for later round-trip; readers may ignore it
     }
 
-    private fun writeEpubIndex(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata) {
+    private fun writeEpubIndex(zip: ZipOutputStream, sections: Map<String, List<Int>>, count: Int, m: ExtendedMetadata, dedicatedCover: Boolean) {
         val uuid = m.identifier.ifBlank { "urn:uuid:${UUID.randomUUID()}" }
         val manifest = buildString {
             append("<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>")
             for (i in 1..count) {
                 append("<item id=\"i$i\" href=\"images/p%05d.png\" media-type=\"image/png\"".format(i))
-                if (i == 1) append(" properties=\"cover-image\"")
+                if (i == 1 && dedicatedCover) append(" properties=\"cover-image\"")
                 append("/>")
                 append("<item id=\"p$i\" href=\"text/p%05d.xhtml\" media-type=\"application/xhtml+xml\"/>".format(i))
             }
@@ -97,7 +100,8 @@ object BookArchiveWriter {
             else -> if (c.code >= 32 || c == '\n' || c == '\t') append(c)
         } }
     }
-    private fun jsonMetadata(m: ExtendedMetadata): String {
+    /** Shared JSON metadata for EPUB/CBZ and the optional XTC/XTCH tail. */
+    fun jsonMetadata(m: ExtendedMetadata): String {
         fun esc(s: String) = buildString { append('"'); s.forEach { c -> when(c) { '\\' -> append("\\\\"); '"' -> append("\\\""); '\n' -> append("\\n"); '\r' -> append("\\r"); '\t' -> append("\\t"); else -> if (c.code < 32) append("\\u%04x".format(c.code)) else append(c) } }; append('"') }
         return """{"title":${esc(m.title)},"author":${esc(m.author)},"artist":${esc(m.artist)},"description":${esc(m.description)},"genres":[${m.genres.joinToString(","){esc(it)}}],"publisher":${esc(m.publisher)},"language":${esc(m.language)},"series":${esc(m.series)},"identifier":${esc(m.identifier)},"sourceUrl":${esc(m.sourceUrl)},"status":${esc(m.status)},"rights":${esc(m.rights)}}"""
     }

@@ -5,12 +5,21 @@ enum class ExportFormat(val extension: String, val mime: String, val label: Stri
     AUTO("", "", "Automatic (for device)"),
     XTC("xtc", "application/octet-stream", "XTC · crisp black & white"),
     XTCH("xtch", "application/octet-stream", "XTCH · 4 gray levels"),
-    EPUB("epub", "application/epub+zip", "EPUB · broadly compatible"),
+    EPUB("epub", "application/epub+zip", "EPUB 3 · Modern"),
+    EPUB2("epub", "application/epub+zip", "EPUB 2 · Classic / e-reader compatible"),
     CBZ("cbz", "application/vnd.comicbook+zip", "CBZ · image archive");
 
-    fun resolved(device: String = "X4"): ExportFormat = if (this == AUTO) {
-        if (device.startsWith("X", true)) XTCH else EPUB
-    } else this
+    fun resolved(device: String = "X4"): ExportFormat {
+        val profile = NooirDeviceProfiles.forId(device)
+        val result = if (this == AUTO) profile.autoFormat else this
+        require(profile.accepts(result)) {
+            "${result.name} is not a supported export choice for ${profile.name}. Choose Auto or another supported format."
+        }
+        require(result != XTCH || profile.height % 8 == 0) {
+            "XTCH requires a canvas height divisible by 8 for Folio/CrossPoint-compatible bit planes. Change the custom height or choose XTC/EPUB/CBZ."
+        }
+        return result
+    }
 }
 
 /** Different formats have fundamentally different native metadata capabilities. */

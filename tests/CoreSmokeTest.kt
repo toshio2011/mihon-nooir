@@ -27,6 +27,40 @@ fun main() {
         check(book[result.fileBytes.toInt()-1] == XtcCodec.encodePage(page).last())
         check(String(book.copyOfRange(56,66)).startsWith("A 漫画"))
     }
+    // Portable XTC/XTCH ends at the final encoded image, with no private trailer.
+    for ((fmt, page) in listOf(XtcFormat.XTC to p, XtcFormat.XTCH to gray)) {
+        val output = ByteArrayOutputStream()
+        val result = XtcCodec.write(fmt, sequenceOf(page), output, work,
+            BookMetadata("Test", coverPage = 0))
+        val data = output.toByteArray()
+        val firstOffset = le64(data, 32).toInt()
+        check(data.size == firstOffset + XtcCodec.encodePage(page).size)
+        check(result.fileBytes == data.size.toLong())
+        check(!data.takeLast(8).toByteArray().contentEquals("NOOIRMD1".toByteArray()))
+    }
+    // Reader cover contract: Folio Nooir renders page zero for XTC/XTCH.
+    // A dedicated cover must occupy page zero, while chapter navigation starts at one.
+    for ((fmt, first) in listOf(XtcFormat.XTC to p, XtcFormat.XTCH to gray)) {
+        val second = QuantizedPage(first.width, first.height,
+            first.levels.map { ((if (fmt.depth == 1) 1 else 3) - (it.toInt() and 255)).toByte() }.toByteArray(),
+            fmt.depth)
+        val output = ByteArrayOutputStream()
+        val result = XtcCodec.write(fmt, sequenceOf(first, second), output, work,
+            BookMetadata("Cover QA", coverPage = 0),
+            chapters = listOf(BookChapter("Chapter 1", 1, 1)))
+        val bytes = output.toByteArray()
+        val chapterOffset = 56 + 256
+        val pageTableOffset = le64(bytes, 24).toInt()
+        val firstOffset = le64(bytes, 32).toInt()
+        check(result.pageCount == 2)
+        check(le16(bytes, 56 + 244) == 0) // metadata coverPage is zero-based
+        check(le16(bytes, chapterOffset + 80) == 2) // on-disk 1-based: chapter starts at zero-based page 1
+        check(le16(bytes, chapterOffset + 82) == 2)
+        check(le64(bytes, pageTableOffset) == firstOffset.toLong())
+        check(bytes.copyOfRange(firstOffset, firstOffset + XtcCodec.encodePage(first).size)
+            .contentEquals(XtcCodec.encodePage(first)))
+        check(!XtcCodec.encodePage(first).contentEquals(XtcCodec.encodePage(second)))
+    }
     val white = ByteArray(480*800) { 255.toByte() }
     val q = GrayscaleConverter.dither(480,800,white,1)
     check(q.levels.all { it == 1.toByte() })

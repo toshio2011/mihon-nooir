@@ -10,7 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -23,14 +23,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.nooir.bridge.ExportFormat
+import dev.nooir.bridge.NooirDeviceProfiles
 
 /** Lightweight settings dialog; always preserves Mihon's original downloads. */
 @Composable
 fun NooirExportDialog(
     mangaTitle: String,
+    selectedChapterCount: Int,
+    onlineSource: Boolean,
     onDismiss: () -> Unit,
-    onSave: (ExportFormat, String) -> Unit,
-    onSend: (ExportFormat, String, String, String) -> Unit,
+    onSave: (ExportFormat, String, Boolean, MangaConversionOptions) -> Unit,
+    onSend: (ExportFormat, String, String, String, Boolean, MangaConversionOptions, String) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
@@ -41,6 +44,10 @@ fun NooirExportDialog(
     var device by remember { mutableStateOf(prefs.getString("device", "X4") ?: "X4") }
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var destination by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
+    var quickExport by remember { mutableStateOf(false) }
+    var outputName by remember(mangaTitle) { mutableStateOf(mangaTitle) }
+    var showAdvanced by remember { mutableStateOf(false) }
+    var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
 
     fun saveSettings() {
         prefs.edit()
@@ -49,8 +56,11 @@ fun NooirExportDialog(
             .putString("host", host.trim())
             .putString("destination", destination.trim())
             .apply()
+        options.save(prefs)
     }
-    val canSend = host.trim().isNotEmpty() &&
+    val canExport = !quickExport || (onlineSource && selectedChapterCount >= 1)
+    val profile = NooirDeviceProfiles.forId(device)
+    val canSend = canExport && profile.xteinkWifi && outputName.isNotBlank() && host.trim().isNotEmpty() &&
         destination.trim().startsWith("/") && !destination.contains("..")
 
     AlertDialog(
@@ -62,18 +72,25 @@ fun NooirExportDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text("Manga: $mangaTitle")
-                Text("Device preset")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("X4", "X3").forEach { option ->
-                        FilterChip(
-                            selected = device == option,
-                            onClick = { device = option },
-                            label = { Text(option) },
-                        )
+                NooirDevicePicker(device) { id ->
+                    device = id
+                    if (!NooirDeviceProfiles.forId(id).accepts(selectedFormat)) selectedFormat = ExportFormat.AUTO
+                }
+                Text("Chapter source")
+                Row {
+                    Checkbox(checked = quickExport, enabled = onlineSource, onCheckedChange = { quickExport = it })
+                    TextButton(enabled = onlineSource, onClick = { quickExport = !quickExport }) {
+                        Text("Quick Export · fetch missing pages")
                     }
                 }
+                Text(
+                    if (!onlineSource) "Quick Export requires an online manga source."
+                    else if (quickExport) "Select any number of chapters first, even a whole volume. MangaNooir fetches and converts one chapter at a time, cleaning temporary images after each."
+                    else "Use Mihon's permanent downloads. If no chapters are selected, all downloaded chapters are exported."
+                )
+                if (quickExport) Text("Selected chapters: $selectedChapterCount")
                 Text("Output format")
-                ExportFormat.entries.forEach { choice ->
+                ExportFormat.entries.filter(profile::accepts).forEach { choice ->
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                         RadioButton(
                             selected = selectedFormat == choice,
@@ -84,34 +101,46 @@ fun NooirExportDialog(
                         }
                     }
                 }
-                Text("XTEink / Folio Nooir Wi-Fi transfer")
-                OutlinedTextField(
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
+                }
+                if (showAdvanced) MangaConversionSettings(options, onChange = { options = it })
+                Text(if (profile.xteinkWifi) "XTEink Wi-Fi transfer (compatible firmware only)"
+                    else "Direct XTEink Wi-Fi sending is unavailable for this reader. Save the file and transfer it with the reader’s supported method.")
+                if (profile.xteinkWifi) OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
                     label = { Text("Device hostname or IP") },
                     singleLine = true,
                     supportingText = { Text("Use crosspoint.local or the IP shown on your XTEink") },
                 )
-                OutlinedTextField(
+                if (profile.xteinkWifi) OutlinedTextField(
                     value = destination,
                     onValueChange = { destination = it },
                     label = { Text("Destination folder") },
                     singleLine = true,
                 )
-                Text("Start File Transfer on Nooir and connect both devices to the same Wi-Fi. Sending to an existing filename replaces it. Original Mihon downloads are kept.")
+                OutlinedTextField(
+                    value = outputName,
+                    onValueChange = { outputName = it.take(70) },
+                    label = { Text("Output filename (without extension)") },
+                    singleLine = true,
+                    supportingText = { Text("Change this name if the book already exists on the reader. The format extension is added automatically.") },
+                )
+                Text("MangaNooir checks the destination filename before converting. If it exists, this book fails safely and the next queued book continues.")
             }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = {
+                TextButton(enabled = canExport, onClick = {
                     saveSettings()
                     onDismiss()
-                    onSave(selectedFormat, device)
+                    onSave(selectedFormat, device, quickExport, options)
                 }) { Text("Save file") }
                 Button(enabled = canSend, onClick = {
                     saveSettings()
                     onDismiss()
-                    onSend(selectedFormat, device, host.trim(), destination.trim())
+                    onSend(selectedFormat, device, host.trim(), destination.trim(), quickExport, options, outputName.trim())
                 }) { Text("Send to XTEink") }
             }
         },
