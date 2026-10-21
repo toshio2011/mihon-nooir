@@ -30,10 +30,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: manganooir-epub2-xtc-xtch-interop-fixtures
+          name: manganooir-readable-reader-interop-fixtures
           path: tests/generated/*
           if-no-files-found: warn
-      - name: EPUBCheck 5.4.0 on synthetic EPUB 2 output
+      - name: EPUBCheck 5.4.0 on readable EPUB 2 and EPUB 3 outputs
         shell: bash
         run: |
           set -euo pipefail
@@ -43,7 +43,8 @@ jobs:
           unzip -q "$RUNNER_TEMP/epubcheck.zip" -d "$RUNNER_TEMP/epubcheck"
           JAR=$(find "$RUNNER_TEMP/epubcheck" -name epubcheck.jar -print -quit)
           test -n "$JAR"
-          java -jar "$JAR" tests/generated/MangaNooir_Epub2_folio_sample.epub
+          java -jar "$JAR" tests/generated/MangaNooir_Readable_EPUB2_X4.epub
+          java -jar "$JAR" tests/generated/MangaNooir_Readable_EPUB3_X4.epub
 
       - name: Read upstream pin
         id: pin
