@@ -85,7 +85,7 @@ fun main() {
             }
             check(entry.none { it.name.endsWith("nav.xhtml") })
         }
-        // If the real series cover is not supplied, do not fake EPUB 2 cover metadata.
+        // Without a dedicated series cover, use the first readable page as the shelf-cover fallback.
         val missing = ByteArrayOutputStream()
         BookArchiveWriter.write(ExportFormat.EPUB2,
             sequenceOf(ArchivePage("Chapter One", page, 480, 800)), missing,
@@ -98,7 +98,7 @@ fun main() {
                 if (next.name == "OEBPS/package.opf") opf = String(zip.readBytes(), UTF_8)
             }
         }
-        check(!opf.contains("name=\"cover\""))
+        check(opf.contains("name=\"cover\" content=\"cover-image\""))
         check(!opf.contains("<dc:creator>"))
         check(!opf.contains("<dc:description>"))
         check(opf.contains("<dc:title>"))
