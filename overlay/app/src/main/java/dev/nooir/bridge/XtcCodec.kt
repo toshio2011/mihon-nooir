@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets
 enum class XtcFormat(val extension: String, val depth: Int) { XTC("xtc", 1), XTCH("xtch", 2) }
 enum class ReadingDirection(val code: Int) { LEFT_TO_RIGHT(0), RIGHT_TO_LEFT(1), TOP_TO_BOTTOM(2) }
 
-data class QuantizedPage(val width: Int, val height: Int, val levels: ByteArray, val depth: Int) {
+data class QuantizedPage(val width: Int, val height: Int, val levels: ByteArray, val depth: Int, val colorPng: ByteArray? = null) {
     init {
         require(width in 1..65535 && height in 1..65535) { "Invalid page dimensions" }
         require(width.toLong() * height.toLong() == levels.size.toLong()) { "Pixel count mismatch" }
