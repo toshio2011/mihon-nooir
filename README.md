@@ -6,7 +6,7 @@
 
 Read manga on Android · Choose chapters · Convert books · Send to XTEink over Wi-Fi
 
-**[Four export formats in v1.0.12](docs/EXPORT_FORMATS_EPUB2.md)** · **[Start here](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) · [All guides](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md) · [FAQ](https://github.com/toshio2011/mihon-nooir/blob/main/docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+**[Reader sample troubleshooting](docs/READER_INTEROP_DIAGNOSTICS.md)** · **[Four export formats in v1.0.12](docs/EXPORT_FORMATS_EPUB2.md)** · **[Start here](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) · [All guides](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md) · [FAQ](https://github.com/toshio2011/mihon-nooir/blob/main/docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
 
 ![Android](https://img.shields.io/badge/platform-Android-blue)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
