@@ -34,6 +34,17 @@ fun main() {
    check(files.containsKey("META-INF/nooir-metadata.json"))
   }
  }
+ // EPUB 3 must not output empty Dublin Core elements (EPUBCheck RSC-005).
+ val sparse = ByteArrayOutputStream()
+ val sparseMeta = m.copy(title = "", author = "", publisher = "", rights = "", description = "", language = "", genres = emptyList())
+ check(BookArchiveWriter.write(ExportFormat.EPUB,
+    sequenceOf(ArchivePage("Page", byteArrayOf(1,2,3), 480,800)), sparse, sparseMeta) == 1)
+ val sparseOpf = String(contents(sparse.toByteArray()).getValue("OEBPS/package.opf"))
+ check(sparseOpf.contains("<dc:title>Untitled</dc:title>"))
+ check(sparseOpf.contains("<dc:language>und</dc:language>"))
+ for (tag in listOf("creator", "publisher", "rights", "description", "subject")) {
+   check(!sparseOpf.contains("<dc:" + tag + ">")) { "Unexpected empty optional EPUB 3 field: " + tag }
+ }
  check(ExportFormat.AUTO.resolved("X4")==ExportFormat.XTCH)
  check(ExportFormat.AUTO.resolved("X3")==ExportFormat.XTCH)
  check(ExportFormat.AUTO.resolved("X4_PRO")==ExportFormat.XTCH)
