@@ -78,10 +78,23 @@ object BookArchiveWriter {
             }
         }
         val spine = (1..count).joinToString("") { "<itemref idref=\"p$it\"/>" }
-        val subjects = m.genres.joinToString("") { "<dc:subject>${xml(it)}</dc:subject>" }
+        // EPUB 3 rejects empty optional Dublin Core values.
+        // Omit absent fields instead of emitting empty XML elements.
+        val title = m.title.ifBlank { "Untitled" }
+        val language = m.language.ifBlank { "und" }
+        val creator = m.author.takeIf { it.isNotBlank() }
+            ?.let { "<dc:creator>${xml(it)}</dc:creator>" }.orEmpty()
+        val publisher = m.publisher.takeIf { it.isNotBlank() }
+            ?.let { "<dc:publisher>${xml(it)}</dc:publisher>" }.orEmpty()
+        val description = m.description.takeIf { it.isNotBlank() }
+            ?.let { "<dc:description>${xml(it)}</dc:description>" }.orEmpty()
+        val rights = m.rights.takeIf { it.isNotBlank() }
+            ?.let { "<dc:rights>${xml(it)}</dc:rights>" }.orEmpty()
+        val subjects = m.genres.filter(String::isNotBlank)
+            .joinToString("") { "<dc:subject>${xml(it)}</dc:subject>" }
         val direction = if (m.direction == ReadingDirection.RIGHT_TO_LEFT) "rtl" else "ltr"
         entry(zip, "OEBPS/package.opf", """<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" prefix="rendition: http://www.idpf.org/vocab/rendition/#"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">${xml(uuid)}</dc:identifier><dc:title>${xml(m.title)}</dc:title><dc:creator>${xml(m.author)}</dc:creator><dc:publisher>${xml(m.publisher)}</dc:publisher><dc:language>${xml(m.language)}</dc:language><dc:description>${xml(m.description)}</dc:description><dc:rights>${xml(m.rights)}</dc:rights>$subjects<meta property="dcterms:modified">1970-01-01T00:00:00Z</meta><meta property="rendition:layout">pre-paginated</meta><meta property="rendition:orientation">auto</meta><meta property="rendition:spread">none</meta></metadata><manifest>$manifest</manifest><spine page-progression-direction="$direction">$spine</spine></package>""")
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" prefix="rendition: http://www.idpf.org/vocab/rendition/#"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">${xml(uuid)}</dc:identifier><dc:title>${xml(title)}</dc:title>$creator$publisher<dc:language>${xml(language)}</dc:language>$description$rights$subjects<meta property="dcterms:modified">1970-01-01T00:00:00Z</meta><meta property="rendition:layout">pre-paginated</meta><meta property="rendition:orientation">auto</meta><meta property="rendition:spread">none</meta></metadata><manifest>$manifest</manifest><spine page-progression-direction="$direction">$spine</spine></package>""")
         val chapters = sections.entries.joinToString("") { (title, pages) ->
             "<li><a href=\"text/p%05d.xhtml\">${xml(title)}</a></li>".format(pages.first())
         }
