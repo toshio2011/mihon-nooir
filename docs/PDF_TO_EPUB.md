@@ -51,3 +51,9 @@ You can have a **single EPUB** containing genuinely reflowable text chapters **a
 - [ ] Memory use, file cleanup, cancel during large document conversion.
 
 For Android-source details, see the experimental [PDF conversion PR](https://github.com/toshio2011/mihon-nooir/pulls). Track follow-up layout improvements at the [roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
+
+## EPUB version selector (draft PR #22)
+
+The PDF converter now offers **EPUB 2 · older readers** and **EPUB 3 · newer readers**. Both can contain reflowable selectable text, inline images and tables; the **Reflowable text + illustrations** versus **Keep original pages as images** setting is independent of the EPUB version. EPUB 2 writes an NCX table of contents; EPUB 3 writes a navigation XHTML. The choice is forwarded from the dialog through the background worker to the writer. This is **draft code** pending Android CI and physical XTEink testing, not a released feature.
+
+A scanned PDF remains image-based in either EPUB version (no OCR). Complex vector drawings and floor plans may be rendered as complete pages rather than partially extracted. Review resulting page order and illustration placement before sharing.
