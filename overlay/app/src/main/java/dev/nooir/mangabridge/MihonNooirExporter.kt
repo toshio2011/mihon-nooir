@@ -230,7 +230,7 @@ object MihonNooirExporter {
                     var activeName = ""
                     var sectionStart = 0
                     onStage("Preparing actual book cover", 0, ordered.size)
-                    val cover = if (options.includeCover) requireNotNull(coverPage(xtcFormat.depth)) {
+                    val cover = if (options.includeCover) requireNotNull(coverPage(xtcFormat.depth, coverOptions.copy(epubColor = false))) {
                         "Series cover unavailable. Open this manga in Mihon to refresh its cover, or disable Include separate series cover."
                     } else null
                     val stream = sequence {
