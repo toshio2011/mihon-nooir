@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -36,6 +38,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
     var jobs by remember { mutableStateOf<List<WorkInfo>>(emptyList()) }
     var filter by remember { mutableStateOf("Current") }
     var confirmCancelAll by remember { mutableStateOf(false) }
+    var expandedIds by remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(workManager) {
         workManager.getWorkInfosForUniqueWorkFlow(NooirDeviceWorkQueue.NAME)
@@ -140,30 +143,78 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                     Text(if (filter == "Current") "No active Nooir conversions or transfers."
                         else "No jobs to display yet.")
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = { expandedIds = visible.map { it.id.toString() }.toSet() }) {
+                        Text("Expand all")
+                    }
+                    TextButton(onClick = { expandedIds = emptySet() }) {
+                        Text("Collapse all")
+                    }
+                }
                 visible.forEach { job ->
-                    Text(label(job))
-                    Text(when (job.state) {
-                        WorkInfo.State.RUNNING -> stage(job).ifBlank { "Running" }
-                        WorkInfo.State.ENQUEUED -> "Queued; will start when previous job finishes"
-                        WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
-                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(job)) "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
-                        WorkInfo.State.FAILED -> "Failed: " +
-                            error(job).ifBlank {
-                                "This older task did not save an error message. Retry in the latest preview " +
-                                    "and check the task notification for the failing step."
+                    val key = job.id.toString()
+                    val expanded = key in expandedIds
+                    val isManga = job.tags.any { it.endsWith("NooirMangaExportWorker") }
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(label(job))
+                            Text(when (job.state) {
+                                WorkInfo.State.RUNNING -> stage(job).ifBlank { "Running" }
+                                WorkInfo.State.ENQUEUED -> "Queued; waiting for earlier jobs"
+                                WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
+                                WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(job))
+                                    "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
+                                WorkInfo.State.FAILED -> "Failed: " +
+                                    error(job).ifBlank { "Check task notification for details" }
+                                WorkInfo.State.CANCELLED -> "Cancelled"
+                            })
+                            if (job.state == WorkInfo.State.RUNNING) {
+                                val pct = progress(job)
+                                if (pct < 0) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                else {
+                                    LinearProgressIndicator(
+                                        progress = { pct.coerceIn(0, 100) / 100f },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    Text("$" + "{pct.coerceIn(0, 100)}% · upload completion requires reader confirmation")
+                                }
                             }
-                        WorkInfo.State.CANCELLED -> "Cancelled"
-                    })
-                    if (job.state == WorkInfo.State.RUNNING) {
-                        val pct = progress(job)
-                        if (pct < 0) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        else {
-                            LinearProgressIndicator(
-                                progress = { pct.coerceIn(0, 100) / 100f },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Text(pct.coerceIn(0, 100).toString() +
-                                "% · upload completion requires reader confirmation")
+                            TextButton(onClick = {
+                                expandedIds = if (expanded) expandedIds - key else expandedIds + key
+                            }) { Text(if (expanded) "Hide details" else "Show details") }
+                            if (expanded) {
+                                if (isManga) {
+                                    val selected = job.inputData.getInt(
+                                        NooirMangaExportWorker.KEY_SELECTED_CHAPTERS, 0)
+                                    val chapterNames = job.inputData.getString(
+                                        NooirMangaExportWorker.KEY_CHAPTER_PREVIEW).orEmpty()
+                                    val format = job.inputData.getString("format").orEmpty()
+                                    val device = job.inputData.getString("device").orEmpty()
+                                    val opts = MangaConversionOptions.fromToken(
+                                        job.inputData.getString("options"))
+                                    Text("Format: $" + "{format.ifBlank { "Auto" }} · Device: $" + "{device.ifBlank { "X4" }}")
+                                    Text("Selected chapters: $" + "{selected.takeIf { it > 0 }?.toString() ?: "See original selection"}")
+                                    if (chapterNames.isNotBlank()) {
+                                        Text(chapterNames)
+                                        if (selected > 12) Text("… and $" + "{selected - 12} more")
+                                    }
+                                    Text("Source: " + if (job.inputData.getBoolean("quick", false))
+                                        "Quick Export (online)" else "Downloaded chapters")
+                                    Text("Cover: " + if (opts.includeCover) "Include" else "Disabled")
+                                    Text("Orientation: " + opts.orientation +
+                                        " · Layout: " + opts.layout)
+                                    if (opts.xtcExtendedMetadata) Text("Extended XTC/XTCH metadata enabled")
+                                }
+                                val saved = job.inputData.getString("output_uri").orEmpty()
+                                val host = job.inputData.getString("host").orEmpty()
+                                val folder = job.inputData.getString("folder").orEmpty()
+                                if (saved.isNotBlank()) Text("Destination: phone file")
+                                else if (host.isNotBlank()) Text("Destination: $" + "{host + folder}")
+                                val detail = error(job)
+                                if (detail.isNotBlank()) Text("Error details: " + detail)
+                                Text("Job ID: " + key.take(8))
+                            }
                         }
                     }
                 }
