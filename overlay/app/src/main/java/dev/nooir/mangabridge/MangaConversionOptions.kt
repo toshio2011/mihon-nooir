@@ -3,6 +3,10 @@ package dev.nooir.mangabridge
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Slider
@@ -123,7 +127,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
             Text("Include separate series cover (if available)")
         }
         TextButton(onClick = { xtcExpanded = !xtcExpanded }) {
-            Text(if (xtcExpanded) "▾ XTC / XTCH metadata (hide)" else "▸ XTC / XTCH metadata (show)")
+            Text(if (xtcExpanded) "▾ Hide XTC / XTCH metadata" else "▸ Show XTC / XTCH metadata")
         }
         if (xtcExpanded) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -144,7 +148,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
         }
         Text("XTC and XTCH always use 1-bit / 2-bit grayscale. Color EPUBs may use more storage and memory.")
         TextButton(onClick = { epubExpanded = !epubExpanded }) {
-            Text(if (epubExpanded) "▾ EPUB section grouping (hide)" else "▸ EPUB section grouping (show)")
+            Text(if (epubExpanded) "▾ Hide EPUB section grouping" else "▸ Show EPUB section grouping")
         }
         if (epubExpanded) {
             Text("EPUB 2 / EPUB 3 section grouping")
