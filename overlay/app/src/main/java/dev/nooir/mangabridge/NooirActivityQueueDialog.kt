@@ -163,6 +163,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                     val key = job.id.toString()
                     val expanded = key in expandedIds
                     val isManga = job.tags.any { it.endsWith("NooirMangaExportWorker") }
+                    val input = NooirMangaJobStore.load(context, job.id) ?: androidx.work.Data.EMPTY
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(10.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -222,30 +223,30 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                             }) { Text(if (expanded) "Hide details" else "Show details") }
                             if (expanded) {
                                 if (isManga) {
-                                    val selected = job.inputData.getInt(
+                                    val selected = input.getInt(
                                         NooirMangaExportWorker.KEY_SELECTED_CHAPTERS, 0)
-                                    val chapterNames = job.inputData.getString(
+                                    val chapterNames = input.getString(
                                         NooirMangaExportWorker.KEY_CHAPTER_PREVIEW).orEmpty()
-                                    val format = job.inputData.getString("format").orEmpty()
-                                    val device = job.inputData.getString("device").orEmpty()
+                                    val format = input.getString("format").orEmpty()
+                                    val device = input.getString("device").orEmpty()
                                     val opts = MangaConversionOptions.fromToken(
-                                        job.inputData.getString("options"))
+                                        input.getString("options"))
                                     Text("Format: " + format.ifBlank { "Auto" } + " · Device: " + device.ifBlank { "X4" })
                                     Text("Selected chapters: " + (selected.takeIf { it > 0 }?.toString() ?: "See original selection"))
                                     if (chapterNames.isNotBlank()) {
                                         Text(chapterNames)
                                         if (selected > 12) Text("… and " + (selected - 12) + " more")
                                     }
-                                    Text("Source: " + if (job.inputData.getBoolean("quick", false))
+                                    Text("Source: " + if (input.getBoolean("quick", false))
                                         "Quick Export (online)" else "Downloaded chapters")
                                     Text("Cover: " + if (opts.includeCover) "Include" else "Disabled")
                                     Text("Orientation: " + opts.orientation +
                                         " · Layout: " + opts.layout)
                                     if (opts.xtcExtendedMetadata) Text("Extended XTC/XTCH metadata enabled")
                                 }
-                                val saved = job.inputData.getString("output_uri").orEmpty()
-                                val host = job.inputData.getString("host").orEmpty()
-                                val folder = job.inputData.getString("folder").orEmpty()
+                                val saved = input.getString("output_uri").orEmpty()
+                                val host = input.getString("host").orEmpty()
+                                val folder = input.getString("folder").orEmpty()
                                 if (saved.isNotBlank()) Text("Destination: phone file")
                                 else if (host.isNotBlank()) Text("Destination: " + host + folder)
                                 val skipped = job.outputData.getString(
