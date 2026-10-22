@@ -120,7 +120,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                     .putString("options", chosen.token()).build()
                 val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
                     .setInputData(data).apply {
-                        job.tags.filter { it.startsWith(TITLE_TAG_PREFIX) }.forEach(::addTag)
+                        job.tags.filter { it.startsWith(TITLE_TAG_PREFIX) }.forEach { addTag(it) }
                     }.build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
