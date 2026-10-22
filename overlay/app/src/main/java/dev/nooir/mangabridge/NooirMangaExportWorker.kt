@@ -67,9 +67,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             val manifest = File(dir, UUID.randomUUID().toString() + ".txt")
             manifest.writeText(chapterIds.distinct().joinToString("\n"))
             try {
-                val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
-                    .addTag(TITLE_TAG_PREFIX + mangaTitle.take(96))
-                    .setInputData(workDataOf(
+                val data = workDataOf(
                     "manga_id" to mangaId, "ids_file" to manifest.name,
                     "output_uri" to (destination?.toString() ?: ""),
                     "host" to host.orEmpty(), "folder" to folder,
@@ -78,7 +76,11 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                     KEY_OUTPUT_NAME to outputName,
                     KEY_SELECTED_CHAPTERS to chapterIds.distinct().size,
                     KEY_CHAPTER_PREVIEW to chapterNames.take(12).joinToString("\n").take(650)
-                )).build()
+                )
+                val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
+                    .addTag(TITLE_TAG_PREFIX + mangaTitle.take(96))
+                    .setInputData(data).build()
+                NooirMangaJobStore.save(context, request.id, data)
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
                 context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
@@ -101,7 +103,9 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                 NooirExportPreflightException.CHAPTERS, NooirExportPreflightException.RETRY)) {
                 "This job does not need preflight confirmation"
             }
-            val oldName = job.inputData.getString("ids_file").orEmpty()
+            val input = NooirMangaJobStore.load(context, job.id)
+                ?: error("Manga queue details expired. Re-select chapters in Mihon.")
+            val oldName = input.getString("ids_file").orEmpty()
             require(oldName.matches(Regex("[0-9a-f-]{36}\\.txt"))) { "Invalid chapter manifest" }
             val dir = File(context.filesDir, "manganooir_export_jobs")
             val original = File(dir, oldName)
@@ -109,19 +113,20 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             val next = File(dir, UUID.randomUUID().toString() + ".txt")
             original.copyTo(next)
             try {
-                val old = MangaConversionOptions.fromToken(job.inputData.getString("options"))
+                val old = MangaConversionOptions.fromToken(input.getString("options"))
                 val chosen = when (kind) {
                     NooirExportPreflightException.COVER -> old.copy(allowMissingCover = true)
                     NooirExportPreflightException.CHAPTERS -> old.copy(skipUnavailableChapters = true)
                     else -> old
                 }
-                val data = Data.Builder().putAll(job.inputData)
+                val data = Data.Builder().putAll(input)
                     .putString("ids_file", next.name)
                     .putString("options", chosen.token()).build()
                 val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
                     .setInputData(data).apply {
                         job.tags.filter { it.startsWith(TITLE_TAG_PREFIX) }.forEach { addTag(it) }
                     }.build()
+                NooirMangaJobStore.save(context, request.id, data)
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
                 markHandled(context, job.id.toString())
@@ -135,7 +140,8 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
 
         fun dismissPreflight(context: Context, job: WorkInfo) {
             require(job.outputData.getString(KEY_CONFIRMATION_KIND) != null)
-            val name = job.inputData.getString("ids_file").orEmpty()
+            val name = NooirMangaJobStore.load(context, job.id)
+                ?.getString("ids_file").orEmpty()
             if (name.matches(Regex("[0-9a-f-]{36}\\.txt"))) {
                 File(context.filesDir, "manganooir_export_jobs/" + name).delete()
             }
