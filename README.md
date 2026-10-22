@@ -15,7 +15,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MangaNooir is experimental and unofficial.** [v1.0.12 is now publicly available as an experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12). It publishes the exact APKs from [successful Android CI build #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368), including the merged [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) improvements. Physical Android/XTEink tests remain incomplete. **These CI-built APKs may have different signing certificates from previous previews; back up app data before replacing an older installation.**
+> **MangaNooir is experimental and unofficial.** [v1.0.12 is now published as an official GitHub release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12). It publishes the exact APKs from [successful Android CI build #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368), including the merged [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) improvements. Physical Android/XTEink tests remain incomplete. **These CI-built APKs may have different signing certificates from previous previews; back up app data before replacing an older installation.**
 
 ## Experimental v1.0.12 export improvements
 
@@ -32,7 +32,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 
 MangaNooir is built as a minimal Android overlay on the **full [Mihon](https://github.com/mihonapp/mihon)** app. Its aim is to keep Mihon's normal **reader, extensions, library, downloads, tracking, history, categories and backups**, while adding optional e-reader workflows.
 
-| What you want to do | Where to start in the **v1.0.11 preview** | Guide |
+| What you want to do | Where to start in **v1.0.12** | Guide |
 |---|---|---|
 | Export selected manga chapters | **Manga details → select chapters → Export** | [Choose chapters](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CHAPTER_SELECTION.md) |
 | Convert a manga to XTC / XTCH / EPUB / CBZ | **Manga details → Export → format / settings** | [Formats](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CONVERSION.md) |
@@ -46,9 +46,9 @@ MangaNooir is built as a minimal Android overlay on the **full [Mihon](https://g
 
 **Version reminder:** The new **Nooir Tools** hub, web/PDF converters, shared queue, and advanced controls are in the experimental **v1.0.12 release**. They are not in older v1.0.1 APKs. Mihon's native chapter Download Queue is separate and unchanged.
 
-## Install the experimental Android APK
+## Install the official v1.0.12 Android APK
 
-The latest publicly available build is **[v1.0.12 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12)**:
+The latest publicly available build is **[v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12)**:
 
 1. Open the [v1.0.12 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12).
 2. Under **Assets**, download an `.apk` directly; no ZIP extraction is required.
@@ -101,7 +101,7 @@ These statements describe the current **compiled preview code**, not proven phys
 
 This repository contains an **integration overlay**, not an independent rewrite of Mihon. Its [GitHub Actions workflow](.github/workflows/build-apk.yml) checks out the pinned Mihon revision from `config/mihon-upstream.sha`, applies `tools/apply_overlay.py`, runs smoke tests, and assembles a FOSS Android APK. Automated CI is not the same as on-device testing.
 
-- [**Merged PR #22**](https://github.com/toshio2011/mihon-nooir/pull/22) — latest source on `main`; [v1.0.12 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) published; real-device testing pending.
+- [**Merged PR #22**](https://github.com/toshio2011/mihon-nooir/pull/22) — latest source on `main`; [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) published; real-device testing pending.
 - [**Roadmap / feature requests**](https://github.com/toshio2011/mihon-nooir/issues/8) — improvements and known work.
 - [**Project handover**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/PROJECT_HANDOVER.md) — contributor context and technical status.
 
