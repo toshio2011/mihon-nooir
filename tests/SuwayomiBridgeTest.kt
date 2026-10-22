@@ -114,6 +114,17 @@ fun main() {
         check(String(bytes.copyOfRange(0, 4)) == "XTCH")
         check(u16(bytes, 6) == 5) { "Expected cover + four chapter pages" }
         check(u16(bytes, 56 + 246) == 2) { "Expected two chapters" }
+        for ((format, extension) in listOf("EPUB" to "epub", "XTC" to "xtc", "CBZ" to "cbz")) {
+            val file = File(root, "from-suwayomi-$format.$extension")
+            SuwayomiToNooir.main(arrayOf("--base-url", base, "--manga-id", "1", "--mode", "export",
+                "--chapters", "11,12", "--format", format, "--device", "X4", "--output", file.absolutePath))
+            check(file.length() > 100)
+            if (format == "XTC") check(u16(file.readBytes(), 6) == 5)
+            else ZipFile(file).use { zip ->
+                check(zip.getEntry(if (format == "CBZ") "ComicInfo.xml" else "OEBPS/package.opf") != null)
+            }
+        }
+        check(queued.get() == 1) { "Already-downloaded chapters should not be queued again" }
         check(runCatching { SuwayomiToNooir.main(flags) }.isFailure) { "Output collision must fail" }
         val bad = File(root, "unsafe.cbz")
         ZipOutputStream(bad.outputStream()).use { zip ->
@@ -127,7 +138,7 @@ fun main() {
         check(root.listFiles().orEmpty().none { it.name.startsWith(".nooir-suwayomi-") }) {
             "Temporary downloaded archives should be removed"
         }
-        println("Suwayomi D0 mock contract passed: GraphQL, explicit download, CBZ, cover, EPUB2, XTCH, ordering, safe ZIP, no-overwrite")
+        println("Suwayomi D0 mock contract passed: GraphQL, explicit download, CBZ, cover, EPUB2/3, XTC/XTCH, CBZ output, ordering, safe ZIP, no-overwrite")
     } finally {
         server.stop(0)
         root.deleteRecursively()
