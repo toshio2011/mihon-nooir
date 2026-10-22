@@ -173,7 +173,14 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                 WorkInfo.State.ENQUEUED -> "Queued; waiting for earlier jobs"
                                 WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
                                 WorkInfo.State.SUCCEEDED -> if (needsAttention(job)) "Needs your decision"
-                                    else if (NooirDeviceWorkQueue.hasFailed(job))
+                                    else if (job.outputData.getString(
+                                        NooirMangaExportWorker.KEY_CONFIRMATION_KIND) != null) {
+                                        when (NooirMangaExportWorker.preflightResolution(context, key)) {
+                                            "requeued" -> "Decision accepted; new conversion queued"
+                                            "cancelled" -> "Cancelled before conversion"
+                                            else -> "Preflight ended without an export"
+                                        }
+                                    } else if (NooirDeviceWorkQueue.hasFailed(job))
                                     "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
                                 WorkInfo.State.FAILED -> "Failed: " +
                                     error(job).ifBlank { "Check task notification for details" }
