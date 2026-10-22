@@ -1,0 +1,63 @@
+name: Promote MangaNooir v1.0.12 to official release
+
+# Owner-approved promotion of the already-published, CI-verified APKs.
+# Do not rebuild or re-sign the APKs: changing signing keys would break upgrades.
+on:
+  push:
+    paths:
+      - docs/releases/v1.0.12-official.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manganooir-v1.0.12-official-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source, release and uploaded APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < config/version.txt)" = "1.0.12"
+          test -s docs/releases/v1.0.12-official.md
+          test "$(gh api repos/"$GH_REPO"/actions/runs/39734517368 --jq .conclusion)" = "success"
+          test "$(gh api repos/"$GH_REPO"/actions/runs/39734517368 --jq .head_sha)" = "5563d13336527c64b8f248066feabcc2f7e07278"
+          test "$(gh api repos/"$GH_REPO"/releases/tags/v1.0.12 --jq .target_commitish)" = "5563d13336527c64b8f248066feabcc2f7e07278"
+          gh api repos/"$GH_REPO"/releases/tags/v1.0.12 --jq '.assets[].name' > /tmp/manganooir-assets.txt
+          for expected in app-arm64-v8a-foss.apk app-armeabi-v7a-foss.apk app-universal-foss.apk app-x86-foss.apk app-x86_64-foss.apk SHA256SUMS.txt; do
+            grep -Fxq "$expected" /tmp/manganooir-assets.txt
+          done
+      - name: Mark existing v1.0.12 as official GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit v1.0.12 --repo "$GH_REPO" \
+            --title "MangaNooir v1.0.12" \
+            --notes-file docs/releases/v1.0.12-official.md \
+            --prerelease=false \
+            --latest
+      - name: Verify public official release status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/"$GH_REPO"/releases/tags/v1.0.12 --jq .prerelease)" = "false"
+          test "$(gh api repos/"$GH_REPO"/releases/tags/v1.0.12 --jq .draft)" = "false"
+          echo "v1.0.12 is an official published release; APKs unchanged."
