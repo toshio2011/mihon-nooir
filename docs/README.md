@@ -3,7 +3,7 @@
 [← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **Choose the guide for your installed version.** The latest [v1.0.12 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) publishes the APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) with [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) merged. Physical-device testing is still needed. Nooir Tools is absent from older v1.0.1 APKs.
+> **Choose the guide for your installed version.** The latest [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) publishes the APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) with [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) merged. Physical-device testing is still needed. Nooir Tools is absent from older v1.0.1 APKs.
 
 ## If this is your first time
 
@@ -34,7 +34,7 @@
 | [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
 | [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
 | [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
-| [v1.0.12 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) · [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) | Latest experimental APKs, compatibility changes and tests |
+| [v1.0.12 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) · [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) | Official release APKs, compatibility changes and tests |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |
 
 **Reminder:** A successful CI build doesn't establish that an individual public website exposes readable chapters, that PDF text reflows flawlessly, or that XTC/XTCH covers behave identically on every XTEink firmware. The app contains no manga, bundled manga extensions, AI OCR or access-control bypass.
