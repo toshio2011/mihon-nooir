@@ -1,0 +1,84 @@
+name: Publish MangaNooir v1.0.12 experimental preview
+
+# One-shot publication of the exact green APK build. Owner approved 22 Oct 2026.
+on:
+  push:
+    paths:
+      - docs/releases/v1.0.12.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: manganooir-v1.0.12-preview-release
+  cancel-in-progress: false
+
+jobs:
+  publish-preview:
+    name: Publish verified v1.0.12 APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify version, exact candidate and CI run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < config/version.txt)" = "1.0.12"
+          test -s docs/releases/v1.0.12.md
+          test "$(gh api repos/"$GH_REPO"/actions/runs/39734517368 --jq .head_sha)" = "5563d13336527c64b8f248066feabcc2f7e07278"
+          test "$(gh api repos/"$GH_REPO"/actions/runs/39734517368 --jq .conclusion)" = "success"
+          if gh release view v1.0.12 --repo "$GH_REPO" > /dev/null 2>&1; then
+            echo "v1.0.12 already exists; refusing overwrite."
+            exit 1
+          fi
+
+      - name: Download exact successful CI APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 39734517368 --repo "$GH_REPO" --name mihon-nooir-foss-apk --dir dist
+
+      - name: Verify APK archive integrity and create checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(dist/*-foss.apk)
+          if (( ${#apks[@]} < 1 )); then
+            echo "No expected *-foss.apk found in downloaded CI artifact."
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            test -s "$apk"
+            unzip -t "$apk" > /dev/null
+          done
+          (cd dist && sha256sum ./*-foss.apk > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      - name: Publish GitHub experimental prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v1.0.12 dist/*-foss.apk dist/SHA256SUMS.txt \
+            --repo "$GH_REPO" \
+            --title "MangaNooir v1.0.12 — Experimental Preview" \
+            --notes-file docs/releases/v1.0.12.md \
+            --target "5563d13336527c64b8f248066feabcc2f7e07278" \
+            --prerelease
