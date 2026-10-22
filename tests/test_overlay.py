@@ -270,6 +270,17 @@ class TestOverlay(unittest.TestCase):
             pdf_dialog = (work_dir/'NooirPdfToEpubDialog.kt').read_text()
             self.assertIn('NooirPdfExportWorker.BOOK_TITLE', pdf_dialog)
             self.assertIn('NooirPdfExportWorker.BOOK_AUTHOR', pdf_dialog)
+            self.assertIn('NooirPdfExportWorker.OUTPUT_FORMAT', pdf_dialog)
+            self.assertIn('NooirPdfExportWorker.DEVICE', pdf_dialog)
+            self.assertIn('"XTC"', pdf_dialog)
+            self.assertIn('"XTCH"', pdf_dialog)
+            pdf_xtc = (work_dir/'NooirPdfToXtc.kt').read_text()
+            self.assertIn('PdfRenderer', pdf_xtc)
+            self.assertIn('XtcCodec.write', pdf_xtc)
+            self.assertIn('GrayscaleConverter.dither', pdf_xtc)
+            pdf_worker = (work_dir/'NooirPdfExportWorker.kt').read_text()
+            self.assertIn('NooirPdfToXtc.convert', pdf_worker)
+            self.assertIn('NooirPdfToEpub.convert', pdf_worker)
 
 
 if __name__=='__main__': unittest.main()
