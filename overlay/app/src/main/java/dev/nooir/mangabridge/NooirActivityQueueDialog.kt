@@ -39,6 +39,11 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
     var filter by remember { mutableStateOf("Current") }
     var confirmCancelAll by remember { mutableStateOf(false) }
     var expandedIds by remember { mutableStateOf(setOf<String>()) }
+    var handledIds by remember { mutableStateOf(NooirMangaExportWorker.handledPreflightIds(context)) }
+    var actionError by remember { mutableStateOf("") }
+    fun needsAttention(job: WorkInfo): Boolean =
+        job.outputData.getString(NooirMangaExportWorker.KEY_CONFIRMATION_KIND) != null &&
+            job.id.toString() !in handledIds
 
     LaunchedEffect(workManager) {
         workManager.getWorkInfosForUniqueWorkFlow(NooirDeviceWorkQueue.NAME)
@@ -47,10 +52,11 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
 
     fun active(job: WorkInfo): Boolean = job.state in setOf(
         WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED,
-    )
+    ) || needsAttention(job)
     val waiting = jobs.count { it.state in setOf(WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED) }
     val running = jobs.count { it.state == WorkInfo.State.RUNNING }
     val finished = jobs.count { !active(it) }
+    val attention = jobs.count(::needsAttention)
     val visible = jobs.filter { when (filter) {
         "Current" -> active(it)
         "History" -> !active(it)
@@ -62,7 +68,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
             WorkInfo.State.BLOCKED -> 2
             WorkInfo.State.FAILED -> 3
             WorkInfo.State.CANCELLED -> 4
-            WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(it)) 3 else 5
+            WorkInfo.State.SUCCEEDED -> if (needsAttention(it)) -1 else if (NooirDeviceWorkQueue.hasFailed(it)) 3 else 5
         }
     }).take(40)
 
@@ -130,7 +136,9 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Running: " + running + " · Waiting: " + waiting + " · Finished: " + finished)
+                Text("Running: " + running + " · Waiting: " + waiting +
+                    " · Needs attention: " + attention + " · Finished: " + finished)
+                if (actionError.isNotBlank()) Text("Action failed: " + actionError)
                 Text("A failed export is recorded as failed here, but the shared FIFO queue continues with the next book.")
                 Text("All Nooir manga, local files, PDFs, web articles and novel batches use one sequential background queue. No extra processing runs on the e-reader.")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -163,7 +171,8 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                 WorkInfo.State.RUNNING -> stage(job).ifBlank { "Running" }
                                 WorkInfo.State.ENQUEUED -> "Queued; waiting for earlier jobs"
                                 WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
-                                WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(job))
+                                WorkInfo.State.SUCCEEDED -> if (needsAttention(job)) "Needs your decision"
+                                    else if (NooirDeviceWorkQueue.hasFailed(job))
                                     "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
                                 WorkInfo.State.FAILED -> "Failed: " +
                                     error(job).ifBlank { "Check task notification for details" }
@@ -178,6 +187,34 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                     Text(pct.coerceIn(0, 100).toString() + "% · upload completion requires reader confirmation")
+                                }
+                            }
+                            if (needsAttention(job)) {
+                                val kind = job.outputData.getString(
+                                    NooirMangaExportWorker.KEY_CONFIRMATION_KIND).orEmpty()
+                                Text(job.outputData.getString(
+                                    NooirMangaExportWorker.KEY_CONFIRMATION_DETAILS).orEmpty())
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(onClick = {
+                                        runCatching { NooirMangaExportWorker.resume(context, job) }
+                                            .onSuccess {
+                                                handledIds = NooirMangaExportWorker.handledPreflightIds(context)
+                                                actionError = ""
+                                            }.onFailure { actionError = it.message.orEmpty() }
+                                    }) {
+                                        Text(when (kind) {
+                                            NooirExportPreflightException.COVER -> "Continue without cover"
+                                            NooirExportPreflightException.CHAPTERS -> "Skip unavailable"
+                                            else -> "Retry check"
+                                        })
+                                    }
+                                    TextButton(onClick = {
+                                        runCatching { NooirMangaExportWorker.dismissPreflight(context, job) }
+                                            .onSuccess {
+                                                handledIds = NooirMangaExportWorker.handledPreflightIds(context)
+                                                actionError = ""
+                                            }.onFailure { actionError = it.message.orEmpty() }
+                                    }) { Text("Cancel this book") }
                                 }
                             }
                             TextButton(onClick = {
@@ -211,6 +248,13 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                 val folder = job.inputData.getString("folder").orEmpty()
                                 if (saved.isNotBlank()) Text("Destination: phone file")
                                 else if (host.isNotBlank()) Text("Destination: " + host + folder)
+                                val skipped = job.outputData.getString(
+                                    NooirMangaExportWorker.KEY_SKIPPED_CHAPTERS).orEmpty()
+                                if (skipped.isNotBlank()) Text("Skipped chapters: " + skipped)
+                                if (job.outputData.getBoolean(
+                                        NooirMangaExportWorker.KEY_MISSING_COVER, false)) {
+                                    Text("Exported without a separate series cover (confirmed)")
+                                }
                                 val detail = error(job)
                                 if (detail.isNotBlank()) Text("Error details: " + detail)
                                 Text("Job ID: " + key.take(8))
