@@ -33,6 +33,20 @@ Open **MangaNooir → More → Nooir Tools → Activity Queue · All current job
 
 Background work may still be interrupted by power/battery restrictions, revoked permissions, network loss, Android force-stop or full SD storage. Don't mistake a successful queued conversion for a physically verified reader upload.
 
+## Experimental per-book queue details and preflight (draft PR #22)
+
+In the draft build, **Activity Queue** shows a separate expandable card per job, with the manga title, format, device profile, chapter count, a preview of selected chapter names, progress, destination and error details. Use **Expand all** or **Collapse all**. Older jobs may lack the new chapter-preview fields.
+
+Before writing converted book bytes, MangaNooir now checks the requested cover and selected chapters:
+
+- **Missing cover:** first use a valid custom/cached image, then try the saved thumbnail URL. If that fails, automatically request refreshed manga details from the source (without refreshing chapters or changing the library entry), and retry the new thumbnail URL. If no usable cover is available, the job finishes in **Needs your decision** state. Choose **Continue without cover** to enqueue that one manga again without a separate cover, or **Cancel this book**. It never silently substitutes the first chapter as a cover.
+- **Unavailable chapters:** verify downloaded chapter files or, in Quick Export, the chapter page list and first remote image. If some chapters are locked, missing or unavailable, choose **Skip unavailable** to explicitly omit them, or cancel that manga. If every chapter is unavailable, no book is written.
+- **Transient source errors:** choose **Retry check**; temporary HTTP/network failures are not silently treated as locked or skipped.
+- The shared queue continues with other books while a previous job awaits a decision. Once you confirm, the affected book is requeued at the end.
+- Completed job details show skipped chapters and whether a missing cover was explicitly accepted.
+
+These checks do **not** guarantee that every later page is accessible: an image may fail after the first-page probe. In that case the conversion fails without publishing a partial completed book. The Android Save As picker may already have created an empty destination document before the background worker starts; preflight prevents writing a partial *book*, not that picker placeholder.
+
 ## What if the filename already exists?
 
 For experimental v1.0.11, **manga exports, phone-file transfers, PDF EPUBs, web articles and web-novel EPUBs** allow an output filename to be chosen before processing.

@@ -13,6 +13,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dev.nooir.bridge.ExportFormat
@@ -47,11 +48,18 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         const val KEY_TOTAL = "total"
         const val KEY_ERROR = "error"
         const val KEY_OUTPUT_NAME = "output_name"
+        const val KEY_SELECTED_CHAPTERS = "selected_chapters"
+        const val KEY_CHAPTER_PREVIEW = "chapter_preview"
+        const val KEY_CONFIRMATION_KIND = "preflight_kind"
+        const val KEY_CONFIRMATION_DETAILS = "preflight_details"
+        const val KEY_SKIPPED_CHAPTERS = "skipped_chapters"
+        const val KEY_MISSING_COVER = "missing_cover"
+        private const val PREF_HANDLED = "preflight_handled_ids"
 
         fun enqueue(context: Context, mangaId: Long, mangaTitle: String, chapterIds: List<Long>,
             destination: Uri?, host: String?, folder: String, format: ExportFormat,
             device: String, quick: Boolean, options: MangaConversionOptions,
-            outputName: String = ""): UUID {
+            outputName: String = "", chapterNames: List<String> = emptyList()): UUID {
             require(chapterIds.isNotEmpty()) { "Select at least one chapter" }
             require(destination != null || !host.isNullOrBlank()) { "Missing destination" }
             // Avoid WorkManager's 10KB Data limit with a private, durable chapter ID manifest.
@@ -59,16 +67,20 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             val manifest = File(dir, UUID.randomUUID().toString() + ".txt")
             manifest.writeText(chapterIds.distinct().joinToString("\n"))
             try {
-                val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
-                    .addTag(TITLE_TAG_PREFIX + mangaTitle.take(96))
-                    .setInputData(workDataOf(
+                val data = workDataOf(
                     "manga_id" to mangaId, "ids_file" to manifest.name,
                     "output_uri" to (destination?.toString() ?: ""),
                     "host" to host.orEmpty(), "folder" to folder,
                     "format" to format.name, "device" to device,
                     "quick" to quick, "options" to options.token(),
-                    KEY_OUTPUT_NAME to outputName
-                )).build()
+                    KEY_OUTPUT_NAME to outputName,
+                    KEY_SELECTED_CHAPTERS to chapterIds.distinct().size,
+                    KEY_CHAPTER_PREVIEW to chapterNames.take(12).joinToString("\n").take(650)
+                )
+                val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
+                    .addTag(TITLE_TAG_PREFIX + mangaTitle.take(96))
+                    .setInputData(data).build()
+                NooirMangaJobStore.save(context, request.id, data)
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
                 context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
@@ -78,6 +90,78 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                 manifest.delete()
                 throw e
             }
+        }
+
+
+        /** Requeue a preflight decision without blocking the shared FIFO chain.
+         * The original job has completed; its chapter manifest is copied before
+         * any old data is removed. Explicit decisions affect only this job.
+         */
+        fun resume(context: Context, job: WorkInfo): UUID {
+            val kind = job.outputData.getString(KEY_CONFIRMATION_KIND).orEmpty()
+            require(kind in setOf(NooirExportPreflightException.COVER,
+                NooirExportPreflightException.CHAPTERS, NooirExportPreflightException.RETRY)) {
+                "This job does not need preflight confirmation"
+            }
+            val input = NooirMangaJobStore.load(context, job.id)
+                ?: error("Manga queue details expired. Re-select chapters in Mihon.")
+            val oldName = input.getString("ids_file").orEmpty()
+            require(oldName.matches(Regex("[0-9a-f-]{36}\\.txt"))) { "Invalid chapter manifest" }
+            val dir = File(context.filesDir, "manganooir_export_jobs")
+            val original = File(dir, oldName)
+            require(original.isFile) { "Chapter selection expired. Re-select chapters in Mihon." }
+            val next = File(dir, UUID.randomUUID().toString() + ".txt")
+            original.copyTo(next)
+            try {
+                val old = MangaConversionOptions.fromToken(input.getString("options"))
+                val chosen = when (kind) {
+                    NooirExportPreflightException.COVER -> old.copy(allowMissingCover = true)
+                    NooirExportPreflightException.CHAPTERS -> old.copy(skipUnavailableChapters = true)
+                    else -> old
+                }
+                val data = Data.Builder().putAll(input)
+                    .putString("ids_file", next.name)
+                    .putString("options", chosen.token()).build()
+                val request = OneTimeWorkRequestBuilder<NooirMangaExportWorker>()
+                    .setInputData(data).apply {
+                        job.tags.filter { it.startsWith(TITLE_TAG_PREFIX) }.forEach { addTag(it) }
+                    }.build()
+                NooirMangaJobStore.save(context, request.id, data)
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+                markHandled(context, job.id.toString(), "requeued")
+                original.delete()
+                return request.id
+            } catch (e: Exception) {
+                next.delete()
+                throw e
+            }
+        }
+
+        fun dismissPreflight(context: Context, job: WorkInfo) {
+            require(job.outputData.getString(KEY_CONFIRMATION_KIND) != null)
+            val name = NooirMangaJobStore.load(context, job.id)
+                ?.getString("ids_file").orEmpty()
+            if (name.matches(Regex("[0-9a-f-]{36}\\.txt"))) {
+                File(context.filesDir, "manganooir_export_jobs/" + name).delete()
+            }
+            markHandled(context, job.id.toString(), "cancelled")
+        }
+
+        fun handledPreflightIds(context: Context): Set<String> =
+            context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
+                .getStringSet(PREF_HANDLED, emptySet()).orEmpty().toSet()
+
+        fun preflightResolution(context: Context, id: String): String =
+            context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
+                .getString("preflight_resolution_" + id, "").orEmpty()
+
+        private fun markHandled(context: Context, id: String, resolution: String) {
+            val prefs = context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
+            val next = prefs.getStringSet(PREF_HANDLED, emptySet()).orEmpty().toMutableSet()
+            next += id
+            prefs.edit().putStringSet(PREF_HANDLED, next)
+                .putString("preflight_resolution_" + id, resolution).apply()
         }
     }
 
@@ -131,6 +215,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         }
         setForeground(ForegroundInfo(notificationId, notif("Preparing manga export…"),
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0))
+        var needsDecision = false
         try {
             val mangaId = inputData.getLong("manga_id", -1L)
             val ids = manifest.readLines().mapNotNull(String::toLongOrNull).toSet()
@@ -156,7 +241,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                 }
             }
             progress("Preparing chapters", 0, count)
-            withContext(Dispatchers.IO) {
+            val exported = withContext(Dispatchers.IO) {
                 if (output.isNotEmpty()) {
                     MihonNooirExporter.export(applicationContext, downloadProvider,
                         manga, source, chapters, Uri.parse(output), format, device, quick, options,
@@ -178,7 +263,16 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             }
             manager.notify(notificationId, notif(if (output.isNotEmpty()) "Manga file saved"
                 else "XTEink confirmed manga upload", ongoing = false))
-            return Result.success()
+            return Result.success(Data.Builder()
+                .putString(KEY_SKIPPED_CHAPTERS, exported.skippedChapters.joinToString("; ").take(1500))
+                .putBoolean(KEY_MISSING_COVER, exported.missingCover).build())
+        } catch (e: NooirExportPreflightException) {
+            needsDecision = true
+            manager.notify(notificationId, notif("Action needed: " + e.message.orEmpty().take(80),
+                ongoing = false))
+            return Result.success(Data.Builder()
+                .putString(KEY_CONFIRMATION_KIND, e.kind)
+                .putString(KEY_CONFIRMATION_DETAILS, e.message.orEmpty().take(1700)).build())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -186,7 +280,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             manager.notify(notificationId, notif("Export failed: " + error.take(85), ongoing = false))
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), KEY_ERROR, error))
         } finally {
-            manifest.delete()
+            if (!needsDecision) manifest.delete()
         }
     }
 }

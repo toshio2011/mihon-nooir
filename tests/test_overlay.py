@@ -209,12 +209,34 @@ class TestOverlay(unittest.TestCase):
             # Regression from user feedback: missing XTC/XTCH book covers
             # must not be silently omitted while the manga job reports success.
             manga_export = (work_dir/'MihonNooirExporter.kt').read_text()
-            self.assertIn('requireNotNull(coverPage(xtcFormat.depth))', manga_export)
+            self.assertIn('NooirExportPreflightException.COVER', manga_export)
+            self.assertIn('NooirExportPreflightException.CHAPTERS', manga_export)
+            self.assertIn('NooirExportPreflightException.RETRY', manga_export)
+            self.assertIn('tmp.outputStream().use', manga_export)
+            self.assertLess(manga_export.index('NooirExportPreflightException.COVER'),
+                            manga_export.index('tmp.outputStream().use'))
             self.assertIn('yield(cover)', manga_export)
             self.assertIn('Preparing actual book cover', manga_export)
+            self.assertIn('val preparedCover', manga_export)
+            self.assertIn('skippedChapters', manga_export)
+            self.assertIn('KEY_CONFIRMATION_KIND', (work_dir/'NooirMangaExportWorker.kt').read_text())
+            self.assertIn('NooirMangaExportWorker.resume', activity)
+            self.assertIn('Selected chapters:', activity)
+            self.assertIn('Show details', activity)
+            self.assertIn('selectedFormat.resolved(device)', (work_dir/'NooirExportDialog.kt').read_text())
+            self.assertIn('if (isXtc)', opts)
+            self.assertIn('if (isEpub || supportsColor)', opts)
             cover_source = (work_dir/'NooirMangaCover.kt').read_text()
             self.assertIn('imageLooksValid', cover_source)
             self.assertIn('inJustDecodeBounds = true', cover_source)
+            self.assertIn('source.getMangaUpdate(', cover_source)
+            self.assertIn('fetchDetails = true', cover_source)
+            self.assertIn('fetchChapters = false', cover_source)
+            self.assertIn('fetchThumbnail(updatedUrl)', cover_source)
+            self.assertIn('getCustomCoverFile(manga.id)', cover_source)
+            self.assertLess(cover_source.index('getCustomCoverFile(manga.id)'),
+                            cover_source.index('source.getMangaUpdate('))
+            self.assertIn('Finding or refreshing series cover', manga_export)
             # Public HTML pages may be WordPress / Elementor or a story's
             # landing page, which must be distinguished from chapter content.
             web = (work_dir/'NooirWebArticle.kt').read_text()
@@ -256,6 +278,17 @@ class TestOverlay(unittest.TestCase):
             pdf_dialog = (work_dir/'NooirPdfToEpubDialog.kt').read_text()
             self.assertIn('NooirPdfExportWorker.BOOK_TITLE', pdf_dialog)
             self.assertIn('NooirPdfExportWorker.BOOK_AUTHOR', pdf_dialog)
+            self.assertIn('NooirPdfExportWorker.OUTPUT_FORMAT', pdf_dialog)
+            self.assertIn('NooirPdfExportWorker.DEVICE', pdf_dialog)
+            self.assertIn('"XTC"', pdf_dialog)
+            self.assertIn('"XTCH"', pdf_dialog)
+            pdf_xtc = (work_dir/'NooirPdfToXtc.kt').read_text()
+            self.assertIn('PdfRenderer', pdf_xtc)
+            self.assertIn('XtcCodec.write', pdf_xtc)
+            self.assertIn('GrayscaleConverter.dither', pdf_xtc)
+            pdf_worker = (work_dir/'NooirPdfExportWorker.kt').read_text()
+            self.assertIn('NooirPdfToXtc.convert', pdf_worker)
+            self.assertIn('NooirPdfToEpub.convert', pdf_worker)
 
 
 if __name__=='__main__': unittest.main()

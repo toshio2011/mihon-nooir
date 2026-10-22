@@ -11,8 +11,13 @@ import kotlin.math.max
 object PdfReflowLines {
     data class Line(val text: String, val x: Float, val y: Float, val fontSize: Float)
     data class Paragraph(val y: Float, val text: String)
+    /** Vertical range occupied by a substantial embedded illustration. */
+    data class FigureBand(val top: Float, val bottom: Float)
 
-    fun paragraphs(source: List<Line>, pageWidth: Float, pageHeight: Float): List<Paragraph> {
+    fun paragraphs(
+        source: List<Line>, pageWidth: Float, pageHeight: Float,
+        figureBands: List<FigureBand> = emptyList(),
+    ): List<Paragraph> {
         if (source.isEmpty()) return emptyList()
 
         // A single centered digit at the bottom of a novel page is the printed
@@ -92,7 +97,15 @@ object PdfReflowLines {
             }
         }
         for (line in visualLines) {
-            if (buffer.isNotEmpty() && line.y - previousY > paragraphGap) finish()
+            // When a floor-plan/image sits between two nearby lines, keep
+            // text before and after it in separate XHTML paragraphs. This lets
+            // the PDF converter interleave a <figure> at its actual position.
+            // Small margin icons are filtered out by the Android caller.
+            val figureBetween = figureBands.any { band ->
+                band.top >= previousY && band.bottom <= line.y && band.bottom > band.top
+            }
+            if (buffer.isNotEmpty() &&
+                (line.y - previousY > paragraphGap || figureBetween)) finish()
             if (buffer.isEmpty()) firstY = line.y
             else if (buffer.endsWith("\u00ad")) buffer.deleteCharAt(buffer.lastIndex)
             else if (!buffer.endsWith("-")) buffer.append(' ')

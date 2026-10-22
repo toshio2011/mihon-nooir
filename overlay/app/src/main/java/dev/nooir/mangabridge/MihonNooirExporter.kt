@@ -50,7 +50,10 @@ object MihonNooirExporter {
         ka.size.compareTo(kb.size)
     }
 
-    data class ExportResult(val pageCount: Int, val fileBytes: Long, val format: ExportFormat)
+    data class ExportResult(
+        val pageCount: Int, val fileBytes: Long, val format: ExportFormat,
+        val skippedChapters: List<String> = emptyList(), val missingCover: Boolean = false,
+    )
 
     suspend fun export(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
@@ -97,7 +100,7 @@ object MihonNooirExporter {
             ?: error("Quick Export requires a coroutine Job")
         val ordered = chapters.sortedWith(compareBy<Chapter> { it.chapterNumber }.thenBy { it.id })
         // Chapter storage lookups are suspending: do these before entering SequenceScope.
-        val locations = ordered.map { chapter ->
+        var locations = ordered.map { chapter ->
             chapter to provider.findChapterDir(
                 chapter.name, chapter.scanlator, chapter.url, manga.title, source,
             )
@@ -120,13 +123,16 @@ object MihonNooirExporter {
         // Folio Nooir uses the *first XTC page* to generate its shelf thumbnail.
         // Use the actual Mihon series artwork if we can obtain it; otherwise leave
         // original page ordering intact rather than fabricating a cover.
-        val coverUri = if (options.includeCover) NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder) else null
+        val coverUri = if (options.includeCover) {
+            onStage("Finding or refreshing series cover", 0, ordered.size)
+            NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder)
+        } else null
         val coverOptions = options.copy(
             layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
             orientation = "PORTRAIT", overlapPercent = 0,
         )
-        fun coverPage(depth: Int): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
-            pageSource.pages(listOf(uri), width, height, depth, coverOptions).singleOrNull()
+        fun coverPage(depth: Int, pageOptions: MangaConversionOptions = coverOptions): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
+            pageSource.pages(listOf(uri), width, height, depth, pageOptions).singleOrNull()
                 ?: error("Mihon cover image produced no XTC/XTCH page")
         }
         val safeTitle = manga.title.take(70).map { c ->
@@ -208,7 +214,8 @@ object MihonNooirExporter {
                     // XTC/XTCH must retain each target profile's portrait panel dimensions.
                     val frameWidth = if (archiveLandscape) height else width
                     val frameHeight = if (archiveLandscape) width else height
-                    for (page in pageSource.pages(uris, frameWidth, frameHeight, depth, options)) {
+                    for (page in pageSource.pages(uris, frameWidth, frameHeight, depth,
+                        if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) options.copy(epubColor = false) else options)) {
                         ownerJob.ensureActive()
                         yield(chapter to page)
                     }
@@ -219,6 +226,96 @@ object MihonNooirExporter {
         }
 
         try {
+            // Preflight is deliberately before tmp.outputStream(): no partial book is created.
+            // A missing/invalid cover requires an explicit decision, regardless of output format.
+            onStage("Checking cover and chapter access", 0, locations.size)
+            val preparedCover = if (options.includeCover) {
+                try {
+                    coverPage(if (actual == ExportFormat.XTC) 1 else 2,
+                        coverOptions.copy(epubColor = actual != ExportFormat.XTC &&
+                            actual != ExportFormat.XTCH && options.epubColor))
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
+            val missingCover = options.includeCover && preparedCover == null
+            if (missingCover && !options.allowMissingCover) {
+                throw NooirExportPreflightException(NooirExportPreflightException.COVER,
+                    "Series cover unavailable after checking cache, fetching the thumbnail and refreshing manga details from the source. Continue without a separate cover?")
+            }
+
+            val unavailable = mutableListOf<Pair<Chapter, String>>()
+            val retryable = mutableListOf<Pair<Chapter, String>>()
+            for ((chapter, downloaded) in locations) {
+                ownerJob.ensureActive()
+                if (downloaded != null) {
+                    val readable = if (downloaded.isFile) {
+                        downloaded.name?.endsWith(".cbz", ignoreCase = true) == true &&
+                            downloaded.length() > 0L
+                    } else {
+                        downloaded.listFiles().orEmpty().any { it.isFile && isImage(it.name) }
+                    }
+                    if (!readable) unavailable += chapter to "Downloaded chapter has no readable pages"
+                } else if (!quickExport || source !is HttpSource) {
+                    unavailable += chapter to "Chapter not downloaded"
+                } else {
+                    // Quick Export: probe the source and its first image to catch
+                    // paywalls/HTTP 403 before building any book. Remaining pages
+                    // are still validated during streaming, never silently skipped.
+                    try {
+                        val pages = source.getPageList(chapter.toSChapter())
+                        if (pages.isEmpty()) {
+                            unavailable += chapter to "Source returned no pages"
+                        } else if (pages.size > 1000) {
+                            retryable += chapter to "Chapter exceeds 1000 pages"
+                        } else {
+                            val first = pages.first()
+                            if (first.imageUrl.isNullOrBlank()) first.imageUrl = source.getImageUrl(first)
+                            source.getImage(first).use { response ->
+                                if (!response.isSuccessful) {
+                                    val reason = "HTTP " + response.code
+                                    if (NooirChapterAccess.classify(response.code) ==
+                                        NooirChapterAccess.Issue.UNAVAILABLE) {
+                                        unavailable += chapter to reason
+                                    } else retryable += chapter to reason
+                                } else if (response.body.byteStream().read() < 0) {
+                                    retryable += chapter to "First page was empty"
+                                }
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        val reason = e.message.orEmpty().take(100).ifBlank { "Source request failed" }
+                        if (NooirChapterAccess.classify(message = reason) ==
+                            NooirChapterAccess.Issue.UNAVAILABLE) {
+                            unavailable += chapter to reason
+                        } else retryable += chapter to reason
+                    }
+                }
+            }
+            fun chapterDetails(items: List<Pair<Chapter, String>>): String =
+                items.take(8).joinToString("; ") { it.first.name + " (" + it.second + ")" } +
+                    if (items.size > 8) "; and " + (items.size - 8) + " more" else ""
+            if (retryable.isNotEmpty()) {
+                throw NooirExportPreflightException(NooirExportPreflightException.RETRY,
+                    "Could not verify " + retryable.size + " chapter(s): " +
+                        chapterDetails(retryable) + ". Retry when the source is available.")
+            }
+            if (unavailable.isNotEmpty() && !options.skipUnavailableChapters) {
+                throw NooirExportPreflightException(NooirExportPreflightException.CHAPTERS,
+                    unavailable.size.toString() + " locked, missing or unavailable chapter(s): " +
+                        chapterDetails(unavailable) + ". Skip these chapters or cancel?")
+            }
+            val skippedNames = unavailable.map { it.first.name }
+            if (unavailable.isNotEmpty()) {
+                val skippedIds = unavailable.map { it.first.id }.toSet()
+                locations = locations.filterNot { it.first.id in skippedIds }
+                require(locations.isNotEmpty()) { "All selected chapters are unavailable; nothing to export" }
+            }
+
             val pageCount: Int
             tmp.outputStream().use { output ->
                 if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
@@ -229,9 +326,7 @@ object MihonNooirExporter {
                     var activeName = ""
                     var sectionStart = 0
                     onStage("Preparing actual book cover", 0, ordered.size)
-                    val cover = if (options.includeCover) requireNotNull(coverPage(xtcFormat.depth)) {
-                        "Series cover unavailable. Open this manga in Mihon to refresh its cover, or disable Include separate series cover."
-                    } else null
+                    val cover = preparedCover
                     val stream = sequence {
                         if (cover != null) { yield(cover); total++ }
                         for ((chapter, page) in chapterFrames(xtcFormat.depth)) {
@@ -253,20 +348,21 @@ object MihonNooirExporter {
                     pageCount = XtcCodec.write(
                         xtcFormat, stream, output, context.cacheDir,
                         metadata = meta.xtc().copy(coverPage = if (cover != null) 0 else null), direction = meta.direction,
+                        extendedMetadataJson = if (options.xtcExtendedMetadata) BookArchiveWriter.jsonMetadata(meta) else null,
                         chapterResolver = { written ->
                             check(total == written) { "Chapter navigation mismatch" }
                             sections.toList()
                         },
                     ).pageCount
                 } else {
-                    val cover = if (options.includeCover) coverPage(2) else null
+                    val cover = preparedCover
                     val stream = sequence {
-                        if (cover != null) yield(ArchivePage("Cover", png(cover), cover.width, cover.height, isCover = true))
+                        if (cover != null) yield(ArchivePage("Cover", archivePng(cover), cover.width, cover.height, isCover = true))
                         for ((chapter, page) in chapterFrames(2, options.orientation == "LANDSCAPE")) {
-                            yield(ArchivePage(chapter.name, png(page), page.width, page.height))
+                            yield(ArchivePage(chapter.name, archivePng(page), page.width, page.height))
                         }
                     }
-                    pageCount = BookArchiveWriter.write(actual, stream, output, meta)
+                    pageCount = BookArchiveWriter.write(actual, stream, output, meta, options.epubPagesPerXhtml)
                 }
             }
             if (destination != null) {
@@ -290,24 +386,62 @@ object MihonNooirExporter {
                         locations.size, locations.size)
                 }
             }
-            ExportResult(pageCount, tmp.length(), actual)
+            ExportResult(pageCount, tmp.length(), actual, skippedNames, missingCover)
         } finally {
             tempFolder.deleteRecursively()
         }
     }
 
+    /** Emit a compact 8-bit grayscale PNG, not Android's ARGB/RGBA PNG.
+     * MangaPoint encodes e-reader page images as low-bit-depth PNG; grayscale
+     * avoids an unnecessary alpha channel and reduces decoder RAM pressure.
+     */
+    private fun archivePng(page: dev.nooir.bridge.QuantizedPage): ByteArray = page.colorPng ?: png(page)
+
     private fun png(page: dev.nooir.bridge.QuantizedPage): ByteArray {
-        val pixels = IntArray(page.levels.size) { i ->
-            val level = page.levels[i].toInt() and 255
-            val gray = if (page.depth == 1) level * 255 else level * 85
-            Color.rgb(gray, gray, gray)
-        }
-        val bitmap = Bitmap.createBitmap(pixels, page.width, page.height, Bitmap.Config.ARGB_8888)
-        return try {
-            ByteArrayOutputStream().use { output ->
-                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) { "Could not encode PNG" }
-                output.toByteArray()
+        val width = page.width
+        val height = page.height
+        val scanlines = ByteArray((width + 1) * height)
+        for (y in 0 until height) {
+            val row = y * (width + 1)
+            scanlines[row] = 0 // PNG filter None
+            for (x in 0 until width) {
+                val level = page.levels[y * width + x].toInt() and 255
+                require(level <= if (page.depth == 1) 1 else 3) { "Invalid grayscale pixel level" }
+                scanlines[row + 1 + x] = (if (page.depth == 1) level * 255 else level * 85).toByte()
             }
-        } finally { bitmap.recycle() }
+        }
+        val compressed = ByteArrayOutputStream()
+        java.util.zip.DeflaterOutputStream(compressed).use { it.write(scanlines) }
+        val out = ByteArrayOutputStream()
+        out.write(byteArrayOf(137.toByte(), 80, 78, 71, 13, 10, 26, 10))
+        fun chunk(name: String, data: ByteArray) {
+            val type = name.toByteArray(Charsets.US_ASCII)
+            fun writeInt(v: Int) {
+                out.write((v ushr 24) and 255)
+                out.write((v ushr 16) and 255)
+                out.write((v ushr 8) and 255)
+                out.write(v and 255)
+            }
+            writeInt(data.size)
+            out.write(type)
+            out.write(data)
+            val crc = java.util.zip.CRC32()
+            crc.update(type)
+            crc.update(data)
+            writeInt(crc.value.toInt())
+        }
+        val ihdr = ByteArray(13)
+        for (i in 0..3) {
+            ihdr[i] = (width ushr (24 - i * 8)).toByte()
+            ihdr[4 + i] = (height ushr (24 - i * 8)).toByte()
+        }
+        ihdr[8] = 8 // 8 bits per sample
+        ihdr[9] = 0 // grayscale, no alpha
+        chunk("IHDR", ihdr)
+        chunk("IDAT", compressed.toByteArray())
+        chunk("IEND", byteArrayOf())
+        return out.toByteArray()
     }
+
 }

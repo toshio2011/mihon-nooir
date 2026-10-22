@@ -14,6 +14,8 @@ import androidx.work.Data
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import dev.nooir.bridge.NooirUpload
+import dev.nooir.bridge.ReflowEpubFormat
+import dev.nooir.bridge.XtcFormat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,6 +29,9 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         const val HOST = "pdf_host"
         const val FOLDER = "pdf_folder"
         const val MODE = "pdf_mode"
+        const val EPUB_FORMAT = "pdf_epub_format"
+        const val OUTPUT_FORMAT = "pdf_output_format"
+        const val DEVICE = "pdf_device"
         const val OUTPUT_NAME = "pdf_output_name"
         const val BOOK_TITLE = "pdf_book_title"
         const val BOOK_AUTHOR = "pdf_book_author"
@@ -51,6 +56,16 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         val save = inputData.getString(SAVE_URI)?.let(Uri::parse)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
+        val epubFormat = if (inputData.getString(EPUB_FORMAT) == "EPUB2")
+            ReflowEpubFormat.EPUB2 else ReflowEpubFormat.EPUB3
+        val target = inputData.getString(OUTPUT_FORMAT).orEmpty()
+        val xtcFormat = when (target) {
+            "XTC" -> XtcFormat.XTC
+            "XTCH" -> XtcFormat.XTCH
+            else -> null
+        }
+        val device = inputData.getString(DEVICE) ?: "X4"
+        val extension = xtcFormat?.extension ?: "epub"
         val mode = if (inputData.getString(MODE) == "ORIGINAL_PAGES")
             NooirPdfToEpub.Mode.ORIGINAL_PAGES else NooirPdfToEpub.Mode.MIXED
         if (save == null && (host.isBlank() || !folder.startsWith("/") || folder.contains(".."))) {
@@ -60,7 +75,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
             NooirTransferWorker.CHANNEL_ID, "MangaNooir file transfers", NotificationManager.IMPORTANCE_LOW,
         ))
         setForeground(ForegroundInfo(notificationId,
-            notice("MangaNooir · PDF to EPUB", "Preparing PDF"),
+            notice("MangaNooir · PDF conversion", "Preparing PDF"),
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0))
         val inputFile = File(applicationContext.cacheDir, "pdf-source-" + id + ".pdf")
         var name = "Converted PDF"
@@ -72,7 +87,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                 cursor?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
                 val desiredName = inputData.getString(OUTPUT_NAME).orEmpty()
                     .ifBlank { name.substringBeforeLast('.', name) }
-                val outputName = NooirDestinationGuard.filename(desiredName, "epub")
+                val outputName = NooirDestinationGuard.filename(desiredName, extension)
                 if (save == null) {
                     setProgressAsync(Data.Builder().putString(PHASE, "Checking existing XTEink filenames").build())
                     NooirDestinationGuard.requireOnReader(host, folder, outputName)
@@ -98,38 +113,52 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                 val shortName = name.substringBeforeLast('.', name)
                     .map { c -> if (c.isLetterOrDigit() && c.code < 128 || c in " -_") c else '_' }
                     .joinToString("").take(80).ifBlank { "Converted-PDF" }
-                val epubFile = File(applicationContext.cacheDir, shortName + "-" +
-                    id.toString().take(8) + ".epub")
+                val convertedFile = File(applicationContext.cacheDir, shortName + "-" +
+                    id.toString().take(8) + "." + extension)
                 try {
-                    NooirPdfToEpub.convert(applicationContext, inputFile, epubFile, mode, name,
-                        inputData.getString(BOOK_TITLE), inputData.getString(BOOK_AUTHOR)) { page, total, stage ->
-                        if (isStopped) throw CancellationException("PDF conversion cancelled")
-                        val percent = page * 100 / total.coerceAtLeast(1)
-                        val info = "Page " + page + "/" + total + " · " + stage
-                        setProgressAsync(Data.Builder().putString(PHASE, info)
-                            .putInt(PERCENT, percent).build())
-                        manager.notify(notificationId, notice("MangaNooir · PDF to EPUB", info, percent))
+                    if (xtcFormat != null) {
+                        NooirPdfToXtc.convert(inputFile, convertedFile, xtcFormat, device,
+                            inputData.getString(BOOK_TITLE).orEmpty().ifBlank { desiredName },
+                            inputData.getString(BOOK_AUTHOR).orEmpty()) { page, total ->
+                            if (isStopped) throw CancellationException("PDF conversion cancelled")
+                            val percent = page * 100 / total.coerceAtLeast(1)
+                            val info = "PDF page " + page + "/" + total + " · " + extension.uppercase()
+                            setProgressAsync(Data.Builder().putString(PHASE, info)
+                                .putInt(PERCENT, percent).build())
+                            manager.notify(notificationId, notice("MangaNooir · PDF to " +
+                                extension.uppercase(), info, percent))
+                        }
+                    } else {
+                        NooirPdfToEpub.convert(applicationContext, inputFile, convertedFile, mode, name,
+                            inputData.getString(BOOK_TITLE), inputData.getString(BOOK_AUTHOR), epubFormat = epubFormat) { page, total, stage ->
+                            if (isStopped) throw CancellationException("PDF conversion cancelled")
+                            val percent = page * 100 / total.coerceAtLeast(1)
+                            val info = "Page " + page + "/" + total + " · " + stage
+                            setProgressAsync(Data.Builder().putString(PHASE, info)
+                                .putInt(PERCENT, percent).build())
+                            manager.notify(notificationId, notice("MangaNooir · PDF to EPUB", info, percent))
+                        }
                     }
                     if (save != null) {
                         applicationContext.contentResolver.openOutputStream(save, "w")?.use { dest ->
-                            epubFile.inputStream().use { it.copyTo(dest, 32 * 1024) }
+                            convertedFile.inputStream().use { it.copyTo(dest, 32 * 1024) }
                         } ?: error("Could not save EPUB file")
                     } else {
                         manager.notify(notificationId, notice("MangaNooir · PDF to EPUB", "Sending to XTEink"))
-                        NooirUpload.upload(epubFile, host, folder, onProgress = { sent, total ->
+                        NooirUpload.upload(convertedFile, host, folder, onProgress = { sent, total ->
                             if (isStopped) throw CancellationException("PDF transfer cancelled")
                             setProgressAsync(Data.Builder().putString(PHASE,
-                                if (sent >= total) "Waiting for XTEink confirmation" else "Uploading EPUB")
+                                if (sent >= total) "Waiting for XTEink confirmation" else "Uploading " + extension.uppercase())
                                 .putInt(PERCENT, (sent * 100 / total.coerceAtLeast(1L)).toInt()).build())
                         }, filenameOverride = outputName)
                     }
-                } finally { epubFile.delete() }
+                } finally { convertedFile.delete() }
             }
             manager.notify(notificationId, NotificationCompat.Builder(
                 applicationContext, NooirTransferWorker.CHANNEL_ID,
             ).setSmallIcon(android.R.drawable.stat_sys_upload_done)
                 .setContentTitle("MangaNooir · PDF converted")
-                .setContentText(if (save == null) "Confirmed by XTEink" else "EPUB saved to phone")
+                .setContentText(if (save == null) "Confirmed by XTEink" else extension.uppercase() + " saved to phone")
                 .setAutoCancel(true).build())
             return Result.success()
         } catch (e: CancellationException) {

@@ -3,8 +3,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirExportPreflight.kt tests/PreflightTest.kt -include-runtime -d "$tmp/preflight.jar"
+java -jar "$tmp/preflight.jar"
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} tests/CoreSmokeTest.kt -include-runtime -d "$tmp/smoke.jar"
 java -jar "$tmp/smoke.jar"
+
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/XtcCodec.kt tests/XtcExtendedMetadataTest.kt -include-runtime -d "$tmp/xtc-metadata.jar"
+java -jar "$tmp/xtc-metadata.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/XtcCodec.kt tests/XtcFolioTest.kt -include-runtime -d "$tmp/folio-xtc.jar"
 java -jar "$tmp/folio-xtc.jar"
@@ -19,6 +25,9 @@ java -jar "$tmp/epub2.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PdfReflowLines.kt tests/PdfReflowLinesTest.kt -include-runtime -d "$tmp/pdf-reflow.jar"
 java -jar "$tmp/pdf-reflow.jar"
+
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,ReflowEpubWriter.kt} tests/ReadableFixturesTest.kt -include-runtime -d "$tmp/readable-fixtures.jar"
+java -Djava.awt.headless=true -jar "$tmp/readable-fixtures.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PageSlicePlanner.kt tests/PageSlicePlannerTest.kt -include-runtime -d "$tmp/slicing.jar"
 java -jar "$tmp/slicing.jar"

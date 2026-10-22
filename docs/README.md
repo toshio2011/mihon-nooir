@@ -1,6 +1,6 @@
 # MangaNooir — user guides
 
-[← Repository homepage](../README.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
+[← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
 > **Choose the guide for your installed version.** Source on `main` is now **v1.0.12** after the [merged integration PR #21](https://github.com/toshio2011/mihon-nooir/pull/21). The latest **public APK release remains v1.0.11**; v1.0.12's [successful Android CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011) is a test artifact, not a published release. Physical-device testing is still needed. Nooir Tools is absent from older v1.0.1 APKs.

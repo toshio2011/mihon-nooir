@@ -104,7 +104,7 @@ fun NooirExportDialog(
                 TextButton(onClick = { showAdvanced = !showAdvanced }) {
                     Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
                 }
-                if (showAdvanced) MangaConversionSettings(options, onChange = { options = it })
+                if (showAdvanced) MangaConversionSettings(options, selectedFormat.resolved(device), onChange = { options = it })
                 Text(if (profile.xteinkWifi) "XTEink Wi-Fi transfer (compatible firmware only)"
                     else "Direct XTEink Wi-Fi sending is unavailable for this reader. Save the file and transfer it with the reader’s supported method.")
                 if (profile.xteinkWifi) OutlinedTextField(

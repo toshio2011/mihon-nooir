@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -36,6 +38,12 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
     var jobs by remember { mutableStateOf<List<WorkInfo>>(emptyList()) }
     var filter by remember { mutableStateOf("Current") }
     var confirmCancelAll by remember { mutableStateOf(false) }
+    var expandedIds by remember { mutableStateOf(setOf<String>()) }
+    var handledIds by remember { mutableStateOf(NooirMangaExportWorker.handledPreflightIds(context)) }
+    var actionError by remember { mutableStateOf("") }
+    fun needsAttention(job: WorkInfo): Boolean =
+        job.outputData.getString(NooirMangaExportWorker.KEY_CONFIRMATION_KIND) != null &&
+            job.id.toString() !in handledIds
 
     LaunchedEffect(workManager) {
         workManager.getWorkInfosForUniqueWorkFlow(NooirDeviceWorkQueue.NAME)
@@ -44,10 +52,11 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
 
     fun active(job: WorkInfo): Boolean = job.state in setOf(
         WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED,
-    )
+    ) || needsAttention(job)
     val waiting = jobs.count { it.state in setOf(WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED) }
     val running = jobs.count { it.state == WorkInfo.State.RUNNING }
     val finished = jobs.count { !active(it) }
+    val attention = jobs.count(::needsAttention)
     val visible = jobs.filter { when (filter) {
         "Current" -> active(it)
         "History" -> !active(it)
@@ -59,7 +68,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
             WorkInfo.State.BLOCKED -> 2
             WorkInfo.State.FAILED -> 3
             WorkInfo.State.CANCELLED -> 4
-            WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(it)) 3 else 5
+            WorkInfo.State.SUCCEEDED -> if (needsAttention(it)) -1 else if (NooirDeviceWorkQueue.hasFailed(it)) 3 else 5
         }
     }).take(40)
 
@@ -127,7 +136,9 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Running: " + running + " · Waiting: " + waiting + " · Finished: " + finished)
+                Text("Running: " + running + " · Waiting: " + waiting +
+                    " · Needs attention: " + attention + " · Finished: " + finished)
+                if (actionError.isNotBlank()) Text("Action failed: " + actionError)
                 Text("A failed export is recorded as failed here, but the shared FIFO queue continues with the next book.")
                 Text("All Nooir manga, local files, PDFs, web articles and novel batches use one sequential background queue. No extra processing runs on the e-reader.")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -140,30 +151,122 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                     Text(if (filter == "Current") "No active Nooir conversions or transfers."
                         else "No jobs to display yet.")
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = { expandedIds = visible.map { it.id.toString() }.toSet() }) {
+                        Text("Expand all")
+                    }
+                    TextButton(onClick = { expandedIds = emptySet() }) {
+                        Text("Collapse all")
+                    }
+                }
                 visible.forEach { job ->
-                    Text(label(job))
-                    Text(when (job.state) {
-                        WorkInfo.State.RUNNING -> stage(job).ifBlank { "Running" }
-                        WorkInfo.State.ENQUEUED -> "Queued; will start when previous job finishes"
-                        WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
-                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(job)) "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
-                        WorkInfo.State.FAILED -> "Failed: " +
-                            error(job).ifBlank {
-                                "This older task did not save an error message. Retry in the latest preview " +
-                                    "and check the task notification for the failing step."
+                    val key = job.id.toString()
+                    val expanded = key in expandedIds
+                    val isManga = job.tags.any { it.endsWith("NooirMangaExportWorker") }
+                    val input = NooirMangaJobStore.load(context, job.id) ?: androidx.work.Data.EMPTY
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(label(job))
+                            Text(when (job.state) {
+                                WorkInfo.State.RUNNING -> stage(job).ifBlank { "Running" }
+                                WorkInfo.State.ENQUEUED -> "Queued; waiting for earlier jobs"
+                                WorkInfo.State.BLOCKED -> "Waiting for previous task to finish"
+                                WorkInfo.State.SUCCEEDED -> if (needsAttention(job)) "Needs your decision"
+                                    else if (job.outputData.getString(
+                                        NooirMangaExportWorker.KEY_CONFIRMATION_KIND) != null) {
+                                        when (NooirMangaExportWorker.preflightResolution(context, key)) {
+                                            "requeued" -> "Decision accepted; new conversion queued"
+                                            "cancelled" -> "Cancelled before conversion"
+                                            else -> "Preflight ended without an export"
+                                        }
+                                    } else if (NooirDeviceWorkQueue.hasFailed(job))
+                                    "Failed: " + error(job).ifBlank { "See task notification" } else "Completed"
+                                WorkInfo.State.FAILED -> "Failed: " +
+                                    error(job).ifBlank { "Check task notification for details" }
+                                WorkInfo.State.CANCELLED -> "Cancelled"
+                            })
+                            if (job.state == WorkInfo.State.RUNNING) {
+                                val pct = progress(job)
+                                if (pct < 0) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                else {
+                                    LinearProgressIndicator(
+                                        progress = { pct.coerceIn(0, 100) / 100f },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    Text(pct.coerceIn(0, 100).toString() + "% · upload completion requires reader confirmation")
+                                }
                             }
-                        WorkInfo.State.CANCELLED -> "Cancelled"
-                    })
-                    if (job.state == WorkInfo.State.RUNNING) {
-                        val pct = progress(job)
-                        if (pct < 0) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        else {
-                            LinearProgressIndicator(
-                                progress = { pct.coerceIn(0, 100) / 100f },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Text(pct.coerceIn(0, 100).toString() +
-                                "% · upload completion requires reader confirmation")
+                            if (needsAttention(job)) {
+                                val kind = job.outputData.getString(
+                                    NooirMangaExportWorker.KEY_CONFIRMATION_KIND).orEmpty()
+                                Text(job.outputData.getString(
+                                    NooirMangaExportWorker.KEY_CONFIRMATION_DETAILS).orEmpty())
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(onClick = {
+                                        runCatching { NooirMangaExportWorker.resume(context, job) }
+                                            .onSuccess {
+                                                handledIds = NooirMangaExportWorker.handledPreflightIds(context)
+                                                actionError = ""
+                                            }.onFailure { actionError = it.message.orEmpty() }
+                                    }) {
+                                        Text(when (kind) {
+                                            NooirExportPreflightException.COVER -> "Continue without cover"
+                                            NooirExportPreflightException.CHAPTERS -> "Skip unavailable"
+                                            else -> "Retry check"
+                                        })
+                                    }
+                                    TextButton(onClick = {
+                                        runCatching { NooirMangaExportWorker.dismissPreflight(context, job) }
+                                            .onSuccess {
+                                                handledIds = NooirMangaExportWorker.handledPreflightIds(context)
+                                                actionError = ""
+                                            }.onFailure { actionError = it.message.orEmpty() }
+                                    }) { Text("Cancel this book") }
+                                }
+                            }
+                            TextButton(onClick = {
+                                expandedIds = if (expanded) expandedIds - key else expandedIds + key
+                            }) { Text(if (expanded) "Hide details" else "Show details") }
+                            if (expanded) {
+                                if (isManga) {
+                                    val selected = input.getInt(
+                                        NooirMangaExportWorker.KEY_SELECTED_CHAPTERS, 0)
+                                    val chapterNames = input.getString(
+                                        NooirMangaExportWorker.KEY_CHAPTER_PREVIEW).orEmpty()
+                                    val format = input.getString("format").orEmpty()
+                                    val device = input.getString("device").orEmpty()
+                                    val opts = MangaConversionOptions.fromToken(
+                                        input.getString("options"))
+                                    Text("Format: " + format.ifBlank { "Auto" } + " · Device: " + device.ifBlank { "X4" })
+                                    Text("Selected chapters: " + (selected.takeIf { it > 0 }?.toString() ?: "See original selection"))
+                                    if (chapterNames.isNotBlank()) {
+                                        Text(chapterNames)
+                                        if (selected > 12) Text("… and " + (selected - 12) + " more")
+                                    }
+                                    Text("Source: " + if (input.getBoolean("quick", false))
+                                        "Quick Export (online)" else "Downloaded chapters")
+                                    Text("Cover: " + if (opts.includeCover) "Include" else "Disabled")
+                                    Text("Orientation: " + opts.orientation +
+                                        " · Layout: " + opts.layout)
+                                    if (opts.xtcExtendedMetadata) Text("Extended XTC/XTCH metadata enabled")
+                                }
+                                val saved = input.getString("output_uri").orEmpty()
+                                val host = input.getString("host").orEmpty()
+                                val folder = input.getString("folder").orEmpty()
+                                if (saved.isNotBlank()) Text("Destination: phone file")
+                                else if (host.isNotBlank()) Text("Destination: " + host + folder)
+                                val skipped = job.outputData.getString(
+                                    NooirMangaExportWorker.KEY_SKIPPED_CHAPTERS).orEmpty()
+                                if (skipped.isNotBlank()) Text("Skipped chapters: " + skipped)
+                                if (job.outputData.getBoolean(
+                                        NooirMangaExportWorker.KEY_MISSING_COVER, false)) {
+                                    Text("Exported without a separate series cover (confirmed)")
+                                }
+                                val detail = error(job)
+                                if (detail.isNotBlank()) Text("Error details: " + detail)
+                                Text("Job ID: " + key.take(8))
+                            }
                         }
                     }
                 }

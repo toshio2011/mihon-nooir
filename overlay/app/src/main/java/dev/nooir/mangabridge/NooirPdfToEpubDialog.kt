@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -33,6 +34,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import dev.nooir.bridge.ExportFormat
+import dev.nooir.bridge.NooirDeviceProfiles
 import java.util.UUID
 
 /** PDF → genuinely reflowable text + positioned illustrations, where possible. */
@@ -49,6 +52,8 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
     var host by remember { mutableStateOf(prefs.getString("host", "crosspoint.local") ?: "crosspoint.local") }
     var folder by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var mode by remember { mutableStateOf("MIXED") }
+    var outputFormat by remember { mutableStateOf("EPUB3") }
+    var device by remember { mutableStateOf(prefs.getString("device", "X4") ?: "X4") }
     var workId by remember {
         mutableStateOf(prefs.getString(NooirPdfExportWorker.LAST_WORK, null)?.let {
             runCatching { UUID.fromString(it) }.getOrNull()
@@ -69,6 +74,9 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 NooirPdfExportWorker.HOST to host.trim(),
                 NooirPdfExportWorker.FOLDER to folder.trim(),
                 NooirPdfExportWorker.MODE to mode,
+                NooirPdfExportWorker.EPUB_FORMAT to outputFormat,
+                NooirPdfExportWorker.OUTPUT_FORMAT to outputFormat,
+                NooirPdfExportWorker.DEVICE to device,
                 NooirPdfExportWorker.OUTPUT_NAME to outputName.trim(),
                 NooirPdfExportWorker.BOOK_TITLE to bookTitle.trim(),
                 NooirPdfExportWorker.BOOK_AUTHOR to bookAuthor.trim(),
@@ -105,53 +113,99 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
             enqueue(uri)
         }
     }
+    val binaryFormat = outputFormat == "XTC" || outputFormat == "XTCH"
+    val extension = if (binaryFormat) outputFormat.lowercase() else "epub"
+    val selectedExport = when (outputFormat) {
+        "XTC" -> ExportFormat.XTC
+        "XTCH" -> ExportFormat.XTCH
+        "EPUB2" -> ExportFormat.EPUB2
+        else -> ExportFormat.EPUB
+    }
+    val profile = NooirDeviceProfiles.forId(device)
+    val validFormat = profile.accepts(selectedExport) &&
+        (outputFormat != "XTCH" || profile.height % 8 == 0)
+    val saveBinary = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null) {
+            try { context.contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            ) } catch (_: SecurityException) { }
+            enqueue(uri)
+        }
+    }
     val busy = state?.state == WorkInfo.State.ENQUEUED || state?.state == WorkInfo.State.RUNNING
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("PDF to EPUB · text + images") },
+        title = { Text("PDF to e-reader") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Convert a PDF to an offline EPUB. Extractable PDF text stays selectable and resizable; illustrations are embedded near their original locations when recoverable.")
+                Text("Choose reflowable EPUB 2/3 (selectable text where available) or XTC/XTCH (rasterized PDF pages for e-ink).")
                 Button(onClick = { choosePdf.launch(arrayOf("application/pdf")) }) {
                     Text("Choose PDF from phone")
                 }
                 Text(fileName)
                 OutlinedTextField(value = bookTitle, onValueChange = { bookTitle = it.take(192) },
-                    label = { Text("EPUB book title (optional)") }, singleLine = true,
+                    label = { Text("Book title (optional)") }, singleLine = true,
                     supportingText = { Text("Visible book title; leave blank to use the PDF metadata or filename.") })
                 OutlinedTextField(value = bookAuthor, onValueChange = { bookAuthor = it.take(128) },
                     label = { Text("Author or pen name (optional)") }, singleLine = true,
                     supportingText = { Text("Overrides the PDF author metadata if supplied.") })
                 OutlinedTextField(value = outputName, onValueChange = { outputName = it.take(70) },
-                    label = { Text("EPUB filename (without extension)") }, singleLine = true,
+                    label = { Text("Output filename (without extension)") }, singleLine = true,
                     supportingText = { Text("Rename before conversion if the name already exists on XTEink.") })
-                Text("How should pages be converted?")
-                FilterChip(selected = mode == "MIXED", onClick = { mode = "MIXED" },
-                    label = { Text("Reflowable text + illustrations") })
-                FilterChip(selected = mode == "ORIGINAL_PAGES",
-                    onClick = { mode = "ORIGINAL_PAGES" },
-                    label = { Text("Keep original pages as images") })
-                Text(if (mode == "MIXED")
-                    "Uses the PDF's text layer. Scans and complex diagram pages become images without OCR."
-                    else "Preserves every page visually, but text won't resize.")
+                Text("Output format")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = outputFormat == "EPUB2",
+                        onClick = { outputFormat = "EPUB2" },
+                        label = { Text("EPUB 2") })
+                    FilterChip(selected = outputFormat == "EPUB3",
+                        onClick = { outputFormat = "EPUB3" },
+                        label = { Text("EPUB 3") })
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = outputFormat == "XTC",
+                        onClick = { outputFormat = "XTC" },
+                        label = { Text("XTC · 1-bit") })
+                    FilterChip(selected = outputFormat == "XTCH",
+                        onClick = { outputFormat = "XTCH" },
+                        label = { Text("XTCH · 2-bit") })
+                }
+                if (binaryFormat) {
+                    NooirDevicePicker(device) { device = it }
+                    Text("XTC/XTCH render each PDF page to the selected device size. Text becomes pixels; no OCR is required. EPUB remains available for selectable text.")
+                    if (!validFormat) Text("This device profile does not support the selected format.")
+                } else {
+                    Text("EPUB keeps extractable text selectable and embeds illustrations.")
+                    Text("How should pages be converted?")
+                    FilterChip(selected = mode == "MIXED", onClick = { mode = "MIXED" },
+                        label = { Text("Reflowable text + illustrations") })
+                    FilterChip(selected = mode == "ORIGINAL_PAGES",
+                        onClick = { mode = "ORIGINAL_PAGES" },
+                        label = { Text("Keep original pages as images") })
+                    Text(if (mode == "MIXED")
+                        "Uses the PDF's text layer. Scans and complex diagram pages become images without OCR."
+                        else "Preserves every page visually, but text won't resize.")
+                }
                 OutlinedTextField(value = host, onValueChange = { host = it },
                     label = { Text("XTEink IP or hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
                     label = { Text("XTEink destination folder") }, singleLine = true)
-                Button(enabled = document != null && !busy && outputName.isNotBlank(), onClick = {
-                    saveEpub.launch(NooirDestinationGuard.filename(outputName, "epub"))
-                }) { Text("Convert PDF & save EPUB to phone") }
-                Button(enabled = document != null && !busy && outputName.isNotBlank() && host.isNotBlank() &&
+                Button(enabled = document != null && !busy && outputName.isNotBlank() && validFormat, onClick = {
+                    if (binaryFormat) saveBinary.launch(NooirDestinationGuard.filename(outputName, extension))
+                    else saveEpub.launch(NooirDestinationGuard.filename(outputName, "epub"))
+                }) { Text("Convert PDF & save " + extension.uppercase() + " to phone") }
+                Button(enabled = document != null && !busy && outputName.isNotBlank() && validFormat && host.isNotBlank() &&
                     folder.startsWith("/") && !folder.contains(".."),
-                    onClick = { enqueue(null) }) { Text("Convert PDF & send EPUB to XTEink") }
+                    onClick = { enqueue(null) }) { Text("Convert PDF & send " + extension.uppercase() + " to XTEink") }
                 val phase = state?.progress?.getString(NooirPdfExportWorker.PHASE).orEmpty()
                 val percent = state?.progress?.getInt(NooirPdfExportWorker.PERCENT, -1) ?: -1
                 state?.let { info ->
                     Text(when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Failed: " + info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty() else "EPUB conversion complete"
+                        WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Failed: " + info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty() else extension.uppercase() + " conversion complete"
                         WorkInfo.State.FAILED -> "Failed: " +
                             info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty()
                         WorkInfo.State.CANCELLED -> "Canceled"

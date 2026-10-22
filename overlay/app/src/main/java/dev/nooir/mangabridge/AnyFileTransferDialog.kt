@@ -310,7 +310,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                     Text(if (sendSettings) "Hide conversion settings" else "More conversion settings")
                 }
                 if (sendSettings) {
-                    MangaConversionSettings(options, onChange = { options = it })
+                    MangaConversionSettings(options, format.resolved(device), onChange = { options = it })
                 }
                 if (!profile.xteinkWifi) Text("Direct Wi-Fi upload is only offered for compatible XTEink firmware. Save/export to the phone, then use the reader’s supported transfer method.")
                 Button(enabled = canQueue, onClick = { enqueue(false) }) {

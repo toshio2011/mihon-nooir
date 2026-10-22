@@ -74,11 +74,8 @@ private fun verify(fmt: XtcFormat) {
     val invalidFirst=b.clone()
     invalidFirst[data]=0
     check(!String(invalidFirst.copyOfRange(data,data+3)).startsWith("XT"))
-    val folder=System.getenv("NOOIR_OUTPUT_DIR")
-    if (!folder.isNullOrBlank()) {
-        File(folder).mkdirs()
-        File(folder,"MangaNooir_Folio_${fmt.extension}_sample.${fmt.extension}").writeBytes(b)
-    }
+    // The legacy pattern pages are unit-test inputs, NOT reader sample books.
+
 }
 
 fun main() {

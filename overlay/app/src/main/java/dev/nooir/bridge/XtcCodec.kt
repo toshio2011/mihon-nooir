@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets
 enum class XtcFormat(val extension: String, val depth: Int) { XTC("xtc", 1), XTCH("xtch", 2) }
 enum class ReadingDirection(val code: Int) { LEFT_TO_RIGHT(0), RIGHT_TO_LEFT(1), TOP_TO_BOTTOM(2) }
 
-data class QuantizedPage(val width: Int, val height: Int, val levels: ByteArray, val depth: Int) {
+data class QuantizedPage(val width: Int, val height: Int, val levels: ByteArray, val depth: Int, val colorPng: ByteArray? = null) {
     init {
         require(width in 1..65535 && height in 1..65535) { "Invalid page dimensions" }
         require(width.toLong() * height.toLong() == levels.size.toLong()) { "Pixel count mismatch" }
@@ -101,6 +101,7 @@ object XtcCodec {
         chapterResolver: ((Int) -> List<BookChapter>)? = null,
         direction: ReadingDirection = ReadingDirection.RIGHT_TO_LEFT,
         onPageEncoded: ((Int) -> Unit)? = null,
+        extendedMetadataJson: String? = null,
     ): XtcWriteResult {
         require(spoolDirectory.isDirectory || spoolDirectory.mkdirs()) { "Cannot create spool directory" }
         val temp = File.createTempFile("nooir-pages-", ".bin", spoolDirectory)
@@ -178,8 +179,20 @@ object XtcCodec {
                 pos += size
             }
             BufferedInputStream(FileInputStream(temp)).use { input -> input.copyTo(output, 64 * 1024) }
+            // Optional trailer: JSON payload, 8-byte magic, uint32 LE payload size.
+            var trailerBytes = 0L
+            if (extendedMetadataJson != null) {
+                val payload = extendedMetadataJson.toByteArray(StandardCharsets.UTF_8)
+                require(payload.size <= 64 * 1024) { "Extended metadata exceeds 64 KiB" }
+                output.write(payload)
+                output.write("NOOIRM01".toByteArray(StandardCharsets.US_ASCII))
+                val size = ByteArray(4)
+                setU32(size, 0, payload.size.toLong())
+                output.write(size)
+                trailerBytes = payload.size.toLong() + 12
+            }
             output.flush()
-            return XtcWriteResult(entries.size, dataOffset + dataLength)
+            return XtcWriteResult(entries.size, dataOffset + dataLength + trailerBytes)
         } finally {
             temp.delete()
         }

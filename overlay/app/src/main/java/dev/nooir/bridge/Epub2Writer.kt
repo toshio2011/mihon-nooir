@@ -35,7 +35,8 @@ object Epub2Writer {
     private fun xmlEntry(zip: ZipOutputStream, path: String, xml: String) =
         writeEntry(zip, path, xml.toByteArray(StandardCharsets.UTF_8))
 
-    fun write(pages: Sequence<ArchivePage>, output: OutputStream, metadata: ExtendedMetadata): Int {
+    fun write(pages: Sequence<ArchivePage>, output: OutputStream, metadata: ExtendedMetadata, pagesPerXhtml: Int = 1): Int {
+        require(pagesPerXhtml in 0..999)
         val identifier = metadata.identifier.ifBlank {
             "urn:uuid:" + UUID.nameUUIDFromBytes(
                 ("manganooir:" + metadata.series + ":" + metadata.title + ":" + metadata.author)
@@ -47,6 +48,9 @@ object Epub2Writer {
         var count = 0
         var previousChapter: String? = null
         var hasRealCover = false
+        val groups = mutableListOf<Int>()
+        var grouped = mutableListOf<Int>()
+        var groupChapter = ""
         ZipOutputStream(output).use { zip ->
             val type = "application/epub+zip".toByteArray(StandardCharsets.US_ASCII)
             val crc = CRC32().apply { update(type) }
@@ -63,24 +67,39 @@ object Epub2Writer {
             xmlEntry(zip, "META-INF/container.xml", """<?xml version="1.0" encoding="UTF-8"?>
 <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OEBPS/package.opf" media-type="application/oebps-package+xml"/></rootfiles></container>""")
 
+            fun flush() {
+                if (grouped.isEmpty()) return
+                val start = grouped.first()
+                val imgs = grouped.joinToString("") { n -> "<div class=\"page\"><img src=\"../images/p%05d.png\" alt=\"Page $n\"/></div>".format(n) }
+                xmlEntry(zip, "OEBPS/text/p%05d.xhtml".format(start), """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${escape(lang)}"><head><title>${escape(groupChapter)}</title><style type="text/css">html,body{margin:0;padding:0;background:#fff;text-align:center}.page{page-break-after:always}.page:last-child{page-break-after:auto}.page img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:auto}</style></head><body>$imgs</body></html>""")
+                groups += start
+                grouped = mutableListOf()
+            }
             for (page in pages) {
                 require(page.width > 0 && page.height > 0 && page.imagePng.isNotEmpty()) { "Invalid image page" }
                 require(count < 65535) { "EPUB page count exceeds 65535; export smaller volumes" }
                 count++
                 if (page.isCover && count == 1) hasRealCover = true
+                if (pagesPerXhtml != 1 && grouped.isNotEmpty() && (groupChapter != page.chapter || (pagesPerXhtml != 0 && grouped.size >= pagesPerXhtml))) flush()
                 if (page.chapter != previousChapter) {
                     chapters += page.chapter to count
                     previousChapter = page.chapter
                 }
+                if (pagesPerXhtml != 1) { if (grouped.isEmpty()) groupChapter = page.chapter; grouped.add(count) }
                 val idx = "%05d".format(count)
                 writeEntry(zip, "OEBPS/images/p$idx.png", page.imagePng)
-                xmlEntry(zip, "OEBPS/text/p$idx.xhtml", """<?xml version="1.0" encoding="UTF-8"?>
+                if (pagesPerXhtml == 1) {
+                    groups += count
+                    xmlEntry(zip, "OEBPS/text/p$idx.xhtml", """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${escape(lang)}"><head>
 <title>${escape(page.chapter)} — $count</title>
 <style type="text/css">html,body{margin:0;padding:0;background:#fff;text-align:center}
 img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:auto}</style>
 </head><body><div><img src="../images/p$idx.png" alt="Page $count"/></div></body></html>""")
+                }
             }
+            if (pagesPerXhtml != 1) flush()
             require(count > 0) { "At least one manga page is required" }
             val dc = buildString {
                 append("<dc:identifier id=\"bookid\">${escape(identifier)}</dc:identifier>")
@@ -91,17 +110,18 @@ img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:a
                 if (metadata.description.isNotBlank()) append("<dc:description>${escape(metadata.description)}</dc:description>")
                 if (metadata.publisher.isNotBlank()) append("<dc:publisher>${escape(metadata.publisher)}</dc:publisher>")
                 metadata.genres.filter(String::isNotBlank).forEach { append("<dc:subject>${escape(it)}</dc:subject>") }
-                if (hasRealCover) append("<meta name=\"cover\" content=\"cover-image\"/>")
+                append("<meta name=\"cover\" content=\"cover-image\"/>")
             }
             val manifest = buildString {
                 append("<item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>")
                 for (i in 1..count) {
                     val idx = "%05d".format(i)
-                    append("<item id=\"${if (hasRealCover && i == 1) "cover-image" else "i$i"}\" href=\"images/p$idx.png\" media-type=\"image/png\"/>")
-                    append("<item id=\"p$i\" href=\"text/p$idx.xhtml\" media-type=\"application/xhtml+xml\"/>")
+                    append("<item id=\"${if (i == 1) "cover-image" else "i$i"}\" href=\"images/p$idx.png\" media-type=\"image/png\"/>")
+
                 }
+                for (start in groups) append("<item id=\"p$start\" href=\"text/p%05d.xhtml\" media-type=\"application/xhtml+xml\"/>".format(start))
             }
-            val spine = (1..count).joinToString("") { "<itemref idref=\"p$it\"/>" }
+            val spine = groups.joinToString("") { "<itemref idref=\"p$it\"/>" }
             val guide = if (hasRealCover)
                 "<guide><reference type=\"cover\" title=\"Cover\" href=\"text/p00001.xhtml\"/>" +
                     "<reference type=\"start\" title=\"Start\" href=\"text/p00001.xhtml\"/></guide>"
@@ -115,7 +135,7 @@ img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:a
             }
             xmlEntry(zip, "OEBPS/package.opf", opf)
             val navPoints = chapters.mapIndexed { index, (title, page) ->
-                val idx = "%05d".format(page)
+                val idx = "%05d".format(groups.lastOrNull { it <= page } ?: page)
                 "<navPoint id=\"n${index + 1}\" playOrder=\"${index + 1}\"><navLabel><text>${escape(title.ifBlank { "Chapter ${index + 1}" })}</text></navLabel><content src=\"text/p$idx.xhtml\"/></navPoint>"
             }.joinToString("")
             xmlEntry(zip, "OEBPS/toc.ncx", """<?xml version="1.0" encoding="UTF-8"?>
