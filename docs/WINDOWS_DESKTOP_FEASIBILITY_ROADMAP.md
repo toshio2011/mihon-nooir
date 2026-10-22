@@ -19,6 +19,38 @@
 
 **Not promised for v0.1:** exact Android Mihon UI parity; Android extension APK execution directly on JVM; automatic two-way Android library sync; guaranteed compatibility with every extension or protected website; OCR; Windows EXE before CI proves it.
 
+## 1A. Non-negotiable Android ↔ Windows conversion parity
+
+**Product requirement (22 October 2026): Windows must expose the same MangaNooir conversion workflow and conversion settings as Android, not a cut-down converter.** Build one platform-neutral conversion core, with Android and Windows input/output adapters. Keep Android regression tests green and compare generated output with identical fixtures.
+
+| Android MangaNooir capability | Required Windows equivalent |
+|---|---|
+| EPUB 2.0.1 Classic / EPUB 3 | Same packaging, metadata, cover, navigation and compatibility rules |
+| XTC 1-bit Fast / XTCH 2-bit HQ | Same native codec, grayscale, plane layout, orientation and reader constraints |
+| CBZ | Same page order, naming, image quality and metadata where supported |
+| Chapter selection | Single, range, selected, unread, all; consistent ordering, volume grouping and missing-chapter warnings |
+| Quick online / Normal downloaded export | Equivalent workflows, with explicit network availability and source restrictions; reuse cached pages instead of needless redownloads |
+| Conversion presets | Same XTEink X3/X4/X4 Pro and other profiles, custom resolution, defaults and overrides |
+| Page processing | Same portrait/landscape, spread splitting, overlapping, webtoon slicing, trimming, cropping, margins, resizing, dithering, grayscale and quality controls that are actually implemented on Android |
+| Covers and metadata | Same cover fallback order, title/author/chapters, source cover refresh when supported, and source integrity rules |
+| PDF → EPUB and PDF → XTC/XTCH | Same best-effort text/illustration and image-mode behavior, with platform PDF renderer differences documented |
+| Public web URL → EPUB | Same supported article/web-novel extraction and safety limits; do not imply web-to-XTC/XTCH exists unless implemented |
+| Background export queue | Same preflight, destination collision checks, cancellation, per-job progress/errors, persistence and safe retry semantics |
+| Output destinations | Save to local folder and send to compatible XTEink receiver with conflict/ACK checks |
+
+**Parity is a requirement, not a current implementation claim.** Some Android features are experimental or incomplete; audit their real behavior and tests before marking a Windows row done. Platform-specific controls (Android SAF picker versus Windows folder picker, WorkManager versus desktop job service) may differ visually, but user-facing behavior and conversion output should match.
+
+**Desktop additions**: drag-and-drop files/folders, batch input selection, preview and compare, native Save As/choose-folder, large-screen chapter table, keyboard shortcuts, and optionally reusable preset import/export. These add to parity; they must not replace or simplify existing MangaNooir workflows.
+
+**Parity gates and tests:**
+- [ ] Inventory actual Android conversion settings and default values directly from source/UI; make a single cross-platform settings schema with migration/versioning.
+- [ ] Build shared Kotlin/JVM conversion APIs; Android delegates to them without behavior regressions.
+- [ ] For each format and representative chapter/PDF/web fixture, compare Android and Windows output (byte-equal where deterministic; otherwise page count, ordering, pixels/planes, metadata, validation and device readability).
+- [ ] Test normal downloaded and quick online workflows, offline handling, missing pages, retries and cancellation.
+- [ ] Test all device profiles, custom resolutions, long-webtoon slicing, RTL/LTR, cover recovery and large manga.
+- [ ] Document intentional platform differences; never silently omit an Android setting.
+- [ ] Require both Android and Windows CI conversion suites to pass before shipping a desktop release.
+
 ## 2. Source-verified feasibility findings
 
 ### Existing MangaNooir code
@@ -121,7 +153,7 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 - **Gate:** one end-to-end *source → chapter download → XTC/EPUB2 export → readable file* demonstration on Windows.
 
 ### D1 — Shared conversion core (after Android stabilization)
-- [ ] Create `nooir-core`, `nooir-desktop-io`, `nooir-transfer-jvm` modules; keep Android overlay API compatibility.
+- [ ] Create `nooir-core`, `nooir-desktop-io`, `nooir-transfer-jvm` modules; keep Android overlay API compatibility and a shared settings schema with the complete Android conversion workflow.
 - [ ] Run existing Kotlin tests and EPUBCheck on both Android and desktop; add identical sample-output assertions and memory budgets.
 - [ ] Port image/PDF adapters; no `android.*` imports in shared modules.
 - **Gate:** Android build stays green; desktop CLI produces valid EPUB2/3, XTC/XTCH, CBZ from fixtures.
@@ -138,7 +170,7 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 - **Gate:** end-to-end manga discovery, download and offline reading works on Windows.
 
 ### D4 — Export, local documents and e-reader sending
-- [ ] Export downloaded selected chapters to all five formats, with metadata/cover, split volumes, settings and output preview.
+- [ ] Export downloaded selected chapters to all five formats, with metadata/cover, split volumes, settings and output preview; meet the Android/Windows conversion parity matrix in §1A.
 - [ ] Local file import and PDF mixed-content conversion; reuse web-article conversion where tested.
 - [ ] Background conversion/transfer queue, XTEink local upload with ACK, conflict guard and receiver test.
 - **Gate:** one manga downloaded from source and sent as XTC/XTCH/EPUB to an X4; other formats pass fixtures.
