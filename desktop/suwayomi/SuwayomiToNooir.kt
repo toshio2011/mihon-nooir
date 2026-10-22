@@ -144,8 +144,8 @@ object SuwayomiToNooir {
                 require(normalized.split('/').none { it == ".." || it == "." } &&
                     !normalized.startsWith('/')) { "Unsafe CBZ entry path" }
                 normalized.substringAfterLast('.', "").lowercase() in imageExt
-            }.sortedWith { a, b -> NaturalPageOrder.compare(a.name, b.name) }
-                .take(MAX_CHAPTER_PAGES + 1).toList()
+            }.take(MAX_CHAPTER_PAGES + 1).toList()
+                .sortedWith { a, b -> NaturalPageOrder.compare(a.name, b.name) }
             require(pages.isNotEmpty() && pages.size <= MAX_CHAPTER_PAGES) { "Invalid chapter page count" }
             var total = 0L
             for ((index, entry) in pages.withIndex()) {
