@@ -123,7 +123,10 @@ object MihonNooirExporter {
         // Folio Nooir uses the *first XTC page* to generate its shelf thumbnail.
         // Use the actual Mihon series artwork if we can obtain it; otherwise leave
         // original page ordering intact rather than fabricating a cover.
-        val coverUri = if (options.includeCover) NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder) else null
+        val coverUri = if (options.includeCover) {
+            onStage("Finding or refreshing series cover", 0, ordered.size)
+            NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder)
+        } else null
         val coverOptions = options.copy(
             layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
             orientation = "PORTRAIT", overlapPercent = 0,
@@ -240,7 +243,7 @@ object MihonNooirExporter {
             val missingCover = options.includeCover && preparedCover == null
             if (missingCover && !options.allowMissingCover) {
                 throw NooirExportPreflightException(NooirExportPreflightException.COVER,
-                    "Series cover unavailable after checking cache and source. Continue without a separate cover?")
+                    "Series cover unavailable after checking cache, fetching the thumbnail and refreshing manga details from the source. Continue without a separate cover?")
             }
 
             val unavailable = mutableListOf<Pair<Chapter, String>>()
