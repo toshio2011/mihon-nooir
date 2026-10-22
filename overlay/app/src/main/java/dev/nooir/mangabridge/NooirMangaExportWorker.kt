@@ -129,7 +129,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                 NooirMangaJobStore.save(context, request.id, data)
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
-                markHandled(context, job.id.toString())
+                markHandled(context, job.id.toString(), "requeued")
                 original.delete()
                 return request.id
             } catch (e: Exception) {
@@ -145,18 +145,23 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             if (name.matches(Regex("[0-9a-f-]{36}\\.txt"))) {
                 File(context.filesDir, "manganooir_export_jobs/" + name).delete()
             }
-            markHandled(context, job.id.toString())
+            markHandled(context, job.id.toString(), "cancelled")
         }
 
         fun handledPreflightIds(context: Context): Set<String> =
             context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
                 .getStringSet(PREF_HANDLED, emptySet()).orEmpty().toSet()
 
-        private fun markHandled(context: Context, id: String) {
+        fun preflightResolution(context: Context, id: String): String =
+            context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
+                .getString("preflight_resolution_" + id, "").orEmpty()
+
+        private fun markHandled(context: Context, id: String, resolution: String) {
             val prefs = context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE)
             val next = prefs.getStringSet(PREF_HANDLED, emptySet()).orEmpty().toMutableSet()
             next += id
-            prefs.edit().putStringSet(PREF_HANDLED, next).apply()
+            prefs.edit().putStringSet(PREF_HANDLED, next)
+                .putString("preflight_resolution_" + id, resolution).apply()
         }
     }
 
