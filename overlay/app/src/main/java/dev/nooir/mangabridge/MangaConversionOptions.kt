@@ -40,11 +40,15 @@ data class MangaConversionOptions(
     val includeCover: Boolean = true,
     val epubColor: Boolean = false, // EPUB/CBZ only; XTC and XTCH remain grayscale
     val xtcExtendedMetadata: Boolean = false,
+    // Internal one-job preflight decisions; only changed by explicit queue confirmation.
+    val allowMissingCover: Boolean = false,
+    val skipUnavailableChapters: Boolean = false,
     val epubPagesPerXhtml: Int = 1, // 0 = entire chapter, 1 = original, 2..999 = custom
 ) {
     fun token() = listOf(preset, layout, cropWhiteMargins, splitSpreads, rightToLeft,
         contrast.coerceIn(0, 100), dither, orientation, overlapPercent.coerceIn(0, 50),
-        landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(0, 999), xtcExtendedMetadata).joinToString("|")
+        landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(0, 999), xtcExtendedMetadata,
+        allowMissingCover, skipUnavailableChapters).joinToString("|")
 
     companion object {
         fun preset(name: String): MangaConversionOptions = when (name) {
@@ -65,7 +69,7 @@ data class MangaConversionOptions(
             val v = raw.split("|")
             // Existing jobs/settings created by 1.0.4/1.0.5 stored seven tokens.
             // Preserve those values and migrate only the new options to defaults.
-            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12 && v.size != 13 && v.size != 14) return MangaConversionOptions()
+            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12 && v.size != 13 && v.size != 14 && v.size != 15 && v.size != 16) return MangaConversionOptions()
             return MangaConversionOptions(
                 preset = v[0].take(32),
                 layout = v[1].takeIf { it in setOf("AUTO", "PAGED", "WEBTOON") } ?: "AUTO",
@@ -82,6 +86,8 @@ data class MangaConversionOptions(
                 epubColor = v.getOrNull(11)?.toBooleanStrictOrNull() ?: false,
                 epubPagesPerXhtml = (v.getOrNull(12)?.toIntOrNull() ?: 1).coerceIn(0, 999),
                 xtcExtendedMetadata = v.getOrNull(13)?.toBooleanStrictOrNull() ?: false,
+                allowMissingCover = v.getOrNull(14)?.toBooleanStrictOrNull() ?: false,
+                skipUnavailableChapters = v.getOrNull(15)?.toBooleanStrictOrNull() ?: false,
             )
         }
 
