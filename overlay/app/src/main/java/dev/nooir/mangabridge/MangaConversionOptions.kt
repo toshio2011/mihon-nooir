@@ -98,7 +98,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
     var xtcExpanded by remember { mutableStateOf(false) }
     var imageExpanded by remember { mutableStateOf(false) }
     val isXtc = format == ExportFormat.XTC || format == ExportFormat.XTCH
-    val isEpub = format == ExportFormat.EPUB2 || format == ExportFormat.EPUB3
+    val isEpub = format == ExportFormat.EPUB2 || format == ExportFormat.EPUB
     val supportsColor = isEpub || format == ExportFormat.CBZ
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Conversion preset")
