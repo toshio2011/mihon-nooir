@@ -50,7 +50,10 @@ object MihonNooirExporter {
         ka.size.compareTo(kb.size)
     }
 
-    data class ExportResult(val pageCount: Int, val fileBytes: Long, val format: ExportFormat)
+    data class ExportResult(
+        val pageCount: Int, val fileBytes: Long, val format: ExportFormat,
+        val skippedChapters: List<String> = emptyList(), val missingCover: Boolean = false,
+    )
 
     suspend fun export(
         context: Context, provider: DownloadProvider, manga: Manga, source: Source,
@@ -97,7 +100,7 @@ object MihonNooirExporter {
             ?: error("Quick Export requires a coroutine Job")
         val ordered = chapters.sortedWith(compareBy<Chapter> { it.chapterNumber }.thenBy { it.id })
         // Chapter storage lookups are suspending: do these before entering SequenceScope.
-        val locations = ordered.map { chapter ->
+        var locations = ordered.map { chapter ->
             chapter to provider.findChapterDir(
                 chapter.name, chapter.scanlator, chapter.url, manga.title, source,
             )
@@ -220,6 +223,96 @@ object MihonNooirExporter {
         }
 
         try {
+            // Preflight is deliberately before tmp.outputStream(): no partial book is created.
+            // A missing/invalid cover requires an explicit decision, regardless of output format.
+            onStage("Checking cover and chapter access", 0, locations.size)
+            val preparedCover = if (options.includeCover) {
+                try {
+                    coverPage(if (actual == ExportFormat.XTC) 1 else 2,
+                        coverOptions.copy(epubColor = actual != ExportFormat.XTC &&
+                            actual != ExportFormat.XTCH && options.epubColor))
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
+            val missingCover = options.includeCover && preparedCover == null
+            if (missingCover && !options.allowMissingCover) {
+                throw NooirExportPreflightException(NooirExportPreflightException.COVER,
+                    "Series cover unavailable after checking cache and source. Continue without a separate cover?")
+            }
+
+            val unavailable = mutableListOf<Pair<Chapter, String>>()
+            val retryable = mutableListOf<Pair<Chapter, String>>()
+            for ((chapter, downloaded) in locations) {
+                ownerJob.ensureActive()
+                if (downloaded != null) {
+                    val readable = if (downloaded.isFile) {
+                        downloaded.name?.endsWith(".cbz", ignoreCase = true) == true &&
+                            downloaded.length() > 0L
+                    } else {
+                        downloaded.listFiles().orEmpty().any { it.isFile && isImage(it.name) }
+                    }
+                    if (!readable) unavailable += chapter to "Downloaded chapter has no readable pages"
+                } else if (!quickExport || source !is HttpSource) {
+                    unavailable += chapter to "Chapter not downloaded"
+                } else {
+                    // Quick Export: probe the source and its first image to catch
+                    // paywalls/HTTP 403 before building any book. Remaining pages
+                    // are still validated during streaming, never silently skipped.
+                    try {
+                        val pages = source.getPageList(chapter.toSChapter())
+                        if (pages.isEmpty()) {
+                            unavailable += chapter to "Source returned no pages"
+                        } else if (pages.size > 1000) {
+                            retryable += chapter to "Chapter exceeds 1000 pages"
+                        } else {
+                            val first = pages.first()
+                            if (first.imageUrl.isNullOrBlank()) first.imageUrl = source.getImageUrl(first)
+                            source.getImage(first).use { response ->
+                                if (!response.isSuccessful) {
+                                    val reason = "HTTP " + response.code
+                                    if (NooirChapterAccess.classify(response.code) ==
+                                        NooirChapterAccess.Issue.UNAVAILABLE) {
+                                        unavailable += chapter to reason
+                                    } else retryable += chapter to reason
+                                } else if (response.body.byteStream().read() < 0) {
+                                    retryable += chapter to "First page was empty"
+                                }
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        val reason = e.message.orEmpty().take(100).ifBlank { "Source request failed" }
+                        if (NooirChapterAccess.classify(message = reason) ==
+                            NooirChapterAccess.Issue.UNAVAILABLE) {
+                            unavailable += chapter to reason
+                        } else retryable += chapter to reason
+                    }
+                }
+            }
+            fun chapterDetails(items: List<Pair<Chapter, String>>): String =
+                items.take(8).joinToString("; ") { it.first.name + " (" + it.second + ")" } +
+                    if (items.size > 8) "; and " + (items.size - 8) + " more" else ""
+            if (retryable.isNotEmpty()) {
+                throw NooirExportPreflightException(NooirExportPreflightException.RETRY,
+                    "Could not verify " + retryable.size + " chapter(s): " +
+                        chapterDetails(retryable) + ". Retry when the source is available.")
+            }
+            if (unavailable.isNotEmpty() && !options.skipUnavailableChapters) {
+                throw NooirExportPreflightException(NooirExportPreflightException.CHAPTERS,
+                    unavailable.size.toString() + " locked, missing or unavailable chapter(s): " +
+                        chapterDetails(unavailable) + ". Skip these chapters or cancel?")
+            }
+            val skippedNames = unavailable.map { it.first.name }
+            if (unavailable.isNotEmpty()) {
+                val skippedIds = unavailable.map { it.first.id }.toSet()
+                locations = locations.filterNot { it.first.id in skippedIds }
+                require(locations.isNotEmpty()) { "All selected chapters are unavailable; nothing to export" }
+            }
+
             val pageCount: Int
             tmp.outputStream().use { output ->
                 if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
@@ -230,9 +323,7 @@ object MihonNooirExporter {
                     var activeName = ""
                     var sectionStart = 0
                     onStage("Preparing actual book cover", 0, ordered.size)
-                    val cover = if (options.includeCover) requireNotNull(coverPage(xtcFormat.depth, coverOptions.copy(epubColor = false))) {
-                        "Series cover unavailable. Open this manga in Mihon to refresh its cover, or disable Include separate series cover."
-                    } else null
+                    val cover = preparedCover
                     val stream = sequence {
                         if (cover != null) { yield(cover); total++ }
                         for ((chapter, page) in chapterFrames(xtcFormat.depth)) {
@@ -261,7 +352,7 @@ object MihonNooirExporter {
                         },
                     ).pageCount
                 } else {
-                    val cover = if (options.includeCover) coverPage(2, coverOptions.copy(epubColor = options.epubColor)) else null
+                    val cover = preparedCover
                     val stream = sequence {
                         if (cover != null) yield(ArchivePage("Cover", archivePng(cover), cover.width, cover.height, isCover = true))
                         for ((chapter, page) in chapterFrames(2, options.orientation == "LANDSCAPE")) {
@@ -292,7 +383,7 @@ object MihonNooirExporter {
                         locations.size, locations.size)
                 }
             }
-            ExportResult(pageCount, tmp.length(), actual)
+            ExportResult(pageCount, tmp.length(), actual, skippedNames, missingCover)
         } finally {
             tempFolder.deleteRecursively()
         }
