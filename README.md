@@ -6,7 +6,7 @@
 
 Read manga on Android · Choose chapters · Convert books · Send to XTEink over Wi-Fi
 
-**[Reader sample troubleshooting](docs/READER_INTEROP_DIAGNOSTICS.md)** · **[Four export formats in v1.0.12](docs/EXPORT_FORMATS_EPUB2.md)** · **[Start here](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) · [All guides](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md) · [FAQ](https://github.com/toshio2011/mihon-nooir/blob/main/docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+**[Reader sample troubleshooting](docs/READER_INTEROP_DIAGNOSTICS.md)** · **[EPUB 2/3 and XTC/XTCH in v1.0.12](docs/EXPORT_FORMATS_EPUB2.md)** · **[Start here](https://github.com/toshio2011/mihon-nooir/blob/main/docs/NOOIR_TOOLS_QUICK_START.md)** · [Installation](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) · [All guides](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md) · [FAQ](https://github.com/toshio2011/mihon-nooir/blob/main/docs/FAQ.md) · [Project roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
 
 ![Android](https://img.shields.io/badge/platform-Android-blue)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,9 +15,9 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MangaNooir is experimental and unofficial.** The full v1.0.12 source (EPUB 2 Classic, EPUB 3, XTC/XTCH, multiprovider reader profiles, and existing Nooir Tools) has been merged into `main` via [PR #21](https://github.com/toshio2011/mihon-nooir/pull/21), with a successful [Android FOSS build](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 has NOT been published as a release.** The latest public prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Build artifacts are unsigned/CI-signed previews and may not install over prior test builds.
+> **MangaNooir is experimental and unofficial.** [v1.0.12 is now publicly available as an experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12). It publishes the exact APKs from [successful Android CI build #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368), including the merged [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) improvements. Physical Android/XTEink tests remain incomplete. **These CI-built APKs may have different signing certificates from previous previews; back up app data before replacing an older installation.**
 
-## Experimental v1.0.12 export improvements (not released)
+## Experimental v1.0.12 export improvements
 
 - **EPUB 2 Classic**: genuine EPUB 2.0.1, OPF 2.0, NCX chapters, traditional cover-image metadata, author/synopsis when available.
 - **EPUB 3 Modern**: existing modern fixed-image EPUB export remains a separate choice.
@@ -44,17 +44,17 @@ MangaNooir is built as a minimal Android overlay on the **full [Mihon](https://g
 | Watch transfers and diagnose a failed book | **More → Nooir Tools → Activity Queue** | [Queue and conflicts](https://github.com/toshio2011/mihon-nooir/blob/main/docs/DEVICE_FILES_AND_QUEUE.md) |
 | Browse your XTEink's SD-card files | **More → Nooir Tools → Browse XTEink files** | [Reader files](https://github.com/toshio2011/mihon-nooir/blob/main/docs/DEVICE_FILES_AND_QUEUE.md) |
 
-**Version reminder:** The new **Nooir Tools** hub, web/PDF converters, shared queue, and advanced controls are **in the v1.0.12 code on `main`**, and most are in the published experimental v1.0.11 preview. They are **not** in older v1.0.1 APKs. No v1.0.12 release has been published. Mihon's native chapter Download Queue is separate and unchanged.
+**Version reminder:** The new **Nooir Tools** hub, web/PDF converters, shared queue, and advanced controls are in the experimental **v1.0.12 release**. They are not in older v1.0.1 APKs. Mihon's native chapter Download Queue is separate and unchanged.
 
 ## Install the experimental Android APK
 
-The publicly available [v1.0.11 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) is available for installing; it does **not** include the v1.0.12 changes. For v1.0.11:
+The latest publicly available build is **[v1.0.12 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12)**:
 
-1. Open the [v1.0.11 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11).
+1. Open the [v1.0.12 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12).
 2. Under **Assets**, download an `.apk` directly; no ZIP extraction is required.
-3. Choose a suitable **signed** APK for your Android architecture (normally `arm64-v8a` on recent phones), then install it using Android's file manager.
-4. Open **MangaNooir**. It has a separate app identity and can coexist with ordinary Mihon.
-5. If installing over an older MangaNooir test APK fails, **back up your data first**; different CI signing keys can block an in-place update. Do not uninstall ordinary Mihon just to test this fork.
+3. Choose **`app-arm64-v8a-foss.apk`** for most recent Android phones, or **`app-universal-foss.apk`** if unsure.
+4. Install from Android's file manager. MangaNooir has a separate app identity and can coexist with ordinary Mihon.
+5. **Back up MangaNooir first** if replacing an older preview; CI signing keys can differ and prevent in-place updates. Do not uninstall ordinary Mihon to test this fork.
 
 [**Full installation / first export tutorial →**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) · [Build and update policy](https://github.com/toshio2011/mihon-nooir/blob/main/docs/UPDATES.md)
 
@@ -101,7 +101,7 @@ These statements describe the current **compiled preview code**, not proven phys
 
 This repository contains an **integration overlay**, not an independent rewrite of Mihon. Its [GitHub Actions workflow](.github/workflows/build-apk.yml) checks out the pinned Mihon revision from `config/mihon-upstream.sha`, applies `tools/apply_overlay.py`, runs smoke tests, and assembles a FOSS Android APK. Automated CI is not the same as on-device testing.
 
-- [**Merged integration PR #21**](https://github.com/toshio2011/mihon-nooir/pull/21) — full source on `main`; real-device testing and v1.0.12 release pending.
+- [**Merged PR #22**](https://github.com/toshio2011/mihon-nooir/pull/22) — latest source on `main`; [v1.0.12 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) published; real-device testing pending.
 - [**Roadmap / feature requests**](https://github.com/toshio2011/mihon-nooir/issues/8) — improvements and known work.
 - [**Project handover**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/PROJECT_HANDOVER.md) — contributor context and technical status.
 
