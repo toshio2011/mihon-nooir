@@ -21,7 +21,7 @@ object NooirChapterAccess {
     enum class Issue { UNAVAILABLE, RETRY }
 
     fun classify(httpStatus: Int? = null, message: String = ""): Issue {
-        if (httpStatus in setOf(401, 402, 403, 404, 410, 423, 451)) return Issue.UNAVAILABLE
+        if (httpStatus != null && httpStatus in setOf(401, 402, 403, 404, 410, 423, 451)) return Issue.UNAVAILABLE
         if (httpStatus != null) return Issue.RETRY
         val reason = message.lowercase()
         return if (listOf("locked", "premium", "paywall", "subscription",
