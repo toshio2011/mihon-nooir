@@ -57,3 +57,12 @@ For Android-source details, see the experimental [PDF conversion PR](https://git
 The PDF converter now offers **EPUB 2 · older readers** and **EPUB 3 · newer readers**. Both can contain reflowable selectable text, inline images and tables; the **Reflowable text + illustrations** versus **Keep original pages as images** setting is independent of the EPUB version. EPUB 2 writes an NCX table of contents; EPUB 3 writes a navigation XHTML. The choice is forwarded from the dialog through the background worker to the writer. This is **draft code** pending Android CI and physical XTEink testing, not a released feature.
 
 A scanned PDF remains image-based in either EPUB version (no OCR). Complex vector drawings and floor plans may be rendered as complete pages rather than partially extracted. Review resulting page order and illustration placement before sharing.
+
+
+## Draft PR #22: PDF → XTC / XTCH (experimental)
+
+The PDF converter now also offers **XTC (1-bit)** and **XTCH (2-bit)** for supported XTEink profiles. Select the output format and device before saving or sending. This path uses Android `PdfRenderer` and converts one PDF page at a time to the native panel dimensions; it does **not** use OCR or an AI service. Scanned pages, embedded images and visible text are all rendered as pixels.
+
+**Important distinction:** EPUB 2/3 still use the existing text-and-illustration extraction path and preserve selectable/reflowable text where possible. Choosing XTC/XTCH deliberately rasterizes text; the output cannot be reflowed or selected. Large, password-protected and unusual PDFs may fail. The XTC/XTCH path has a 600-page limit and has not yet been physically verified on X3/X4.
+
+The XTC/XTCH first PDF page is treated as page zero/cover; a PDF without a dedicated cover will display its first content page instead.
