@@ -229,6 +229,14 @@ class TestOverlay(unittest.TestCase):
             cover_source = (work_dir/'NooirMangaCover.kt').read_text()
             self.assertIn('imageLooksValid', cover_source)
             self.assertIn('inJustDecodeBounds = true', cover_source)
+            self.assertIn('source.getMangaUpdate(', cover_source)
+            self.assertIn('fetchDetails = true', cover_source)
+            self.assertIn('fetchChapters = false', cover_source)
+            self.assertIn('fetchThumbnail(updatedUrl)', cover_source)
+            self.assertIn('getCustomCoverFile(manga.id)', cover_source)
+            self.assertLess(cover_source.index('getCustomCoverFile(manga.id)'),
+                            cover_source.index('source.getMangaUpdate('))
+            self.assertIn('Finding or refreshing series cover', manga_export)
             # Public HTML pages may be WordPress / Elementor or a story's
             # landing page, which must be distinguished from chapter content.
             web = (work_dir/'NooirWebArticle.kt').read_text()
