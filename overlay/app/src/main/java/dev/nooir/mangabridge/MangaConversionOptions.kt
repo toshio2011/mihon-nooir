@@ -3,10 +3,6 @@ package dev.nooir.mangabridge
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material3.Surface
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Slider
@@ -99,6 +95,7 @@ data class MangaConversionOptions(
 fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaConversionOptions) -> Unit) {
     var epubExpanded by remember { mutableStateOf(false) }
     var xtcExpanded by remember { mutableStateOf(false) }
+    var imageExpanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Conversion preset")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -138,6 +135,10 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
             }
             Text("Off by default. Adds a JSON trailer; older readers may ignore it.")
         }
+        TextButton(onClick = { epubExpanded = !epubExpanded }) {
+            Text(if (epubExpanded) "▾ Hide EPUB section grouping" else "▸ Show EPUB section grouping")
+        }
+        if (epubExpanded) {
         Text("EPUB / CBZ image colors")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(false to "Grayscale (e-reader)", true to "Original color").forEach { (value, title) ->
@@ -146,11 +147,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
                     label = { Text(title) })
             }
         }
-        Text("XTC and XTCH always use 1-bit / 2-bit grayscale. Color EPUBs may use more storage and memory.")
-        TextButton(onClick = { epubExpanded = !epubExpanded }) {
-            Text(if (epubExpanded) "▾ Hide EPUB section grouping" else "▸ Show EPUB section grouping")
-        }
-        if (epubExpanded) {
+        Text("EPUB and CBZ can retain original color. XTC/XTCH remain grayscale.")
             Text("EPUB 2 / EPUB 3 section grouping")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(1 to "One page", 5 to "Custom", 0 to "Entire chapter").forEach { (value, label) ->
@@ -177,6 +174,10 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
         }
         Text("Entire chapter groups all its images in one XHTML. Experimental: larger sections may take longer to open on low-memory e-readers.")
         }
+        TextButton(onClick = { imageExpanded = !imageExpanded }) {
+            Text(if (imageExpanded) "▾ Hide image and layout controls" else "▸ Show image and layout controls")
+        }
+        if (imageExpanded) {
         Text("Page orientation")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape").forEach { (value, title) ->
@@ -230,6 +231,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, onChange: (MangaCon
             Text("Floyd–Steinberg dithering")
             Switch(checked = options.dither,
                 onCheckedChange = { onChange(options.copy(preset = "Custom", dither = it)) })
+        }
         }
         Text("Changes apply to the next conversion. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page. Manual crop, zoom, preview and guide arrows are still planned.")
     }
