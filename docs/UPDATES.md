@@ -2,7 +2,7 @@
 
 ## Keeping the app up to date
 
-The [v1.0.12 experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) is publicly available. It publishes the exact APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) at merged source commit `5563d133` (no rebuild or re-sign). These are **not persistent-key-signed stable releases**. Android experimental signing keys may differ, so back up MangaNooir before replacing older test builds. Physical-device validation is still pending.
+The [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) is publicly available. It publishes the exact APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) at merged source commit `5563d133` (no rebuild or re-sign). **Official release status does not mean persistent-key signing or completed hardware validation.** Android experimental signing keys may differ, so back up MangaNooir before replacing older test builds. Physical-device validation is still pending.
 
 
 The fork will reuse Mihon's existing in-app update checker and installer, but its APK releases must come from **toshio2011/mihon-nooir**, not upstream Mihon. The fork's package ID is `dev.nooir.mihon.foss`. Android always requires matching signing certificates to install an update over an earlier APK.
