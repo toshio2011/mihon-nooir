@@ -1,6 +1,6 @@
 # MangaNooir Windows — D1 shared conversion spike (developer-only)
 
-This is the **first implementation increment**, not the Windows desktop app or a Windows installer. It proves that the same Kotlin/JVM conversion codecs and MangaNooir settings can run on desktop without Android APIs. It deliberately does **not** include Suwayomi, manga browsing, chapter downloads, Mihon backup restore, a GUI, PDF or web conversion.
+This is the **first implementation increment**, not the Windows desktop app or a Windows installer. It proves that the same Kotlin/JVM conversion codecs and MangaNooir settings can run on desktop without Android APIs. It now also includes a **D0 developer-only Suwayomi localhost integration** for listing chapters and exporting selected downloaded chapters. It does **not** include a managed Suwayomi backend, source browsing UI, Mihon backup restore, a GUI, PDF or web conversion.
 
 ## Shared source — no duplicate codecs
 
@@ -55,10 +55,51 @@ bash tests/run.sh
 
 ## Limitations and next steps
 
-- No manga source browser, chapter downloader, Mihon backup restore, Windows GUI or packaged EXE yet.
+- A Suwayomi localhost API bridge is available for existing downloaded chapters and explicitly requested backend downloads; **no embedded backend**, manga source browser, Mihon backup restore, Windows GUI or packaged EXE yet.
 - ZIP and image files are bounded; desktop ImageIO codec support differs from Android, especially WebP. Password-protected archives, RAR, PDF and text EPUB are not inputs here.
 - Image rendering is currently a Java2D approximation of Android's Bitmap canvas, not certified pixel parity. Cover resolution from online sources and Android preflight confirmations are not yet ported.
 - Source files with huge dimensions may require more memory than intended; real-world batch, malformed image and crash-recovery testing remains.
-- Next: compare generated pages against Android fixtures, stabilize image adapter, and complete the D0 Suwayomi backend download-to-export proof before GUI development.
+- Next: validate against a **real released Suwayomi v2.4.2366 server** with a user-approved extension and lawful sample chapter, compare generated pages against Android fixtures, stabilize the image adapter and build the Windows GUI/managed backend only after the D0 gate.
 
 Full roadmap: [Windows desktop feasibility and feature plan](../docs/WINDOWS_DESKTOP_FEASIBILITY_ROADMAP.md).
+
+## D0: Suwayomi localhost → selected chapters → e-reader book
+
+The `desktop/suwayomi/` adapter is pinned for contract research to [Suwayomi-Server v2.4.2366](https://github.com/Suwayomi/Suwayomi-Server/releases/tag/v2.4.2366). The implementation uses its documented GraphQL manga/chapter fields and `enqueueChapterDownloads` mutation, plus `GET /api/v1/chapter/{chapterId}/download?markAsRead=false` to obtain **downloaded chapter CBZ archives** without modifying read status. It extracts bounded image pages into temporary folders and invokes the **existing** shared MangaNooir conversion CLI. This integration has mock-server tests; **a real released Suwayomi instance has not yet been tested**.
+
+### Setup
+
+1. Install and run your own released Suwayomi server on `127.0.0.1:4567` (or another localhost port). Follow [Suwayomi's extension setup guide](https://github.com/Suwayomi/Suwayomi-Server/blob/master/docs/Getting-Extensions.md) and add **only** extension repositories you trust; MangaNooir bundles none.
+2. In Suwayomi, add a manga and fetch its chapters. Note the **Suwayomi manga ID**, not an Android Mihon database ID.
+3. Build the desktop CLI with the same shared sources as above, **plus** the three files under `desktop/suwayomi/`. For example, on Linux/macOS Bash:
+
+```bash
+kotlinc \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  desktop/cli/NooirDesktopCli.kt desktop/suwayomi/*.kt \
+  -include-runtime -d build/desktop/manganooir-suwayomi.jar
+```
+
+4. List chapter IDs and download state:
+
+```bash
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir \
+  --mode list --manga-id 123 --base-url http://127.0.0.1:4567
+```
+
+5. Export **explicitly selected downloaded chapters** (replace IDs, paths and output extension):
+
+```bash
+java -Djava.awt.headless=true -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir \
+  --mode export --manga-id 123 --chapters 456,457 \
+  --output /path/to/output/manga.epub --format EPUB2 --device X4
+```
+
+To request missing chapters from your already-configured Suwayomi source, add `--download-missing true --wait-seconds 180`. Without this flag, the command refuses to fetch missing chapters. It does not install extensions, search unapproved sources, or mark chapters read. Formats are `EPUB2`, `EPUB` (EPUB 3), `XTC`, `XTCH` and `CBZ`; device profiles and `--options-token` match the Android core. For a missing series cover, use an Android-generated options token with `allowMissingCover=true` or `includeCover=false`; there is **no silent fabricated cover**.
+
+For a server requiring an Authorization header, set `NOOIR_SUWAYOMI_AUTHORIZATION` in the environment (e.g. `Bearer ...` or `Basic ...`) rather than passing credentials in a command argument. Never share credentials or run this early D0 client against a public endpoint; it deliberately permits **localhost only**.
+
+**Limitations:** chapter list must already be populated in Suwayomi; server version/schema compatibility and auth modes beyond the supplied header need live verification; no automatic server launch, no real backend packaging, no online streaming of chapter pages, no download cancellation, no image-perfect Android/Java2D parity and no Windows EXE. ImageIO may lack WebP support; archives and image sizes are bounded, and temporary chapter data is cleaned after conversion.
+
+Run the full mock contract and conversion tests with `bash tests/run.sh`.

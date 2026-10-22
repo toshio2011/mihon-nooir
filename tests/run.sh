@@ -45,3 +45,14 @@ kotlinc \
   desktop/cli/NooirDesktopCli.kt tests/DesktopCliTest.kt \
   -include-runtime -d "$tmp/desktop-cli-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/desktop-cli-tests.jar" DesktopCliTestKt
+
+# D0: exercise a mock Suwayomi v2.4.2366 GraphQL/CBZ server and export its
+# downloaded chapter images with the exact Android-compatible writers.
+kotlinc \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  desktop/cli/NooirDesktopCli.kt \
+  desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiToNooir.kt} \
+  tests/SuwayomiBridgeTest.kt \
+  -include-runtime -d "$tmp/suwayomi-bridge-tests.jar"
+java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/suwayomi-bridge-tests.jar" SuwayomiBridgeTestKt

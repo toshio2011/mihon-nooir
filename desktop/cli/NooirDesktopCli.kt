@@ -138,7 +138,7 @@ object NooirDesktopCli {
             val sources = sorted.map { file ->
                 val rel = file.relativeTo(input).invariantSeparatorsPath
                 val cover = !rel.contains('/') && file.nameWithoutExtension.equals("cover", ignoreCase = true)
-                SourcePage(rel, if (cover) "Cover" else file.parentFile.takeIf { it != input }?.name ?: input.name,
+                SourcePage(rel, if (cover) "Cover" else file.parentFile.takeIf { it != input }?.name?.replace(Regex("^[0-9]{4}__"), "") ?: input.name,
                     cover) { file.inputStream() }
             }.sortedWith(compareBy<SourcePage> { !it.cover })
             return use(sources)

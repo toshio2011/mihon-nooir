@@ -1,7 +1,7 @@
 # MangaNooir Windows Desktop — Full Reader Feasibility & Implementation Roadmap
 
 **Research date:** 22 October 2026  
-**Status:** Feasibility study and approved planning scope; **no Windows app, installer or integrated prototype exists yet**.  
+**Status:** D1 shared conversion JVM CLI merged (PR #23); D0 localhost Suwayomi download-to-conversion **mock contract integration in progress**. No Windows GUI, installer, bundled backend or real-server end-to-end validation yet.  
 **Product priority:** Android v1.0.12 stabilization and repeatable signing/updates remain the release gate before full desktop implementation. Planning and isolated proof-of-concept work may be prepared without modifying Folio Nooir.
 
 ## 1. Product scope
@@ -144,17 +144,17 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 
 ## 5. Implementation milestones (not started)
 
-### D0 — Feasibility proof (can be researched without touching Android release)
+### D0 — Feasibility proof (isolated developer CLI, not a desktop release)
 - [ ] Pin and install a released Suwayomi Windows/server build in a disposable environment.
 - [ ] Confirm localhost-only backend lifecycle, auth, first-run onboarding, extension store, browse/search, manga details, chapters and a real authorized download.
-- [ ] Verify GraphQL schema and downloaded-page retrieval; capture success, rate limit, offline and extension failure cases.
-- [ ] Spike a Kotlin/JVM converter CLI from existing `bridge/` sources with unchanged output hashes/fixtures.
+- [ ] Verify GraphQL schema and downloaded-page retrieval **against a real released Suwayomi server**; mock contract tests for manga, chapters, download mutation and chapter CBZ endpoint are being added; capture success, rate limit, offline and extension failure cases.
+- [x] Spike a Kotlin/JVM converter CLI from existing `bridge/` sources and validate format/metadata fixtures (PR #23); exact Android image pixel/hash parity remains open.
 - [ ] Compare Compose Desktop vs web frontend + sidecar using real UI, packaging and license criteria.
 - **Gate:** one end-to-end *source → chapter download → XTC/EPUB2 export → readable file* demonstration on Windows.
 
 ### D1 — Shared conversion core (after Android stabilization)
 - [ ] Create `nooir-core`, `nooir-desktop-io`, `nooir-transfer-jvm` modules; keep Android overlay API compatibility and a shared settings schema with the complete Android conversion workflow.
-- [ ] Run existing Kotlin tests and EPUBCheck on both Android and desktop; add identical sample-output assertions and memory budgets.
+- [x] Compile the shared Kotlin codecs on JVM, validate synthetic EPUB2/3, XTC, XTCH and CBZ and keep Android APK + EPUBCheck CI green (PR #23). [ ] Android-vs-Java2D image pixel parity and memory budgets remain.
 - [ ] Port image/PDF adapters; no `android.*` imports in shared modules.
 - **Gate:** Android build stays green; desktop CLI produces valid EPUB2/3, XTC/XTCH, CBZ from fixtures.
 
@@ -231,3 +231,10 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 - [Suwayomi MPL-2.0 license](https://github.com/Suwayomi/Suwayomi-Server/blob/master/LICENSE)
 
 **Bottom line:** Full Windows MangaNooir is achievable without porting Android itself: integrate a pinned desktop-compatible manga backend, reuse Nooir's JVM conversion core, and build a real desktop interface. The critical unknown is the **verified end-to-end backend download → export bridge**; do that spike before committing to the full UI.
+
+## 22 October 2026 — D0 Suwayomi localhost bridge implementation slice
+
+- The D1 conversion CLI was merged in [PR #23](https://github.com/toshio2011/mihon-nooir/pull/23); the Android APK and shared Kotlin tests passed in [run #39755714615](https://github.com/toshio2011/mihon-nooir/actions/runs/39755714615).
+- **D0 follow-up implementation:** `desktop/suwayomi/SuwayomiClient.kt` uses the **Suwayomi-Server v2.4.2366** GraphQL manga/chapter fields, `enqueueChapterDownloads`, and the `/api/v1/chapter/{chapterId}/download` CBZ REST endpoint. `SuwayomiToNooir.kt` accepts explicit chapter IDs, verifies download status, optionally enqueues missing chapters on request, extracts image pages safely, and invokes the shared EPUB2/3/XTC/XTCH/CBZ CLI. Mock HTTP tests exercise downloaded and newly enqueued chapters.
+- **Do not mark D0 complete until tested with an actual released Suwayomi server** and a user-approved, lawfully accessed source chapter. No bundled extensions, manga, remote server connections, or automated backend process management are present.
+- Android parity, GUI, reader, PDF/web conversion, Windows packaging, update signing and the full source browsing workflow remain independent open tasks.
