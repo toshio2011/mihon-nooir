@@ -47,11 +47,13 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         const val KEY_TOTAL = "total"
         const val KEY_ERROR = "error"
         const val KEY_OUTPUT_NAME = "output_name"
+        const val KEY_SELECTED_CHAPTERS = "selected_chapters"
+        const val KEY_CHAPTER_PREVIEW = "chapter_preview"
 
         fun enqueue(context: Context, mangaId: Long, mangaTitle: String, chapterIds: List<Long>,
             destination: Uri?, host: String?, folder: String, format: ExportFormat,
             device: String, quick: Boolean, options: MangaConversionOptions,
-            outputName: String = ""): UUID {
+            outputName: String = "", chapterNames: List<String> = emptyList()): UUID {
             require(chapterIds.isNotEmpty()) { "Select at least one chapter" }
             require(destination != null || !host.isNullOrBlank()) { "Missing destination" }
             // Avoid WorkManager's 10KB Data limit with a private, durable chapter ID manifest.
@@ -67,7 +69,9 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                     "host" to host.orEmpty(), "folder" to folder,
                     "format" to format.name, "device" to device,
                     "quick" to quick, "options" to options.token(),
-                    KEY_OUTPUT_NAME to outputName
+                    KEY_OUTPUT_NAME to outputName,
+                    KEY_SELECTED_CHAPTERS to chapterIds.distinct().size,
+                    KEY_CHAPTER_PREVIEW to chapterNames.take(12).joinToString("\n").take(650)
                 )).build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
