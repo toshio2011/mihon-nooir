@@ -34,3 +34,14 @@ java -jar "$tmp/slicing.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
 java -jar "$tmp/reflow.jar"
+
+# Desktop uses the same source files as Android; never maintain duplicate codecs.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt tests/ConversionOptionsParityTest.kt -include-runtime -d "$tmp/options-parity.jar"
+java -jar "$tmp/options-parity.jar"
+
+kotlinc \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  desktop/cli/NooirDesktopCli.kt tests/DesktopCliTest.kt \
+  -include-runtime -d "$tmp/desktop-cli-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/desktop-cli-tests.jar" DesktopCliTestKt
