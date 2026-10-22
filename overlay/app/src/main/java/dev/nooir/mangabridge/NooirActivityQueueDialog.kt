@@ -177,7 +177,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                         progress = { pct.coerceIn(0, 100) / 100f },
                                         modifier = Modifier.fillMaxWidth(),
                                     )
-                                    Text("$" + "{pct.coerceIn(0, 100)}% · upload completion requires reader confirmation")
+                                    Text(pct.coerceIn(0, 100).toString() + "% · upload completion requires reader confirmation")
                                 }
                             }
                             TextButton(onClick = {
@@ -193,11 +193,11 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                     val device = job.inputData.getString("device").orEmpty()
                                     val opts = MangaConversionOptions.fromToken(
                                         job.inputData.getString("options"))
-                                    Text("Format: $" + "{format.ifBlank { "Auto" }} · Device: $" + "{device.ifBlank { "X4" }}")
-                                    Text("Selected chapters: $" + "{selected.takeIf { it > 0 }?.toString() ?: "See original selection"}")
+                                    Text("Format: " + format.ifBlank { "Auto" } + " · Device: " + device.ifBlank { "X4" })
+                                    Text("Selected chapters: " + (selected.takeIf { it > 0 }?.toString() ?: "See original selection"))
                                     if (chapterNames.isNotBlank()) {
                                         Text(chapterNames)
-                                        if (selected > 12) Text("… and $" + "{selected - 12} more")
+                                        if (selected > 12) Text("… and " + (selected - 12) + " more")
                                     }
                                     Text("Source: " + if (job.inputData.getBoolean("quick", false))
                                         "Quick Export (online)" else "Downloaded chapters")
@@ -210,7 +210,7 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                 val host = job.inputData.getString("host").orEmpty()
                                 val folder = job.inputData.getString("folder").orEmpty()
                                 if (saved.isNotBlank()) Text("Destination: phone file")
-                                else if (host.isNotBlank()) Text("Destination: $" + "{host + folder}")
+                                else if (host.isNotBlank()) Text("Destination: " + host + folder)
                                 val detail = error(job)
                                 if (detail.isNotBlank()) Text("Error details: " + detail)
                                 Text("Job ID: " + key.take(8))
