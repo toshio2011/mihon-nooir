@@ -121,6 +121,19 @@ class TestOverlay(unittest.TestCase):
             self.assertNotIn('chapters.size <= 5', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirTransferWorker.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt').exists())
+
+            # Shared JVM model and codec helpers must be the exact files Android receives.
+            shared_options = root/'app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt'
+            self.assertTrue(shared_options.exists())
+            self.assertIn('data class MangaConversionOptions(', shared_options.read_text())
+            self.assertNotIn('import android.', shared_options.read_text())
+            self.assertIn('MangaConversionOptions.Companion.load', (root/'app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt').read_text())
+            for helper in ('GrayscalePng.kt', 'NaturalPageOrder.kt'):
+                pure = root/'app/src/main/java/dev/nooir/bridge'/helper
+                self.assertTrue(pure.exists(), helper)
+                self.assertNotIn('import android.', pure.read_text())
+            self.assertIn('GrayscalePng.encode(page)', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
+
             opts=(root/'app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt').read_text()
             self.assertIn('overlapPercent', opts)
             self.assertIn('orientation', opts)
