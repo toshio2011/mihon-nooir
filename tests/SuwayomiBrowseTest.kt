@@ -37,6 +37,12 @@ fun main() {
             "sources(first: 2, offset: 2)" in query -> {
                 """{"data":{"sources":{"totalCount":3,"nodes":[{"id":"314","name":"Gamma","lang":"es","displayName":"Gamma","supportsLatest":true,"contentWarning":"SAFE"}]}}}"""
             }
+            "mangas(condition: { inLibrary: true }, first: 2, offset: 0)" in query -> {
+                """{"data":{"mangas":{"totalCount":3,"nodes":[{"id":101,"title":"One Piece","author":"Oda","description":"Pirates","thumbnailUrl":"/cover","inLibrary":true},{"id":102,"title":"Second","author":null,"description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
+            }
+            "mangas(condition: { inLibrary: true }, first: 2, offset: 2)" in query -> {
+                """{"data":{"mangas":{"totalCount":3,"nodes":[{"id":103,"title":"Third","author":null,"description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
+            }
             "fetchSourceManga" in query && "type: POPULAR" in query -> {
                 check("source: \"$SOURCE_ID\"" in query && "page: 1" in query)
                 """{"data":{"fetchSourceManga":{"hasNextPage":true,"mangas":[{"id":101,"title":"One Piece","author":"Oda","description":"Pirates","thumbnailUrl":"/api/v1/manga/101/thumbnail","inLibrary":false},{"id":102,"title":"Manga Two","author":null,"description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
@@ -77,6 +83,9 @@ fun main() {
         check(first.sources[1].id == 42L && !first.sources[1].supportsLatest)
         val second = client.sources(2, 2)
         check(second.sources.single().name == "Gamma")
+        val library = client.library(0, 2)
+        check(library.totalCount == 3 && library.mangas.size == 2 && library.mangas.all { it.inLibrary })
+        check(client.library(2, 2).mangas.single().id == 103)
         val popular = client.browse(SOURCE_ID, SuwayomiBrowseMode.POPULAR)
         check(popular.hasNextPage && popular.mangas.size == 2)
         check(popular.mangas[0].title == "One Piece" && popular.mangas[1].inLibrary)
@@ -90,6 +99,8 @@ fun main() {
         val beforeInvalid = hits.get()
         check(runCatching { client.sources(-1, 200) }.isFailure)
         check(runCatching { client.sources(0, 201) }.isFailure)
+        check(runCatching { client.library(-1, 100) }.isFailure)
+        check(runCatching { client.library(0, 201) }.isFailure)
         check(runCatching { client.browse(0, SuwayomiBrowseMode.POPULAR) }.isFailure)
         check(runCatching { client.browse(SOURCE_ID, SuwayomiBrowseMode.SEARCH, 1, " ") }.isFailure)
         check(runCatching { client.browse(SOURCE_ID, SuwayomiBrowseMode.SEARCH, 1, "x\ny") }.isFailure)
@@ -101,6 +112,11 @@ fun main() {
                 "--limit", "2", "--offset", "0"))
         }
         check(sourceCli.contains("Alpha (EN)") && sourceCli.contains("More sources"))
+        val libraryCli = outputOf {
+            SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "library",
+                "--limit", "2", "--offset", "0"))
+        }
+        check(libraryCli.contains("One Piece") && libraryCli.contains("More library titles"))
         val browseCli = outputOf {
             SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "popular",
                 "--source-id", SOURCE_ID.toString()))
@@ -119,7 +135,7 @@ fun main() {
             SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "sources",
                 "--limit", "2", "--limit", "1"))
         }.isFailure)
-        println("Suwayomi source browsing contract passed: GraphQL LongString signed source IDs, paginated installed sources, popular/latest/search, escaping, explicit refresh, chapters and CLI")
+        println("Suwayomi source browsing contract passed: GraphQL LongString signed source IDs, paginated installed sources and library, popular/latest/search, escaping, explicit refresh, chapters and CLI")
     } finally {
         server.stop(0)
     }
