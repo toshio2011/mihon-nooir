@@ -49,9 +49,6 @@ object NooirDesktopCli {
                 "Output extension must be .${format.extension} for $format"
             }
             val options = MangaConversionOptions.fromToken(flags["--options-token"])
-            require(options.panelMode == "OFF") {
-                "Panel by Panel is currently Android-only; desktop detection/rendering parity is not yet implemented"
-            }
             val title = (flags["--title"] ?: input.nameWithoutExtension).take(120).ifBlank { "Manga" }
             val profile = NooirDeviceProfiles.forId(device)
             val meta = ExtendedMetadata(title = title,
@@ -72,6 +69,7 @@ object NooirDesktopCli {
                             val coverOpts = options.copy(
                                 layout = "PAGED", cropWhiteMargins = false,
                                 splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
+                                panelMode = "OFF",
                             )
                             val opts = if (entry.cover) coverOpts else options
                             for (frame in render(img, w, h, depth, opts)) {
@@ -195,16 +193,49 @@ object NooirDesktopCli {
         ).takeIf { it.width > 0 && it.height > 0 } ?: region
     }
 
+    /** Same bounded OCR-free panel detector as Android, with a Java2D thumbnail adapter. */
+    private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<PageRegion>? {
+        if (options.panelMode != "PANEL_BY_PANEL") return null
+        if (src.height.toLong() > src.width.toLong() * 3L ||
+            src.width.toLong() * 100L > src.height.toLong() * 135L) return null
+        val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
+        val w = (src.width * scale).toInt().coerceAtLeast(1)
+        val h = (src.height * scale).toInt().coerceAtLeast(1)
+        val thumbnail = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        val graphics = thumbnail.createGraphics()
+        try {
+            graphics.color = Color.WHITE
+            graphics.fillRect(0, 0, w, h)
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            graphics.drawImage(src, 0, 0, w, h, null)
+        } finally {
+            graphics.dispose()
+        }
+        val rgb = thumbnail.getRGB(0, 0, w, h, null, 0, w)
+        val gray = ByteArray(rgb.size) { i ->
+            val c = rgb[i]
+            ((((c ushr 16) and 255) * 299 + ((c ushr 8) and 255) * 587 +
+                (c and 255) * 114) / 1000).toByte()
+        }
+        val plan = PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
+        return if (plan.usedFullPageFallback) null
+            else PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+    }
+
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions): Sequence<QuantizedPage> = sequence {
         val rotate = options.orientation == "LANDSCAPE" && width < height
         val vw = if (rotate) height else width
         val vh = if (rotate) width else height
-        val regions = PageSlicePlanner.plan(src.width, src.height, vw, vh,
+        val panels = detectPanels(src, options)
+        val regions = if (panels != null) panels.flatMap { panel ->
+            PanelViewportPlanner.plan(panel, vw, vh, options.rightToLeft, options.overlapPercent)
+        } else PageSlicePlanner.plan(src.width, src.height, vw, vh,
             options.layout, options.splitSpreads, options.rightToLeft,
             options.overlapPercent, options.orientation)
         for (region in regions) {
-            val r = if (options.cropWhiteMargins) trimWhite(src, region) else region
+            // Padded panel crops must never be trimmed again: that can cut balloons.
+            val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, region) else region
             val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)
             val dh = (r.height * scale).toInt().coerceIn(1, vh)
