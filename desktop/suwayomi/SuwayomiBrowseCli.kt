@@ -13,7 +13,7 @@ object SuwayomiBrowseCli {
         val flags = args.toList().chunked(2).associate { it[0] to it[1] }
         require(flags.keys.all { it in setOf(
             "--mode", "--base-url", "--source-id", "--manga-id", "--query",
-            "--page", "--offset", "--limit",
+            "--page", "--offset", "--limit", "--refresh",
         ) }) { "Unknown source browse option" }
         require(flags.size == args.size / 2) { "Duplicate browse option" }
         val client = SuwayomiClient(
@@ -23,7 +23,7 @@ object SuwayomiBrowseCli {
         when (flags["--mode"] ?: "sources") {
             "sources" -> {
                 require(flags["--source-id"] == null && flags["--manga-id"] == null &&
-                    flags["--query"] == null && flags["--page"] == null) {
+                    flags["--query"] == null && flags["--page"] == null && flags["--refresh"] == null) {
                     "Source listing accepts --offset and --limit, not manga search arguments"
                 }
                 val offset = flags["--offset"]?.toIntOrNull() ?: 0
@@ -41,7 +41,7 @@ object SuwayomiBrowseCli {
                 }
             }
             "popular", "latest", "search" -> {
-                require(flags["--offset"] == null && flags["--limit"] == null && flags["--manga-id"] == null) {
+                require(flags["--offset"] == null && flags["--limit"] == null && flags["--manga-id"] == null && flags["--refresh"] == null) {
                     "Manga browsing uses --source-id and --page, not source pagination"
                 }
                 val sourceId = flags["--source-id"]?.toLongOrNull()
@@ -69,6 +69,12 @@ object SuwayomiBrowseCli {
                 }
                 val id = flags["--manga-id"]?.toIntOrNull()
                     ?.takeIf { it > 0 } ?: error("Missing positive --manga-id")
+                val refresh = when (flags["--refresh"] ?: "false") {
+                    "true" -> true
+                    "false" -> false
+                    else -> error("--refresh must be true or false")
+                }
+                if (refresh) client.refreshManga(id)
                 val manga = client.manga(id)
                 println("${clean(manga.title)} (manga ID ${manga.id}) — ${manga.chapters.size} chapters")
                 val chapters = manga.chapters.sortedWith(compareBy<SuwayomiChapter> {
