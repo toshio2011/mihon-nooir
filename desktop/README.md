@@ -137,3 +137,23 @@ Replace example IDs with IDs returned by your own server. `--mode latest` is ava
 Once chapter IDs are displayed, the existing `SuwayomiToNooir --mode export --chapters ...` command converts the chosen chapters with the **same Android-compatible conversion writers**.
 
 **Still pending:** test against a real released Suwayomi instance and user-approved source; a graphical source browser, cover grid, chapter selection UI, download manager, local server lifecycle and packaged Windows app. Automated fake-server tests verify request shapes, signed IDs, pagination, search escaping, explicit refresh, error handling and CLI output, but do not prove that all third-party extensions work.
+
+## D2 Windows GUI prototype (new, unsigned preview)
+
+The **first actual desktop window** is in `desktop/ui/MangaNooirDesktop.kt`. It runs against a separately installed, configured **localhost Suwayomi** server. The UI can list installed sources, browse popular/latest manga, search titles, show the Suwayomi library, inspect chapters, select any combination or downloaded-only chapters, and export to **EPUB 2, EPUB 3, XTC, XTCH or CBZ**.
+
+The GUI uses the **same Kotlin Android conversion settings model and device profiles**: open **Conversion settings** to choose Manga/Manhwa/Manhua presets, page layout, cropping, split spreads, right-to-left, contrast, dithering, orientation, overlap, cover, color EPUB/CBZ, EPUB XHTML grouping and extended XTC metadata. Device choices include XTEink, Kindle, Kobo, Boox and PocketBook. Unsupported device/format combinations are rejected before export. Downloads of missing chapters require both an opt-in checkbox and a confirmation prompt.
+
+### Windows preview artifact
+
+The [Build MangaNooir Windows desktop preview](../.github/workflows/desktop-preview.yml) GitHub Actions workflow compiles the **exact shared Android-compatible codecs**, tests the GUI model and Suwayomi mock server, then uses Windows `jpackage` to produce an **unsigned portable application folder** with a bundled Java runtime. Download the workflow artifact named `manganooir-windows-preview-unsigned`, unzip it, and run `MangaNooir-Preview.exe` **inside the extracted folder**. It is **not** an installer and must not be published as a stable release. Windows may warn because the binary is unsigned; users should verify the artifact came from this repository's GitHub Actions and use it only for testing.
+
+You still need to run Suwayomi separately and configure trusted extension sources. MangaNooir does **not** bundle extensions, manga, a Suwayomi server, or a Windows service. It connects only to `localhost`; the default is `http://127.0.0.1:4567`. The GUI currently has no Mihon backup restoration, embedded/offline reader, progress dashboard, pause/resume queue or background jobs across restarts. It can export downloaded chapters and can optionally request missing chapters; progress is a busy status until completion.
+
+To run on any JVM desktop with Java 21+ and a display after compiling the shared sources:
+
+```bash
+java -cp build/desktop/manganooir-desktop-preview.jar dev.nooir.desktop.ui.MangaNooirDesktop
+```
+
+**Testing status:** GUI code compiles in headless CI and its selection/format model is tested; a real Windows desktop interaction and a real released Suwayomi instance with an authorized source are still **not verified**. Pixel-identical rendering with Android remains open. This is a functionality prototype, not final UI design.
