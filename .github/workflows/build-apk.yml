@@ -64,11 +64,6 @@ jobs:
           java-version: '21'
       - name: Apply integration
         run: python3 tools/apply_overlay.py upstream
-      - name: Make pull-request APK safely install beside stable MangaNooir
-        if: github.event_name == 'pull_request'
-        env:
-          NOOIR_PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python3 tools/prepare_pr_preview.py upstream "$NOOIR_PR_NUMBER"
       - name: Assemble fork (FOSS APK)
         working-directory: upstream
         run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
