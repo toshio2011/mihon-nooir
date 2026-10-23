@@ -74,11 +74,20 @@ jobs:
           $ErrorActionPreference = 'Stop'
           jpackage --type app-image --name MangaNooir-Preview --input package/input --main-jar manganooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --dest package/output --java-options '-Dfile.encoding=UTF-8'
           if ($LASTEXITCODE -ne 0) { throw "jpackage failed: $LASTEXITCODE" }
-          Compress-Archive -Path package/output/MangaNooir-Preview -DestinationPath package/MangaNooir-Windows-Preview.zip -CompressionLevel Optimal
+          $app = 'package/output/MangaNooir-Preview'
+          if (!(Test-Path "$app/MangaNooir-Preview.exe")) { throw 'Windows launcher missing from app image' }
+          if (!(Test-Path "$app/app")) { throw 'Packaged application files missing' }
+          if (!(Test-Path "$app/runtime")) { throw 'Bundled Java runtime missing' }
+          Compress-Archive -Path $app -DestinationPath package/MangaNooir-Windows-Preview.zip -CompressionLevel Optimal
           if (!(Test-Path package/MangaNooir-Windows-Preview.zip)) { throw 'Windows archive missing' }
+          $hash = (Get-FileHash -Algorithm SHA256 'package/MangaNooir-Windows-Preview.zip').Hash.ToLowerInvariant()
+          Set-Content -Path 'package/MangaNooir-Windows-Preview.zip.sha256' -Encoding ascii -NoNewline -Value "$hash  MangaNooir-Windows-Preview.zip"
+          Write-Host "Portable Windows ZIP SHA256: $hash"
       - uses: actions/upload-artifact@v4
         with:
           name: manganooir-windows-preview-unsigned
-          path: package/MangaNooir-Windows-Preview.zip
+          path: |
+            package/MangaNooir-Windows-Preview.zip
+            package/MangaNooir-Windows-Preview.zip.sha256
           if-no-files-found: error
           retention-days: 14
