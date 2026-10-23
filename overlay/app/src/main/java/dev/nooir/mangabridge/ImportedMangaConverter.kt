@@ -144,7 +144,7 @@ object ImportedMangaConverter {
                 } else {
                     val frameWidth = if (options.orientation == "LANDSCAPE") height else width
                     val frameHeight = if (options.orientation == "LANDSCAPE") width else height
-                    val archivePages = source.pages(listOf(input), frameWidth, frameHeight, 2, options).map { page ->
+                    val archivePages = source.pages(listOf(input), frameWidth, frameHeight, 2, options, fixedFramebuffer = false).map { page ->
                         ArchivePage(baseTitle, png(page), page.width, page.height)
                     }
                     count = BookArchiveWriter.write(actual, archivePages, target, metadata)

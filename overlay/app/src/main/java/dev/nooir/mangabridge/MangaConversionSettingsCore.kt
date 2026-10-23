@@ -13,7 +13,7 @@ data class MangaConversionOptions(
     val rightToLeft: Boolean = true,
     val contrast: Int = 50,               // 50 is neutral; 0..100
     val dither: Boolean = true,           // false = nearest threshold
-    val orientation: String = "PORTRAIT", // portrait panel / sideways reading
+    val orientation: String = "PORTRAIT", // PORTRAIT, LANDSCAPE, AUTO_FIT (panel-by-panel only)
     val overlapPercent: Int = 8,         // repeating rows on long WEBTOON strips, 0..50
     val landscapeClockwise: Boolean = true, // turn content clockwise for XTC/XTCH
     val includeCover: Boolean = true,
@@ -58,7 +58,7 @@ data class MangaConversionOptions(
                 rightToLeft = v[4].toBoolean(),
                 contrast = (v[5].toIntOrNull() ?: 50).coerceIn(0, 100),
                 dither = v[6].toBoolean(),
-                orientation = v.getOrNull(7)?.takeIf { it in setOf("PORTRAIT", "LANDSCAPE") }
+                orientation = v.getOrNull(7)?.takeIf { it in setOf("PORTRAIT", "LANDSCAPE", "AUTO_FIT") }
                     ?: "PORTRAIT",
                 overlapPercent = (v.getOrNull(8)?.toIntOrNull() ?: 8).coerceIn(0, 50),
                 landscapeClockwise = v.getOrNull(9)?.toBooleanStrictOrNull() ?: true,

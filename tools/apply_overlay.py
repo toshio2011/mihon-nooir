@@ -155,7 +155,7 @@ toolbar.write_text(toolbar_text)
 # Both the launcher label and the app's UI translation use the same Moko resource.
 i18n = upstream / "i18n/src/commonMain/moko-resources/base/strings.xml"
 replace_once(i18n, '<string name="app_name" translatable="false">Mihon</string>',
-    '<string name="app_name" translatable="false">MangaNooir</string>')
+    '<string name="app_name" translatable="false">MihonNooir</string>')
 # New WorkManager worker needs Metro graph injection just as Mihon's own workers do.
 app_graph = upstream / "app/src/main/java/mihon/app/di/AppGraph.kt"
 replace_once(app_graph, "import eu.kanade.tachiyomi.data.download.DownloadWorker\n",
