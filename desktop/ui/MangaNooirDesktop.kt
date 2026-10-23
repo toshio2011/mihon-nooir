@@ -73,8 +73,11 @@ internal object DesktopUiModel {
     }
 
     fun suggestedFile(title: String, format: ExportFormat): String {
-        val safe = title.replace(Regex("[^\\p{L}\\p{N} ._()-]"), "_")
-            .trim().trim('.').take(80).ifBlank { "MangaNooir" }
+        val normalized = title.replace(Regex("[^\\p{L}\\p{N} ._()-]"), "_")
+            .trim().take(80).trimEnd(' ', '.').ifBlank { "MangaNooir" }
+        // Windows also reserves these names with an extension (for example CON.epub).
+        val reserved = Regex("(?i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$")
+        val safe = if (reserved.matches(normalized)) "_$normalized" else normalized
         return "$safe.${format.extension}"
     }
 }
@@ -228,13 +231,16 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
         loadSources()
     }
 
-    private fun client(): SuwayomiClient = SuwayomiClient(
-        endpoint.text.trim(), System.getenv("NOOIR_SUWAYOMI_AUTHORIZATION"),
+    private fun client(baseUrl: String): SuwayomiClient = SuwayomiClient(
+        baseUrl, System.getenv("NOOIR_SUWAYOMI_AUTHORIZATION"),
     )
 
     private fun <T> runTask(label: String, task: () -> T, onSuccess: (T) -> Unit) {
         if (!busy.compareAndSet(false, true)) return
         controls.forEach { it.isEnabled = false }
+        // Prevent a new selection or endpoint edit from being lost while a request is in flight.
+        listOf(endpoint, search, sourceList, mangaList, chapterList, format, device, downloadMissing)
+            .forEach { it.isEnabled = false }
         status.text = "$label..."
         object : SwingWorker<T, Unit>() {
             override fun doInBackground(): T = task()
@@ -250,6 +256,8 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
                 } finally {
                     busy.set(false)
                     controls.forEach { it.isEnabled = true }
+                    listOf(endpoint, search, sourceList, mangaList, chapterList, format, device, downloadMissing)
+                        .forEach { it.isEnabled = true }
                     setPaging()
                 }
             }
@@ -258,8 +266,9 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
 
     private fun loadSources() {
         val selectedId = selectedSource?.id
+        val baseUrl = endpoint.text.trim()
         runTask("Loading installed sources", {
-            val c = client()
+            val c = client(baseUrl)
             val result = mutableListOf<SuwayomiSource>()
             var offset = 0
             while (true) {
@@ -287,11 +296,12 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
             showError("Choose an installed source first"); return
         }
         val term = search.text.trim()
+        val baseUrl = endpoint.text.trim()
         if (mode == "search" && term.isBlank()) {
             showError("Enter a manga title to search"); return
         }
         runTask("Loading $mode manga", {
-            val c = client()
+            val c = client(baseUrl)
             if (mode == "library") {
                 val result = c.library((targetPage - 1) * 50, 50)
                 Pair(result.mangas, (targetPage - 1) * 50 + result.mangas.size < result.totalCount)
@@ -318,8 +328,9 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
     }
 
     private fun loadChapters(id: Int, forceRefresh: Boolean) {
+        val baseUrl = endpoint.text.trim()
         runTask(if (forceRefresh) "Refreshing chapters" else "Loading chapters", {
-            val c = client()
+            val c = client(baseUrl)
             if (forceRefresh) c.refreshManga(id)
             c.manga(id)
         }, { result ->
