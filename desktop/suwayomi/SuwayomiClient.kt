@@ -49,6 +49,13 @@ data class SuwayomiMangaCard(
     val inLibrary: Boolean,
 )
 
+data class SuwayomiLibraryPage(
+    val mangas: List<SuwayomiMangaCard>,
+    val totalCount: Int,
+    val offset: Int,
+    val limit: Int,
+)
+
 data class SuwayomiBrowsePage(
     val sourceId: Long,
     val page: Int,
@@ -141,6 +148,37 @@ class SuwayomiClient(
         }
         require(sources.size <= limit) { "Source page exceeds requested limit" }
         return SuwayomiSourcePage(sources, total, offset, limit)
+    }
+
+    /** User's Suwayomi library (not an Android Mihon library sync). */
+    fun library(offset: Int = 0, limit: Int = 100): SuwayomiLibraryPage {
+        require(offset in 0..100_000 && limit in 1..200) { "Invalid library pagination" }
+        val query = """
+            query NooirLibrary {
+              mangas(condition: { inLibrary: true }, first: $limit, offset: $offset) {
+                totalCount
+                nodes { id title author description thumbnailUrl inLibrary }
+              }
+            }
+        """.trimIndent()
+        val result = graphql(query).obj("mangas")
+        val total = result.int("totalCount")
+        require(total >= 0) { "Invalid library total" }
+        val mangas = result.list("nodes").map { item ->
+            val node = item.asObject()
+            SuwayomiMangaCard(
+                id = node.int("id"),
+                title = node.str("title"),
+                author = node["author"] as? String,
+                description = node["description"] as? String,
+                thumbnailUrl = node["thumbnailUrl"] as? String,
+                inLibrary = node["inLibrary"] as? Boolean ?: error("Missing inLibrary"),
+            )
+        }
+        require(mangas.size <= limit && mangas.all { it.inLibrary }) {
+            "Suwayomi returned invalid library entries"
+        }
+        return SuwayomiLibraryPage(mangas, total, offset, limit)
     }
 
     /**
