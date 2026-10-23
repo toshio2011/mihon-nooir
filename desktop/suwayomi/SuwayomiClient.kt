@@ -191,6 +191,30 @@ class SuwayomiClient(
         return SuwayomiBrowsePage(sourceId, page, mangas, next)
     }
 
+    /**
+     * Explicit source-network refresh, needed for chapter lists of newly discovered manga.
+     * Never invoked implicitly by browse/search. The server updates its metadata cache.
+     */
+    fun refreshManga(mangaId: Int, fetchManga: Boolean = true, fetchChapters: Boolean = true) {
+        require(mangaId > 0) { "Invalid manga ID" }
+        require(fetchManga || fetchChapters) { "Select at least one refresh operation" }
+        val query = """
+            mutation NooirRefresh {
+              fetchMangaAndChapters(input: {
+                id: $mangaId,
+                fetchManga: $fetchManga,
+                fetchChapters: $fetchChapters
+              }) {
+                manga { id }
+              }
+            }
+        """.trimIndent()
+        val response = graphql(query).obj("fetchMangaAndChapters")
+        require(response.obj("manga").int("id") == mangaId) {
+            "Suwayomi returned an unexpected manga ID"
+        }
+    }
+
     fun manga(id: Int): SuwayomiManga {
         require(id > 0) { "Invalid manga ID" }
         val query = """
