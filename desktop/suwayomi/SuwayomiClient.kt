@@ -23,7 +23,7 @@ data class SuwayomiManga(
     val chapters: List<SuwayomiChapter>,
 )
 
-/** Source IDs are signed 64-bit hashes; valid Suwayomi IDs may be negative. */
+/** Source IDs are signed 64-bit hashes serialized as GraphQL LongString; valid IDs may be negative. */
 data class SuwayomiSource(
     val id: Long,
     val name: String,
@@ -145,7 +145,7 @@ class SuwayomiClient(
 
     /**
      * Fetch a source page using Suwayomi's v2.4.2366 FetchSourceManga mutation.
-     * Search terms are GraphQL-string-escaped and source IDs are signed Longs.
+     * Search terms are GraphQL-string-escaped and signed source IDs use LongString literals.
      * Suwayomi may cache fetched manga metadata in its own database.
      */
     fun browse(
@@ -168,7 +168,7 @@ class SuwayomiClient(
         }
         val query = """
             mutation NooirBrowse {
-              fetchSourceManga(input: { source: $sourceId, type: ${mode.name}, page: $page$queryPart }) {
+              fetchSourceManga(input: { source: "${sourceId}", type: ${mode.name}, page: $page$queryPart }) {
                 hasNextPage
                 mangas { id title author description thumbnailUrl inLibrary }
               }
