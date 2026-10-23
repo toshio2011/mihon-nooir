@@ -31,7 +31,7 @@ object PanelAutoFit {
         require(portraitWidth > 0 && portraitHeight > 0)
         val portrait = occupiedFraction(region, portraitWidth, portraitHeight)
         val landscape = occupiedFraction(region, portraitHeight, portraitWidth)
-        return landscape * 100.0 >= portrait * MIN_IMPROVEMENT_PERCENT &&
+        return landscape * 100.0 >= portrait * MIN_IMPROVEMENT_PERCENT.toDouble() &&
             landscape > portrait + 0.05
     }
 
