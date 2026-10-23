@@ -103,3 +103,27 @@ For a server requiring an Authorization header, set `NOOIR_SUWAYOMI_AUTHORIZATIO
 **Limitations:** chapter list must already be populated in Suwayomi; server version/schema compatibility and auth modes beyond the supplied header need live verification; no automatic server launch, no real backend packaging, no online streaming of chapter pages, no download cancellation, no image-perfect Android/Java2D parity and no Windows EXE. ImageIO may lack WebP support; archives and image sizes are bounded, and temporary chapter data is cleaned after conversion.
 
 Run the full mock contract and conversion tests with `bash tests/run.sh`.
+
+## D0.2 — Source discovery, popular/latest browsing and manga search
+
+The desktop developer CLI can now discover **locally installed** Suwayomi sources, browse their manga, and search by title **without manually knowing a manga ID**. It uses Suwayomi v2.4.2366 REST endpoints `/api/v1/source/list`, `/{sourceId}/popular/{pageNum}`, `/{sourceId}/latest/{pageNum}`, and `/{sourceId}/search?searchTerm=...&pageNum=...`. Source IDs are kept as decimal strings (64-bit values). Results contain Suwayomi manga IDs usable with the existing `--mode list` and `--mode export`.
+
+After building the Suwayomi CLI JAR as described above:
+
+```bash
+# Show installed sources and their IDs
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode sources
+
+# Browse the first page of popular manga
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode popular --source-id 1234567890123456789 --page 1
+
+# Browse latest (only for sources that support it)
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode latest --source-id 1234567890123456789 --page 1
+
+# Search within a single installed source; spaces and Unicode are encoded
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode search --source-id 1234567890123456789 --query "Detective Conan" --page 1
+```
+
+Replace the example source ID with the actual ID from `--mode sources`. Output shows manga ID, title, author, library state and whether more pages exist. To list its chapters, pass the returned manga ID to `--mode list --manga-id ID`; export chosen chapters with `--mode export`.
+
+**Limitations:** only already-installed Suwayomi sources; no automatic extension discovery/installation, global cross-source search, graphical covers, advanced filters or Windows GUI. Browse/search can contact the extension's configured remote site and may be blocked or rate-limited by that site. These endpoints are covered by mock-server contract tests, not yet a real released Suwayomi integration run.
