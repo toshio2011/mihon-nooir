@@ -1,9 +1,9 @@
 # MangaNooir v1.0.13 — Android panel-export test candidate
 
-This is **one existing MangaNooir app**, not a separately installed test edition.
+This is **one existing MihonNooir app**, not a separately installed test edition.
 
 - Application ID: `dev.nooir.mihon.foss` (unchanged from v1.0.12).
-- Android launcher label: **MangaNooir** (unchanged).
+- Android launcher label: **MihonNooir** (renamed from MangaNooir; package identity remains unchanged).
 - Candidate version: **1.0.13**; not yet tagged or published.
 - Source: stacked development PRs #30 → #31 → #32, with Panel by Panel (automatic) and optional Auto Fit.
 - Original Mihon library and other app sources are not modified. Folio Nooir is not modified.
@@ -21,7 +21,7 @@ CI now checks each Android APK's archive integrity, signing validity, package ID
 1. Choose the latest **successful** PR #32 `Build Mihon Nooir debug APK` run. Discard the old run #39918193761, which has version 1.0.12 and lacks the new artifact checks.
 2. Download the `mihon-nooir-foss-apk` artifact, extract ZIP, select `arm64-v8a` or `universal` APK. Verify the SHA-256 digest against the included file.
 3. **Back up your existing app**, using Mihon's backup feature; backup archives generally don't contain downloaded pages. Do not uninstall solely to dismiss a dangerous-app block.
-4. When normal, safe installation is accepted, open **MangaNooir → manga → Export → Conversion settings**, enable **Panel by Panel (automatic)** and optionally **Auto Fit**.
+4. When normal, safe installation is accepted, open **MihonNooir → manga → Export → Conversion settings**, enable **Panel by Panel (automatic)** and optionally **Auto Fit**.
 5. Start with one legally accessible downloaded chapter, export to XTC/XTCH/EPUB2/EPUB3/CBZ, compare page order and output counts, then test X3/X4 readability. In difficult pages, conservative whole-page fallback is expected.
 6. After a successful Android installation, representative real manga tests, X3/X4 reading, and signing/release verification, evaluate merging PR #30 then #31 then #32 and tag `v1.0.13`. Until then **no stable release is claimed**.
 
@@ -32,4 +32,4 @@ CI now checks each Android APK's archive integrity, signing validity, package ID
 - Persistent signing identity for reliable in-place upgrades. Do not publish a stable release with an untracked ephemeral signing key.
 - Play Protect / other Android security blocking cause (needs exact warning and device-side observations).
 
-The current project name remains MangaNooir; CI workflow names referring to Mihon Nooir denote its Mihon-based codebase, not a second installed app.
+The launcher is renamed to MihonNooir while keeping the original package identity; changing the visible name alone does not create a new Android app.
