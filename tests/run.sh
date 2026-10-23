@@ -56,3 +56,10 @@ kotlinc \
   tests/SuwayomiBridgeTest.kt \
   -include-runtime -d "$tmp/suwayomi-bridge-tests.jar"
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/suwayomi-bridge-tests.jar" SuwayomiBridgeTestKt
+
+# D0.2: mock v2.4.2366 installed-source discovery, paginated browse and search.
+kotlinc \
+  desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiBrowseCli.kt} \
+  tests/SuwayomiBrowseTest.kt \
+  -include-runtime -d "$tmp/suwayomi-browse-tests.jar"
+java --add-modules jdk.httpserver -cp "$tmp/suwayomi-browse-tests.jar" SuwayomiBrowseTestKt

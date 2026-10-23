@@ -23,6 +23,48 @@ data class SuwayomiManga(
     val chapters: List<SuwayomiChapter>,
 )
 
+/** Source IDs are signed 64-bit hashes serialized as GraphQL LongString; valid IDs may be negative. */
+data class SuwayomiSource(
+    val id: Long,
+    val name: String,
+    val language: String,
+    val displayName: String,
+    val supportsLatest: Boolean,
+    val contentWarning: String,
+)
+
+data class SuwayomiSourcePage(
+    val sources: List<SuwayomiSource>,
+    val totalCount: Int,
+    val offset: Int,
+    val limit: Int,
+)
+
+data class SuwayomiMangaCard(
+    val id: Int,
+    val title: String,
+    val author: String?,
+    val description: String?,
+    val thumbnailUrl: String?,
+    val inLibrary: Boolean,
+)
+
+data class SuwayomiLibraryPage(
+    val mangas: List<SuwayomiMangaCard>,
+    val totalCount: Int,
+    val offset: Int,
+    val limit: Int,
+)
+
+data class SuwayomiBrowsePage(
+    val sourceId: Long,
+    val page: Int,
+    val mangas: List<SuwayomiMangaCard>,
+    val hasNextPage: Boolean,
+)
+
+enum class SuwayomiBrowseMode { POPULAR, LATEST, SEARCH }
+
 class SuwayomiClient(
     endpoint: String = "http://127.0.0.1:4567",
     private val authorization: String? = null,
@@ -74,6 +116,141 @@ class SuwayomiClient(
             "Suwayomi GraphQL error: $messages"
         }
         return root.obj("data")
+    }
+
+    /**
+     * List sources already installed/configured in the user's own Suwayomi server.
+     * GraphQL SourceQuery.sources(first, offset), verified against v2.4.2366.
+     */
+    fun sources(offset: Int = 0, limit: Int = 100): SuwayomiSourcePage {
+        require(offset in 0..100_000 && limit in 1..200) { "Invalid source pagination" }
+        val query = """
+            query NooirSources {
+              sources(first: $limit, offset: $offset) {
+                totalCount
+                nodes { id name lang displayName supportsLatest contentWarning }
+              }
+            }
+        """.trimIndent()
+        val result = graphql(query).obj("sources")
+        val total = result.int("totalCount")
+        require(total >= 0) { "Invalid source count" }
+        val sources = result.list("nodes").map { item ->
+            val node = item.asObject()
+            SuwayomiSource(
+                id = node.long("id"),
+                name = node.str("name"),
+                language = node.str("lang"),
+                displayName = node.str("displayName"),
+                supportsLatest = node["supportsLatest"] as? Boolean ?: error("Missing supportsLatest"),
+                contentWarning = node.str("contentWarning"),
+            )
+        }
+        require(sources.size <= limit) { "Source page exceeds requested limit" }
+        return SuwayomiSourcePage(sources, total, offset, limit)
+    }
+
+    /** User's Suwayomi library (not an Android Mihon library sync). */
+    fun library(offset: Int = 0, limit: Int = 100): SuwayomiLibraryPage {
+        require(offset in 0..100_000 && limit in 1..200) { "Invalid library pagination" }
+        val query = """
+            query NooirLibrary {
+              mangas(condition: { inLibrary: true }, first: $limit, offset: $offset) {
+                totalCount
+                nodes { id title author description thumbnailUrl inLibrary }
+              }
+            }
+        """.trimIndent()
+        val result = graphql(query).obj("mangas")
+        val total = result.int("totalCount")
+        require(total >= 0) { "Invalid library total" }
+        val mangas = result.list("nodes").map { item ->
+            val node = item.asObject()
+            SuwayomiMangaCard(
+                id = node.int("id"),
+                title = node.str("title"),
+                author = node["author"] as? String,
+                description = node["description"] as? String,
+                thumbnailUrl = node["thumbnailUrl"] as? String,
+                inLibrary = node["inLibrary"] as? Boolean ?: error("Missing inLibrary"),
+            )
+        }
+        require(mangas.size <= limit && mangas.all { it.inLibrary }) {
+            "Suwayomi returned invalid library entries"
+        }
+        return SuwayomiLibraryPage(mangas, total, offset, limit)
+    }
+
+    /**
+     * Fetch a source page using Suwayomi's v2.4.2366 FetchSourceManga mutation.
+     * Search terms are GraphQL-string-escaped and signed source IDs use LongString literals.
+     * Suwayomi may cache fetched manga metadata in its own database.
+     */
+    fun browse(
+        sourceId: Long,
+        mode: SuwayomiBrowseMode,
+        page: Int = 1,
+        searchTerm: String? = null,
+    ): SuwayomiBrowsePage {
+        require(sourceId != 0L) { "Invalid source ID" }
+        require(page in 1..10_000) { "Invalid source page" }
+        val queryPart = if (mode == SuwayomiBrowseMode.SEARCH) {
+            val term = searchTerm?.trim() ?: ""
+            require(term.isNotEmpty() && term.length <= 200 && term.none { it.code < 32 }) {
+                "Search requires a 1–200 character term without control characters"
+            }
+            ", query: ${MiniJson.quote(term)}"
+        } else {
+            require(searchTerm.isNullOrBlank()) { "Search term is only valid in SEARCH mode" }
+            ""
+        }
+        val query = """
+            mutation NooirBrowse {
+              fetchSourceManga(input: { source: "${sourceId}", type: ${mode.name}, page: $page$queryPart }) {
+                hasNextPage
+                mangas { id title author description thumbnailUrl inLibrary }
+              }
+            }
+        """.trimIndent()
+        val result = graphql(query).obj("fetchSourceManga")
+        val mangas = result.list("mangas").map { item ->
+            val node = item.asObject()
+            SuwayomiMangaCard(
+                id = node.int("id"),
+                title = node.str("title"),
+                author = node["author"] as? String,
+                description = node["description"] as? String,
+                thumbnailUrl = node["thumbnailUrl"] as? String,
+                inLibrary = node["inLibrary"] as? Boolean ?: error("Missing inLibrary"),
+            )
+        }
+        require(mangas.size <= 500) { "Unexpectedly large source browse page" }
+        val next = result["hasNextPage"] as? Boolean ?: error("Missing hasNextPage")
+        return SuwayomiBrowsePage(sourceId, page, mangas, next)
+    }
+
+    /**
+     * Explicit source-network refresh, needed for chapter lists of newly discovered manga.
+     * Never invoked implicitly by browse/search. The server updates its metadata cache.
+     */
+    fun refreshManga(mangaId: Int, fetchManga: Boolean = true, fetchChapters: Boolean = true) {
+        require(mangaId > 0) { "Invalid manga ID" }
+        require(fetchManga || fetchChapters) { "Select at least one refresh operation" }
+        val query = """
+            mutation NooirRefresh {
+              fetchMangaAndChapters(input: {
+                id: $mangaId,
+                fetchManga: $fetchManga,
+                fetchChapters: $fetchChapters
+              }) {
+                manga { id }
+              }
+            }
+        """.trimIndent()
+        val response = graphql(query).obj("fetchMangaAndChapters")
+        require(response.obj("manga").int("id") == mangaId) {
+            "Suwayomi returned an unexpected manga ID"
+        }
     }
 
     fun manga(id: Int): SuwayomiManga {

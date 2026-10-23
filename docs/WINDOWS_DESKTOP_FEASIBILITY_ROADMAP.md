@@ -238,3 +238,22 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 - **D0 follow-up implementation:** `desktop/suwayomi/SuwayomiClient.kt` uses the **Suwayomi-Server v2.4.2366** GraphQL manga/chapter fields, `enqueueChapterDownloads`, and the `/api/v1/chapter/{chapterId}/download` CBZ REST endpoint. `SuwayomiToNooir.kt` accepts explicit chapter IDs, verifies download status, optionally enqueues missing chapters on request, extracts image pages safely, and invokes the shared EPUB2/3/XTC/XTCH/CBZ CLI. Mock HTTP tests exercise downloaded and newly enqueued chapters.
 - **Do not mark D0 complete until tested with an actual released Suwayomi server** and a user-approved, lawfully accessed source chapter. No bundled extensions, manga, remote server connections, or automated backend process management are present.
 - Android parity, GUI, reader, PDF/web conversion, Windows packaging, update signing and the full source browsing workflow remain independent open tasks.
+
+## 23 October 2026 — D0.2 source discovery and browsing developer slice
+
+- Implemented **source discovery** from Suwayomi GraphQL `sources(first, offset)`, preserving signed 64-bit IDs, languages, display names, latest support and content warnings.
+- Implemented **paginated POPULAR/LATEST/SEARCH** from `fetchSourceManga`, with GraphQL-safe escaped search terms, manga title/author/thumbnail metadata and server-library status.
+- Added **explicit** `fetchMangaAndChapters` refresh for newly discovered manga; chapter lists can then supply selected chapter IDs to the already-merged `SuwayomiToNooir` conversion pipeline.
+- Added a CLI, mock HTTP contract tests, safe pagination/argument limits and user documentation.
+- **Still unverified:** real released Suwayomi server compatibility and extensions, GUI browsing/cover display, source installation/management, Windows packaging, full reader and automated downloads in the GUI.
+- The user-facing Windows app is **not yet available**. See `desktop/README.md`.
+
+## 23 October 2026 — Consolidated D0.2 source browser and library
+
+- [PR #25](https://github.com/toshio2011/mihon-nooir/pull/25) includes installed source discovery, **signed LongString source IDs** (negative IDs allowed), source popular/latest/search with GraphQL-safe search terms, explicit chapter refresh, and a paginated **Suwayomi library** listing.
+- The separate [PR #26](https://github.com/toshio2011/mihon-nooir/pull/26) overlaps; consolidate rather than merging conflicting source browser implementations.
+- [ ] Verify consolidated mock contract tests and Android FOSS APK CI.
+- [ ] Validate a **real** Suwayomi v2.4.2366 installation and user-configured source.
+- [ ] Implement graphical Windows browsing/reading, backend lifecycle and packaged installer.
+
+This does **not** import Mihon backups or synchronize Android library entries, and no third-party extensions or manga are bundled.
