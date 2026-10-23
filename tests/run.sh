@@ -63,3 +63,9 @@ kotlinc \
   tests/SuwayomiBrowseTest.kt \
   -include-runtime -d "$tmp/suwayomi-browse-tests.jar"
 java --add-modules jdk.httpserver -cp "$tmp/suwayomi-browse-tests.jar" SuwayomiBrowseTestKt
+
+# Panel export Phase A: pure Kotlin image geometry and safe reading-order fallback.
+# This is not yet wired into Android export; legacy behavior remains unchanged.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/PanelDetectionCoreTest.kt -include-runtime -d "$tmp/panel-phase-a.jar"
+java -jar "$tmp/panel-phase-a.jar"
