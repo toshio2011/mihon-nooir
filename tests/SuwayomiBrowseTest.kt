@@ -32,13 +32,13 @@ fun main() {
         hits.incrementAndGet()
         val response = when {
             "sources(first: 2, offset: 0)" in query -> {
-                """{"data":{"sources":{"totalCount":3,"nodes":[{"id":$SOURCE_ID,"name":"Alpha","lang":"en","displayName":"Alpha (EN)","supportsLatest":true,"contentWarning":"SAFE"},{"id":42,"name":"Beta","lang":"ja","displayName":"Beta (JP)","supportsLatest":false,"contentWarning":"MIXED"}]}}}"""
+                """{"data":{"sources":{"totalCount":3,"nodes":[{"id":"$SOURCE_ID","name":"Alpha","lang":"en","displayName":"Alpha (EN)","supportsLatest":true,"contentWarning":"SAFE"},{"id":"42","name":"Beta","lang":"ja","displayName":"Beta (JP)","supportsLatest":false,"contentWarning":"MIXED"}]}}}"""
             }
             "sources(first: 2, offset: 2)" in query -> {
-                """{"data":{"sources":{"totalCount":3,"nodes":[{"id":314,"name":"Gamma","lang":"es","displayName":"Gamma","supportsLatest":true,"contentWarning":"SAFE"}]}}}"""
+                """{"data":{"sources":{"totalCount":3,"nodes":[{"id":"314","name":"Gamma","lang":"es","displayName":"Gamma","supportsLatest":true,"contentWarning":"SAFE"}]}}}"""
             }
             "fetchSourceManga" in query && "type: POPULAR" in query -> {
-                check("source: $SOURCE_ID" in query && "page: 1" in query)
+                check("source: \"$SOURCE_ID\"" in query && "page: 1" in query)
                 """{"data":{"fetchSourceManga":{"hasNextPage":true,"mangas":[{"id":101,"title":"One Piece","author":"Oda","description":"Pirates","thumbnailUrl":"/api/v1/manga/101/thumbnail","inLibrary":false},{"id":102,"title":"Manga Two","author":null,"description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
             }
             "fetchSourceManga" in query && "type: LATEST" in query -> {
@@ -119,7 +119,7 @@ fun main() {
             SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "sources",
                 "--limit", "2", "--limit", "1"))
         }.isFailure)
-        println("Suwayomi source browsing contract passed: signed source IDs, paginated installed sources, popular/latest/search, escaping, explicit refresh, chapters and CLI")
+        println("Suwayomi source browsing contract passed: GraphQL LongString signed source IDs, paginated installed sources, popular/latest/search, escaping, explicit refresh, chapters and CLI")
     } finally {
         server.stop(0)
     }
