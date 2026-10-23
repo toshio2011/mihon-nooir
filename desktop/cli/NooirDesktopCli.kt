@@ -49,6 +49,9 @@ object NooirDesktopCli {
                 "Output extension must be .${format.extension} for $format"
             }
             val options = MangaConversionOptions.fromToken(flags["--options-token"])
+            require(options.panelMode == "OFF") {
+                "Panel by Panel is currently Android-only; desktop detection/rendering parity is not yet implemented"
+            }
             val title = (flags["--title"] ?: input.nameWithoutExtension).take(120).ifBlank { "Manga" }
             val profile = NooirDeviceProfiles.forId(device)
             val meta = ExtendedMetadata(title = title,
