@@ -157,3 +157,14 @@ java -cp build/desktop/manganooir-desktop-preview.jar dev.nooir.desktop.ui.Manga
 ```
 
 **Testing status:** GUI code compiles in headless CI and its selection/format model is tested; a real Windows desktop interaction and a real released Suwayomi instance with an authorized source are still **not verified**. Pixel-identical rendering with Android remains open. This is a functionality prototype, not final UI design.
+
+### PR #28 stabilization checks (23 October 2026)
+
+- Freeze source/manga/chapter selections and server/format inputs while a background request is running, avoiding dropped manga selections or exporting against a changed endpoint.
+- Read the server endpoint on the Swing event thread before launching the worker, rather than reading live Swing controls in a background thread.
+- Sanitize export filenames for Windows reserved device names (CON, PRN, AUX, NUL, COM1–9, LPT1–9) and trailing dots/spaces.
+- Add headless regression fixtures for filename handling and the 500-chapter selection cap.
+- Windows packaging CI now checks for the launcher, app files and bundled runtime and emits a SHA-256 checksum next to the unsigned ZIP.
+
+**These are code/CI safeguards, not manual launch validation.** The portable app still requires a separately running trusted Suwayomi instance; real Windows clicks, real downloaded chapters, Android-versus-Java2D pixel parity, backend lifecycle and signed installer remain pending. Do not merge or publish it as stable until those gates are satisfied.
+
