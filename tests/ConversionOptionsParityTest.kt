@@ -20,6 +20,11 @@ fun main() {
     val panel = custom.copy(panelMode = "PANEL_BY_PANEL")
     check(MangaConversionOptions.fromToken(panel.token()) == panel)
     check(panel.token().split("|").size == 17)
+    val autoFit = panel.copy(orientation = "AUTO_FIT")
+    check(MangaConversionOptions.fromToken(autoFit.token()) == autoFit)
+    check(autoFit.token().split("|").size == 17) { "Auto Fit must not break old job token length" }
+    check(MangaConversionOptions.fromToken(custom.token()).orientation == "LANDSCAPE")
+
     check(MangaConversionOptions.fromToken(custom.token().substringBeforeLast("|")).panelMode == "OFF")
     check(MangaConversionOptions.fromToken(panel.token().substringBeforeLast("|") + "|UNKNOWN").panelMode == "OFF")
     check(MangaConversionOptions.fromToken(null).panelMode == "OFF")
