@@ -8,7 +8,7 @@ object SuwayomiBrowseCli {
     @JvmStatic
     fun main(args: Array<String>) {
         require(args.size % 2 == 0) {
-            "Use --mode sources|popular|latest|search|chapters [--source-id ID] [--query TEXT]"
+            "Use --mode sources|library|popular|latest|search|chapters [--source-id ID] [--query TEXT]"
         }
         val flags = args.toList().chunked(2).associate { it[0] to it[1] }
         require(flags.keys.all { it in setOf(
@@ -38,6 +38,22 @@ object SuwayomiBrowseCli {
                 }
                 if (offset.toLong() + result.sources.size < result.totalCount) {
                     println("More sources: repeat with --offset ${offset + result.sources.size}")
+                }
+            }
+            "library" -> {
+                require(flags["--source-id"] == null && flags["--manga-id"] == null &&
+                    flags["--query"] == null && flags["--page"] == null && flags["--refresh"] == null) {
+                    "Library listing accepts --offset and --limit only"
+                }
+                val offset = flags["--offset"]?.toIntOrNull() ?: 0
+                val limit = flags["--limit"]?.toIntOrNull() ?: 100
+                val result = client.library(offset, limit)
+                println("Suwayomi library: ${result.totalCount}; showing ${result.mangas.size} at offset $offset")
+                for (manga in result.mangas) {
+                    println("${manga.id}\\t${clean(manga.title)}\\t${clean(manga.author ?: "")}")
+                }
+                if (offset.toLong() + result.mangas.size < result.totalCount) {
+                    println("More library titles: repeat with --offset ${offset + result.mangas.size}")
                 }
             }
             "popular", "latest", "search" -> {
@@ -85,7 +101,7 @@ object SuwayomiBrowseCli {
                 }
                 println("Export selected IDs with SuwayomiToNooir --mode export --manga-id $id --chapters ID,ID ...")
             }
-            else -> error("--mode must be sources, popular, latest, search or chapters")
+            else -> error("--mode must be sources, library, popular, latest, search or chapters")
         }
     }
 
