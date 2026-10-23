@@ -68,7 +68,8 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 checked = options.panelMode == "PANEL_BY_PANEL",
                 onCheckedChange = {
                     onChange(options.copy(preset = "Custom",
-                        panelMode = if (it) "PANEL_BY_PANEL" else "OFF"))
+                        panelMode = if (it) "PANEL_BY_PANEL" else "OFF",
+                        orientation = if (!it && options.orientation == "AUTO_FIT") "PORTRAIT" else options.orientation))
                 },
             )
             Text("Panel by Panel (automatic)")
@@ -147,7 +148,8 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
         if (imageExpanded) {
         Text("Page orientation")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape").forEach { (value, title) ->
+            (listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape") +
+                if (options.panelMode == "PANEL_BY_PANEL") listOf("AUTO_FIT" to "Auto Fit") else emptyList()).forEach { (value, title) ->
                 FilterChip(
                     selected = options.orientation == value,
                     onClick = { onChange(options.copy(preset = "Custom", orientation = value)) },
@@ -155,7 +157,13 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 )
             }
         }
-        if (options.orientation == "LANDSCAPE") {
+        if (options.orientation == "AUTO_FIT" && options.panelMode == "PANEL_BY_PANEL") {
+            Text("Auto Fit chooses portrait or landscape for each detected panel to use more screen space, " +
+                "without cutting panel content. Uncertain pages use the safe portrait fallback.")
+            if (isXtc) Text("XTC/XTCH stays at the device's native pixel dimensions; " +
+                "some wide panels will be rotated and may require turning the reader sideways.")
+        }
+        if (options.orientation == "LANDSCAPE" || options.orientation == "AUTO_FIT") {
             Text(if (isXtc) "Turn the X3/X4 sideways to read landscape XTC/XTCH pages." else "Landscape exports use a wider page.")
             if (isXtc) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Rotate content clockwise")
