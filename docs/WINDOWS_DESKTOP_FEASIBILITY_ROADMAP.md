@@ -1,13 +1,3 @@
-## 23 October 2026 — Consolidated D0.2 source browser and library
-
-- [PR #25](https://github.com/toshio2011/mihon-nooir/pull/25) includes installed source discovery, **signed LongString source IDs** (negative IDs allowed), source popular/latest/search with GraphQL-safe search terms, explicit chapter refresh, and a paginated **Suwayomi library** listing.
-- The separate [PR #26](https://github.com/toshio2011/mihon-nooir/pull/26) overlaps; consolidate rather than merging conflicting source browser implementations.
-- [ ] Verify consolidated mock contract tests and Android FOSS APK CI.
-- [ ] Validate a **real** Suwayomi v2.4.2366 installation and user-configured source.
-- [ ] Implement graphical Windows browsing/reading, backend lifecycle and packaged installer.
-
-This does **not** import Mihon backups or synchronize Android library entries, and no third-party extensions or manga are bundled.
-
 # MangaNooir Windows Desktop — Full Reader Feasibility & Implementation Roadmap
 
 **Research date:** 22 October 2026  
@@ -257,3 +247,13 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 - Added a CLI, mock HTTP contract tests, safe pagination/argument limits and user documentation.
 - **Still unverified:** real released Suwayomi server compatibility and extensions, GUI browsing/cover display, source installation/management, Windows packaging, full reader and automated downloads in the GUI.
 - The user-facing Windows app is **not yet available**. See `desktop/README.md`.
+
+## 23 October 2026 — Consolidated D0.2 source browser and library
+
+- [PR #25](https://github.com/toshio2011/mihon-nooir/pull/25) includes installed source discovery, **signed LongString source IDs** (negative IDs allowed), source popular/latest/search with GraphQL-safe search terms, explicit chapter refresh, and a paginated **Suwayomi library** listing.
+- The separate [PR #26](https://github.com/toshio2011/mihon-nooir/pull/26) overlaps; consolidate rather than merging conflicting source browser implementations.
+- [ ] Verify consolidated mock contract tests and Android FOSS APK CI.
+- [ ] Validate a **real** Suwayomi v2.4.2366 installation and user-configured source.
+- [ ] Implement graphical Windows browsing/reading, backend lifecycle and packaged installer.
+
+This does **not** import Mihon backups or synchronize Android library entries, and no third-party extensions or manga are bundled.
