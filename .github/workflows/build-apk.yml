@@ -67,10 +67,35 @@ jobs:
       - name: Assemble fork (FOSS APK)
         working-directory: upstream
         run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
-      - name: Upload APK
-        if: always()
+      - name: Verify one-app APK identity, version, signing and archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(upstream/app/build/outputs/apk/foss/*.apk)
+          (( ${#apks[@]} >= 1 )) || { echo 'No built APK found'; exit 1; }
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk"
+          tools_dir=$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          test -x "$tools_dir/apksigner" && test -x "$tools_dir/aapt"
+          version=$(tr -d '\r\n' < config/version.txt)
+          version_code=$(python3 -c 'import sys; a,b,c=map(int,sys.argv[1].split(".")); print(a*1000000+b*10000+c)' "$version")
+          for apk in "${apks[@]}"; do
+            unzip -tq "$apk" >/dev/null
+            "$tools_dir/apksigner" verify --verbose --print-certs "$apk"
+            badging=$("$tools_dir/aapt" dump badging "$apk")
+            grep -Fq "name='dev.nooir.mihon.foss'" <<< "$badging"
+            grep -Fq "versionCode='$version_code'" <<< "$badging"
+            grep -Fq "versionName='$version'" <<< "$badging"
+            grep -Fq "application-label:'MangaNooir'" <<< "$badging"
+            echo "Verified single-app identity and signature: $(basename "$apk")"
+          done
+          (cd upstream/app/build/outputs/apk/foss && sha256sum ./*.apk > SHA256SUMS.txt)
+      - name: Upload verified APKs and checksums
         uses: actions/upload-artifact@v4
         with:
           name: mihon-nooir-foss-apk
-          path: upstream/app/build/outputs/apk/foss/*.apk
-          if-no-files-found: warn
+          path: |
+            upstream/app/build/outputs/apk/foss/*.apk
+            upstream/app/build/outputs/apk/foss/SHA256SUMS.txt
+          if-no-files-found: error
