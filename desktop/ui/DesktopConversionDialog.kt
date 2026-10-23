@@ -30,7 +30,10 @@ internal object DesktopConversionDialog {
         val overlap = JSpinner(SpinnerNumberModel(8, 0, 50, 1))
         val pagesPerXhtml = JSpinner(SpinnerNumberModel(1, 0, 999, 1))
 
+        var updating = false
         fun populate(o: MangaConversionOptions) {
+            if (updating) return
+            updating = true
             preset.selectedItem = o.preset.takeIf { it in listOf("Manga", "Manhwa", "Manhua") } ?: "Custom"
             layout.selectedItem = o.layout
             orientation.selectedItem = o.orientation
@@ -46,9 +49,11 @@ internal object DesktopConversionDialog {
             contrast.value = o.contrast
             overlap.value = o.overlapPercent
             pagesPerXhtml.value = o.epubPagesPerXhtml
+            updating = false
         }
         populate(original)
         preset.addActionListener {
+            if (updating) return@addActionListener
             val name = preset.selectedItem as String
             if (name != "Custom") populate(MangaConversionOptions.preset(name))
         }
