@@ -64,6 +64,8 @@ jobs:
           java-version: '21'
       - name: Apply integration
         run: python3 tools/apply_overlay.py upstream
+      - name: Remove Android-wide installation capabilities
+        run: python3 tools/secure_android_installers.py upstream
       - name: Assemble fork (FOSS APK)
         working-directory: upstream
         run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
@@ -88,6 +90,13 @@ jobs:
             grep -Fq "versionCode='$version_code'" <<< "$badging"
             grep -Fq "versionName='$version'" <<< "$badging"
             grep -Fq "application-label:'MihonNooir'" <<< "$badging"
+            perms=$("$tools_dir/aapt" dump permissions "$apk")
+            for permission in REQUEST_INSTALL_PACKAGES REQUEST_DELETE_PACKAGES UPDATE_PACKAGES_WITHOUT_USER_ACTION; do
+              if grep -Fq "android.permission.$permission" <<< "$perms"; then
+                echo "Unexpected Android package management permission: $permission"
+                exit 1
+              fi
+            done
             echo "Verified single-app identity and signature: $(basename "$apk")"
           done
           (cd upstream/app/build/outputs/apk/foss && sha256sum ./*.apk > SHA256SUMS.txt)
