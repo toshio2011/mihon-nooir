@@ -175,7 +175,7 @@ class AndroidPageSource(private val context: Context) {
         // all rendered full-screen bitmaps from the current source page.
         for (initial in regions) {
             val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
-            val r = if (options.cropWhiteMargins) trimWhite(src, sourceRegion) else sourceRegion
+            val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
             val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
             val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)
