@@ -64,6 +64,21 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(
+                checked = options.panelMode == "PANEL_BY_PANEL",
+                onCheckedChange = {
+                    onChange(options.copy(preset = "Custom",
+                        panelMode = if (it) "PANEL_BY_PANEL" else "OFF"))
+                },
+            )
+            Text("Panel by Panel (automatic)")
+        }
+        if (options.panelMode == "PANEL_BY_PANEL") {
+            Text("One detected panel per screen. No OCR or manual review. " +
+                "Complex pages stay intact to protect artwork and dialogue. " +
+                "Exports may be much larger and take longer.")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = options.includeCover, onCheckedChange = {
                 onChange(options.copy(preset = "Custom", includeCover = it))
             })
@@ -185,6 +200,6 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 onCheckedChange = { onChange(options.copy(preset = "Custom", dither = it)) })
         }
         }
-        Text("Changes apply to the next conversion. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page. Manual crop, zoom, preview and guide arrows are still planned.")
+        Text("Changes apply to the next conversion. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page. Manual crop, preview and guide arrows are optional future tools; Panel by Panel requires no review.")
     }
 }
