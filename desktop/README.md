@@ -103,3 +103,33 @@ For a server requiring an Authorization header, set `NOOIR_SUWAYOMI_AUTHORIZATIO
 **Limitations:** chapter list must already be populated in Suwayomi; server version/schema compatibility and auth modes beyond the supplied header need live verification; no automatic server launch, no real backend packaging, no online streaming of chapter pages, no download cancellation, no image-perfect Android/Java2D parity and no Windows EXE. ImageIO may lack WebP support; archives and image sizes are bounded, and temporary chapter data is cleaned after conversion.
 
 Run the full mock contract and conversion tests with `bash tests/run.sh`.
+
+## D0.2: Browse installed sources and find manga without knowing IDs
+
+The developer-only `SuwayomiBrowseCli` uses Suwayomi-Server **v2.4.2366** `sources(first, offset)`, `fetchSourceManga` (POPULAR/LATEST/SEARCH) and optional `fetchMangaAndChapters` GraphQL operations. Source IDs are **signed 64-bit values** (some are negative); manga IDs and chapter IDs are separate positive integers.
+
+Build the same Kotlin JVM source set used by the D0 bridge, including `desktop/suwayomi/SuwayomiBrowseCli.kt` (or compile `desktop/suwayomi/*.kt`). Use an already-running localhost Suwayomi instance with your own configured extensions. MangaNooir does not bundle sources or copyrighted content.
+
+```bash
+# List installed sources; use --offset to page beyond the first 100.
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiBrowseCli \
+  --mode sources --limit 100 --offset 0
+
+# Browse popular manga from a selected source; signed source IDs are valid.
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiBrowseCli \
+  --mode popular --source-id -900000000000000001 --page 1
+
+# Search that source by title (search terms are escaped as GraphQL strings).
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiBrowseCli \
+  --mode search --source-id -900000000000000001 --query "Example Manga" --page 1
+
+# After choosing a manga ID, explicitly fetch its latest metadata and chapters.
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiBrowseCli \
+  --mode chapters --manga-id 123 --refresh true
+```
+
+Replace example IDs with IDs returned by your own server. `--mode latest` is available only for sources reporting `supportsLatest=true`. Without `--refresh true`, chapter listing reads Suwayomi's existing cached chapters; newly discovered manga may have none until refreshed. Refreshing fetches source metadata and chapters and can make network requests; searching/browsing also contacts the selected source and may cache metadata on the Suwayomi server. Neither action downloads pages or changes reading progress.
+
+Once chapter IDs are displayed, the existing `SuwayomiToNooir --mode export --chapters ...` command converts the chosen chapters with the **same Android-compatible conversion writers**.
+
+**Still pending:** test against a real released Suwayomi instance and user-approved source; a graphical source browser, cover grid, chapter selection UI, download manager, local server lifecycle and packaged Windows app. Automated fake-server tests verify request shapes, signed IDs, pagination, search escaping, explicit refresh, error handling and CLI output, but do not prove that all third-party extensions work.
