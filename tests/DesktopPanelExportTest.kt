@@ -114,10 +114,10 @@ fun main() {
                     img.width to img.height
                 }
             }
-            check(sizes.count { it == 800 to 480 } == 1) {
+            check(sizes.count { it == (800 to 480) } == 1) {
                 "Wide panel should use landscape: $sizes"
             }
-            check(sizes.count { it == 480 to 800 } == 2) {
+            check(sizes.count { it == (480 to 800) } == 2) {
                 "Tall panels should use portrait: $sizes"
             }
         }
