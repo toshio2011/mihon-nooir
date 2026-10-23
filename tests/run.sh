@@ -52,7 +52,7 @@ kotlinc \
   overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt \
-  desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiToNooir.kt} \
+  desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiCatalog.kt,SuwayomiToNooir.kt} \
   tests/SuwayomiBridgeTest.kt \
   -include-runtime -d "$tmp/suwayomi-bridge-tests.jar"
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/suwayomi-bridge-tests.jar" SuwayomiBridgeTestKt

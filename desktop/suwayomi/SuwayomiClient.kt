@@ -60,7 +60,7 @@ class SuwayomiClient(
             .POST(HttpRequest.BodyPublishers.ofString("{\"query\":" + MiniJson.quote(query) + "}"))
     }
 
-    private fun graphql(query: String): Map<String, Any?> {
+    internal fun graphql(query: String): Map<String, Any?> {
         val response = http.send(request("/api/graphql", query).build(), HttpResponse.BodyHandlers.ofInputStream())
         require(response.statusCode() == 200) { "Suwayomi GraphQL returned HTTP ${response.statusCode()}" }
         val body = response.body().use { it.readNBytes(4_000_001) }

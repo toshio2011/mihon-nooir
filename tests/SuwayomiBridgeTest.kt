@@ -1,6 +1,7 @@
 import com.sun.net.httpserver.HttpServer
 import dev.nooir.desktop.suwayomi.MiniJson
 import dev.nooir.desktop.suwayomi.SuwayomiClient
+import dev.nooir.desktop.suwayomi.SuwayomiCatalog
 import dev.nooir.desktop.suwayomi.SuwayomiToNooir
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -58,6 +59,27 @@ fun main() {
         val request = ctx.requestBody.bufferedReader().use { it.readText() }
         val query = (MiniJson.parse(request) as Map<*, *>)["query"] as String
         val response = when {
+            "fetchSourceManga" in query -> {
+                check("source: 9876543210123" in query)
+                check("page: 2" in query)
+                when {
+                    "type: SEARCH" in query -> {
+                        check("query: ${MiniJson.quote("A \"quote\" & \\ slash")}" in query)
+                        """{"data":{"fetchSourceManga":{"mangas":[{"id":1,"title":"Mock Manga","author":"Mock Author","sourceId":9876543210123}],"hasNextPage":false}}}"""
+                    }
+                    "type: LATEST" in query -> """{"data":{"fetchSourceManga":{"mangas":[],"hasNextPage":false}}}"""
+                    "type: POPULAR" in query -> """{"data":{"fetchSourceManga":{"mangas":[{"id":1,"title":"Mock Manga","author":null,"sourceId":9876543210123}],"hasNextPage":true}}}"""
+                    else -> error("Unknown browse mode")
+                }
+            }
+            "sources(" in query -> {
+                check("first: 1, offset: 0" in query)
+                """{"data":{"sources":{"nodes":[{"id":9876543210123,"name":"Trusted Test Source","lang":"en","supportsLatest":true}],"totalCount":2}}}"""
+            }
+            "mangas(condition: { inLibrary: true }" in query -> {
+                check("first: 1, offset: 0" in query)
+                """{"data":{"mangas":{"nodes":[{"id":1,"title":"Mock Manga","author":null,"sourceId":9876543210123}],"totalCount":1}}}"""
+            }
             "enqueueChapterDownloads" in query -> {
                 check("ids: [12]" in query)
                 queued.incrementAndGet()
@@ -91,6 +113,27 @@ fun main() {
     try {
         val base = "http://127.0.0.1:${server.address.port}"
         val client = SuwayomiClient(base, "Bearer test")
+        val catalog = SuwayomiCatalog(client)
+        val sources = catalog.sources(limit = 1)
+        check(sources.items.single().id == 9876543210123L && sources.hasNextPage)
+        check(sources.items.single().supportsLatest)
+        val library = catalog.library(limit = 1)
+        check(library.items.single().id == 1 && !library.hasNextPage)
+        check(library.items.single().author.isEmpty())
+        val popular = catalog.browse(9876543210123L, SuwayomiCatalog.BrowseMode.POPULAR, page = 2)
+        check(popular.items.single().id == 1 && popular.hasNextPage)
+        val latest = catalog.browse(9876543210123L, SuwayomiCatalog.BrowseMode.LATEST, page = 2)
+        check(latest.items.isEmpty() && !latest.hasNextPage)
+        val found = catalog.browse(9876543210123L, SuwayomiCatalog.BrowseMode.SEARCH, page = 2, search = "A \"quote\" & \\ slash")
+        check(found.items.single().title == "Mock Manga" && !found.hasNextPage)
+        check(runCatching { catalog.browse(9876543210123L, SuwayomiCatalog.BrowseMode.SEARCH) }.isFailure)
+        check(runCatching { catalog.sources(limit = 1000) }.isFailure)
+        check(runCatching { catalog.browse(9876543210123L, SuwayomiCatalog.BrowseMode.POPULAR, page = -1) }.isFailure)
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "sources", "--limit", "1"))
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "library", "--limit", "1"))
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "popular", "--source-id", "9876543210123", "--page", "2"))
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "latest", "--source-id", "9876543210123", "--page", "2"))
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "search", "--source-id", "9876543210123", "--page", "2", "--query", "A \"quote\" & \\ slash"))
         val manga = client.manga(1)
         check(manga.title == "Mock Manga" && manga.chapters.size == 2)
         SuwayomiToNooir.main(arrayOf("--base-url", base, "--manga-id", "1", "--mode", "list"))
@@ -138,7 +181,7 @@ fun main() {
         check(root.listFiles().orEmpty().none { it.name.startsWith(".nooir-suwayomi-") }) {
             "Temporary downloaded archives should be removed"
         }
-        println("Suwayomi D0 mock contract passed: GraphQL, explicit download, CBZ, cover, EPUB2/3, XTC/XTCH, CBZ output, ordering, safe ZIP, no-overwrite")
+        println("Suwayomi D0 mock contract passed: source discovery, library, search, popular/latest, GraphQL, explicit download, CBZ, cover, EPUB2/3, XTC/XTCH, CBZ output, ordering, safe ZIP, no-overwrite")
     } finally {
         server.stop(0)
         root.deleteRecursively()

@@ -1,6 +1,6 @@
 # MangaNooir Windows — D1 shared conversion spike (developer-only)
 
-This is the **first implementation increment**, not the Windows desktop app or a Windows installer. It proves that the same Kotlin/JVM conversion codecs and MangaNooir settings can run on desktop without Android APIs. It now also includes a **D0 developer-only Suwayomi localhost integration** for listing chapters and exporting selected downloaded chapters. It does **not** include a managed Suwayomi backend, source browsing UI, Mihon backup restore, a GUI, PDF or web conversion.
+This is the **first implementation increment**, not the Windows desktop app or a Windows installer. It proves that the same Kotlin/JVM conversion codecs and MangaNooir settings can run on desktop without Android APIs. It now also includes a **D0 developer-only Suwayomi localhost integration** for source discovery, library listing, popular/latest manga browsing, title search, chapter listing and exporting selected downloaded chapters. It does **not** include a managed Suwayomi backend, source browsing UI, Mihon backup restore, a GUI, PDF or web conversion.
 
 ## Shared source — no duplicate codecs
 
@@ -55,7 +55,7 @@ bash tests/run.sh
 
 ## Limitations and next steps
 
-- A Suwayomi localhost API bridge is available for existing downloaded chapters and explicitly requested backend downloads; **no embedded backend**, manga source browser, Mihon backup restore, Windows GUI or packaged EXE yet.
+- A Suwayomi localhost API bridge is available for browsing/searching existing user-added sources, listing the Suwayomi library, and explicitly requested chapter downloads; **no embedded backend**, Mihon backup restore, Windows GUI or packaged EXE yet.
 - ZIP and image files are bounded; desktop ImageIO codec support differs from Android, especially WebP. Password-protected archives, RAR, PDF and text EPUB are not inputs here.
 - Image rendering is currently a Java2D approximation of Android's Bitmap canvas, not certified pixel parity. Cover resolution from online sources and Android preflight confirmations are not yet ported.
 - Source files with huge dimensions may require more memory than intended; real-world batch, malformed image and crash-recovery testing remains.
@@ -65,7 +65,7 @@ Full roadmap: [Windows desktop feasibility and feature plan](../docs/WINDOWS_DES
 
 ## D0: Suwayomi localhost → selected chapters → e-reader book
 
-The `desktop/suwayomi/` adapter is pinned for contract research to [Suwayomi-Server v2.4.2366](https://github.com/Suwayomi/Suwayomi-Server/releases/tag/v2.4.2366). The implementation uses its documented GraphQL manga/chapter fields and `enqueueChapterDownloads` mutation, plus `GET /api/v1/chapter/{chapterId}/download?markAsRead=false` to obtain **downloaded chapter CBZ archives** without modifying read status. It extracts bounded image pages into temporary folders and invokes the **existing** shared MangaNooir conversion CLI. This integration has mock-server tests; **a real released Suwayomi instance has not yet been tested**.
+The `desktop/suwayomi/` adapter is pinned for contract research to [Suwayomi-Server v2.4.2366](https://github.com/Suwayomi/Suwayomi-Server/releases/tag/v2.4.2366). The implementation uses its documented GraphQL `sources` and `mangas` queries, `fetchSourceManga` browse/search mutation, manga/chapter fields and `enqueueChapterDownloads` mutation, plus `GET /api/v1/chapter/{chapterId}/download?markAsRead=false` to obtain **downloaded chapter CBZ archives** without modifying read status. It extracts bounded image pages into temporary folders and invokes the **existing** shared MangaNooir conversion CLI. This integration has mock-server tests; **a real released Suwayomi instance has not yet been tested**.
 
 ### Setup
 
@@ -81,14 +81,31 @@ kotlinc \
   -include-runtime -d build/desktop/manganooir-suwayomi.jar
 ```
 
-4. List chapter IDs and download state:
+4. Discover installed source IDs and browse/search titles. The following are **developer CLI commands**, not a graphical browser. They require sources already installed in your own Suwayomi instance:
+
+```bash
+# Installed sources (shows source ID, language, name and latest support)
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode sources
+
+# Your Suwayomi library
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode library
+
+# Browse a specific source, using its ID from --mode sources
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode popular --source-id 123456 --page 1
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode latest --source-id 123456 --page 1
+java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir --mode search --source-id 123456 --query "Sample Title" --page 1
+```
+
+Source/library lists support `--limit 1..100 --offset N`; source browsing/search supports `--page 1..1000`. Results include manga IDs, which can be passed to `--mode list` and `--mode export` below. A source may not support latest; in that case the server reports an error rather than silently substituting popular results. Searches access only the selected, already-installed source and may fail when the upstream site is unavailable.
+
+5. List chapter IDs and download state:
 
 ```bash
 java -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir \
   --mode list --manga-id 123 --base-url http://127.0.0.1:4567
 ```
 
-5. Export **explicitly selected downloaded chapters** (replace IDs, paths and output extension):
+6. Export **explicitly selected downloaded chapters** (replace IDs, paths and output extension):
 
 ```bash
 java -Djava.awt.headless=true -cp build/desktop/manganooir-suwayomi.jar dev.nooir.desktop.suwayomi.SuwayomiToNooir \
@@ -100,6 +117,6 @@ To request missing chapters from your already-configured Suwayomi source, add `-
 
 For a server requiring an Authorization header, set `NOOIR_SUWAYOMI_AUTHORIZATION` in the environment (e.g. `Bearer ...` or `Basic ...`) rather than passing credentials in a command argument. Never share credentials or run this early D0 client against a public endpoint; it deliberately permits **localhost only**.
 
-**Limitations:** chapter list must already be populated in Suwayomi; server version/schema compatibility and auth modes beyond the supplied header need live verification; no automatic server launch, no real backend packaging, no online streaming of chapter pages, no download cancellation, no image-perfect Android/Java2D parity and no Windows EXE. ImageIO may lack WebP support; archives and image sizes are bounded, and temporary chapter data is cleaned after conversion.
+**Limitations:** source extensions must already be installed by the user; chapter list must already be populated in Suwayomi; server version/schema compatibility and auth modes beyond the supplied header need live verification; no automatic server launch, no real backend packaging, no online streaming of chapter pages, no download cancellation, no image-perfect Android/Java2D parity and no Windows EXE. ImageIO may lack WebP support; archives and image sizes are bounded, and temporary chapter data is cleaned after conversion.
 
 Run the full mock contract and conversion tests with `bash tests/run.sh`.
