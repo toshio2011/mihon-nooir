@@ -113,7 +113,7 @@ class SuwayomiClient(
         rest("/api/v1/source/list").asList().map { item ->
             val source = item.asObject()
             val id = source.str("id")
-            require(id.toLongOrNull()?.let { it >= 0 } == true) { "Invalid source ID" }
+            require(id.toLongOrNull() != null) { "Invalid source ID" }
             SuwayomiSource(
                 id = id,
                 name = source.str("name"),
@@ -125,7 +125,7 @@ class SuwayomiClient(
 
     /** v1 API page numbering is one-based; searchTerm is UTF-8 percent-encoded. */
     fun browse(sourceId: String, mode: String, page: Int = 1, searchTerm: String = ""): SuwayomiBrowsePage {
-        require(sourceId.toLongOrNull()?.let { it >= 0 } == true) { "Invalid source ID" }
+        require(sourceId.toLongOrNull() != null) { "Invalid source ID" }
         require(page in 1..1000) { "Page must be between 1 and 1000" }
         val suffix = when (mode) {
             "popular" -> "popular/$page"
