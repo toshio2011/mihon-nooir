@@ -149,7 +149,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
         Text("Page orientation")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             (listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape") +
-                if (options.panelMode == "PANEL_BY_PANEL") listOf("AUTO_FIT" to "Auto Fit") else emptyList()).forEach { (value, title) ->
+                (if (options.panelMode == "PANEL_BY_PANEL") listOf("AUTO_FIT" to "Auto Fit") else emptyList())).forEach { (value, title) ->
                 FilterChip(
                     selected = options.orientation == value,
                     onClick = { onChange(options.copy(preset = "Custom", orientation = value)) },
