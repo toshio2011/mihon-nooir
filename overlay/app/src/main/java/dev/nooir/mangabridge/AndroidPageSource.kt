@@ -55,14 +55,14 @@ class AndroidPageSource(private val context: Context) {
                         for (entry in entries) {
                             // Two independent streams: first checks dimensions, second decodes.
                             val image = decode({ zip.getInputStream(entry) })
-                            try { for (page in render(image, width, height, depth, optionsForFile(entry.name, options))) yield(page) }
+                            try { for (page in render(image, width, height, depth, optionsForFile(entry.name, options), fixedFramebuffer)) yield(page) }
                             finally { image.recycle() }
                         }
                     }
                 } finally { temp.delete() }
             } else {
                 val image = decode({ resolver.openInputStream(uri) ?: error("Cannot open $uri") })
-                try { for (page in render(image, width, height, depth, optionsForFile(name(uri), options))) yield(page) }
+                try { for (page in render(image, width, height, depth, optionsForFile(name(uri), options), fixedFramebuffer)) yield(page) }
                 finally { image.recycle() }
             }
         }
