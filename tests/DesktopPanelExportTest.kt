@@ -52,6 +52,34 @@ fun main() {
                 check(imageCount == 6) { "$format should contain six panel images, got $imageCount" }
             }
         }
+        // Auto Fit is a new opt-in orientation on top of detected panel mode.
+        // It must preserve all six panels and native XTC/XTCH framebuffer sizes.
+        val autoOptions = panelOptions.copy(orientation = "AUTO_FIT")
+        for ((format, ext) in listOf("XTC" to "xtc", "XTCH" to "xtch",
+            "EPUB2" to "epub", "EPUB" to "epub", "CBZ" to "cbz")) {
+            val output = File(root, "auto-$format.$ext")
+            NooirDesktopCli.main(arrayOf(
+                "--input", input.absolutePath, "--output", output.absolutePath,
+                "--format", format, "--device", "X4", "--options-token", autoOptions.token(),
+            ))
+            check(output.length() > 200) { "Auto Fit $format empty" }
+            if (format in listOf("XTC", "XTCH")) {
+                val bytes = output.readBytes()
+                check(u16(bytes, 6) == 6) { "Auto Fit $format must retain all panels" }
+            } else ZipFile(output).use { zip ->
+                val entries = zip.entries().asSequence()
+                    .filter { it.name.endsWith(".png") }.toList()
+                check(entries.size == 6) { "Auto Fit $format lost detected panels" }
+                for (entry in entries) {
+                    val img = zip.getInputStream(entry).use { ImageIO.read(it) }
+                        ?: error("Unreadable Auto Fit image in $format")
+                    check((img.width == 480 && img.height == 800) ||
+                        (img.width == 800 && img.height == 480)) {
+                        "Unexpected adaptive Auto Fit page dimensions: ${img.width}x${img.height}"
+                    }
+                }
+            }
+        }
         val original = File(root, "original.xtch")
         NooirDesktopCli.main(arrayOf(
             "--input", input.absolutePath, "--output", original.absolutePath,
@@ -72,6 +100,6 @@ fun main() {
             "--format", "XTC", "--device", "X4", "--options-token", panelOptions.token(),
         ))
         check(u16(safe.readBytes(), 6) == 1) { "Splash pages must remain intact" }
-        println("Desktop panel exports passed: XTC, XTCH, EPUB2, EPUB3, CBZ, six screens, legacy OFF, splash fallback")
+        println("Desktop panel exports passed: XTC, XTCH, EPUB2, EPUB3, CBZ, six screens, all-format Auto Fit, legacy OFF, splash fallback")
     } finally { root.deleteRecursively() }
 }
