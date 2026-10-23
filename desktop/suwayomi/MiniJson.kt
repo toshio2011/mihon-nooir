@@ -156,11 +156,11 @@ internal fun Any?.asList(): List<Any?> {
 internal fun Map<String, Any?>.obj(key: String): Map<String, Any?> = this[key].asObject()
 internal fun Map<String, Any?>.list(key: String): List<Any?> = this[key].asList()
 internal fun Map<String, Any?>.str(key: String): String = this[key] as? String ?: error("Missing $key")
+/** Suwayomi GraphQL LongString scalar serializes signed Longs as JSON strings. */
 internal fun Map<String, Any?>.long(key: String): Long {
-    val number = this[key] as? Number ?: error("Missing $key")
-    val value = number.toLong()
-    require(number.toDouble() == value.toDouble()) { "Invalid $key" }
-    return value
+    val raw = this[key] as? String ?: error("Expected LongString for $key")
+    require(raw.matches(Regex("-?(0|[1-9][0-9]*)"))) { "Invalid LongString for $key" }
+    return raw.toLongOrNull() ?: error("Out-of-range LongString for $key")
 }
 internal fun Map<String, Any?>.int(key: String): Int {
     val number = this[key] as? Number ?: error("Missing $key")
