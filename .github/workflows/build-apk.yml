@@ -90,6 +90,13 @@ jobs:
             grep -Fq "versionCode='$version_code'" <<< "$badging"
             grep -Fq "versionName='$version'" <<< "$badging"
             grep -Fq "application-label:'MihonNooir'" <<< "$badging"
+            merged_manifest=$("$tools_dir/aapt" dump xmltree "$apk" AndroidManifest.xml)
+            for component in ShizukuProvider ExtensionInstallService ExtensionInstallActivity; do
+              if grep -Fq "$component" <<< "$merged_manifest"; then
+                echo "Unexpected privileged installation component: $component"
+                exit 1
+              fi
+            done
             perms=$("$tools_dir/aapt" dump permissions "$apk")
             for permission in REQUEST_INSTALL_PACKAGES REQUEST_DELETE_PACKAGES UPDATE_PACKAGES_WITHOUT_USER_ACTION; do
               if grep -Fq "android.permission.$permission" <<< "$perms"; then
