@@ -156,6 +156,12 @@ internal fun Any?.asList(): List<Any?> {
 internal fun Map<String, Any?>.obj(key: String): Map<String, Any?> = this[key].asObject()
 internal fun Map<String, Any?>.list(key: String): List<Any?> = this[key].asList()
 internal fun Map<String, Any?>.str(key: String): String = this[key] as? String ?: error("Missing $key")
+internal fun Map<String, Any?>.long(key: String): Long {
+    val number = this[key] as? Number ?: error("Missing $key")
+    val value = number.toLong()
+    require(number.toDouble() == value.toDouble()) { "Invalid $key" }
+    return value
+}
 internal fun Map<String, Any?>.int(key: String): Int {
     val number = this[key] as? Number ?: error("Missing $key")
     val value = number.toLong()
