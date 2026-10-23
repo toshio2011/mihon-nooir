@@ -269,7 +269,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
                 val found = (0 until sources.size()).firstOrNull { sources[it].id == selectedId } ?: 0
                 sourceList.selectedIndex = found
             }
-            browse("library", 1)
+            SwingUtilities.invokeLater { browse("library", 1) }
         })
     }
 
@@ -369,7 +369,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
         }, { file ->
             JOptionPane.showMessageDialog(this,
                 "Export complete:\n${file.absolutePath}", "MangaNooir", JOptionPane.INFORMATION_MESSAGE)
-            loadChapters(selected.id, false)
+            SwingUtilities.invokeLater { loadChapters(selected.id, false) }
         })
     }
 
