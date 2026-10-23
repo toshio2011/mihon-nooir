@@ -63,3 +63,13 @@ kotlinc \
   tests/SuwayomiBrowseTest.kt \
   -include-runtime -d "$tmp/suwayomi-browse-tests.jar"
 java --add-modules jdk.httpserver -cp "$tmp/suwayomi-browse-tests.jar" SuwayomiBrowseTestKt
+
+# D2 preview: compile the actual Swing desktop UI and verify its pure selection
+# model in headless CI. No JFrame is instantiated on the CI runner.
+kotlinc \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  desktop/cli/NooirDesktopCli.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
+  tests/DesktopGuiModelTest.kt \
+  -include-runtime -d "$tmp/desktop-gui-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/desktop-gui-tests.jar" DesktopGuiModelTestKt
