@@ -22,23 +22,55 @@ object SuwayomiToNooir {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        require(args.size % 2 == 0) { "Use --mode list|export --manga-id ID [--chapters 1,2] [--output FILE] ..." }
+        require(args.size % 2 == 0) { "Use --mode sources|library|popular|latest|search|list|export with the appropriate IDs" }
         val flags = args.toList().chunked(2).associate { it[0] to it[1] }
         require(flags.keys.all { it in setOf(
             "--mode", "--base-url", "--manga-id", "--chapters", "--output", "--format",
             "--device", "--title", "--options-token", "--download-missing", "--wait-seconds",
+            "--source-id", "--page", "--query", "--limit", "--offset",
         ) }) { "Unknown Suwayomi CLI option" }
-        val mangaId = flags["--manga-id"]?.toIntOrNull()?.takeIf { it > 0 } ?: error("Missing positive --manga-id")
         val client = SuwayomiClient(
             flags["--base-url"] ?: "http://127.0.0.1:4567",
             System.getenv("NOOIR_SUWAYOMI_AUTHORIZATION"),
         )
-        val manga = client.manga(mangaId)
-        when (flags["--mode"] ?: "list") {
+        val mode = flags["--mode"] ?: "sources"
+        val catalog = SuwayomiCatalog(client)
+        val mangaId = if (mode in setOf("list", "export")) {
+            flags["--manga-id"]?.toIntOrNull()?.takeIf { it > 0 } ?: error("Missing positive --manga-id")
+        } else null
+        val manga = mangaId?.let { client.manga(it) }
+        when (mode) {
+            "sources" -> {
+                val limit = (flags["--limit"] ?: "100").toIntOrNull() ?: error("Invalid --limit")
+                val offset = (flags["--offset"] ?: "0").toIntOrNull() ?: error("Invalid --offset")
+                val result = catalog.sources(limit, offset)
+                for (source in result.items) {
+                    println("${source.id}\\t${source.language}\\t${source.name}\\tlatest=${source.supportsLatest}")
+                }
+                println("Next page: ${result.hasNextPage}")
+            }
+            "library" -> {
+                val limit = (flags["--limit"] ?: "100").toIntOrNull() ?: error("Invalid --limit")
+                val offset = (flags["--offset"] ?: "0").toIntOrNull() ?: error("Invalid --offset")
+                val result = catalog.library(limit, offset)
+                printManga(result)
+            }
+            "popular", "latest", "search" -> {
+                val sourceId = flags["--source-id"]?.toLongOrNull()?.takeIf { it > 0 }
+                    ?: error("Missing positive --source-id (use --mode sources)")
+                val page = (flags["--page"] ?: "1").toIntOrNull() ?: error("Invalid --page")
+                val browseMode = when (mode) {
+                    "popular" -> SuwayomiCatalog.BrowseMode.POPULAR
+                    "latest" -> SuwayomiCatalog.BrowseMode.LATEST
+                    else -> SuwayomiCatalog.BrowseMode.SEARCH
+                }
+                printManga(catalog.browse(sourceId, browseMode, page, flags["--query"] ?: ""))
+            }
             "list" -> {
-                println("${manga.title} (Suwayomi manga ID ${manga.id})")
-                for (c in manga.chapters.sortedWith(chapterOrder)) {
-                    println("${c.id}\t${if (c.downloaded) "downloaded" else "not downloaded"}\t${c.name}")
+                val book = requireNotNull(manga)
+                println("${book.title} (Suwayomi manga ID ${book.id})")
+                for (c in book.chapters.sortedWith(chapterOrder)) {
+                    println("${c.id}\\t${if (c.downloaded) "downloaded" else "not downloaded"}\\t${c.name}")
                 }
             }
             "export" -> {
@@ -49,7 +81,7 @@ object SuwayomiToNooir {
                     "Choose 1 to 500 distinct chapter IDs"
                 }
                 val selected = ids.map { id ->
-                    manga.chapters.find { it.id == id } ?: error("Chapter $id does not belong to manga $mangaId")
+                    requireNotNull(manga).chapters.find { it.id == id } ?: error("Chapter $id does not belong to manga $mangaId")
                 }.sortedWith(chapterOrder)
                 val missing = selected.filterNot { it.downloaded }
                 val downloadMissing = when (flags["--download-missing"] ?: "false") {
@@ -67,7 +99,7 @@ object SuwayomiToNooir {
                         ?.takeIf { it in 0..600 } ?: error("--wait-seconds must be 0..600")
                     val deadline = System.nanoTime() + waitSeconds * 1_000_000_000L
                     while (true) {
-                        val fresh = client.manga(mangaId).chapters
+                        val fresh = client.manga(requireNotNull(mangaId)).chapters
                         val pending = selected.filter { wanted ->
                             fresh.none { it.id == wanted.id && it.downloaded }
                         }
@@ -86,7 +118,7 @@ object SuwayomiToNooir {
                 val work = Files.createTempDirectory(output.parentFile.toPath(), ".nooir-suwayomi-").toFile()
                 try {
                     if (opts.includeCover) {
-                        val cover = runCatching { client.thumbnail(mangaId) }.getOrNull()
+                        val cover = runCatching { client.thumbnail(requireNotNull(mangaId)) }.getOrNull()
                         val img = cover?.inputStream()?.use { ImageIO.read(it) }
                         if (img == null) {
                             require(opts.allowMissingCover) {
@@ -118,7 +150,7 @@ object SuwayomiToNooir {
                         "--output", output.absolutePath,
                         "--format", format,
                         "--device", device,
-                        "--title", flags["--title"] ?: manga.title,
+                        "--title", flags["--title"] ?: requireNotNull(manga).title,
                         "--options-token", opts.token(),
                     )
                     NooirDesktopCli.main(forwarded)
@@ -128,6 +160,11 @@ object SuwayomiToNooir {
             }
             else -> error("--mode must be list or export")
         }
+    }
+
+    private fun printManga(page: SuwayomiPage<SuwayomiMangaCard>) {
+        for (book in page.items) println("${book.id}\\t${book.title}\\t${book.author}\\tsource=${book.sourceId}")
+        println("Next page: ${page.hasNextPage}")
     }
 
     private val chapterOrder = compareBy<SuwayomiChapter> {
