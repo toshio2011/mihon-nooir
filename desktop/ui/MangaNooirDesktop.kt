@@ -1,6 +1,8 @@
 package dev.nooir.desktop.ui
 
 import dev.nooir.bridge.ExportFormat
+import dev.nooir.bridge.NooirDeviceProfiles
+import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.suwayomi.SuwayomiBrowseMode
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 import dev.nooir.desktop.suwayomi.SuwayomiClient
@@ -90,8 +92,10 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
     private val chapterList = JList(chapters)
     private val search = JTextField(20)
     private val format = JComboBox(arrayOf("EPUB2", "EPUB", "XTC", "XTCH", "CBZ"))
-    private val device = JComboBox(arrayOf("X4", "X3", "X4_PRO"))
+    private val device = JComboBox(NooirDeviceProfiles.builtins.map { it.id }.toTypedArray())
     private val downloadMissing = JCheckBox("Download missing chapters (explicit opt-in)")
+    private val conversionSettings = JButton("Conversion settings")
+    private var options = MangaConversionOptions.preset("Manga")
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
     private val library = JButton("My library")
@@ -167,7 +171,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(JLabel("Format:")); add(format)
-                add(JLabel("Device:")); add(device)
+                add(JLabel("Device:")); add(device); add(conversionSettings)
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply { add(downloadMissing) })
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply { add(refresh); add(export) })
@@ -195,7 +199,10 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
-            next, previous, selected, onlyDownloaded, clear, refresh, export)
+            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings)
+        conversionSettings.addActionListener {
+            DesktopConversionDialog.show(this, options)?.let { options = it }
+        }
         connect.addActionListener { loadSources() }
         library.addActionListener { browse("library", 1) }
         popular.addActionListener { browse("popular", 1) }
@@ -343,6 +350,11 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
             if (confirm != JOptionPane.YES_OPTION) return
         }
         val outputFormat = ExportFormat.valueOf(format.selectedItem as String)
+        val deviceId = device.selectedItem as String
+        if (!NooirDeviceProfiles.forId(deviceId).accepts(outputFormat)) {
+            showError("This device preset does not support ${outputFormat.name}. Choose another format.")
+            return
+        }
         val chooser = JFileChooser().apply {
             dialogTitle = "Export MangaNooir book"
             selectedFile = File(DesktopUiModel.suggestedFile(selected.title, outputFormat))
@@ -357,13 +369,14 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
             return
         }
         val base = endpoint.text.trim()
-        val deviceId = device.selectedItem as String
+        val token = options.token()
         runTask("Exporting ${ids.size} chapters", {
             SuwayomiToNooir.main(arrayOf(
                 "--base-url", base, "--mode", "export", "--manga-id", selected.id.toString(),
                 "--chapters", ids.joinToString(","), "--format", outputFormat.name,
                 "--device", deviceId, "--output", target.absolutePath,
                 "--download-missing", (missing > 0).toString(),
+                "--options-token", token,
             ))
             target
         }, { file ->
