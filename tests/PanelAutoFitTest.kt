@@ -3,7 +3,7 @@ import dev.nooir.bridge.PanelAutoFit
 
 fun main() {
     val portrait = PageRegion(0, 0, 250, 600)
-    val wide = PageRegion(0, 0, 650, 200)
+    val wide = PageRegion(0, 0, 600, 300)
     val square = PageRegion(0, 0, 400, 400)
     check(!PanelAutoFit.landscapeFor(portrait, 480, 800))
     check(PanelAutoFit.landscapeFor(wide, 480, 800))
