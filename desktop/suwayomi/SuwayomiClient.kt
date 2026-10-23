@@ -23,6 +23,28 @@ data class SuwayomiManga(
     val chapters: List<SuwayomiChapter>,
 )
 
+/** Source IDs are 64-bit in Suwayomi and must not be coerced to JavaScript-style numbers. */
+data class SuwayomiSource(
+    val id: String,
+    val name: String,
+    val language: String,
+    val supportsLatest: Boolean,
+    val displayName: String,
+)
+
+data class SuwayomiBrowseManga(
+    val id: Int,
+    val title: String,
+    val author: String,
+    val sourceId: String,
+    val inLibrary: Boolean,
+)
+
+data class SuwayomiBrowsePage(
+    val manga: List<SuwayomiBrowseManga>,
+    val hasNextPage: Boolean,
+)
+
 class SuwayomiClient(
     endpoint: String = "http://127.0.0.1:4567",
     private val authorization: String? = null,
@@ -74,6 +96,63 @@ class SuwayomiClient(
             "Suwayomi GraphQL error: $messages"
         }
         return root.obj("data")
+    }
+
+    private fun rest(path: String): Any? {
+        val response = http.send(request(path).build(), HttpResponse.BodyHandlers.ofInputStream())
+        val body = response.body().use { it.readNBytes(4_000_001) }
+        require(response.statusCode() == 200) {
+            "Suwayomi REST returned HTTP ${response.statusCode()} for ${path.substringBefore('?')}"
+        }
+        require(body.size <= 4_000_000) { "Suwayomi REST reply too large" }
+        return MiniJson.parse(body.toString(Charsets.UTF_8))
+    }
+
+    /** Only locally installed Suwayomi sources. No extension installation or global scraping. */
+    fun sources(): List<SuwayomiSource> =
+        rest("/api/v1/source/list").asList().map { item ->
+            val source = item.asObject()
+            val id = source.str("id")
+            require(id.toLongOrNull() != null) { "Invalid source ID" }
+            SuwayomiSource(
+                id = id,
+                name = source.str("name"),
+                language = source.str("lang"),
+                supportsLatest = source["supportsLatest"] as? Boolean ?: false,
+                displayName = source["displayName"] as? String ?: source.str("name"),
+            )
+        }.also { require(it.size <= 2000) { "Too many installed sources" } }
+
+    /** v1 API page numbering is one-based; searchTerm is UTF-8 percent-encoded. */
+    fun browse(sourceId: String, mode: String, page: Int = 1, searchTerm: String = ""): SuwayomiBrowsePage {
+        require(sourceId.toLongOrNull() != null) { "Invalid source ID" }
+        require(page in 1..1000) { "Page must be between 1 and 1000" }
+        val suffix = when (mode) {
+            "popular" -> "popular/$page"
+            "latest" -> "latest/$page"
+            "search" -> {
+                require(searchTerm.isNotBlank() && searchTerm.length <= 250) { "Search term must be 1..250 characters" }
+                val encoded = java.net.URLEncoder.encode(searchTerm, Charsets.UTF_8)
+                "search?searchTerm=$encoded&pageNum=$page"
+            }
+            else -> error("Browse mode must be popular, latest or search")
+        }
+        val root = rest("/api/v1/source/$sourceId/$suffix").asObject()
+        val manga = root.list("mangaList").map { raw ->
+            val m = raw.asObject()
+            SuwayomiBrowseManga(
+                id = m.int("id"),
+                title = m.str("title"),
+                author = m["author"] as? String ?: "",
+                sourceId = m.str("sourceId"),
+                inLibrary = m["inLibrary"] as? Boolean ?: false,
+            )
+        }
+        require(manga.size <= 1000) { "Source returned too many manga" }
+        return SuwayomiBrowsePage(
+            manga = manga,
+            hasNextPage = root["hasNextPage"] as? Boolean ?: error("Missing hasNextPage"),
+        )
     }
 
     fun manga(id: Int): SuwayomiManga {

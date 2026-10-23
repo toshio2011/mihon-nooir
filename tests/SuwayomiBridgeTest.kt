@@ -74,6 +74,22 @@ fun main() {
         ctx.sendResponseHeaders(200, bytes.size.toLong())
         ctx.responseBody.use { it.write(bytes) }
     }
+    server.createContext("/api/v1/source/list") { ctx ->
+        val bytes = """[{"id":"1234567890123456789","name":"MockSource","lang":"en","supportsLatest":true,"displayName":"Mock Source"}]""".toByteArray()
+        ctx.sendResponseHeaders(200, bytes.size.toLong())
+        ctx.responseBody.use { it.write(bytes) }
+    }
+    server.createContext("/api/v1/source/1234567890123456789/") { ctx ->
+        val path = ctx.requestURI.path
+        val query = ctx.requestURI.rawQuery.orEmpty()
+        check(
+            path.endsWith("/popular/1") || path.endsWith("/latest/2") ||
+                path.endsWith("/search") && query.contains("pageNum=3") && query.contains("searchTerm=Detective+Conan")
+        ) { "Unexpected browse path or unencoded search query: $path?$query" }
+        val bytes = """{"mangaList":[{"id":1,"title":"Detective Conan","author":"Gosho Aoyama","sourceId":"1234567890123456789","inLibrary":false}],"hasNextPage":true}""".toByteArray()
+        ctx.sendResponseHeaders(200, bytes.size.toLong())
+        ctx.responseBody.use { it.write(bytes) }
+    }
     server.createContext("/api/v1/chapter/") { ctx ->
         fetched.incrementAndGet()
         check(ctx.requestURI.rawQuery == "markAsRead=false") { "Export must not mark chapter as read" }
@@ -91,6 +107,20 @@ fun main() {
     try {
         val base = "http://127.0.0.1:${server.address.port}"
         val client = SuwayomiClient(base, "Bearer test")
+        val sources = client.sources()
+        check(sources.size == 1 && sources[0].id == "1234567890123456789")
+        check(sources[0].supportsLatest && sources[0].language == "en")
+        val popular = client.browse(sources[0].id, "popular")
+        check(popular.manga.single().id == 1 && popular.hasNextPage)
+        check(client.browse(sources[0].id, "latest", 2).manga.single().title == "Detective Conan")
+        check(client.browse(sources[0].id, "search", 3, "Detective Conan").manga.single().author == "Gosho Aoyama")
+        check(runCatching { client.browse("../x", "popular") }.isFailure)
+        check(runCatching { client.browse(sources[0].id, "search", 1, "") }.isFailure)
+        check(runCatching { client.browse(sources[0].id, "latest", 0) }.isFailure)
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "sources"))
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "popular", "--source-id", sources[0].id))
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "latest", "--source-id", sources[0].id, "--page", "2"))
+        SuwayomiToNooir.main(arrayOf("--base-url", base, "--mode", "search", "--source-id", sources[0].id, "--query", "Detective Conan", "--page", "3"))
         val manga = client.manga(1)
         check(manga.title == "Mock Manga" && manga.chapters.size == 2)
         SuwayomiToNooir.main(arrayOf("--base-url", base, "--manga-id", "1", "--mode", "list"))

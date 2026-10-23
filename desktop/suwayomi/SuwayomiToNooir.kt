@@ -27,14 +27,33 @@ object SuwayomiToNooir {
         require(flags.keys.all { it in setOf(
             "--mode", "--base-url", "--manga-id", "--chapters", "--output", "--format",
             "--device", "--title", "--options-token", "--download-missing", "--wait-seconds",
+            "--source-id", "--page", "--query",
         ) }) { "Unknown Suwayomi CLI option" }
-        val mangaId = flags["--manga-id"]?.toIntOrNull()?.takeIf { it > 0 } ?: error("Missing positive --manga-id")
+        val mode = flags["--mode"] ?: "list"
         val client = SuwayomiClient(
             flags["--base-url"] ?: "http://127.0.0.1:4567",
             System.getenv("NOOIR_SUWAYOMI_AUTHORIZATION"),
         )
+        if (mode == "sources") {
+            for (source in client.sources()) {
+                println("${source.id}\\t${source.language}\\t${if (source.supportsLatest) "latest" else "popular only"}\\t${source.displayName}")
+            }
+            return
+        }
+        if (mode in setOf("popular", "latest", "search")) {
+            val sourceId = flags["--source-id"] ?: error("Missing --source-id; run --mode sources first")
+            val page = flags["--page"]?.toIntOrNull() ?: 1
+            val term = flags["--query"] ?: ""
+            val result = client.browse(sourceId, mode, page, term)
+            for (item in result.manga) {
+                println("${item.id}\\t${item.title}\\t${item.author}\\t${if (item.inLibrary) "in library" else "not in library"}")
+            }
+            println("Page $page; more pages: ${result.hasNextPage}. Select a manga ID with --mode list.")
+            return
+        }
+        val mangaId = flags["--manga-id"]?.toIntOrNull()?.takeIf { it > 0 } ?: error("Missing positive --manga-id")
         val manga = client.manga(mangaId)
-        when (flags["--mode"] ?: "list") {
+        when (mode) {
             "list" -> {
                 println("${manga.title} (Suwayomi manga ID ${manga.id})")
                 for (c in manga.chapters.sortedWith(chapterOrder)) {
@@ -126,7 +145,7 @@ object SuwayomiToNooir {
                     work.deleteRecursively()
                 }
             }
-            else -> error("--mode must be list or export")
+            else -> error("--mode must be sources, popular, latest, search, list or export")
         }
     }
 
