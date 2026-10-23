@@ -64,7 +64,7 @@ fun main() {
                 check("page: 2" in query)
                 when {
                     "type: SEARCH" in query -> {
-                        check("query: \\"A \\\"quote\\\" & \\\\ slash\\"" in query)
+                        check("query: ${MiniJson.quote("A \"quote\" & \\ slash")}" in query)
                         """{"data":{"fetchSourceManga":{"mangas":[{"id":1,"title":"Mock Manga","author":"Mock Author","sourceId":9876543210123}],"hasNextPage":false}}}"""
                     }
                     "type: LATEST" in query -> """{"data":{"fetchSourceManga":{"mangas":[],"hasNextPage":false}}}"""
