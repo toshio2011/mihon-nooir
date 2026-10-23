@@ -50,7 +50,7 @@ object SuwayomiBrowseCli {
                 val result = client.library(offset, limit)
                 println("Suwayomi library: ${result.totalCount}; showing ${result.mangas.size} at offset $offset")
                 for (manga in result.mangas) {
-                    println("${manga.id}\\t${clean(manga.title)}\\t${clean(manga.author ?: "")}")
+                    println(listOf(manga.id.toString(), clean(manga.title), clean(manga.author ?: "")).joinToString("\t"))
                 }
                 if (offset.toLong() + result.mangas.size < result.totalCount) {
                     println("More library titles: repeat with --offset ${offset + result.mangas.size}")
