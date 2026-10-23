@@ -64,7 +64,7 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('fun inject(nooirMangaExportWorker', (graph/'AppGraph.kt').read_text())
             self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
             self.assertIn('versionName = "1.0.14"',(app/'build.gradle.kts').read_text())
-            self.assertIn('versionCode = 1000013',(app/'build.gradle.kts').read_text())
+            self.assertIn('versionCode = 1000014',(app/'build.gradle.kts').read_text())
             self.assertIn('toshio2011/mihon-nooir',(updater/'AppUpdateChecker.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').exists())
