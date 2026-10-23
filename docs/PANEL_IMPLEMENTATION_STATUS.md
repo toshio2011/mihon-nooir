@@ -2,7 +2,7 @@
 
 **Design source:** [PR #29 — approved handoff](https://github.com/toshio2011/mihon-nooir/pull/29) / `docs/AUTOMATIC_PANEL_BY_PANEL_EXPORT.md` on `docs/automatic-panel-export-design`.
 
-**Status:** Phase A geometry implementation **in review**, **not available in the Android app yet**. The design PR is intentionally still draft. No change to Folio Nooir.
+**Status:** Phase A geometry in PR #30; Phase B Android + desktop opt-in integration on a separate development branch. **Not merged, not released, and not physically validated**. The approved design PR #29 remains draft. Folio Nooir unchanged.
 
 ## User-approved behavior (non-negotiable)
 
@@ -25,13 +25,14 @@
 
 **Important limitation:** This is a deliberately conservative **first detector**. Touching/borderless/diagonal panels, complex speech balloons and uneven panel arrangements may fall back to a full page. No real-manga corpus, Android rendering integration, output validation or physical-device testing is claimed.
 
-## Phase B — Android integration (P0, NOT IMPLEMENTED)
+## Phase B — Android and desktop export integration (P0, IN DEVELOPMENT)
 
-- [ ] Add backward-compatible `panelMode=OFF|PANEL_BY_PANEL` (and safety settings) to `MangaConversionSettingsCore.kt` token and `MangaConversionOptions.kt` Compose settings. Old tokens must decode to OFF; unchanged mode must preserve existing outputs.
-- [ ] In `AndroidPageSource.kt`, downsample each decoded Bitmap to a **bounded** grayscale analysis buffer; invoke Phase A detector **only** when enabled; map regions to source; crop with guard padding; render **one panel per screen** through the current image/quantization pipeline.
-- [ ] Handle overly tall/wide **single panels** with consecutive overlapping crops of that panel only; avoid slicing one panel into mixed layouts. Keep cover exempt.
-- [ ] Preserve selected chapters, metadata, covers and Quick Export; integrate both `MihonNooirExporter.kt` and `ImportedMangaConverter.kt` without rewriting format writers.
-- [ ] Add Android instrumentation/unit integration and export-format smoke fixtures. Keep Windows shared converter compiling; desktop panel parity is a follow-up.
+- [x] Add backward-compatible `panelMode=OFF|PANEL_BY_PANEL` (and safety settings) to `MangaConversionSettingsCore.kt` token and `MangaConversionOptions.kt` Compose settings. Old tokens must decode to OFF; unchanged mode must preserve existing outputs.
+- [x] In `AndroidPageSource.kt`, downsample each decoded Bitmap to a **bounded** grayscale analysis buffer; invoke Phase A detector **only** when enabled; map regions to source; crop with guard padding; render **one panel per screen** through the current image/quantization pipeline.
+- [x] Handle overly tall/wide **single panels** with consecutive overlapping crops of that panel only; avoid slicing one panel into mixed layouts. Keep cover exempt.
+- [x] Preserve selected chapters, metadata, covers and Quick Export; integrate both `MihonNooirExporter.kt` and `ImportedMangaConverter.kt` without rewriting format writers.
+- [x] Add JVM panel geometry, token migration and all-five-format export smoke fixtures. Desktop CLI uses the same pure detector, viewport planner and existing format writers.
+- [ ] Verify Android FOSS APK CI and real Android panel exports; Java2D vs Bitmap pixel-perfect parity remains unverified.
 
 ## Phase C — safety and large batches (P0, NOT IMPLEMENTED)
 
@@ -81,3 +82,11 @@
 4. After five-format Android export smoke tests and format/page-count preflight, validate actual X3/X4 readability. Preserve original conversion behavior when Panel Mode is off.
 
 **Upstream pin audit:** `config/mihon-upstream.sha` currently pins `deeb9b2584b6e246135cbd31da49a39e6b6e1e52` (17 October 2026). At review, Mihon upstream `main` was **15 commits ahead** of that pin, affecting 65 files; notably logging header redaction, WebGPU viewer dependency, library update ordering and a Compose download queue migration. Do not confuse this with the unmerged panel PR #4045; it is not in those 15 commits. Review individual upstream changes and Android overlay compatibility before updating the pin.\n\n**Other upstream changes worth tracking separately:** stable Mihon v0.21.2 (13 October 2026) contains bug fixes around migration/database updates and extension installation; do not rebase MangaNooir blindly because the fork overlays Android-specific export code. Review targeted fixes against existing fork behavior first. Open upstream PRs for download queue Compose migration, extension image decoding and reader settings are *not* merged features and should be tracked separately.
+
+## Phase B branch — exact scope and safety notes
+
+- The opt-in **Panel by Panel (automatic)** switch is visible in Android's conversion settings. Default is OFF; old saved settings and queued jobs migrate to OFF. Selecting a preset resets to its legacy default.
+- Android uses a maximum 600×900 grayscale thumbnail for detection, while the source Bitmap is decoded by the existing bounded page source. Confidence/fallback decisions come from the pure `PanelDetectionCore` from Phase A. A fallback page follows the previous page slicing path.
+- One panel region is rendered per screen, with guard padding; only unusually elongated **single** panels use overlapping viewport crops. The cover path is exempt. Page frames are yielded as a sequence to avoid retaining all rendered frames from one source image.
+- Desktop CLI implements the same detector and viewport geometry using Java2D and exposes panel mode via the same 17-field settings token; output is written through the same XTC/XTCH/EPUB2/3/CBZ writers.
+- **Not complete:** real manga accuracy corpus, in-app fallback/page-count summary, automatic XTC/XTCH volume splitting, large-book preflight, pixel parity, real X3/X4 hardware test and a stable user-facing release. If the writer's hard page cap is reached, export fails rather than silently truncating. A larger file is acceptable; a corrupt one is not.

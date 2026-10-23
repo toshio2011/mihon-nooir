@@ -128,7 +128,7 @@ object MihonNooirExporter {
             NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder)
         } else null
         val coverOptions = options.copy(
-            layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
+            panelMode = "OFF", layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
             orientation = "PORTRAIT", overlapPercent = 0,
         )
         fun coverPage(depth: Int, pageOptions: MangaConversionOptions = coverOptions): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->

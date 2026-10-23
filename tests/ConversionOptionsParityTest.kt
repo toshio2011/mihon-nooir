@@ -17,6 +17,12 @@ fun main() {
         allowMissingCover = true, skipUnavailableChapters = true, epubPagesPerXhtml = 0,
     )
     check(MangaConversionOptions.fromToken(custom.token()) == custom)
+    val panel = custom.copy(panelMode = "PANEL_BY_PANEL")
+    check(MangaConversionOptions.fromToken(panel.token()) == panel)
+    check(panel.token().split("|").size == 17)
+    check(MangaConversionOptions.fromToken(custom.token().substringBeforeLast("|")).panelMode == "OFF")
+    check(MangaConversionOptions.fromToken(panel.token().substringBeforeLast("|") + "|UNKNOWN").panelMode == "OFF")
+    check(MangaConversionOptions.fromToken(null).panelMode == "OFF")
     val legacySeven = "Manga|PAGED|true|false|true|40|false"
     val migrated = MangaConversionOptions.fromToken(legacySeven)
     check(migrated.layout == "PAGED" && migrated.cropWhiteMargins)
