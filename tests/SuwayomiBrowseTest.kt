@@ -52,6 +52,11 @@ fun main() {
                 }
                 """{"data":{"fetchSourceManga":{"hasNextPage":false,"mangas":[{"id":103,"title":"Tokyo Cafe","author":null,"description":null,"thumbnailUrl":null,"inLibrary":false}]}}}"""
             }
+            "fetchMangaAndChapters" in query -> {
+                check("id: 101" in query && "fetchManga: true" in query &&
+                    "fetchChapters: true" in query)
+                """{"data":{"fetchMangaAndChapters":{"manga":{"id":101}}}}"""
+            }
             "manga(id: 101)" in query -> {
                 """{"data":{"manga":{"id":101,"title":"One Piece","author":"Oda","chapters":{"nodes":[{"id":7001,"name":"Chapter 1","chapterNumber":1.0,"sourceOrder":5,"isDownloaded":true},{"id":7002,"name":"Chapter 2","chapterNumber":2.0,"sourceOrder":4,"isDownloaded":false}]}}}}"""
             }
@@ -79,6 +84,9 @@ fun main() {
         check(latest.mangas.isEmpty() && !latest.hasNextPage)
         val searched = client.browse(SOURCE_ID, SuwayomiBrowseMode.SEARCH, 3, "Tokyo \"Cafe\"")
         check(searched.mangas.single().id == 103)
+        client.refreshManga(101)
+        check(runCatching { client.refreshManga(0) }.isFailure)
+        check(runCatching { client.refreshManga(101, false, false) }.isFailure)
         val beforeInvalid = hits.get()
         check(runCatching { client.sources(-1, 200) }.isFailure)
         check(runCatching { client.sources(0, 201) }.isFailure)
@@ -100,7 +108,7 @@ fun main() {
         check(browseCli.contains("One Piece") && browseCli.contains("More titles"))
         val chaptersCli = outputOf {
             SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "chapters",
-                "--manga-id", "101"))
+                "--manga-id", "101", "--refresh", "true"))
         }
         check(chaptersCli.contains("7001\tdownloaded") && chaptersCli.contains("7002\tnot-downloaded"))
         check(runCatching {
@@ -111,7 +119,7 @@ fun main() {
             SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "sources",
                 "--limit", "2", "--limit", "1"))
         }.isFailure)
-        println("Suwayomi source browsing contract passed: signed source IDs, paginated installed sources, popular/latest/search, escaping, chapters and CLI")
+        println("Suwayomi source browsing contract passed: signed source IDs, paginated installed sources, popular/latest/search, escaping, explicit refresh, chapters and CLI")
     } finally {
         server.stop(0)
     }
