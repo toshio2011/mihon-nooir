@@ -82,7 +82,7 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('online.getPageList', (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text())
             self.assertIn('onClickExport = onExportClicked', (presentation/'MangaScreen.kt').read_text())
             self.assertIn('Export to XTEink', (components/'MangaToolbar.kt').read_text())
-            self.assertIn('MangaNooir', (strings/'strings.xml').read_text())
+            self.assertIn('<string name="app_name" translatable="false">MihonNooir</string>', (strings/'strings.xml').read_text())
             # The hub replaces scattered More entries without hiding any tools.
             more_tab_text = (moretab/'MoreTab.kt').read_text()
             more_screen_text = (morescreen/'MoreScreen.kt').read_text()
