@@ -163,7 +163,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
             if (isXtc) Text("XTC/XTCH stays at the device's native pixel dimensions; " +
                 "some wide panels will be rotated and may require turning the reader sideways.")
         }
-        if (options.orientation == "LANDSCAPE" || options.orientation == "AUTO_FIT") {
+        if (options.orientation == "LANDSCAPE") {
             Text(if (isXtc) "Turn the X3/X4 sideways to read landscape XTC/XTCH pages." else "Landscape exports use a wider page.")
             if (isXtc) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Rotate content clockwise")
@@ -171,7 +171,14 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                     onCheckedChange = { onChange(options.copy(preset = "Custom", landscapeClockwise = it)) })
             }
         }
-        if (options.layout != "PAGED" || options.orientation == "LANDSCAPE") {
+        if (options.orientation == "AUTO_FIT" && isXtc) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Rotate wide panels clockwise")
+                Switch(checked = options.landscapeClockwise,
+                    onCheckedChange = { onChange(options.copy(preset = "Custom", landscapeClockwise = it)) })
+            }
+        }
+        if (options.layout != "PAGED" || options.orientation == "LANDSCAPE" || options.orientation == "AUTO_FIT") {
             Text("Overlapping page cuts · " + options.overlapPercent + "%")
             Slider(
                 value = options.overlapPercent.toFloat(),
