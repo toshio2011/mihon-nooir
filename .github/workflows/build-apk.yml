@@ -87,7 +87,7 @@ jobs:
             grep -Fq "name='dev.nooir.mihon.foss'" <<< "$badging"
             grep -Fq "versionCode='$version_code'" <<< "$badging"
             grep -Fq "versionName='$version'" <<< "$badging"
-            grep -Fq "application-label:'MangaNooir'" <<< "$badging"
+            grep -Fq "application-label:'MihonNooir'" <<< "$badging"
             echo "Verified single-app identity and signature: $(basename "$apk")"
           done
           (cd upstream/app/build/outputs/apk/foss && sha256sum ./*.apk > SHA256SUMS.txt)
