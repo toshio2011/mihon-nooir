@@ -68,6 +68,25 @@ class AndroidPageSource(private val context: Context) {
         }
     }
 
+    /**
+     * Preview the first source image using exactly the export rendering pipeline.
+     * Materialize only the requested frames, never the whole chapter.
+     * Call from a background dispatcher; decoding and quantization are blocking.
+     *
+     * The caller owns source selection (downloaded chapter or online cache).
+     * A CBZ source uses its first archive image in natural reading order.
+     */
+    fun previewFirstPage(
+        sourceUri: Uri, width: Int, height: Int, depth: Int,
+        options: MangaConversionOptions = MangaConversionOptions(),
+        fixedFramebuffer: Boolean = true,
+        maxFrames: Int = 24,
+    ): List<QuantizedPage> {
+        require(maxFrames in 1..64) { "Preview frame limit must be 1..64" }
+        return pages(listOf(sourceUri), width, height, depth, options, fixedFramebuffer)
+            .take(maxFrames).toList()
+    }
+
     private fun optionsForFile(filename: String, options: MangaConversionOptions): MangaConversionOptions {
         // A separate named series cover must never be mistaken for a panel grid.
         val basename = filename.substringAfterLast('/').substringBeforeLast('.').lowercase()
