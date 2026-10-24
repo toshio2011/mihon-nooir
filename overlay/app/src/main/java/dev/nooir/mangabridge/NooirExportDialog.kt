@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
@@ -133,7 +134,7 @@ fun NooirExportDialog(
                                 runCatching {
                                     AndroidPageSource(context).previewFirstPage(
                                         previewSourceUri, profile.width, profile.height,
-                                        depth, options.copy(epubColor = false), fixed,
+                                        depth, options.copy(epubColor = false), fixed, maxFrames = 8,
                                     ).map { page ->
                                         val pixels = IntArray(page.width * page.height) { i ->
                                             val level = page.levels[i].toInt() and 255
@@ -146,6 +147,9 @@ fun NooirExportDialog(
                             }
                         }
                         val frames = preview?.getOrNull()
+                        DisposableEffect(frames) {
+                            onDispose { frames?.forEach { it.recycle() } }
+                        }
                         when {
                             preview == null -> Text("Rendering preview…")
                             preview?.isFailure == true -> Text("Preview failed: " +
