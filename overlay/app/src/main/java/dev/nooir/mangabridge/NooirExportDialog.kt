@@ -113,7 +113,7 @@ fun NooirExportDialog(
                 }
                 Text(
                     if (!onlineSource) "Quick Export requires an online manga source."
-                    else if (quickExport) "Select any number of chapters first, even a whole volume. MangaNooir fetches and converts one chapter at a time, cleaning temporary images after each."
+                    else if (quickExport) "Select any number of chapters first, even a whole volume. MihonNooir fetches and converts one chapter at a time, cleaning temporary images after each."
                     else "Use Mihon's permanent downloads. If no chapters are selected, all downloaded chapters are exported."
                 )
                 if (quickExport) Text("Selected chapters: $selectedChapterCount")
@@ -227,7 +227,7 @@ fun NooirExportDialog(
                     singleLine = true,
                     supportingText = { Text("Change this name if the book already exists on the reader. The format extension is added automatically.") },
                 )
-                Text("MangaNooir checks the destination filename before converting. If it exists, this book fails safely and the next queued book continues.")
+                Text("MihonNooir checks the destination filename before converting. If it exists, this book fails safely and the next queued book continues.")
             }
         },
         confirmButton = {
