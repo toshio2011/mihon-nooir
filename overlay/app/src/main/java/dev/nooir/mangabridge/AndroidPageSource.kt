@@ -84,8 +84,7 @@ class AndroidPageSource(private val context: Context) {
      */
     private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<PageRegion>? {
         if (options.panelMode != "PANEL_BY_PANEL") return null
-        if (src.height.toLong() > src.width.toLong() * 3L ||
-            src.width.toLong() * 100L > src.height.toLong() * 135L) return null
+        if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
         val w = (src.width * scale).toInt().coerceAtLeast(1)
         val h = (src.height * scale).toInt().coerceAtLeast(1)
