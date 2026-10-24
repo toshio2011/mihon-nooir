@@ -53,6 +53,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 )
             }
         }
+        Text("Page splitting and reading order")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = options.showFullPageBeforeSplits, onCheckedChange = {
                 onChange(options.copy(preset = "Custom", showFullPageBeforeSplits = it))
@@ -86,6 +87,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 "Complex pages stay intact to protect artwork and dialogue. " +
                 "Exports may be much larger and take longer.")
         }
+        Text("Book packaging")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = options.includeCover, onCheckedChange = {
                 onChange(options.copy(preset = "Custom", includeCover = it))
@@ -222,6 +224,6 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 onCheckedChange = { onChange(options.copy(preset = "Custom", dither = it)) })
         }
         }
-        Text("Changes apply to the next conversion. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page. Panel by Panel requires no manual review. Live preview is planned but not available yet.")
+        Text("Changes apply to the next conversion. Open the first-page preview in the export dialog to inspect rendered crops. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page.")
     }
 }
