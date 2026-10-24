@@ -2,6 +2,8 @@ package dev.nooir.mangabridge
 
 import android.content.Context
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.foundation.Image
@@ -61,6 +63,15 @@ fun NooirExportDialog(
     var showAdvanced by remember { mutableStateOf(false) }
     var showPreview by remember { mutableStateOf(false) }
     var previewIndex by remember { mutableStateOf(0) }
+    var chosenPreviewUri by remember { mutableStateOf<Uri?>(null) }
+    val previewPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            chosenPreviewUri = uri
+            showPreview = true
+            previewIndex = 0
+        }
+    }
+    val activePreviewUri = chosenPreviewUri ?: previewSourceUri
     var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
 
     fun saveSettings() {
@@ -119,7 +130,10 @@ fun NooirExportDialog(
                     Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
                 }
                 if (showAdvanced) MangaConversionSettings(options, selectedFormat.resolved(device), onChange = { options = it })
-                if (previewSourceUri != null) {
+                TextButton(onClick = { previewPicker.launch("image/*") }) {
+                    Text("Choose image for conversion preview")
+                }
+                if (activePreviewUri != null) {
                     TextButton(onClick = { showPreview = !showPreview; previewIndex = 0 }) {
                         Text(if (showPreview) "Hide first-page preview" else "Preview first page")
                     }
@@ -128,12 +142,12 @@ fun NooirExportDialog(
                         val depth = if (actualFormat == ExportFormat.XTC) 1 else 2
                         val fixed = actualFormat == ExportFormat.XTC || actualFormat == ExportFormat.XTCH
                         val preview by produceState<Result<List<Bitmap>>?>(initialValue = null,
-                            previewSourceUri, device, actualFormat, options) {
+                            activePreviewUri, device, actualFormat, options) {
                             value = null
                             value = withContext(Dispatchers.IO) {
                                 runCatching {
                                     AndroidPageSource(context).previewFirstPage(
-                                        previewSourceUri, profile.width, profile.height,
+                                        activePreviewUri, profile.width, profile.height,
                                         depth, options.copy(epubColor = false), fixed, maxFrames = 8,
                                     ).map { page ->
                                         val pixels = IntArray(page.width * page.height) { i ->
@@ -177,7 +191,7 @@ fun NooirExportDialog(
                         }
                     }
                 } else {
-                    Text("First-page preview becomes available when a chapter image is accessible.")
+                    Text("Choose a page image above to test the conversion preview.")
                 }
                 Text(if (profile.xteinkWifi) "XTEink Wi-Fi transfer (compatible firmware only)"
                     else "Direct XTEink Wi-Fi sending is unavailable for this reader. Save the file and transfer it with the reader’s supported method.")
