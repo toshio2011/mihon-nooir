@@ -1,6 +1,17 @@
 package dev.nooir.mangabridge
 
 import android.content.Context
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.Color
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +42,7 @@ fun NooirExportDialog(
     mangaTitle: String,
     selectedChapterCount: Int,
     onlineSource: Boolean,
+    previewSourceUri: Uri? = null,
     onDismiss: () -> Unit,
     onSave: (ExportFormat, String, Boolean, MangaConversionOptions) -> Unit,
     onSend: (ExportFormat, String, String, String, Boolean, MangaConversionOptions, String) -> Unit,
@@ -47,6 +59,8 @@ fun NooirExportDialog(
     var quickExport by remember { mutableStateOf(false) }
     var outputName by remember(mangaTitle) { mutableStateOf(mangaTitle) }
     var showAdvanced by remember { mutableStateOf(false) }
+    var showPreview by remember { mutableStateOf(false) }
+    var previewIndex by remember { mutableStateOf(0) }
     var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
 
     fun saveSettings() {
@@ -105,6 +119,61 @@ fun NooirExportDialog(
                     Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
                 }
                 if (showAdvanced) MangaConversionSettings(options, selectedFormat.resolved(device), onChange = { options = it })
+                if (previewSourceUri != null) {
+                    TextButton(onClick = { showPreview = !showPreview; previewIndex = 0 }) {
+                        Text(if (showPreview) "Hide first-page preview" else "Preview first page")
+                    }
+                    if (showPreview) {
+                        val actualFormat = selectedFormat.resolved(device)
+                        val depth = if (actualFormat == ExportFormat.XTC) 1 else 2
+                        val fixed = actualFormat == ExportFormat.XTC || actualFormat == ExportFormat.XTCH
+                        val preview by produceState<List<Bitmap>?>(initialValue = null,
+                            previewSourceUri, device, actualFormat, options) {
+                            value = null
+                            value = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    AndroidPageSource(context).previewFirstPage(
+                                        previewSourceUri, profile.width, profile.height,
+                                        depth, options.copy(epubColor = false), fixed,
+                                    ).map { page ->
+                                        val pixels = IntArray(page.width * page.height) { i ->
+                                            val level = page.levels[i].toInt() and 255
+                                            val lum = if (page.depth == 1) level * 255 else level * 85
+                                            Color.rgb(lum, lum, lum)
+                                        }
+                                        Bitmap.createBitmap(pixels, page.width, page.height, Bitmap.Config.ARGB_8888)
+                                    }
+                                }.getOrNull()
+                            }
+                        }
+                        val frames = preview
+                        when {
+                            frames == null -> Text("Rendering preview…")
+                            frames.isEmpty() -> Text("No readable preview frames.")
+                            else -> {
+                                val current = previewIndex.coerceIn(0, frames.lastIndex)
+                                Image(
+                                    bitmap = frames[current].asImageBitmap(),
+                                    contentDescription = "Converted first page, screen ${current + 1}",
+                                    modifier = Modifier.fillMaxWidth().height(290.dp),
+                                    contentScale = ContentScale.Fit,
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    TextButton(enabled = current > 0, onClick = { previewIndex = current - 1 }) {
+                                        Text("Previous")
+                                    }
+                                    Text("Screen ${current + 1} of ${frames.size}")
+                                    TextButton(enabled = current < frames.lastIndex,
+                                        onClick = { previewIndex = current + 1 }) {
+                                        Text("Next")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("First-page preview becomes available when a chapter image is accessible.")
+                }
                 Text(if (profile.xteinkWifi) "XTEink Wi-Fi transfer (compatible firmware only)"
                     else "Direct XTEink Wi-Fi sending is unavailable for this reader. Save the file and transfer it with the reader’s supported method.")
                 if (profile.xteinkWifi) OutlinedTextField(
