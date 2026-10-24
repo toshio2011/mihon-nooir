@@ -66,7 +66,7 @@ fun NooirExportDialog(
     var previewIndex by remember { mutableStateOf(0) }
     var chosenPreviewUri by remember { mutableStateOf<Uri?>(null) }
     var previewFrameLimit by remember { mutableStateOf(8) }
-    val previewPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val previewPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             chosenPreviewUri = uri
             showPreview = true
@@ -133,8 +133,8 @@ fun NooirExportDialog(
                     Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
                 }
                 if (showAdvanced) MangaConversionSettings(options, selectedFormat.resolved(device), onChange = { options = it })
-                TextButton(onClick = { previewPicker.launch("image/*") }) {
-                    Text("Choose image for conversion preview")
+                TextButton(onClick = { previewPicker.launch(arrayOf("image/*", "application/zip", "application/x-cbz", "application/vnd.comicbook+zip")) }) {
+                    Text("Choose manga image or CBZ for preview")
                 }
                 if (activePreviewUri != null) {
                     TextButton(onClick = { showPreview = !showPreview; previewIndex = 0 }) {
@@ -203,7 +203,7 @@ fun NooirExportDialog(
                         }
                     }
                 } else {
-                    Text("Choose a page image above to test the conversion preview.")
+                    Text("Choose a page image or CBZ above to test the conversion preview.")
                 }
                 Text(if (profile.xteinkWifi) "XTEink Wi-Fi transfer (compatible firmware only)"
                     else "Direct XTEink Wi-Fi sending is unavailable for this reader. Save the file and transfer it with the reader’s supported method.")
