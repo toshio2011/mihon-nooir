@@ -76,6 +76,23 @@ class ExtensionInstaller {
     }
 }
 """)
+        onboarding = write("app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt", """import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState
+import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
+class PermissionStep {
+        val installGranted = rememberRequestPackageInstallsPermissionState()
+        Column {
+            PermissionCheckbox(
+                title = stringResource(MR.strings.onboarding_permission_install_apps),
+                subtitle = stringResource(MR.strings.onboarding_permission_install_apps_description),
+                granted = installGranted,
+                onButtonClick = {
+                    context.launchRequestPackageInstallsPermission()
+                },
+            )
+            OtherPermission()
+        }
+}
+""")
         settings = write("app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsAdvancedScreen.kt", """class SettingsAdvancedScreen {
     @Composable
     private fun getExtensionsGroup(
@@ -107,6 +124,11 @@ class ExtensionInstaller {
             root = pathlib.Path(d)
             manifest, extension, settings, graph, to_delete = self.fixture(root)
             MODULE.secure(root)
+            onboarding = (root / "app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt").read_text()
+            self.assertNotIn("rememberRequestPackageInstallsPermissionState", onboarding)
+            self.assertNotIn("launchRequestPackageInstallsPermission", onboarding)
+            self.assertNotIn("onboarding_permission_install_apps", onboarding)
+            self.assertIn("OtherPermission()", onboarding)
             xml = manifest.read_text()
             for name in ("REQUEST_INSTALL_PACKAGES", "REQUEST_DELETE_PACKAGES",
                          "UPDATE_PACKAGES_WITHOUT_USER_ACTION"):
