@@ -32,7 +32,7 @@ object PanelDetectionCore {
         // No OCR means we cannot prove that a low-ink region has no lettering.
         // Only trust clear rectangular gutters; uncertain pages stay intact.
         if (height.toLong() > width.toLong() * 3L) return fallback("long strip: preserve existing webtoon slicing")
-        if (width.toLong() > height.toLong() * 135L / 100L) return fallback("wide spread: preserve existing spread handling")
+        // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
         val detector = Detector(width, height, grayscale)
         val root = detector.partition(whole, 0) ?: return fallback("ambiguous gutters or too many regions")
         val regions = PanelReadingOrder.flatten(root, rightToLeft)
