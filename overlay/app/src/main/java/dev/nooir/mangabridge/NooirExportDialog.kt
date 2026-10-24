@@ -8,7 +8,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -127,7 +126,7 @@ fun NooirExportDialog(
                         val actualFormat = selectedFormat.resolved(device)
                         val depth = if (actualFormat == ExportFormat.XTC) 1 else 2
                         val fixed = actualFormat == ExportFormat.XTC || actualFormat == ExportFormat.XTCH
-                        val preview by produceState<List<Bitmap>?>(initialValue = null,
+                        val preview by produceState<Result<List<Bitmap>>?>(initialValue = null,
                             previewSourceUri, device, actualFormat, options) {
                             value = null
                             value = withContext(Dispatchers.IO) {
@@ -143,13 +142,15 @@ fun NooirExportDialog(
                                         }
                                         Bitmap.createBitmap(pixels, page.width, page.height, Bitmap.Config.ARGB_8888)
                                     }
-                                }.getOrNull()
+                                }
                             }
                         }
-                        val frames = preview
+                        val frames = preview?.getOrNull()
                         when {
-                            frames == null -> Text("Rendering preview…")
-                            frames.isEmpty() -> Text("No readable preview frames.")
+                            preview == null -> Text("Rendering preview…")
+                            preview?.isFailure == true -> Text("Preview failed: " +
+                                (preview?.exceptionOrNull()?.message ?: "Unable to decode first page"))
+                            frames.isNullOrEmpty() -> Text("No readable preview frames.")
                             else -> {
                                 val current = previewIndex.coerceIn(0, frames.lastIndex)
                                 Image(
