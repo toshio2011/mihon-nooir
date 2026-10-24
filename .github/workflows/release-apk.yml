@@ -47,6 +47,21 @@ jobs:
           keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: bash ./gradlew :app:assembleFoss -Pdist=foss --no-daemon --stacktrace
+      - name: Verify release APK signature and identity
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/foss -maxdepth 1 -name '*.apk' -type f -print -quit)
+          test -n "$apk"
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -x "$apksigner"
+          "$apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apk-signature.txt"
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$RUNNER_TEMP/apk-signature.txt"
+          if grep -q 'CN=Android Debug' "$RUNNER_TEMP/apk-signature.txt"; then
+            echo 'Refusing to publish an APK signed with an ephemeral Android debug key.' >&2
+            exit 1
+          fi
+          echo 'Release APK signature verified; publishing can proceed.'
       - name: Publish release with versioned APK
         env:
           GH_TOKEN: ${{ github.token }}
