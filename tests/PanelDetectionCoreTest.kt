@@ -54,7 +54,20 @@ fun main() {
     val uncertain = PanelDetectionCore.detect(width, height, staggered, true)
     check(uncertain.usedFullPageFallback) { "Ambiguous cross-column tiers must not be guessed" }
 
-    // Existing WEBTOON and wide-spread segmentation must not be replaced.
+    // Landscape manga strips with clear framed panels must not be skipped.
+    val wideW = 480
+    val wideH = 240
+    val wideStrip = ByteArray(wideW * wideH) { 255.toByte() }
+    for (y in 12 until wideH - 12) {
+        for (x in 12 until 225) wideStrip[y * wideW + x] = 75.toByte()
+        for (x in 255 until wideW - 12) wideStrip[y * wideW + x] = 95.toByte()
+    }
+    val widePlan = PanelDetectionCore.detect(wideW, wideH, wideStrip, true)
+    check(!widePlan.usedFullPageFallback && widePlan.regions.size == 2) {
+        "Wide strip should split into two panels: ${widePlan.reason}"
+    }
+    check(widePlan.regions[0].left > widePlan.regions[1].left)
+    // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(runCatching { PanelDetectionCore.detect(0, 20, ByteArray(1), true) }.isFailure)
