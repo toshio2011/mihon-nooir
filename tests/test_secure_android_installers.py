@@ -80,6 +80,7 @@ class ExtensionInstaller {
 import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
 class PermissionStep {
         val installGranted = rememberRequestPackageInstallsPermissionState()
+
         Column {
             PermissionCheckbox(
                 title = stringResource(MR.strings.onboarding_permission_install_apps),
@@ -89,6 +90,7 @@ class PermissionStep {
                     context.launchRequestPackageInstallsPermission()
                 },
             )
+
             OtherPermission()
         }
 }
