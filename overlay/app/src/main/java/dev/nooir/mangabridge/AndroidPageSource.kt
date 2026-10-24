@@ -176,17 +176,24 @@ class AndroidPageSource(private val context: Context) {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
+        // A source-page overview precedes any multi-frame result, including panels,
+        // landscape overlap, spreads and webtoon slices. Never duplicate single frames.
+        // Render the overview in portrait to preserve the full composition.
+        val outputSlices = if (options.showFullPageBeforeSplits && slices.size > 1) {
+            listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + slices
+        } else slices
         // Render one frame at a time, with per-panel orientation only in Auto Fit.
-        for (slice in slices) {
+        for ((sliceIndex, slice) in outputSlices.withIndex()) {
+            val isOverview = options.showFullPageBeforeSplits && slices.size > 1 && sliceIndex == 0
             val initial = slice.region
-            val landscape = if (auto) slice.landscape else manualRotate
+            val landscape = if (isOverview) false else if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
             val frameHeight = if (auto && !fixedFramebuffer && landscape) minOf(width, height) else height
             val needsRotation = fixedFramebuffer && landscape && frameWidth < frameHeight
             val viewWidth = if (needsRotation) frameHeight else frameWidth
             val viewHeight = if (needsRotation) frameWidth else frameHeight
             val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
-            val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
+            val r = if (!isOverview && options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
             val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
             val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)
