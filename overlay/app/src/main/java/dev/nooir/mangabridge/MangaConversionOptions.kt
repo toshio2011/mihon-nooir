@@ -53,6 +53,13 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 )
             }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(checked = options.showFullPageBeforeSplits, onCheckedChange = {
+                onChange(options.copy(preset = "Custom", showFullPageBeforeSplits = it))
+            })
+            Text("Show full page before splits")
+        }
+        Text("When a page produces multiple crops or slices, show the entire original page first. Single-screen pages are not duplicated.")
         Text("Layout")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("AUTO" to "Auto", "PAGED" to "Pages", "WEBTOON" to "Webtoon").forEach { (value, title) ->
