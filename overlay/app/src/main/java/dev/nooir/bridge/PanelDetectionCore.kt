@@ -118,10 +118,10 @@ object PanelDetectionCore {
             val length = if (horizontal) r.height else r.width
             val span = if (horizontal) r.width else r.height
             // Keep a minimum of 15% of the *whole page* on either side.
-            val minChild = maxOf(12, (if (horizontal) height else width) * 15 / 100)
-            val margin = maxOf(minChild, length * 17 / 100)
+            val minChild = maxOf(12, (if (horizontal) height else width) * 10 / 100)
+            val margin = maxOf(minChild, length * 12 / 100)
             if (length <= margin * 2 + 3 || span < 12) return null
-            val minGap = maxOf(3, length / 80)
+            val minGap = maxOf(3, length / 120)
             var bestStart = -1
             var bestEnd = -1
             var runStart = -1
@@ -138,7 +138,8 @@ object PanelDetectionCore {
                         if ((gray[y * width + axis].toInt() and 255) >= WHITE) bright++
                     }
                 }
-                val clear = bright.toLong() * 100 >= span.toLong() * 99
+                // Permit a few non-white pixels in real manga gutters without guessing cuts.
+                val clear = bright.toLong() * 100 >= span.toLong() * 97
                 if (clear && runStart < 0) runStart = axis
                 if ((!clear || axis == origin + length - margin - 1) && runStart >= 0) {
                     val end = if (clear) axis + 1 else axis
