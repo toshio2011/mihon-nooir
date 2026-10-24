@@ -65,11 +65,13 @@ fun NooirExportDialog(
     var showPreview by remember { mutableStateOf(false) }
     var previewIndex by remember { mutableStateOf(0) }
     var chosenPreviewUri by remember { mutableStateOf<Uri?>(null) }
+    var previewFrameLimit by remember { mutableStateOf(8) }
     val previewPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             chosenPreviewUri = uri
             showPreview = true
             previewIndex = 0
+            previewFrameLimit = 8
         }
     }
     val activePreviewUri = chosenPreviewUri ?: previewSourceUri
@@ -143,13 +145,13 @@ fun NooirExportDialog(
                         val depth = if (actualFormat == ExportFormat.XTC) 1 else 2
                         val fixed = actualFormat == ExportFormat.XTC || actualFormat == ExportFormat.XTCH
                         val preview by produceState<Result<List<Bitmap>>?>(initialValue = null,
-                            activePreviewUri, device, actualFormat, options) {
+                            activePreviewUri, device, actualFormat, options, previewFrameLimit) {
                             value = null
                             value = withContext(Dispatchers.IO) {
                                 runCatching {
                                     AndroidPageSource(context).previewFirstPage(
                                         activePreviewUri, profile.width, profile.height,
-                                        depth, options.copy(epubColor = false), fixed, maxFrames = 8,
+                                        depth, options.copy(epubColor = false), fixed, maxFrames = previewFrameLimit,
                                     ).map { page ->
                                         val pixels = IntArray(page.width * page.height) { i ->
                                             val level = page.levels[i].toInt() and 255
@@ -181,12 +183,17 @@ fun NooirExportDialog(
                                     modifier = Modifier.fillMaxWidth().height(290.dp),
                                     contentScale = ContentScale.Fit,
                                 )
+                                if (frames.size == previewFrameLimit && previewFrameLimit < 64) {
+                                    TextButton(onClick = { previewFrameLimit = minOf(64, previewFrameLimit + 8) }) {
+                                        Text("Show more preview screens")
+                                    }
+                                }
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     TextButton(enabled = current > 0, onClick = { previewIndex = current - 1 }) {
                                         Text("Previous")
                                     }
                                     Text("Screen ${current + 1} of ${frames.size}" +
-                                        if (frames.size == 8) " (first 8)" else "")
+                                        if (frames.size == previewFrameLimit) " (first $previewFrameLimit)" else "")
                                     TextButton(enabled = current < frames.lastIndex,
                                         onClick = { previewIndex = current + 1 }) {
                                         Text("Next")
