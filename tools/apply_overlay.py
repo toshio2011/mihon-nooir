@@ -18,6 +18,13 @@ for source in (root / "overlay").rglob("*.kt"):
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
 
+# Drop unattended package-update capability inherited from Mihon.
+# Keep the user-confirmed extension installation path intact.
+manifest = upstream / "app/src/main/AndroidManifest.xml"
+replace_once(manifest,
+    '    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />\n',
+    '')
+
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
 replace_once(vm, "import android.content.Context\n", "import android.content.Context\nimport android.net.Uri\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.MihonNooirExporter\nimport dev.nooir.mangabridge.MangaConversionOptions\nimport dev.nooir.mangabridge.NooirMangaExportWorker\n")
 replace_once(vm, "import eu.kanade.tachiyomi.data.download.DownloadManager\n", "import eu.kanade.tachiyomi.data.download.DownloadManager\nimport eu.kanade.tachiyomi.data.download.DownloadProvider\n")
