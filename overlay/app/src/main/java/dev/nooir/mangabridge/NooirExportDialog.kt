@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
@@ -160,6 +161,9 @@ fun NooirExportDialog(
                                 }
                             }
                         }
+                        LaunchedEffect(activePreviewUri, device, actualFormat, options) {
+                            previewIndex = 0
+                        }
                         val frames = preview?.getOrNull()
                         DisposableEffect(frames) {
                             onDispose { frames?.forEach { it.recycle() } }
@@ -181,7 +185,8 @@ fun NooirExportDialog(
                                     TextButton(enabled = current > 0, onClick = { previewIndex = current - 1 }) {
                                         Text("Previous")
                                     }
-                                    Text("Screen ${current + 1} of ${frames.size}")
+                                    Text("Screen ${current + 1} of ${frames.size}" +
+                                        if (frames.size == 8) " (first 8)" else "")
                                     TextButton(enabled = current < frames.lastIndex,
                                         onClick = { previewIndex = current + 1 }) {
                                         Text("Next")
