@@ -43,6 +43,18 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
     val isEpub = format == ExportFormat.EPUB2 || format == ExportFormat.EPUB
     val supportsColor = isEpub || format == ExportFormat.CBZ
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Recommended for Japanese manga: Panel by Panel + Auto Fit. This attempts one panel per view.")
+        TextButton(onClick = {
+            onChange(options.copy(preset = "Custom", layout = "PAGED",
+                panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT",
+                overlapPercent = 0, cropWhiteMargins = true,
+                splitSpreads = true, rightToLeft = true,
+                showFullPageBeforeSplits = false))
+        }) { Text("Apply recommended manga panel settings") }
+        Text("Help: Pages keeps normal manga pages; Webtoon handles long scrolling strips. Panel by Panel attempts individual panels; Row by Row keeps each horizontal tier together.")
+        Text("Auto Fit rotates each detected panel to best use the screen. Overlap repeats part of a slice; 0% is a good starting point for manga panels.")
+        Text("Trim white margins removes empty borders. Split double-page spreads separates facing pages, not individual panels.")
+        Text("Some pages remain whole when the detector cannot find a safe boundary; changing overlap will not solve that.")
         Text("Conversion preset")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("Manga", "Manhwa", "Manhua").forEach { name ->
