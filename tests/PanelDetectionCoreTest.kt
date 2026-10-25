@@ -58,7 +58,8 @@ fun main() {
     for (y in 3 until 205) for (x in 156 until width - 4) staggered[y * width + x] = 100.toByte()
     for (y in 218 until height - 4) for (x in 156 until width - 4) staggered[y * width + x] = 100.toByte()
     val uncertain = PanelDetectionCore.detect(width, height, staggered, true)
-    check(!uncertain.usedFullPageFallback && uncertain.regions.size == 4) { "Staggered two-column layouts should retain four distinct panels: ${uncertain.reason}" }\n    check(uncertain.regions[0].left > uncertain.regions[2].left) { "Right column must precede left column for RTL" }
+    check(!uncertain.usedFullPageFallback && uncertain.regions.size == 4) { "Staggered two-column layouts should retain four distinct panels: ${uncertain.reason}" }
+    check(uncertain.regions[0].left > uncertain.regions[2].left) { "Right column must precede left column for RTL" }
 
     // Landscape manga strips with clear framed panels must not be skipped.
     val wideW = 480
