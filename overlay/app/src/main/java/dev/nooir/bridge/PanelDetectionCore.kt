@@ -166,10 +166,10 @@ object PanelDetectionCore {
             val length = if (horizontal) r.height else r.width
             val span = if (horizontal) r.width else r.height
             // Keep a minimum of 15% of the *whole page* on either side.
-            val minChild = maxOf(12, (if (horizontal) height else width) * 10 / 100)
-            val margin = maxOf(minChild, length * 12 / 100)
+            val minChild = maxOf(8, (if (horizontal) height else width) * 6 / 100)
+            val margin = maxOf(minChild, length * 7 / 100)
             if (length <= margin * 2 + 3 || span < 12) return null
-            val minGap = maxOf(3, length / 120)
+            val minGap = maxOf(2, length / 180)
             var bestStart = -1
             var bestEnd = -1
             var runStart = -1
@@ -187,7 +187,7 @@ object PanelDetectionCore {
                     }
                 }
                 // Permit a few non-white pixels in real manga gutters without guessing cuts.
-                val clear = bright.toLong() * 100 >= span.toLong() * 99
+                val clear = bright.toLong() * 100 >= span.toLong() * 97
                 if (clear && runStart < 0) runStart = axis
                 if ((!clear || axis == origin + length - margin - 1) && runStart >= 0) {
                     val end = if (clear) axis + 1 else axis
@@ -264,14 +264,10 @@ object PanelReadingOrder {
     }
 
     fun flatten(node: Node, rightToLeft: Boolean): List<PageRegion>? {
-        // A vertical-first layout with independent row splits in columns has
-        // ambiguous cross-column tier order. Never guess in Phase A.
-        fun hasHorizontal(node: Node): Boolean = when (node) {
-            is Node.Leaf -> false
-            is Node.Split -> node.horizontal || hasHorizontal(node.first) || hasHorizontal(node.second)
-        }
-        if (node is Node.Split && !node.horizontal &&
-            (hasHorizontal(node.first) || hasHorizontal(node.second))) return null
+        // Vertical-first partitions are legitimate manga layouts (e.g. two
+        // columns with different internal rows). Keep their panels rather than
+        // discarding the entire detection as ambiguous. Traverse each column
+        // in reading direction, top-to-bottom within that column.
         fun visit(n: Node): List<PageRegion> = when (n) {
             is Node.Leaf -> listOf(n.region)
             is Node.Split -> if (n.horizontal) visit(n.first) + visit(n.second)
