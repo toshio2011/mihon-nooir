@@ -151,18 +151,33 @@ object PanelDetectionCore {
                 }
             }
             if (bestStart < 0) return null
-            val midpoint = (bestStart + bestEnd) / 2
-            // A balloon tail or out-of-border dialogue may cross an otherwise white gutter.
-            // Never place a split through a dark stroke at its center.
-            val safeCenter = ((midpoint - 1)..(midpoint + 1)).all { axis ->
-                if (axis < origin || axis >= origin + length) false
-                else if (horizontal) (r.left until r.right).all { x ->
-                    (gray[axis * width + x].toInt() and 255) >= WHITE
-                } else (r.top until r.bottom).all { y ->
-                    (gray[y * width + axis].toInt() and 255) >= WHITE
+            // Find the safest axis *within* the gutter rather than requiring
+            // three perfectly white lines at its midpoint. Real scanned manga
+            // has compression speckles and antialiasing in otherwise clear gaps.
+            // Refuse to cut across a sustained ink stroke, but tolerate isolated
+            // near-white pixels instead of collapsing an entire page to fallback.
+            fun darkCount(axis: Int): Int {
+                var dark = 0
+                if (horizontal) {
+                    for (x in r.left until r.right) {
+                        if ((gray[axis * width + x].toInt() and 255) < INK) dark++
+                    }
+                } else {
+                    for (y in r.top until r.bottom) {
+                        if ((gray[y * width + axis].toInt() and 255) < INK) dark++
+                    }
                 }
+                return dark
             }
-            return midpoint.takeIf { safeCenter && it - origin >= minChild && origin + length - it >= minChild }
+            val midpoint = (bestStart + bestEnd) / 2
+            val candidate = (bestStart until bestEnd)
+                .filter { it - origin >= minChild && origin + length - it >= minChild }
+                .minWithOrNull(compareBy<Int> { darkCount(it) }
+                    .thenBy { kotlin.math.abs(it - midpoint) })
+                ?: return null
+            // At most 0.5% dark pixels across the cut. This rejects balloon
+            // strokes without demanding a mathematically perfect white line.
+            return candidate.takeIf { darkCount(it).toLong() * 200 <= span.toLong() }
         }
 
         fun hasContent(r: PageRegion): Boolean {
