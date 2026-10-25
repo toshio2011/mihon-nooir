@@ -58,42 +58,12 @@ object PanelDetectionCore {
         require(grayscale.size == width * height)
         val whole = PageRegion(0, 0, width, height)
         fun fallback(reason: String) = PanelPlan(listOf(whole), true, reason)
-        val minHeight = maxOf(12, height / 12)
-        val minGap = maxOf(3, height / 120)
-        val rows = mutableListOf<PageRegion>()
-        var previous = 0
-        var run = -1
-        for (y in 0..height) {
-            val white = if (y == height) false else {
-                var bright = 0
-                var dark = 0
-                for (x in 0 until width) {
-                    val value = grayscale[y * width + x].toInt() and 255
-                    if (value >= WHITE) bright++
-                    if (value < INK) dark++
-                }
-                bright.toLong() * 100 >= width.toLong() * 98 &&
-                    dark.toLong() * 200 <= width.toLong()
-            }
-            if (white && run < 0) run = y
-            if (!white && run >= 0) {
-                val start = run
-                val end = y
-                run = -1
-                if (end - start >= minGap && start - previous >= minHeight &&
-                    height - (start + end) / 2 >= minHeight) {
-                    val split = (start + end) / 2
-                    rows += PageRegion(0, previous, width, split)
-                    previous = split
-                }
-            }
-        }
-        if (height - previous >= minHeight) rows += PageRegion(0, previous, width, height)
-        else return fallback("last row too short")
-        if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
         val detector = Detector(width, height, grayscale)
+        val rows = detector.partitionRows(whole)
+        if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
         if (rows.any { !detector.hasContent(it) }) return fallback("empty row")
-        return PanelPlan(rows, false, "validated horizontal rows")
+        if (!coversEntirePage(rows, width, height)) return fallback("unsafe row coverage")
+        return PanelPlan(rows, false, "validated horizontal white-strip rows")
     }
 
     /**
@@ -136,6 +106,37 @@ object PanelDetectionCore {
     private class Detector(private val width: Int, private val height: Int, private val gray: ByteArray) {
         private var leaves = 0
         private var invalid = false
+
+        /**
+         * Row mode deliberately never divides columns. Reuse the same guarded
+         * white-strip detector as panel mode, but scan each remaining row
+         * independently so short/uneven horizontal gaps are not missed.
+         */
+        fun partitionRows(whole: PageRegion): List<PageRegion> {
+            val rows = mutableListOf<PageRegion>()
+            fun visit(region: PageRegion, depth: Int) {
+                if (depth >= 10 || rows.size >= MAX_PANELS) {
+                    rows += region
+                    return
+                }
+                val axis = bestGutter(region, horizontal = true)
+                    ?: adaptiveGutter(region, horizontal = true)
+                if (axis == null) {
+                    rows += region
+                    return
+                }
+                val upper = region.copy(bottom = axis)
+                val lower = region.copy(top = axis)
+                if (!hasContent(upper) || !hasContent(lower)) {
+                    rows += region
+                    return
+                }
+                visit(upper, depth + 1)
+                visit(lower, depth + 1)
+            }
+            visit(whole, 0)
+            return rows
+        }
 
         fun partition(region: PageRegion, depth: Int): PanelReadingOrder.Node? {
             if (invalid || depth > 10) return null
