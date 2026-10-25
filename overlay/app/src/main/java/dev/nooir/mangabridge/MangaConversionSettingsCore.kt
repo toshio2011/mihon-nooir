@@ -23,7 +23,7 @@ data class MangaConversionOptions(
     val allowMissingCover: Boolean = false,
     val skipUnavailableChapters: Boolean = false,
     val epubPagesPerXhtml: Int = 1, // 0 = entire chapter, 1 = original, 2..999 = custom
-    val panelMode: String = "OFF", // OFF or PANEL_BY_PANEL; opt-in and backward compatible
+    val panelMode: String = "OFF", // OFF, ROW_BY_ROW or PANEL_BY_PANEL; opt-in and backward compatible
     val showFullPageBeforeSplits: Boolean = false, // add overview only when a source yields multiple frames
 ) {
     fun token() = listOf(preset, layout, cropWhiteMargins, splitSpreads, rightToLeft,
@@ -69,7 +69,7 @@ data class MangaConversionOptions(
                 xtcExtendedMetadata = v.getOrNull(13)?.toBooleanStrictOrNull() ?: false,
                 allowMissingCover = v.getOrNull(14)?.toBooleanStrictOrNull() ?: false,
                 skipUnavailableChapters = v.getOrNull(15)?.toBooleanStrictOrNull() ?: false,
-                panelMode = v.getOrNull(16)?.takeIf { it == "PANEL_BY_PANEL" } ?: "OFF",
+                panelMode = v.getOrNull(16)?.takeIf { it in setOf("PANEL_BY_PANEL", "ROW_BY_ROW") } ?: "OFF",
                 showFullPageBeforeSplits = v.getOrNull(17)?.toBooleanStrictOrNull() ?: false,
             )
         }
