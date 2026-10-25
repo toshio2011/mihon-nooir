@@ -102,7 +102,7 @@ class AndroidPageSource(private val context: Context) {
      * An uncertain page uses exactly the previous page slicing behavior.
      */
     private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<PageRegion>? {
-        if (options.panelMode != "PANEL_BY_PANEL") return null
+        if (options.panelMode != "PANEL_BY_PANEL" && options.panelMode != "ROW_BY_ROW") return null
         if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
         val w = (src.width * scale).toInt().coerceAtLeast(1)
@@ -120,7 +120,7 @@ class AndroidPageSource(private val context: Context) {
                 // Transparent gutters on PNGs are white, not black.
                 ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
             }
-            val plan = PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
+            val plan = if (options.panelMode == "ROW_BY_ROW") PanelDetectionCore.detectRows(w, h, gray)\n                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
             if (plan.usedFullPageFallback) return null
             val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
             // A genuine panel can be very wide or tall. Screen occupancy is
@@ -238,7 +238,7 @@ class AndroidPageSource(private val context: Context) {
         src: Bitmap, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean,
     ): Sequence<QuantizedPage> = sequence {
-        val auto = options.panelMode == "PANEL_BY_PANEL" && options.orientation == "AUTO_FIT"
+        val auto = options.panelMode != "OFF" && options.orientation == "AUTO_FIT"
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
         val manualViewHeight = if (manualRotate) width else height
