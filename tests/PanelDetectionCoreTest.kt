@@ -67,6 +67,17 @@ fun main() {
         "Wide strip should split into two panels: ${widePlan.reason}"
     }
     check(widePlan.regions[0].left > widePlan.regions[1].left)
+    // Dialogue/balloon strokes crossing a gutter must not be sliced in half.
+    val balloonAcrossGutter = wideStrip.copyOf()
+    for (x in 225 until 255) {
+        for (y in 24 until wideH - 24) balloonAcrossGutter[y * wideW + x] = 255.toByte()
+    }
+    // A narrow black speech-balloon tail runs through the center of the gap.
+    for (x in 225 until 255) balloonAcrossGutter[wideH / 2 * wideW + x] = 30.toByte()
+    val protected = PanelDetectionCore.detect(wideW, wideH, balloonAcrossGutter, true)
+    check(protected.usedFullPageFallback || protected.regions.none { region ->
+        region.left > 225 && region.left < 255 || region.right > 225 && region.right < 255
+    }) { "Do not split through speech balloon strokes in the gutter" }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
