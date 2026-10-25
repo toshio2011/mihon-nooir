@@ -276,21 +276,28 @@ object PanelDetectionCore {
                 for (offset in -window..window) corridor += inkRatio(axis + offset)
                 corridor /= (window * 2 + 1)
                 if (corridor > 9) continue
-                // A balloon tail crossing the corridor is not a safe panel gutter.
-                // Reject any candidate with a dense dark segment in its central band.
-                val band = maxOf(2, span / 12)
+                // Reject continuous dark strokes crossing the proposed cut.
+                // A speech-balloon tail can be only one pixel thick along the
+                // gutter but dozens of pixels long ACROSS it. Density-based
+                // checks miss it, whereas isolated scanner speckles remain safe.
+                val bridgeRadius = maxOf(5, length / 35)
+                val crossStart = if (horizontal) r.left else r.top
+                val crossEnd = if (horizontal) r.right else r.bottom
                 var blocked = false
-                for (offset in -window..window) {
-                    var dark = 0
-                    var sampled = 0
-                    val crossStart = if (horizontal) r.left else r.top
-                    for (cross in crossStart until crossStart + span step step) {
-                        val idx = if (horizontal) (axis + offset) * width + cross else cross * width + axis + offset
-                        if ((gray[idx].toInt() and 255) < 180) dark++
-                        sampled++
-                        if (sampled >= band && dark * 100 > sampled * 4) { blocked = true; break }
+                for (cross in crossStart until crossEnd step step) {
+                    var longestRun = 0
+                    var run = 0
+                    for (position in axis - bridgeRadius..axis + bridgeRadius) {
+                        val index = if (horizontal) position * width + cross else cross * width + position
+                        if ((gray[index].toInt() and 255) < 180) {
+                            run++
+                            longestRun = maxOf(longestRun, run)
+                        } else run = 0
                     }
-                    if (blocked) break
+                    if (longestRun >= bridgeRadius + 2) {
+                        blocked = true
+                        break
+                    }
                 }
                 if (blocked) continue
                 val before = (1..3).sumOf { inkRatio(axis - flank * it / 3) } / 3
