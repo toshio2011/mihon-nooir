@@ -253,7 +253,7 @@ object PanelDetectionCore {
         private fun adaptiveGutter(r: PageRegion, horizontal: Boolean): Int? {
             val length = if (horizontal) r.height else r.width
             val span = if (horizontal) r.width else r.height
-            val minChild = maxOf(8, (if (horizontal) height else width) * 5 / 100)
+            val minChild = maxOf(8, (if (horizontal) height else width) * 3 / 100)
             if (length < minChild * 2 + 8 || span < 24) return null
             val origin = if (horizontal) r.top else r.left
             val step = maxOf(1, span / 300)
@@ -303,8 +303,18 @@ object PanelDetectionCore {
                     }
                 }
                 if (blocked) continue
-                val before = (1..3).sumOf { inkRatio(axis - flank * it / 3) } / 3
-                val after = (1..3).sumOf { inkRatio(axis + flank * it / 3) } / 3
+                // Search multiple distances: nested panels often have broad
+                // white margins around their frames, hiding ink at one flank.
+                val maxReach = minOf(length / 3, minOf(axis - origin - 1, origin + length - axis - 1))
+                if (maxReach < flank) continue
+                val distances = listOf(flank, maxOf(flank, length / 9),
+                    maxOf(flank, length / 6)).filter { it <= maxReach }
+                val before = distances.maxOf { distance ->
+                    (inkRatio(axis - distance) + inkRatio(axis - distance / 2)) / 2
+                }
+                val after = distances.maxOf { distance ->
+                    (inkRatio(axis + distance) + inkRatio(axis + distance / 2)) / 2
+                }
                 if (before < 14 || after < 14) continue
                 val score = minOf(before, after) - corridor
                 if (score > bestScore && score >= 12) {
