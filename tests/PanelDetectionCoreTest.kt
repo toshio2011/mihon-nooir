@@ -78,6 +78,22 @@ fun main() {
     check(protected.usedFullPageFallback || protected.regions.none { region ->
         region.left > 225 && region.left < 255 || region.right > 225 && region.right < 255
     }) { "Do not split through speech balloon strokes in the gutter" }
+    // Narrow, ink-filled panels are real panels, not errors merely because
+    // their shape occupies little of a portrait screen.
+    val narrowW = 300
+    val narrowH = 420
+    val narrow = ByteArray(narrowW * narrowH) { 255.toByte() }
+    for (y in 15 until 405) {
+        for (x in 5 until 39) narrow[y * narrowW + x] = 80.toByte()
+        for (x in 57 until 295) narrow[y * narrowW + x] = 110.toByte()
+    }
+    val narrowPlan = PanelDetectionCore.detect(narrowW, narrowH, narrow, true)
+    check(!narrowPlan.usedFullPageFallback && narrowPlan.regions.size == 2) {
+        "Real narrow panel should survive conservative gutter detection: ${narrowPlan.reason}"
+    }
+    check(narrowPlan.regions.any { it.width < narrowW / 5 }) {
+        "Detector must retain a narrow panel instead of rejecting its aspect ratio"
+    }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
