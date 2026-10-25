@@ -224,6 +224,21 @@ object PanelDetectionCore {
                     if ((gray[y * width + x].toInt() and 255) < 220) fullInk++
                 }
                 if (fullInk * 100 > r.height * 10) continue
+                // Reject a continuous balloon tail or drawn stroke crossing
+                // the proposed separator, even when the rest is bright.
+                val guard = maxOf(5, r.width / 35)
+                var crossing = false
+                for (y in r.top until r.bottom step 2) {
+                    var run = 0
+                    for (dx in -guard..guard) {
+                        if ((gray[y * width + x + dx].toInt() and 255) < 180) {
+                            run++
+                            if (run >= guard + 2) { crossing = true; break }
+                        } else run = 0
+                    }
+                    if (crossing) break
+                }
+                if (crossing) continue
                 val score = minOf(leftInk, rightInk) - corridor
                 if (score > scoreBest) {
                     best = x
