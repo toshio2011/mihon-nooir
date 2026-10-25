@@ -175,9 +175,25 @@ object PanelDetectionCore {
                 .minWithOrNull(compareBy<Int> { darkCount(it) }
                     .thenBy { kotlin.math.abs(it - midpoint) })
                 ?: return null
-            // At most 0.5% dark pixels across the cut. This rejects balloon
-            // strokes without demanding a mathematically perfect white line.
-            return candidate.takeIf { darkCount(it).toLong() * 200 <= span.toLong() }
+            // A continuous dark stroke across neighbouring candidate axes is
+            // likely a balloon tail, not compression noise. Isolated dark
+            // speckles are acceptable, but never cut through a sustained line.
+            fun crossesStroke(axis: Int): Boolean {
+                if (axis <= bestStart || axis + 1 >= bestEnd) return true
+                for (cross in 0 until span) {
+                    val position = if (horizontal) r.left + cross else r.top + cross
+                    fun ink(at: Int): Boolean = if (horizontal)
+                        (gray[at * width + position].toInt() and 255) < INK
+                    else (gray[position * width + at].toInt() and 255) < INK
+                    if (ink(axis - 1) && ink(axis) && ink(axis + 1)) return true
+                }
+                return false
+            }
+            val safe = (bestStart + 1 until bestEnd - 1)
+                .filter { it - origin >= minChild && origin + length - it >= minChild }
+                .filter { darkCount(it).toLong() * 200 <= span.toLong() && !crossesStroke(it) }
+            return safe.minWithOrNull(compareBy<Int> { darkCount(it) }
+                .thenBy { kotlin.math.abs(it - midpoint) })
         }
 
         fun hasContent(r: PageRegion): Boolean {
