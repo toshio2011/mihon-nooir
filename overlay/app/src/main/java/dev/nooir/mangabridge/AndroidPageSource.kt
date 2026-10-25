@@ -184,10 +184,11 @@ class AndroidPageSource(private val context: Context) {
             panels != null && auto -> PanelAutoFit.plan(
                 panels, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
+                preserveWholePanels = true,
             )
             panels != null -> panels.flatMap { panel ->
                 PanelViewportPlanner.plan(panel, manualViewWidth, manualViewHeight,
-                    options.rightToLeft, options.overlapPercent)
+                    options.rightToLeft, options.overlapPercent, preserveWholePanel = true)
             }.map { PanelFitSlice(it, manualRotate) }
             else -> PageSlicePlanner.plan(
                 src.width, src.height, manualViewWidth, manualViewHeight,
