@@ -170,11 +170,6 @@ object PanelDetectionCore {
                 return dark
             }
             val midpoint = (bestStart + bestEnd) / 2
-            val candidate = (bestStart until bestEnd)
-                .filter { it - origin >= minChild && origin + length - it >= minChild }
-                .minWithOrNull(compareBy<Int> { darkCount(it) }
-                    .thenBy { kotlin.math.abs(it - midpoint) })
-                ?: return null
             // A continuous dark stroke across neighbouring candidate axes is
             // likely a balloon tail, not compression noise. Isolated dark
             // speckles are acceptable, but never cut through a sustained line.
