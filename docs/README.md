@@ -35,6 +35,7 @@
 | [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
 | [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
 | [v1.0.12 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) · [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) | Official release APKs, compatibility changes and tests |
+| [Automatic Panel-by-Panel implementation status](PANEL_IMPLEMENTATION_STATUS.md) | Approved design PR #29, Phase A prototype, Android/format/hardware work still pending — **not a shipped feature** |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |
 
 **Reminder:** A successful CI build doesn't establish that an individual public website exposes readable chapters, that PDF text reflows flawlessly, or that XTC/XTCH covers behave identically on every XTEink firmware. The app contains no manga, bundled manga extensions, AI OCR or access-control bypass.

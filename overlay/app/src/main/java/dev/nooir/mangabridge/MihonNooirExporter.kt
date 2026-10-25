@@ -128,7 +128,7 @@ object MihonNooirExporter {
             NooirMangaCover.resolve(context, manga, source, coverCache, tempFolder)
         } else null
         val coverOptions = options.copy(
-            layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
+            panelMode = "OFF", layout = "PAGED", cropWhiteMargins = false, splitSpreads = false,
             orientation = "PORTRAIT", overlapPercent = 0,
         )
         fun coverPage(depth: Int, pageOptions: MangaConversionOptions = coverOptions): dev.nooir.bridge.QuantizedPage? = coverUri?.let { uri ->
@@ -215,7 +215,8 @@ object MihonNooirExporter {
                     val frameWidth = if (archiveLandscape) height else width
                     val frameHeight = if (archiveLandscape) width else height
                     for (page in pageSource.pages(uris, frameWidth, frameHeight, depth,
-                        if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) options.copy(epubColor = false) else options)) {
+                        if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) options.copy(epubColor = false) else options,
+                        fixedFramebuffer = (actual == ExportFormat.XTC || actual == ExportFormat.XTCH))) {
                         ownerJob.ensureActive()
                         yield(chapter to page)
                     }

@@ -155,7 +155,7 @@ toolbar.write_text(toolbar_text)
 # Both the launcher label and the app's UI translation use the same Moko resource.
 i18n = upstream / "i18n/src/commonMain/moko-resources/base/strings.xml"
 replace_once(i18n, '<string name="app_name" translatable="false">Mihon</string>',
-    '<string name="app_name" translatable="false">MangaNooir</string>')
+    '<string name="app_name" translatable="false">MihonNooir</string>')
 # New WorkManager worker needs Metro graph injection just as Mihon's own workers do.
 app_graph = upstream / "app/src/main/java/mihon/app/di/AppGraph.kt"
 replace_once(app_graph, "import eu.kanade.tachiyomi.data.download.DownloadWorker\n",
@@ -197,7 +197,7 @@ replace_once(more_screen, '''            item {
 # The separate Android platform PdfRenderer supplies bitmap-page fallback.
 replace_once(upstream / "app/build.gradle.kts", "dependencies {\n",
     "dependencies {\n    implementation(\"com.tom-roush:pdfbox-android:2.0.27.0\")\n")
-replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihon"')
+replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihontrial"')
 version = (root / "config/version.txt").read_text().strip()
 assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Version must be X.Y.Z"
 major, minor, patch = map(int, version.split("."))
