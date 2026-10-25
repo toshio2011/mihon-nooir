@@ -28,6 +28,12 @@ fun main() {
     check(rtl.regions.map { centerGray(image, width, it) } == listOf(48, 35, 83, 70, 118, 105)) {
         "RTL must read top tier first, right to left within each tier"
     }
+    val rowPlan = PanelDetectionCore.detectRows(width, height, image)
+    check(!rowPlan.usedFullPageFallback && rowPlan.regions.size == 3) {
+        "Row by Row must keep two columns together in each of three tiers: ${rowPlan.reason}"
+    }
+    check(rowPlan.regions.all { it.left == 0 && it.right == width })
+    check(rowPlan.regions.zipWithNext().all { (a, b) -> a.bottom == b.top })
     val ltr = PanelDetectionCore.detect(width, height, image, false)
     check(ltr.regions.map { centerGray(image, width, it) } == listOf(35, 48, 70, 83, 105, 118))
     val scaled = PanelDetectionCore.sourceRegions(rtl, width, height, 480, 800, 1)
