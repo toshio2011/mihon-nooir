@@ -21,6 +21,28 @@ def replace_once(path: Path, old: str, new: str) -> None:
 
 
 def secure(upstream: Path) -> None:
+    # The upstream onboarding screen assumes REQUEST_INSTALL_PACKAGES is declared.
+    # This fork intentionally removes that permission; remove its obsolete prompt
+    # so Android 16 does not throw in canRequestPackageInstalls() on resume.
+    onboarding = upstream / "app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt"
+    replace_once(onboarding,
+        "import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState\n", "")
+    replace_once(onboarding,
+        "import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission\n", "")
+    replace_once(onboarding,
+        "        val installGranted = rememberRequestPackageInstallsPermissionState()\n\n", "")
+    replace_once(onboarding,
+        """            PermissionCheckbox(
+                title = stringResource(MR.strings.onboarding_permission_install_apps),
+                subtitle = stringResource(MR.strings.onboarding_permission_install_apps_description),
+                granted = installGranted,
+                onButtonClick = {
+                    context.launchRequestPackageInstallsPermission()
+                },
+            )
+
+""", "")
+
     manifest = upstream / "app/src/main/AndroidManifest.xml"
 
     for permission in (
