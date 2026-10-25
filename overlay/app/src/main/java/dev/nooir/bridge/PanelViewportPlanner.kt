@@ -18,9 +18,11 @@ object PanelViewportPlanner {
         viewportHeight: Int,
         rightToLeft: Boolean,
         overlapPercent: Int,
+        preserveWholePanel: Boolean = false,
     ): List<PageRegion> {
         require(panel.width > 0 && panel.height > 0)
         require(viewportWidth > 0 && viewportHeight > 0)
+        if (preserveWholePanel) return listOf(panel)
         val overlap = overlapPercent.coerceIn(5, 30)
         val tall = panel.height.toLong() * viewportWidth * 100 >
             panel.width.toLong() * viewportHeight * ELONGATION_PERCENT
