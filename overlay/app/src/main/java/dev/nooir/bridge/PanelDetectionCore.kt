@@ -146,10 +146,22 @@ object PanelDetectionCore {
             // leaving multi-column manga grouped or in the wrong hierarchy.
             val cleanHorizontal = bestGutter(region, horizontal = true)
             val cleanVertical = bestGutter(region, horizontal = false)
+            // A clear vertical separator is stronger evidence of distinct
+            // columns than an imperfect horizontal band (often just whitespace
+            // inside a panel). For imperfect gutters in both directions,
+            // compare ink contrast instead of always choosing a row first.
+            val adaptiveHorizontal = if (cleanHorizontal == null && cleanVertical == null)
+                adaptiveGutterCandidate(region, horizontal = true) else null
+            val adaptiveVertical = if (cleanHorizontal == null && cleanVertical == null)
+                adaptiveGutterCandidate(region, horizontal = false) else null
             val split = cleanHorizontal?.let { true to it }
                 ?: cleanVertical?.let { false to it }
-                ?: adaptiveGutter(region, horizontal = true)?.let { true to it }
-                ?: adaptiveGutter(region, horizontal = false)?.let { false to it }
+                ?: when {
+                    adaptiveHorizontal == null -> adaptiveVertical?.let { false to it.first }
+                    adaptiveVertical == null -> adaptiveHorizontal.let { true to it.first }
+                    adaptiveVertical.second > adaptiveHorizontal.second -> false to adaptiveVertical.first
+                    else -> true to adaptiveHorizontal.first
+                }
             if (split == null) {
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
@@ -251,7 +263,10 @@ object PanelDetectionCore {
          * corridor to be substantially lighter than the artwork on BOTH sides;
          * otherwise do not speculate. Recursive partitioning examines children.
          */
-        private fun adaptiveGutter(r: PageRegion, horizontal: Boolean): Int? {
+        private fun adaptiveGutter(r: PageRegion, horizontal: Boolean): Int? =
+            adaptiveGutterCandidate(r, horizontal)?.first
+
+        private fun adaptiveGutterCandidate(r: PageRegion, horizontal: Boolean): Pair<Int, Int>? {
             val length = if (horizontal) r.height else r.width
             val span = if (horizontal) r.width else r.height
             val minChild = maxOf(8, (if (horizontal) height else width) * 3 / 100)
@@ -323,7 +338,7 @@ object PanelDetectionCore {
                     bestAxis = axis
                 }
             }
-            return bestAxis
+            return bestAxis?.let { it to bestScore }
         }
 
         fun hasContent(r: PageRegion): Boolean {
