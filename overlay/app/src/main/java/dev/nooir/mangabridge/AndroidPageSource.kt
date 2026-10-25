@@ -177,6 +177,63 @@ class AndroidPageSource(private val context: Context) {
         ).takeIf { it.width() > 0 && it.height() > 0 } ?: region
     }
 
+    /**
+     * Make elongated panels readable only where a full-width/height, clean
+     * white corridor is visible. Never cut at an arbitrary screen boundary.
+     * If no corridor exists, retain the complete panel rather than clip text.
+     */
+    private fun safePanelSlices(
+        src: Bitmap, panel: PageRegion, viewWidth: Int, viewHeight: Int,
+        rightToLeft: Boolean, overlapPercent: Int,
+    ): List<PageRegion> {
+        val tall = panel.height.toLong() * viewWidth > panel.width.toLong() * viewHeight * 2
+        val wide = panel.width.toLong() * viewHeight > panel.height.toLong() * viewWidth * 2
+        if (!tall && !wide) return listOf(panel)
+        val start = if (tall) panel.top else panel.left
+        val end = if (tall) panel.bottom else panel.right
+        val segment = (if (tall) panel.width.toLong() * viewHeight / viewWidth
+                       else panel.height.toLong() * viewWidth / viewHeight)
+            .coerceIn(1L, (end - start).toLong()).toInt()
+        if (segment < 12) return listOf(panel)
+        val results = mutableListOf<PageRegion>()
+        var cursor = start
+        val sampleStep = maxOf(1, (if (tall) panel.width else panel.height) / 350)
+        fun clear(axis: Int): Boolean {
+            for (offset in -1..1) {
+                val line = axis + offset
+                if (line <= start || line >= end) return false
+                var cross = if (tall) panel.left else panel.top
+                val crossEnd = if (tall) panel.right else panel.bottom
+                while (cross < crossEnd) {
+                    val color = if (tall) src.getPixel(cross, line) else src.getPixel(line, cross)
+                    val lum = (Color.red(color) * 299 + Color.green(color) * 587 +
+                        Color.blue(color) * 114) / 1000
+                    if (lum < 247 && Color.alpha(color) > 32) return false
+                    cross += sampleStep
+                }
+            }
+            return true
+        }
+        while (cursor + segment < end && results.size < 31) {
+            // Prefer boundaries near the viewport-sized section, but never
+            // force a cut through ink or a speech balloon.
+            val ideal = cursor + segment
+            val low = maxOf(cursor + segment * 65 / 100, cursor + 3)
+            val high = minOf(end - segment * 35 / 100, ideal + segment / 10)
+            val boundary = (low..high).filter { clear(it) }
+                .minByOrNull { kotlin.math.abs(it - ideal) }
+                ?: return listOf(panel)
+            results += if (tall) PageRegion(panel.left, cursor, panel.right, boundary)
+                       else PageRegion(cursor, panel.top, boundary, panel.bottom)
+            val overlap = ((boundary - cursor) * overlapPercent.coerceIn(0, 30) / 100)
+                .coerceAtLeast(1)
+            cursor = (boundary - overlap).coerceAtLeast(cursor + 1)
+        }
+        results += if (tall) PageRegion(panel.left, cursor, panel.right, end)
+                   else PageRegion(cursor, panel.top, end, panel.bottom)
+        return if (wide && rightToLeft) results.reversed() else results
+    }
+
     private fun render(
         src: Bitmap, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean,
@@ -191,10 +248,15 @@ class AndroidPageSource(private val context: Context) {
                 panels, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
                 preserveWholePanels = true,
-            )
+            ).flatMap { fit ->
+                val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
+                val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
+                safePanelSlices(src, fit.region, vw, vh, options.rightToLeft, options.overlapPercent)
+                    .map { PanelFitSlice(it, fit.landscape) }
+            }
             panels != null -> panels.flatMap { panel ->
-                PanelViewportPlanner.plan(panel, manualViewWidth, manualViewHeight,
-                    options.rightToLeft, options.overlapPercent, preserveWholePanel = true)
+                safePanelSlices(src, panel, manualViewWidth, manualViewHeight,
+                    options.rightToLeft, options.overlapPercent)
             }.map { PanelFitSlice(it, manualRotate) }
             else -> PageSlicePlanner.plan(
                 src.width, src.height, manualViewWidth, manualViewHeight,
