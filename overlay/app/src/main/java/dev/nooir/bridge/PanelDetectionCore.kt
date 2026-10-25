@@ -140,7 +140,9 @@ object PanelDetectionCore {
         fun partition(region: PageRegion, depth: Int): PanelReadingOrder.Node? {
             if (invalid || depth > 10) return null
             val horizontal = bestGutter(region, horizontal = true)
+                ?: adaptiveGutter(region, horizontal = true)
             val vertical = bestGutter(region, horizontal = false)
+                ?: adaptiveGutter(region, horizontal = false)
             // Across-page horizontal tiers take priority over vertical columns.
             // This preserves manga's top-to-bottom, then right-to-left order.
             val split = horizontal?.let { true to it } ?: vertical?.let { false to it }
@@ -237,6 +239,53 @@ object PanelDetectionCore {
                 .filter { darkCount(it).toLong() * 200 <= span.toLong() && !crossesStroke(it) }
             return safe.minWithOrNull(compareBy<Int> { darkCount(it) }
                 .thenBy { kotlin.math.abs(it - midpoint) })
+        }
+
+        /**
+         * Secondary detector for imperfect/broken gutters. A narrow light corridor
+         * can be interrupted by borders or balloon tails. Require the candidate
+         * corridor to be substantially lighter than the artwork on BOTH sides;
+         * otherwise do not speculate. Recursive partitioning examines children.
+         */
+        private fun adaptiveGutter(r: PageRegion, horizontal: Boolean): Int? {
+            val length = if (horizontal) r.height else r.width
+            val span = if (horizontal) r.width else r.height
+            val minChild = maxOf(8, (if (horizontal) height else width) * 5 / 100)
+            if (length < minChild * 2 + 8 || span < 24) return null
+            val origin = if (horizontal) r.top else r.left
+            val step = maxOf(1, span / 300)
+            fun inkRatio(axis: Int): Int {
+                var dark = 0
+                var total = 0
+                var cross = if (horizontal) r.left else r.top
+                val limit = if (horizontal) r.right else r.bottom
+                while (cross < limit) {
+                    val index = if (horizontal) axis * width + cross else cross * width + axis
+                    if ((gray[index].toInt() and 255) < 235) dark++
+                    total++
+                    cross += step
+                }
+                return if (total == 0) 100 else dark * 100 / total
+            }
+            val window = maxOf(2, length / 160)
+            val flank = maxOf(window * 3, length / 18)
+            var bestAxis: Int? = null
+            var bestScore = 0
+            for (axis in origin + minChild + flank until origin + length - minChild - flank step window) {
+                var corridor = 0
+                for (offset in -window..window) corridor += inkRatio(axis + offset)
+                corridor /= (window * 2 + 1)
+                if (corridor > 9) continue
+                val before = (1..3).sumOf { inkRatio(axis - flank * it / 3) } / 3
+                val after = (1..3).sumOf { inkRatio(axis + flank * it / 3) } / 3
+                if (before < 14 || after < 14) continue
+                val score = minOf(before, after) - corridor
+                if (score > bestScore && score >= 12) {
+                    bestScore = score
+                    bestAxis = axis
+                }
+            }
+            return bestAxis
         }
 
         fun hasContent(r: PageRegion): Boolean {
