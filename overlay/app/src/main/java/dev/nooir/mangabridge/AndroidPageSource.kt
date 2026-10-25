@@ -68,6 +68,25 @@ class AndroidPageSource(private val context: Context) {
         }
     }
 
+    /**
+     * Preview the first source image using exactly the export rendering pipeline.
+     * Materialize only the requested frames, never the whole chapter.
+     * Call from a background dispatcher; decoding and quantization are blocking.
+     *
+     * The caller owns source selection (downloaded chapter or online cache).
+     * A CBZ source uses its first archive image in natural reading order.
+     */
+    fun previewFirstPage(
+        sourceUri: Uri, width: Int, height: Int, depth: Int,
+        options: MangaConversionOptions = MangaConversionOptions(),
+        fixedFramebuffer: Boolean = true,
+        maxFrames: Int = 24,
+    ): List<QuantizedPage> {
+        require(maxFrames in 1..64) { "Preview frame limit must be 1..64" }
+        return pages(listOf(sourceUri), width, height, depth, options, fixedFramebuffer)
+            .take(maxFrames).toList()
+    }
+
     private fun optionsForFile(filename: String, options: MangaConversionOptions): MangaConversionOptions {
         // A separate named series cover must never be mistaken for a panel grid.
         val basename = filename.substringAfterLast('/').substringBeforeLast('.').lowercase()
@@ -84,8 +103,7 @@ class AndroidPageSource(private val context: Context) {
      */
     private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<PageRegion>? {
         if (options.panelMode != "PANEL_BY_PANEL") return null
-        if (src.height.toLong() > src.width.toLong() * 3L ||
-            src.width.toLong() * 100L > src.height.toLong() * 135L) return null
+        if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
         val w = (src.width * scale).toInt().coerceAtLeast(1)
         val h = (src.height * scale).toInt().coerceAtLeast(1)
@@ -177,17 +195,24 @@ class AndroidPageSource(private val context: Context) {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
+        // A source-page overview precedes any multi-frame result, including panels,
+        // landscape overlap, spreads and webtoon slices. Never duplicate single frames.
+        // Render the overview in portrait to preserve the full composition.
+        val outputSlices = if (options.showFullPageBeforeSplits && slices.size > 1) {
+            listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + slices
+        } else slices
         // Render one frame at a time, with per-panel orientation only in Auto Fit.
-        for (slice in slices) {
+        for ((sliceIndex, slice) in outputSlices.withIndex()) {
+            val isOverview = options.showFullPageBeforeSplits && slices.size > 1 && sliceIndex == 0
             val initial = slice.region
-            val landscape = if (auto) slice.landscape else manualRotate
+            val landscape = if (isOverview) false else if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
             val frameHeight = if (auto && !fixedFramebuffer && landscape) minOf(width, height) else height
             val needsRotation = fixedFramebuffer && landscape && frameWidth < frameHeight
             val viewWidth = if (needsRotation) frameHeight else frameWidth
             val viewHeight = if (needsRotation) frameWidth else frameHeight
             val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
-            val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
+            val r = if (!isOverview && options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
             val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
             val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)

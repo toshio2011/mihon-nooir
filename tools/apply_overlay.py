@@ -197,7 +197,7 @@ replace_once(more_screen, '''            item {
 # The separate Android platform PdfRenderer supplies bitmap-page fallback.
 replace_once(upstream / "app/build.gradle.kts", "dependencies {\n",
     "dependencies {\n    implementation(\"com.tom-roush:pdfbox-android:2.0.27.0\")\n")
-replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihon"')
+replace_once(upstream / "app/build.gradle.kts", 'applicationId = "app.mihon"', 'applicationId = "dev.nooir.mihontrial"')
 version = (root / "config/version.txt").read_text().strip()
 assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Version must be X.Y.Z"
 major, minor, patch = map(int, version.split("."))

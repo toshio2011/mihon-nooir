@@ -53,6 +53,14 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 )
             }
         }
+        Text("Page splitting and reading order")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(checked = options.showFullPageBeforeSplits, onCheckedChange = {
+                onChange(options.copy(preset = "Custom", showFullPageBeforeSplits = it))
+            })
+            Text("Show full page before splits")
+        }
+        if (options.showFullPageBeforeSplits) Text("The complete original page appears before any multiple crops or slices. Single-screen pages are not duplicated.")
         Text("Layout")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("AUTO" to "Auto", "PAGED" to "Pages", "WEBTOON" to "Webtoon").forEach { (value, title) ->
@@ -79,6 +87,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 "Complex pages stay intact to protect artwork and dialogue. " +
                 "Exports may be much larger and take longer.")
         }
+        Text("Book packaging")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = options.includeCover, onCheckedChange = {
                 onChange(options.copy(preset = "Custom", includeCover = it))
@@ -178,7 +187,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                     onCheckedChange = { onChange(options.copy(preset = "Custom", landscapeClockwise = it)) })
             }
         }
-        if (options.layout != "PAGED" || options.orientation == "LANDSCAPE" || options.orientation == "AUTO_FIT") {
+        if (options.panelMode == "PANEL_BY_PANEL" || options.layout != "PAGED" || options.orientation == "LANDSCAPE" || options.orientation == "AUTO_FIT") {
             Text("Overlapping page cuts · " + options.overlapPercent + "%")
             Slider(
                 value = options.overlapPercent.toFloat(),
@@ -215,6 +224,6 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 onCheckedChange = { onChange(options.copy(preset = "Custom", dither = it)) })
         }
         }
-        Text("Changes apply to the next conversion. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page. Manual crop, preview and guide arrows are optional future tools; Panel by Panel requires no review.")
+        Text("Changes apply to the next conversion. Open the first-page preview in the export dialog to inspect rendered crops. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page.")
     }
 }
