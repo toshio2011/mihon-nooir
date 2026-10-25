@@ -30,6 +30,12 @@ fun main() {
     check(rtl.first().right == wide.right && rtl.last().left == wide.left)
     check(ltr.zipWithNext().all { (a, b) -> b.left < a.right && b.left > a.left })
     covered(rtl, wide)
+    // Android export must never create a second crop inside a detected panel.
+    // This applies even to legitimate extreme wide/tall panels.
+    check(PanelViewportPlanner.plan(tall, screenW, screenH, true, 8, preserveWholePanel = true) == listOf(tall))
+    check(PanelViewportPlanner.plan(wide, screenW, screenH, true, 8, preserveWholePanel = true) == listOf(wide))
+    val narrow = PageRegion(10, 20, 40, 700)
+    check(PanelViewportPlanner.plan(narrow, screenW, screenH, false, 8, preserveWholePanel = true) == listOf(narrow))
     val horizontal = PanelViewportPlanner.plan(ordinary, 800, 480, true, 8)
     check(horizontal.isNotEmpty())
     check(runCatching { PanelViewportPlanner.plan(PageRegion(0, 0, 1, 300000), 480, 800, true, 8) }.isFailure) {
