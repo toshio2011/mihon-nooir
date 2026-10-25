@@ -71,21 +71,25 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Switch(
-                checked = options.panelMode == "PANEL_BY_PANEL",
-                onCheckedChange = {
-                    onChange(options.copy(preset = "Custom",
-                        panelMode = if (it) "PANEL_BY_PANEL" else "OFF",
-                        orientation = if (!it && options.orientation == "AUTO_FIT") "PORTRAIT" else options.orientation))
-                },
-            )
-            Text("Panel by Panel (automatic)")
+        Text("Reading segmentation")
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("OFF" to "Page", "ROW_BY_ROW" to "Row by Row",
+                "PANEL_BY_PANEL" to "Panel by Panel").forEach { (value, title) ->
+                FilterChip(
+                    selected = options.panelMode == value,
+                    onClick = {
+                        onChange(options.copy(preset = "Custom", panelMode = value,
+                            orientation = if (value == "OFF" && options.orientation == "AUTO_FIT")
+                                "PORTRAIT" else options.orientation))
+                    },
+                    label = { Text(title) },
+                )
+            }
         }
-        if (options.panelMode == "PANEL_BY_PANEL") {
-            Text("One detected panel per screen. No OCR or manual review. " +
-                "Complex pages stay intact to protect artwork and dialogue. " +
-                "Exports may be much larger and take longer.")
+        if (options.panelMode == "ROW_BY_ROW") {
+            Text("Detect horizontal manga rows independently. Keep panels together across each row; uncertain pages remain intact.")
+        } else if (options.panelMode == "PANEL_BY_PANEL") {
+            Text("Detect individual manga panels. Uncertain boundaries preserve the page rather than guess.")
         }
         Text("Book packaging")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -158,7 +162,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
         Text("Page orientation")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             (listOf("PORTRAIT" to "Portrait", "LANDSCAPE" to "Landscape") +
-                (if (options.panelMode == "PANEL_BY_PANEL") listOf("AUTO_FIT" to "Auto Fit") else emptyList())).forEach { (value, title) ->
+                (if (options.panelMode != "OFF") listOf("AUTO_FIT" to "Auto Fit") else emptyList())).forEach { (value, title) ->
                 FilterChip(
                     selected = options.orientation == value,
                     onClick = { onChange(options.copy(preset = "Custom", orientation = value)) },
@@ -166,7 +170,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                 )
             }
         }
-        if (options.orientation == "AUTO_FIT" && options.panelMode == "PANEL_BY_PANEL") {
+        if (options.orientation == "AUTO_FIT" && options.panelMode != "OFF") {
             Text("Auto Fit chooses portrait or landscape for each detected panel to use more screen space, " +
                 "without cutting panel content. Uncertain pages use the safe portrait fallback.")
             if (isXtc) Text("XTC/XTCH stays at the device's native pixel dimensions; " +
@@ -187,7 +191,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
                     onCheckedChange = { onChange(options.copy(preset = "Custom", landscapeClockwise = it)) })
             }
         }
-        if (options.panelMode == "PANEL_BY_PANEL" || options.layout != "PAGED" || options.orientation == "LANDSCAPE" || options.orientation == "AUTO_FIT") {
+        if (options.panelMode != "OFF" || options.layout != "PAGED" || options.orientation == "LANDSCAPE" || options.orientation == "AUTO_FIT") {
             Text("Overlapping page cuts · " + options.overlapPercent + "%")
             Slider(
                 value = options.overlapPercent.toFloat(),
