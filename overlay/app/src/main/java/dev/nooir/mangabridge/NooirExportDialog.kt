@@ -1,6 +1,20 @@
 package dev.nooir.mangabridge
 
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.Bitmap
+import android.graphics.Color
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +45,7 @@ fun NooirExportDialog(
     mangaTitle: String,
     selectedChapterCount: Int,
     onlineSource: Boolean,
+    previewSourceUri: Uri? = null,
     onDismiss: () -> Unit,
     onSave: (ExportFormat, String, Boolean, MangaConversionOptions) -> Unit,
     onSend: (ExportFormat, String, String, String, Boolean, MangaConversionOptions, String) -> Unit,
@@ -47,6 +62,19 @@ fun NooirExportDialog(
     var quickExport by remember { mutableStateOf(false) }
     var outputName by remember(mangaTitle) { mutableStateOf(mangaTitle) }
     var showAdvanced by remember { mutableStateOf(false) }
+    var showPreview by remember { mutableStateOf(false) }
+    var previewIndex by remember { mutableStateOf(0) }
+    var chosenPreviewUri by remember { mutableStateOf<Uri?>(null) }
+    var previewFrameLimit by remember { mutableStateOf(8) }
+    val previewPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            chosenPreviewUri = uri
+            showPreview = true
+            previewIndex = 0
+            previewFrameLimit = 8
+        }
+    }
+    val activePreviewUri = chosenPreviewUri ?: previewSourceUri
     var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
 
     fun saveSettings() {
@@ -85,7 +113,7 @@ fun NooirExportDialog(
                 }
                 Text(
                     if (!onlineSource) "Quick Export requires an online manga source."
-                    else if (quickExport) "Select any number of chapters first, even a whole volume. MangaNooir fetches and converts one chapter at a time, cleaning temporary images after each."
+                    else if (quickExport) "Select any number of chapters first, even a whole volume. MihonNooir fetches and converts one chapter at a time, cleaning temporary images after each."
                     else "Use Mihon's permanent downloads. If no chapters are selected, all downloaded chapters are exported."
                 )
                 if (quickExport) Text("Selected chapters: $selectedChapterCount")
@@ -105,6 +133,78 @@ fun NooirExportDialog(
                     Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
                 }
                 if (showAdvanced) MangaConversionSettings(options, selectedFormat.resolved(device), onChange = { options = it })
+                TextButton(onClick = { previewPicker.launch(arrayOf("image/*", "application/zip", "application/x-cbz", "application/vnd.comicbook+zip")) }) {
+                    Text("Choose manga image or CBZ for preview")
+                }
+                if (activePreviewUri != null) {
+                    TextButton(onClick = { showPreview = !showPreview; previewIndex = 0 }) {
+                        Text(if (showPreview) "Hide first-page preview" else "Preview first page")
+                    }
+                    if (showPreview) {
+                        val actualFormat = selectedFormat.resolved(device)
+                        val depth = if (actualFormat == ExportFormat.XTC) 1 else 2
+                        val fixed = actualFormat == ExportFormat.XTC || actualFormat == ExportFormat.XTCH
+                        val preview by produceState<Result<List<Bitmap>>?>(initialValue = null,
+                            activePreviewUri, device, actualFormat, options, previewFrameLimit) {
+                            value = null
+                            value = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    AndroidPageSource(context).previewFirstPage(
+                                        activePreviewUri, profile.width, profile.height,
+                                        depth, options.copy(epubColor = false), fixed, maxFrames = previewFrameLimit,
+                                    ).map { page ->
+                                        val pixels = IntArray(page.width * page.height) { i ->
+                                            val level = page.levels[i].toInt() and 255
+                                            val lum = if (page.depth == 1) level * 255 else level * 85
+                                            Color.rgb(lum, lum, lum)
+                                        }
+                                        Bitmap.createBitmap(pixels, page.width, page.height, Bitmap.Config.ARGB_8888)
+                                    }
+                                }
+                            }
+                        }
+                        LaunchedEffect(activePreviewUri, device, actualFormat, options) {
+                            previewIndex = 0
+                        }
+                        val frames = preview?.getOrNull()
+                        DisposableEffect(frames) {
+                            onDispose { frames?.forEach { it.recycle() } }
+                        }
+                        when {
+                            preview == null -> Text("Rendering preview…")
+                            preview?.isFailure == true -> Text("Preview failed: " +
+                                (preview?.exceptionOrNull()?.message ?: "Unable to decode first page"))
+                            frames.isNullOrEmpty() -> Text("No readable preview frames.")
+                            else -> {
+                                val current = previewIndex.coerceIn(0, frames.lastIndex)
+                                Image(
+                                    bitmap = frames[current].asImageBitmap(),
+                                    contentDescription = "Converted first page, screen ${current + 1}",
+                                    modifier = Modifier.fillMaxWidth().height(290.dp),
+                                    contentScale = ContentScale.Fit,
+                                )
+                                if (frames.size == previewFrameLimit && previewFrameLimit < 64) {
+                                    TextButton(onClick = { previewFrameLimit = minOf(64, previewFrameLimit + 8) }) {
+                                        Text("Show more preview screens")
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    TextButton(enabled = current > 0, onClick = { previewIndex = current - 1 }) {
+                                        Text("Previous")
+                                    }
+                                    Text("Screen ${current + 1} of ${frames.size}" +
+                                        if (frames.size == previewFrameLimit) " (first $previewFrameLimit)" else "")
+                                    TextButton(enabled = current < frames.lastIndex,
+                                        onClick = { previewIndex = current + 1 }) {
+                                        Text("Next")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("Choose a page image or CBZ above to test the conversion preview.")
+                }
                 Text(if (profile.xteinkWifi) "XTEink Wi-Fi transfer (compatible firmware only)"
                     else "Direct XTEink Wi-Fi sending is unavailable for this reader. Save the file and transfer it with the reader’s supported method.")
                 if (profile.xteinkWifi) OutlinedTextField(
@@ -127,7 +227,7 @@ fun NooirExportDialog(
                     singleLine = true,
                     supportingText = { Text("Change this name if the book already exists on the reader. The format extension is added automatically.") },
                 )
-                Text("MangaNooir checks the destination filename before converting. If it exists, this book fails safely and the next queued book continues.")
+                Text("MihonNooir checks the destination filename before converting. If it exists, this book fails safely and the next queued book continues.")
             }
         },
         confirmButton = {
