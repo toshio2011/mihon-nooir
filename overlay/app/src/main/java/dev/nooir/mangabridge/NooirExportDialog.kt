@@ -65,13 +65,14 @@ fun NooirExportDialog(
     var showPreview by remember { mutableStateOf(false) }
     var previewIndex by remember { mutableStateOf(0) }
     var chosenPreviewUri by remember { mutableStateOf<Uri?>(null) }
-    var previewFrameLimit by remember { mutableStateOf(8) }
+    var previewFrameLimit by remember { mutableStateOf(24) }
+    var previewRefresh by remember { mutableStateOf(0) }
     val previewPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             chosenPreviewUri = uri
             showPreview = true
             previewIndex = 0
-            previewFrameLimit = 8
+            previewFrameLimit = 24
         }
     }
     val activePreviewUri = chosenPreviewUri ?: previewSourceUri
@@ -132,7 +133,10 @@ fun NooirExportDialog(
                 TextButton(onClick = { showAdvanced = !showAdvanced }) {
                     Text(if (showAdvanced) "Hide advanced conversion" else "More conversion settings")
                 }
-                if (showAdvanced) MangaConversionSettings(options, selectedFormat.resolved(device), onChange = { options = it })
+                if (showAdvanced) MangaConversionSettings(options, selectedFormat.resolved(device), onChange = { updated ->
+                    options = updated
+                    previewIndex = 0
+                })
                 TextButton(onClick = { previewPicker.launch(arrayOf("image/*", "application/zip", "application/x-cbz", "application/vnd.comicbook+zip")) }) {
                     Text("Choose manga image or CBZ for preview")
                 }
@@ -141,11 +145,15 @@ fun NooirExportDialog(
                         Text(if (showPreview) "Hide first-page preview" else "Preview first page")
                     }
                     if (showPreview) {
+                        Text("Live preview: changing conversion settings automatically renders the updated result.")
+                        TextButton(onClick = { previewRefresh++; previewIndex = 0 }) {
+                            Text("Refresh preview")
+                        }
                         val actualFormat = selectedFormat.resolved(device)
                         val depth = if (actualFormat == ExportFormat.XTC) 1 else 2
                         val fixed = actualFormat == ExportFormat.XTC || actualFormat == ExportFormat.XTCH
                         val preview by produceState<Result<List<Bitmap>>?>(initialValue = null,
-                            activePreviewUri, device, actualFormat, options, previewFrameLimit) {
+                            activePreviewUri, device, actualFormat, options, previewFrameLimit, previewRefresh) {
                             value = null
                             value = withContext(Dispatchers.IO) {
                                 runCatching {
@@ -163,7 +171,7 @@ fun NooirExportDialog(
                                 }
                             }
                         }
-                        LaunchedEffect(activePreviewUri, device, actualFormat, options) {
+                        LaunchedEffect(activePreviewUri, device, actualFormat, options, previewRefresh) {
                             previewIndex = 0
                         }
                         val frames = preview?.getOrNull()
