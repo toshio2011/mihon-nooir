@@ -157,8 +157,8 @@ object PanelDetectionCore {
             val split = cleanHorizontal?.let { true to it }
                 ?: cleanVertical?.let { false to it }
                 ?: when {
-                    adaptiveHorizontal == null -> adaptiveVertical?.let { false to it.first }
-                    adaptiveVertical == null -> adaptiveHorizontal.let { true to it.first }
+                    adaptiveHorizontal == null -> adaptiveVertical?.let { false to it.first }\n                        ?: partialVerticalGutter(region)?.let { false to it }
+                    adaptiveVertical == null -> partialVerticalGutter(region)?.let { false to it }\n                        ?: adaptiveHorizontal.let { true to it.first }
                     adaptiveVertical.second > adaptiveHorizontal.second -> false to adaptiveVertical.first
                     else -> true to adaptiveHorizontal.first
                 }
@@ -178,6 +178,57 @@ object PanelDetectionCore {
             val a = partition(first, depth + 1) ?: return null
             val b = partition(second, depth + 1) ?: return null
             return PanelReadingOrder.Node.Split(isHorizontal, a, b)
+        }
+
+        /**
+         * Detect narrow vertical panel gutters whose upper/lower ends are
+         * interrupted by panel borders or page decoration. This is only used
+         * after the full-span detectors fail, and never in row-only mode.
+         * Requiring a bright central corridor plus dark content on both sides
+         * avoids treating blank page margins as columns.
+         */
+        private fun partialVerticalGutter(r: PageRegion): Int? {
+            if (r.width < 72 || r.height < 48) return null
+            val margin = maxOf(12, r.width * 12 / 100)
+            val top = r.top + r.height / 8
+            val bottom = r.bottom - r.height / 8
+            if (bottom <= top) return null
+            val band = maxOf(2, r.width / 200)
+            fun darkness(x: Int): Int {
+                var dark = 0
+                var count = 0
+                for (y in top until bottom step 2) {
+                    if ((gray[y * width + x].toInt() and 255) < 235) dark++
+                    count++
+                }
+                return if (count == 0) 100 else dark * 100 / count
+            }
+            var best: Int? = null
+            var scoreBest = 0
+            for (x in r.left + margin until r.right - margin) {
+                var corridor = 0
+                for (dx in -band..band) corridor += darkness(x + dx)
+                corridor /= (band * 2 + 1)
+                if (corridor > 5) continue
+                val reach = maxOf(8, r.width / 8)
+                if (x - reach <= r.left || x + reach >= r.right) continue
+                val leftInk = maxOf(darkness(x - reach), darkness(x - reach / 2))
+                val rightInk = maxOf(darkness(x + reach), darkness(x + reach / 2))
+                if (leftInk < 18 || rightInk < 18) continue
+                // A real gutter should remain mostly empty over the entire
+                // tier. Reject cuts crossing substantial artwork at its ends.
+                var fullInk = 0
+                for (y in r.top until r.bottom) {
+                    if ((gray[y * width + x].toInt() and 255) < 220) fullInk++
+                }
+                if (fullInk * 100 > r.height * 10) continue
+                val score = minOf(leftInk, rightInk) - corridor
+                if (score > scoreBest) {
+                    best = x
+                    scoreBest = score
+                }
+            }
+            return best
         }
 
         private fun bestGutter(r: PageRegion, horizontal: Boolean): Int? {
