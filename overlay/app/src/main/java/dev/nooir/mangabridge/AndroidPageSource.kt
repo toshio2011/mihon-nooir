@@ -121,8 +121,19 @@ class AndroidPageSource(private val context: Context) {
                 ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
             }
             val plan = PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
-            return if (plan.usedFullPageFallback) null
-                else PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+            if (plan.usedFullPageFallback) return null
+            val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+            // Reject suspiciously thin detected strips. Such rectangles are often
+            // fragments of real panels and make dialogue unreadable when fitted.
+            // Preserve the complete source page rather than exporting fake panels.
+            val portraitWidth = 480
+            val portraitHeight = 800
+            val suspicious = regions.any { region ->
+                val portrait = PanelAutoFit.occupiedFraction(region, portraitWidth, portraitHeight)
+                val landscape = PanelAutoFit.occupiedFraction(region, portraitHeight, portraitWidth)
+                maxOf(portrait, landscape) < 0.30
+            }
+            return if (suspicious) listOf(PageRegion(0, 0, src.width, src.height)) else regions
         } finally {
             if (thumb !== src) thumb.recycle()
         }
