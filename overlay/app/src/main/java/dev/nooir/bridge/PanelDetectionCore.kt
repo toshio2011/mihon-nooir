@@ -139,7 +139,7 @@ object PanelDetectionCore {
                     }
                 }
                 // Permit a few non-white pixels in real manga gutters without guessing cuts.
-                val clear = bright.toLong() * 100 >= span.toLong() * 97
+                val clear = bright.toLong() * 100 >= span.toLong() * 99
                 if (clear && runStart < 0) runStart = axis
                 if ((!clear || axis == origin + length - margin - 1) && runStart >= 0) {
                     val end = if (clear) axis + 1 else axis
@@ -152,7 +152,17 @@ object PanelDetectionCore {
             }
             if (bestStart < 0) return null
             val midpoint = (bestStart + bestEnd) / 2
-            return midpoint.takeIf { it - origin >= minChild && origin + length - it >= minChild }
+            // A balloon tail or out-of-border dialogue may cross an otherwise white gutter.
+            // Never place a split through a dark stroke at its center.
+            val safeCenter = ((midpoint - 1)..(midpoint + 1)).all { axis ->
+                if (axis < origin || axis >= origin + length) false
+                else if (horizontal) (r.left until r.right).all { x ->
+                    (gray[axis * width + x].toInt() and 255) >= WHITE
+                } else (r.top until r.bottom).all { y ->
+                    (gray[y * width + axis].toInt() and 255) >= WHITE
+                }
+            }
+            return midpoint.takeIf { safeCenter && it - origin >= minChild && origin + length - it >= minChild }
         }
 
         fun hasContent(r: PageRegion): Boolean {
