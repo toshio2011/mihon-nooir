@@ -46,13 +46,14 @@ object PanelAutoFit {
         portraitHeight: Int,
         rightToLeft: Boolean,
         overlapPercent: Int,
+        preserveWholePanels: Boolean = false,
     ): List<PanelFitSlice> {
         require(panels.size <= 32) { "Too many detected panels" }
         return panels.flatMap { panel ->
             val landscape = landscapeFor(panel, portraitWidth, portraitHeight)
             val vw = if (landscape) portraitHeight else portraitWidth
             val vh = if (landscape) portraitWidth else portraitHeight
-            PanelViewportPlanner.plan(panel, vw, vh, rightToLeft, overlapPercent)
+            PanelViewportPlanner.plan(panel, vw, vh, rightToLeft, overlapPercent, preserveWholePanels)
                 .map { PanelFitSlice(it, landscape) }
         }
     }
