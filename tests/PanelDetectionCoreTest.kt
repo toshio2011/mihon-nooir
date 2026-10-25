@@ -78,6 +78,18 @@ fun main() {
     check(protected.usedFullPageFallback || protected.regions.none { region ->
         region.left > 225 && region.left < 255 || region.right > 225 && region.right < 255
     }) { "Do not split through speech balloon strokes in the gutter" }
+    // Scanned gutters contain sparse compression/antialias noise. A detector
+    // that demands three perfectly white lines loses real panel boundaries.
+    val speckled = wideStrip.copyOf()
+    for (x in 225 until 255) {
+        // Every gutter column has a different isolated dark speck, so there
+        // is no mathematically all-white line anywhere in the gap.
+        speckled[(20 + (x * 7) % 190) * wideW + x] = 180.toByte()
+    }
+    val speckledPlan = PanelDetectionCore.detect(wideW, wideH, speckled, true)
+    check(!speckledPlan.usedFullPageFallback && speckledPlan.regions.size == 2) {
+        "Isolated gutter noise must not collapse two valid panels into a full page: ${speckledPlan.reason}"
+    }
     // Narrow, ink-filled panels are real panels, not errors merely because
     // their shape occupies little of a portrait screen.
     val narrowW = 300
