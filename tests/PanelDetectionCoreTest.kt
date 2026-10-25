@@ -34,6 +34,15 @@ fun main() {
     }
     check(rowPlan.regions.all { it.left == 0 && it.right == width })
     check(rowPlan.regions.zipWithNext().all { (a, b) -> a.bottom == b.top })
+    // Row mode must tolerate isolated scan speckles in a thin white separator,
+    // without accidentally splitting the two columns into separate panels.
+    val noisyRows = image.copyOf()
+    for (x in 0 until width step 13) noisyRows[138 * width + x] = 185.toByte()
+    val noisyRowPlan = PanelDetectionCore.detectRows(width, height, noisyRows)
+    check(!noisyRowPlan.usedFullPageFallback && noisyRowPlan.regions.size == 3) {
+        "Thin noisy white strips should still separate three horizontal tiers: ${noisyRowPlan.reason}"
+    }
+    check(noisyRowPlan.regions.all { it.left == 0 && it.right == width })
     val ltr = PanelDetectionCore.detect(width, height, image, false)
     check(ltr.regions.map { centerGray(image, width, it) } == listOf(35, 48, 70, 83, 105, 118))
     val scaled = PanelDetectionCore.sourceRegions(rtl, width, height, 480, 800, 1)
