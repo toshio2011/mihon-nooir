@@ -120,7 +120,8 @@ class AndroidPageSource(private val context: Context) {
                 // Transparent gutters on PNGs are white, not black.
                 ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
             }
-            val plan = if (options.panelMode == "ROW_BY_ROW") PanelDetectionCore.detectRows(w, h, gray)\n                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
+            val plan = if (options.panelMode == "ROW_BY_ROW") PanelDetectionCore.detectRows(w, h, gray)
+                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
             if (plan.usedFullPageFallback) return null
             val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
             // A genuine panel can be very wide or tall. Screen occupancy is
