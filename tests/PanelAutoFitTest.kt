@@ -19,6 +19,12 @@ fun main() {
     check(planned.first().region == portrait && !planned.first().landscape)
     check(planned.last().region == wide && planned.last().landscape)
     check(planned.all { it.region.width > 0 && it.region.height > 0 })
+    // AUTO_FIT may rotate a panel, but must not slice its contents when
+    // Android requests whole-panel preservation.
+    val elongated = listOf(PageRegion(0, 0, 3000, 200), PageRegion(0, 0, 180, 3000))
+    val intact = PanelAutoFit.plan(elongated, 480, 800, true, 8, preserveWholePanels = true)
+    check(intact.map { it.region } == elongated)
+    check(intact.first().landscape && !intact.last().landscape)
     check(runCatching { PanelAutoFit.plan(List(33) { portrait }, 480, 800, true, 8) }.isFailure)
     check(runCatching { PanelAutoFit.landscapeFor(PageRegion(0, 0, 0, 3), 480, 800) }.isFailure)
     println("Panel Auto Fit passed: per-panel portrait/landscape selection, no-crop bounds, conservative tie and limits")
