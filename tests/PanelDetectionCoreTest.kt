@@ -113,6 +113,20 @@ fun main() {
     check(narrowPlan.regions.any { it.width < narrowW / 5 }) {
         "Detector must retain a narrow panel instead of rejecting its aspect ratio"
     }
+    // Three narrow columns nested inside a horizontal tier must all split.
+    val nestedW = 360
+    val nestedH = 420
+    val nested = ByteArray(nestedW * nestedH) { 255.toByte() }
+    for (y in 12 until 192) for (x in 10 until nestedW - 10)
+        nested[y * nestedW + x] = 85.toByte()
+    for (pair in listOf(10 to 112, 130 to 232, 250 to 350)) {
+        for (y in 225 until 408) for (x in pair.first until pair.second)
+            nested[y * nestedW + x] = 95.toByte()
+    }
+    val nestedPlan = PanelDetectionCore.detect(nestedW, nestedH, nested, true)
+    check(!nestedPlan.usedFullPageFallback && nestedPlan.regions.size == 4) {
+        "Nested three-column tier must produce four panels: ${nestedPlan.reason}, ${nestedPlan.regions}"
+    }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
