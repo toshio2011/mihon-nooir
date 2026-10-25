@@ -14,6 +14,11 @@ import dev.nooir.bridge.GrayscaleConverter
 import dev.nooir.bridge.QuantizedPage
 import dev.nooir.bridge.PageSlicePlanner
 import dev.nooir.bridge.NaturalPageOrder
+import dev.nooir.bridge.PanelDetectionCore
+import dev.nooir.bridge.PanelViewportPlanner
+import dev.nooir.bridge.PanelAutoFit
+import dev.nooir.bridge.PanelFitSlice
+import dev.nooir.bridge.PageRegion
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -33,6 +38,7 @@ class AndroidPageSource(private val context: Context) {
 
     fun pages(inputUris: List<Uri>, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions = MangaConversionOptions(),
+        fixedFramebuffer: Boolean = true,
     ): Sequence<QuantizedPage> = sequence {
         for (uri in inputUris.sortedWith { a, b -> NaturalPageOrder.compare(name(a), name(b)) }) {
             if (name(uri).endsWith(".cbz", true) || name(uri).endsWith(".zip", true)) {
@@ -49,16 +55,76 @@ class AndroidPageSource(private val context: Context) {
                         for (entry in entries) {
                             // Two independent streams: first checks dimensions, second decodes.
                             val image = decode({ zip.getInputStream(entry) })
-                            try { for (page in render(image, width, height, depth, options)) yield(page) }
+                            try { for (page in render(image, width, height, depth, optionsForFile(entry.name, options), fixedFramebuffer)) yield(page) }
                             finally { image.recycle() }
                         }
                     }
                 } finally { temp.delete() }
             } else {
                 val image = decode({ resolver.openInputStream(uri) ?: error("Cannot open $uri") })
-                try { for (page in render(image, width, height, depth, options)) yield(page) }
+                try { for (page in render(image, width, height, depth, optionsForFile(name(uri), options), fixedFramebuffer)) yield(page) }
                 finally { image.recycle() }
             }
+        }
+    }
+
+    /**
+     * Preview the first source image using exactly the export rendering pipeline.
+     * Materialize only the requested frames, never the whole chapter.
+     * Call from a background dispatcher; decoding and quantization are blocking.
+     *
+     * The caller owns source selection (downloaded chapter or online cache).
+     * A CBZ source uses its first archive image in natural reading order.
+     */
+    fun previewFirstPage(
+        sourceUri: Uri, width: Int, height: Int, depth: Int,
+        options: MangaConversionOptions = MangaConversionOptions(),
+        fixedFramebuffer: Boolean = true,
+        maxFrames: Int = 24,
+    ): List<QuantizedPage> {
+        require(maxFrames in 1..64) { "Preview frame limit must be 1..64" }
+        return pages(listOf(sourceUri), width, height, depth, options, fixedFramebuffer)
+            .take(maxFrames).toList()
+    }
+
+    private fun optionsForFile(filename: String, options: MangaConversionOptions): MangaConversionOptions {
+        // A separate named series cover must never be mistaken for a panel grid.
+        val basename = filename.substringAfterLast('/').substringBeforeLast('.').lowercase()
+        return if (basename in setOf("cover", "frontcover", "folder")) {
+            options.copy(panelMode = "OFF", layout = "PAGED", splitSpreads = false,
+                cropWhiteMargins = false, orientation = "PORTRAIT", overlapPercent = 0)
+        } else options
+    }
+
+    /**
+     * OCR-free and phone-only: analyze at most 600x900 pixels per page. The
+     * original decoded Bitmap is retained for rendering, never sent anywhere.
+     * An uncertain page uses exactly the previous page slicing behavior.
+     */
+    private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<PageRegion>? {
+        if (options.panelMode != "PANEL_BY_PANEL") return null
+        if (src.height.toLong() > src.width.toLong() * 3L) return null
+        val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
+        val w = (src.width * scale).toInt().coerceAtLeast(1)
+        val h = (src.height * scale).toInt().coerceAtLeast(1)
+        val thumb = if (w == src.width && h == src.height) src
+            else Bitmap.createScaledBitmap(src, w, h, true)
+        try {
+            val argb = IntArray(w * h)
+            thumb.getPixels(argb, 0, w, 0, 0, w, h)
+            val gray = ByteArray(argb.size) { i ->
+                val color = argb[i]
+                val alpha = Color.alpha(color)
+                val lum = (Color.red(color) * 299 + Color.green(color) * 587 +
+                    Color.blue(color) * 114) / 1000
+                // Transparent gutters on PNGs are white, not black.
+                ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
+            }
+            val plan = PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
+            return if (plan.usedFullPageFallback) null
+                else PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+        } finally {
+            if (thumb !== src) thumb.recycle()
         }
     }
 
@@ -107,27 +173,50 @@ class AndroidPageSource(private val context: Context) {
 
     private fun render(
         src: Bitmap, width: Int, height: Int, depth: Int,
-        options: MangaConversionOptions,
-    ): List<QuantizedPage> {
-        // XTC/XTCH always use the panel's portrait framebuffer. Landscape
-        // content is composed in a virtual sideways screen then turned into
-        // the native portrait output. EPUB/CBZ can use true landscape images.
-        val needsRotation = options.orientation == "LANDSCAPE" && width < height
-        val viewWidth = if (needsRotation) height else width
-        val viewHeight = if (needsRotation) width else height
-        val regions = PageSlicePlanner.plan(
-            src.width, src.height, viewWidth, viewHeight,
-            options.layout, options.splitSpreads, options.rightToLeft,
-            options.overlapPercent, options.orientation,
-        )
-        val result = ArrayList<QuantizedPage>(regions.size)
-        for (initial in regions) {
+        options: MangaConversionOptions, fixedFramebuffer: Boolean,
+    ): Sequence<QuantizedPage> = sequence {
+        val auto = options.panelMode == "PANEL_BY_PANEL" && options.orientation == "AUTO_FIT"
+        val manualRotate = options.orientation == "LANDSCAPE" && width < height
+        val manualViewWidth = if (manualRotate) height else width
+        val manualViewHeight = if (manualRotate) width else height
+        val panels = detectPanels(src, options)
+        val slices: List<PanelFitSlice> = when {
+            panels != null && auto -> PanelAutoFit.plan(
+                panels, minOf(width, height), maxOf(width, height),
+                options.rightToLeft, options.overlapPercent,
+            )
+            panels != null -> panels.flatMap { panel ->
+                PanelViewportPlanner.plan(panel, manualViewWidth, manualViewHeight,
+                    options.rightToLeft, options.overlapPercent)
+            }.map { PanelFitSlice(it, manualRotate) }
+            else -> PageSlicePlanner.plan(
+                src.width, src.height, manualViewWidth, manualViewHeight,
+                options.layout, options.splitSpreads, options.rightToLeft,
+                options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
+            ).map { PanelFitSlice(it, manualRotate) }
+        }
+        // A source-page overview precedes any multi-frame result, including panels,
+        // landscape overlap, spreads and webtoon slices. Never duplicate single frames.
+        // Render the overview in portrait to preserve the full composition.
+        val outputSlices = if (options.showFullPageBeforeSplits && slices.size > 1) {
+            listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + slices
+        } else slices
+        // Render one frame at a time, with per-panel orientation only in Auto Fit.
+        for ((sliceIndex, slice) in outputSlices.withIndex()) {
+            val isOverview = options.showFullPageBeforeSplits && slices.size > 1 && sliceIndex == 0
+            val initial = slice.region
+            val landscape = if (isOverview) false else if (auto) slice.landscape else manualRotate
+            val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
+            val frameHeight = if (auto && !fixedFramebuffer && landscape) minOf(width, height) else height
+            val needsRotation = fixedFramebuffer && landscape && frameWidth < frameHeight
+            val viewWidth = if (needsRotation) frameHeight else frameWidth
+            val viewHeight = if (needsRotation) frameWidth else frameHeight
             val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
-            val r = if (options.cropWhiteMargins) trimWhite(src, sourceRegion) else sourceRegion
+            val r = if (!isOverview && options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
             val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
             val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)
-            val rendered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val rendered = Bitmap.createBitmap(frameWidth, frameHeight, Bitmap.Config.ARGB_8888)
             try {
                 val canvas = Canvas(rendered)
                 canvas.drawColor(Color.WHITE)
@@ -136,10 +225,10 @@ class AndroidPageSource(private val context: Context) {
                     // into the native HxW portrait XTC/XTCH framebuffer.
                     canvas.save()
                     if (options.landscapeClockwise) {
-                        canvas.translate(width.toFloat(), 0f)
+                        canvas.translate(frameWidth.toFloat(), 0f)
                         canvas.rotate(90f)
                     } else {
-                        canvas.translate(0f, height.toFloat())
+                        canvas.translate(0f, frameHeight.toFloat())
                         canvas.rotate(-90f)
                     }
                 }
@@ -147,8 +236,8 @@ class AndroidPageSource(private val context: Context) {
                 val t = (viewHeight - dh) / 2
                 canvas.drawBitmap(src, r, Rect(l, t, l + dw, t + dh), Paint(Paint.FILTER_BITMAP_FLAG))
                 if (needsRotation) canvas.restore()
-                val rgb = IntArray(width * height)
-                rendered.getPixels(rgb, 0, width, 0, 0, width, height)
+                val rgb = IntArray(frameWidth * frameHeight)
+                rendered.getPixels(rgb, 0, frameWidth, 0, 0, frameWidth, frameHeight)
                 val gray = ByteArray(rgb.size)
                 val boost = (options.contrast.coerceIn(0, 100) / 50f).coerceIn(0.15f, 2f)
                 for (i in rgb.indices) {
@@ -160,18 +249,17 @@ class AndroidPageSource(private val context: Context) {
                     check(rendered.compress(Bitmap.CompressFormat.PNG, 100, buffer)) { "Color PNG encoding failed" }
                     buffer.toByteArray()
                 } else null
-                val quantized = if (options.dither) GrayscaleConverter.dither(width, height, gray, depth)
+                val quantized = if (options.dither) GrayscaleConverter.dither(frameWidth, frameHeight, gray, depth)
                 else {
                     val highest = if (depth == 1) 1 else 3
                     val levels = ByteArray(gray.size) { i ->
                         (((gray[i].toInt() and 255) * highest + 127) / 255).toByte()
                     }
-                    QuantizedPage(width, height, levels, depth)
+                    QuantizedPage(frameWidth, frameHeight, levels, depth)
                 }
-                result.add(if (colorPng == null) quantized else quantized.copy(colorPng = colorPng))
+                yield(if (colorPng == null) quantized else quantized.copy(colorPng = colorPng))
             } finally { rendered.recycle() }
         }
-        return result
     }
 
 }

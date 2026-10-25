@@ -40,7 +40,7 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsC
 java -jar "$tmp/options-parity.jar"
 
 kotlinc \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt tests/DesktopCliTest.kt \
   -include-runtime -d "$tmp/desktop-cli-tests.jar"
@@ -49,7 +49,7 @@ java -Djava.awt.headless=true -cp "$tmp/desktop-cli-tests.jar" DesktopCliTestKt
 # D0: exercise a mock Suwayomi v2.4.2366 GraphQL/CBZ server and export its
 # downloaded chapter images with the exact Android-compatible writers.
 kotlinc \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt \
   desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiToNooir.kt} \
@@ -65,7 +65,24 @@ kotlinc \
 java --add-modules jdk.httpserver -cp "$tmp/suwayomi-browse-tests.jar" SuwayomiBrowseTestKt
 
 # Panel export Phase A: pure Kotlin image geometry and safe reading-order fallback.
-# This is not yet wired into Android export; legacy behavior remains unchanged.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
   tests/PanelDetectionCoreTest.kt -include-runtime -d "$tmp/panel-phase-a.jar"
 java -jar "$tmp/panel-phase-a.jar"
+
+# Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
+  tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
+java -jar "$tmp/panel-phase-b.jar"
+
+# Panel export integration: actual generated files for XTC, XTCH, EPUB2/3 and CBZ.
+kotlinc \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  desktop/cli/NooirDesktopCli.kt tests/DesktopPanelExportTest.kt \
+  -include-runtime -d "$tmp/desktop-panel-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/desktop-panel-tests.jar" DesktopPanelExportTestKt
+
+# Panel Phase C: deterministic per-panel Auto Fit without OCR or cropping.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelAutoFit.kt} \
+  tests/PanelAutoFitTest.kt -include-runtime -d "$tmp/panel-auto-fit.jar"
+java -jar "$tmp/panel-auto-fit.jar"

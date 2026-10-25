@@ -38,6 +38,8 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_*.py' -v
           python3 tools/apply_overlay.py upstream
+      - name: Remove Android-wide installation capabilities
+        run: python3 tools/secure_android_installers.py upstream
       - name: Build stable-signed APK
         working-directory: upstream
         env:

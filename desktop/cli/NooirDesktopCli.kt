@@ -69,9 +69,10 @@ object NooirDesktopCli {
                             val coverOpts = options.copy(
                                 layout = "PAGED", cropWhiteMargins = false,
                                 splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
+                                panelMode = "OFF",
                             )
                             val opts = if (entry.cover) coverOpts else options
-                            for (frame in render(img, w, h, depth, opts)) {
+                            for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
                                 yield(Rendered(entry.chapter, entry.cover, frame))
                             }
                         }
@@ -192,31 +193,82 @@ object NooirDesktopCli {
         ).takeIf { it.width > 0 && it.height > 0 } ?: region
     }
 
+    /** Same bounded OCR-free panel detector as Android, with a Java2D thumbnail adapter. */
+    private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<PageRegion>? {
+        if (options.panelMode != "PANEL_BY_PANEL") return null
+        if (src.height.toLong() > src.width.toLong() * 3L ||
+            src.width.toLong() * 100L > src.height.toLong() * 135L) return null
+        val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
+        val w = (src.width * scale).toInt().coerceAtLeast(1)
+        val h = (src.height * scale).toInt().coerceAtLeast(1)
+        val thumbnail = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        val graphics = thumbnail.createGraphics()
+        try {
+            graphics.color = Color.WHITE
+            graphics.fillRect(0, 0, w, h)
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            graphics.drawImage(src, 0, 0, w, h, null)
+        } finally {
+            graphics.dispose()
+        }
+        val rgb = thumbnail.getRGB(0, 0, w, h, null, 0, w)
+        val gray = ByteArray(rgb.size) { i ->
+            val c = rgb[i]
+            ((((c ushr 16) and 255) * 299 + ((c ushr 8) and 255) * 587 +
+                (c and 255) * 114) / 1000).toByte()
+        }
+        val plan = PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
+        return if (plan.usedFullPageFallback) null
+            else PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+    }
+
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,
-        options: MangaConversionOptions): Sequence<QuantizedPage> = sequence {
-        val rotate = options.orientation == "LANDSCAPE" && width < height
-        val vw = if (rotate) height else width
-        val vh = if (rotate) width else height
-        val regions = PageSlicePlanner.plan(src.width, src.height, vw, vh,
-            options.layout, options.splitSpreads, options.rightToLeft,
-            options.overlapPercent, options.orientation)
-        for (region in regions) {
-            val r = if (options.cropWhiteMargins) trimWhite(src, region) else region
+        options: MangaConversionOptions, fixedFramebuffer: Boolean): Sequence<QuantizedPage> = sequence {
+        val auto = options.panelMode == "PANEL_BY_PANEL" && options.orientation == "AUTO_FIT"
+        val manualRotate = options.orientation == "LANDSCAPE" && width < height
+        val manualViewWidth = if (manualRotate) height else width
+        val manualViewHeight = if (manualRotate) width else height
+        val panels = detectPanels(src, options)
+        val slices: List<PanelFitSlice> = when {
+            panels != null && auto -> PanelAutoFit.plan(
+                panels, minOf(width, height), maxOf(width, height),
+                options.rightToLeft, options.overlapPercent,
+            )
+            panels != null -> panels.flatMap { panel ->
+                PanelViewportPlanner.plan(panel, manualViewWidth, manualViewHeight,
+                    options.rightToLeft, options.overlapPercent)
+            }.map { PanelFitSlice(it, manualRotate) }
+            else -> PageSlicePlanner.plan(
+                src.width, src.height, manualViewWidth, manualViewHeight,
+                options.layout, options.splitSpreads, options.rightToLeft,
+                options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
+            ).map { PanelFitSlice(it, manualRotate) }
+        }
+        for (slice in slices) {
+            val region = slice.region
+            val landscape = if (auto) slice.landscape else manualRotate
+            val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
+            val frameHeight = if (auto && !fixedFramebuffer && landscape) minOf(width, height) else height
+            val rotate = fixedFramebuffer && landscape && frameWidth < frameHeight
+            val vw = if (rotate) frameHeight else frameWidth
+            val vh = if (rotate) frameWidth else frameHeight
+            // Padded panel crops must never be trimmed again: that can cut balloons.
+            val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, region) else region
             val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)
             val dh = (r.height * scale).toInt().coerceIn(1, vh)
-            val frame = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+            val frame = BufferedImage(frameWidth, frameHeight, BufferedImage.TYPE_INT_RGB)
             val g = frame.createGraphics()
             try {
                 g.color = Color.WHITE
-                g.fillRect(0, 0, width, height)
+                g.fillRect(0, 0, frameWidth, frameHeight)
                 g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
                 if (rotate) {
                     if (options.landscapeClockwise) {
-                        g.translate(width, 0)
+                        g.translate(frameWidth, 0)
                         g.rotate(Math.PI / 2)
                     } else {
-                        g.translate(0, height)
+                        g.translate(0, frameHeight)
                         g.rotate(-Math.PI / 2)
                     }
                 }
@@ -227,17 +279,17 @@ object NooirDesktopCli {
             } finally {
                 g.dispose()
             }
-            val gray = ByteArray(width * height)
+            val gray = ByteArray(frameWidth * frameHeight)
             val boost = (options.contrast.coerceIn(0, 100) / 50f).coerceIn(0.15f, 2f)
-            for (y in 0 until height) for (x in 0 until width) {
+            for (y in 0 until frameHeight) for (x in 0 until frameWidth) {
                 val rgb = frame.getRGB(x, y)
                 val lum = (((rgb ushr 16) and 255) * 299 + ((rgb ushr 8) and 255) * 587 + (rgb and 255) * 114) / 1000
-                gray[y * width + x] = (128f + (lum - 128f) * boost).toInt().coerceIn(0, 255).toByte()
+                gray[y * frameWidth + x] = (128f + (lum - 128f) * boost).toInt().coerceIn(0, 255).toByte()
             }
-            val quantized = if (options.dither) GrayscaleConverter.dither(width, height, gray, depth)
+            val quantized = if (options.dither) GrayscaleConverter.dither(frameWidth, frameHeight, gray, depth)
             else {
                 val max = if (depth == 1) 1 else 3
-                QuantizedPage(width, height, ByteArray(gray.size) { i ->
+                QuantizedPage(frameWidth, frameHeight, ByteArray(gray.size) { i ->
                     (((gray[i].toInt() and 255) * max + 127) / 255).toByte()
                 }, depth)
             }
