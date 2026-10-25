@@ -139,13 +139,16 @@ object PanelDetectionCore {
 
         fun partition(region: PageRegion, depth: Int): PanelReadingOrder.Node? {
             if (invalid || depth > 10) return null
-            val horizontal = bestGutter(region, horizontal = true)
-                ?: adaptiveGutter(region, horizontal = true)
-            val vertical = bestGutter(region, horizontal = false)
-                ?: adaptiveGutter(region, horizontal = false)
-            // Across-page horizontal tiers take priority over vertical columns.
-            // This preserves manga's top-to-bottom, then right-to-left order.
-            val split = horizontal?.let { true to it } ?: vertical?.let { false to it }
+            // Prefer a genuinely clear gutter in either direction before
+            // considering imperfect corridors. Previously an approximate
+            // horizontal split could outrank a clean vertical column boundary,
+            // leaving multi-column manga grouped or in the wrong hierarchy.
+            val cleanHorizontal = bestGutter(region, horizontal = true)
+            val cleanVertical = bestGutter(region, horizontal = false)
+            val split = cleanHorizontal?.let { true to it }
+                ?: cleanVertical?.let { false to it }
+                ?: adaptiveGutter(region, horizontal = true)?.let { true to it }
+                ?: adaptiveGutter(region, horizontal = false)?.let { false to it }
             if (split == null) {
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
