@@ -276,6 +276,23 @@ object PanelDetectionCore {
                 for (offset in -window..window) corridor += inkRatio(axis + offset)
                 corridor /= (window * 2 + 1)
                 if (corridor > 9) continue
+                // A balloon tail crossing the corridor is not a safe panel gutter.
+                // Reject any candidate with a dense dark segment in its central band.
+                val band = maxOf(2, span / 12)
+                var blocked = false
+                for (offset in -window..window) {
+                    var dark = 0
+                    var sampled = 0
+                    val crossStart = if (horizontal) r.left else r.top
+                    for (cross in crossStart until crossStart + span step step) {
+                        val idx = if (horizontal) (axis + offset) * width + cross else cross * width + axis + offset
+                        if ((gray[idx].toInt() and 255) < 180) dark++
+                        sampled++
+                        if (sampled >= band && dark * 100 > sampled * 4) { blocked = true; break }
+                    }
+                    if (blocked) break
+                }
+                if (blocked) continue
                 val before = (1..3).sumOf { inkRatio(axis - flank * it / 3) } / 3
                 val after = (1..3).sumOf { inkRatio(axis + flank * it / 3) } / 3
                 if (before < 14 || after < 14) continue
