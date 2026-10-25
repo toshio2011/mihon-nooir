@@ -157,8 +157,10 @@ object PanelDetectionCore {
             val split = cleanHorizontal?.let { true to it }
                 ?: cleanVertical?.let { false to it }
                 ?: when {
-                    adaptiveHorizontal == null -> adaptiveVertical?.let { false to it.first }\n                        ?: partialVerticalGutter(region)?.let { false to it }
-                    adaptiveVertical == null -> partialVerticalGutter(region)?.let { false to it }\n                        ?: adaptiveHorizontal.let { true to it.first }
+                    adaptiveHorizontal == null -> adaptiveVertical?.let { false to it.first }
+                        ?: partialVerticalGutter(region)?.let { false to it }
+                    adaptiveVertical == null -> partialVerticalGutter(region)?.let { false to it }
+                        ?: adaptiveHorizontal.let { true to it.first }
                     adaptiveVertical.second > adaptiveHorizontal.second -> false to adaptiveVertical.first
                     else -> true to adaptiveHorizontal.first
                 }
@@ -212,7 +214,7 @@ object PanelDetectionCore {
                 if (corridor > 5) continue
                 val reach = maxOf(8, r.width / 8)
                 if (x - reach <= r.left || x + reach >= r.right) continue
-                val leftInk = maxOf(darkness(x - reach), darkness(x - reach / 2))
+                val leftInk = maxOf(darkness(x - reach), darkness(x - maxOf(4, reach / 2)))
                 val rightInk = maxOf(darkness(x + reach), darkness(x + reach / 2))
                 if (leftInk < 18 || rightInk < 18) continue
                 // A real gutter should remain mostly empty over the entire
