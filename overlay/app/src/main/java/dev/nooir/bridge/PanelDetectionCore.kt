@@ -49,6 +49,54 @@ object PanelDetectionCore {
     }
 
     /**
+     * Independent row-by-row mode: only horizontal, full-width white gutters
+     * separate rows. Vertical panel boundaries are intentionally ignored.
+     * Uncertain pages remain whole rather than becoming arbitrary strips.
+     */
+    fun detectRows(width: Int, height: Int, grayscale: ByteArray): PanelPlan {
+        require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS)
+        require(grayscale.size == width * height)
+        val whole = PageRegion(0, 0, width, height)
+        fun fallback(reason: String) = PanelPlan(listOf(whole), true, reason)
+        val minHeight = maxOf(12, height / 12)
+        val minGap = maxOf(3, height / 120)
+        val rows = mutableListOf<PageRegion>()
+        var previous = 0
+        var run = -1
+        for (y in 0..height) {
+            val white = if (y == height) false else {
+                var bright = 0
+                var dark = 0
+                for (x in 0 until width) {
+                    val value = grayscale[y * width + x].toInt() and 255
+                    if (value >= WHITE) bright++
+                    if (value < INK) dark++
+                }
+                bright.toLong() * 100 >= width.toLong() * 98 &&
+                    dark.toLong() * 200 <= width.toLong()
+            }
+            if (white && run < 0) run = y
+            if (!white && run >= 0) {
+                val start = run
+                val end = y
+                run = -1
+                if (end - start >= minGap && start - previous >= minHeight &&
+                    height - (start + end) / 2 >= minHeight) {
+                    val split = (start + end) / 2
+                    rows += PageRegion(0, previous, width, split)
+                    previous = split
+                }
+            }
+        }
+        if (height - previous >= minHeight) rows += PageRegion(0, previous, width, height)
+        else return fallback("last row too short")
+        if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
+        val detector = Detector(width, height, grayscale)
+        if (rows.any { !detector.hasContent(it) }) return fallback("empty row")
+        return PanelPlan(rows, false, "validated horizontal rows")
+    }
+
+    /**
      * Convert bounded-thumbnail rectangles back to source-image coordinates,
      * adding overlapping guard padding. The extra padding protects border art
      * and balloons near a gutter; it never changes the reading order.
