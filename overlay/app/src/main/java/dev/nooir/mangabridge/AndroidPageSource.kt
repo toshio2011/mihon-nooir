@@ -101,7 +101,7 @@ class AndroidPageSource(private val context: Context) {
      * original decoded Bitmap is retained for rendering, never sent anywhere.
      * An uncertain page uses exactly the previous page slicing behavior.
      */
-    private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<PageRegion>? {
+    private fun detectPanels(src: Bitmap, options: MangaConversionOptions, viewportWidth: Int, viewportHeight: Int): List<PageRegion>? {
         if (options.panelMode != "PANEL_BY_PANEL") return null
         if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
@@ -126,8 +126,8 @@ class AndroidPageSource(private val context: Context) {
             // Reject suspiciously thin detected strips. Such rectangles are often
             // fragments of real panels and make dialogue unreadable when fitted.
             // Preserve the complete source page rather than exporting fake panels.
-            val portraitWidth = 480
-            val portraitHeight = 800
+            val portraitWidth = minOf(viewportWidth, viewportHeight)
+            val portraitHeight = maxOf(viewportWidth, viewportHeight)
             val suspicious = regions.any { region ->
                 val portrait = PanelAutoFit.occupiedFraction(region, portraitWidth, portraitHeight)
                 val landscape = PanelAutoFit.occupiedFraction(region, portraitHeight, portraitWidth)
@@ -190,7 +190,7 @@ class AndroidPageSource(private val context: Context) {
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
         val manualViewHeight = if (manualRotate) width else height
-        val panels = detectPanels(src, options)
+        val panels = detectPanels(src, options, width, height)
         val slices: List<PanelFitSlice> = when {
             panels != null && auto -> PanelAutoFit.plan(
                 panels, minOf(width, height), maxOf(width, height),
