@@ -19,10 +19,18 @@ fun main() {
     check(MangaConversionOptions.fromToken(custom.token()) == custom)
     val panel = custom.copy(panelMode = "PANEL_BY_PANEL")
     check(MangaConversionOptions.fromToken(panel.token()) == panel)
-    check(panel.token().split("|").size == 17)
-    check(MangaConversionOptions.fromToken(custom.token().substringBeforeLast("|")).panelMode == "OFF")
-    check(MangaConversionOptions.fromToken(panel.token().substringBeforeLast("|") + "|UNKNOWN").panelMode == "OFF")
+    check(panel.token().split("|").size == 18)
+    val autoFit = panel.copy(orientation = "AUTO_FIT")
+    check(MangaConversionOptions.fromToken(autoFit.token()) == autoFit)
+    check(autoFit.token().split("|").size == 18) { "Auto Fit must not break old job token length" }
+    check(MangaConversionOptions.fromToken(custom.token()).orientation == "LANDSCAPE")
+
+    check(!MangaConversionOptions.fromToken(custom.token().substringBeforeLast("|")).showFullPageBeforeSplits)
+    check(!MangaConversionOptions.fromToken(panel.token().substringBeforeLast("|") + "|UNKNOWN").showFullPageBeforeSplits)
     check(MangaConversionOptions.fromToken(null).panelMode == "OFF")
+    val overview = panel.copy(showFullPageBeforeSplits = true)
+    check(MangaConversionOptions.fromToken(overview.token()) == overview)
+    check(MangaConversionOptions.fromToken(overview.token().substringBeforeLast("|")).panelMode == "PANEL_BY_PANEL")
     val legacySeven = "Manga|PAGED|true|false|true|40|false"
     val migrated = MangaConversionOptions.fromToken(legacySeven)
     check(migrated.layout == "PAGED" && migrated.cropWhiteMargins)

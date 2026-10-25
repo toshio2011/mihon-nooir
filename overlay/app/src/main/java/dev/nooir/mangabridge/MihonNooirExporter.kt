@@ -215,7 +215,8 @@ object MihonNooirExporter {
                     val frameWidth = if (archiveLandscape) height else width
                     val frameHeight = if (archiveLandscape) width else height
                     for (page in pageSource.pages(uris, frameWidth, frameHeight, depth,
-                        if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) options.copy(epubColor = false) else options)) {
+                        if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) options.copy(epubColor = false) else options,
+                        fixedFramebuffer = (actual == ExportFormat.XTC || actual == ExportFormat.XTCH))) {
                         ownerJob.ensureActive()
                         yield(chapter to page)
                     }

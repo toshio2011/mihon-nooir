@@ -23,6 +23,22 @@ private fun panelGrid(): BufferedImage {
     } finally { g.dispose() }
     return image
 }
+private fun mixedOrientationGrid(): BufferedImage {
+    val image = BufferedImage(300, 420, BufferedImage.TYPE_INT_RGB)
+    val g = image.createGraphics()
+    try {
+        g.color = java.awt.Color.WHITE
+        g.fillRect(0, 0, 300, 420)
+        g.color = java.awt.Color(45, 45, 45)
+        // Wide top panel and two portrait bottom panels, with full-span gutters.
+        g.fillRect(5, 5, 290, 98)
+        g.color = java.awt.Color(85, 85, 85)
+        g.fillRect(5, 127, 135, 288)
+        g.color = java.awt.Color(125, 125, 125)
+        g.fillRect(160, 127, 135, 288)
+    } finally { g.dispose() }
+    return image
+}
 private fun u16(bytes: ByteArray, at: Int) =
     (bytes[at].toInt() and 255) or ((bytes[at + 1].toInt() and 255) shl 8)
 
@@ -52,6 +68,65 @@ fun main() {
                 check(imageCount == 6) { "$format should contain six panel images, got $imageCount" }
             }
         }
+        // Auto Fit is a new opt-in orientation on top of detected panel mode.
+        // It must preserve all six panels and native XTC/XTCH framebuffer sizes.
+        val autoOptions = panelOptions.copy(orientation = "AUTO_FIT")
+        for ((format, ext) in listOf("XTC" to "xtc", "XTCH" to "xtch",
+            "EPUB2" to "epub", "EPUB" to "epub", "CBZ" to "cbz")) {
+            val output = File(root, "auto-$format.$ext")
+            NooirDesktopCli.main(arrayOf(
+                "--input", input.absolutePath, "--output", output.absolutePath,
+                "--format", format, "--device", "X4", "--options-token", autoOptions.token(),
+            ))
+            check(output.length() > 200) { "Auto Fit $format empty" }
+            if (format in listOf("XTC", "XTCH")) {
+                val bytes = output.readBytes()
+                check(u16(bytes, 6) == 6) { "Auto Fit $format must retain all panels" }
+            } else ZipFile(output).use { zip ->
+                val entries = zip.entries().asSequence()
+                    .filter { it.name.endsWith(".png") }.toList()
+                check(entries.size == 6) { "Auto Fit $format lost detected panels" }
+                for (entry in entries) {
+                    val img = zip.getInputStream(entry).use { ImageIO.read(it) }
+                        ?: error("Unreadable Auto Fit image in $format")
+                    check((img.width == 480 && img.height == 800) ||
+                        (img.width == 800 && img.height == 480)) {
+                        "Unexpected adaptive Auto Fit page dimensions: ${img.width}x${img.height}"
+                    }
+                }
+            }
+        }
+        // Mixed shape panels: a wide panel should fill a landscape EPUB page,
+        // while the tall panels retain portrait pages. XTC stays fixed 480x800.
+        val mixed = File(root, "mixed").apply { mkdirs() }
+        check(ImageIO.write(mixedOrientationGrid(), "png", File(mixed, "01.png")))
+        val mixedEpub = File(root, "mixed-auto.epub")
+        NooirDesktopCli.main(arrayOf(
+            "--input", mixed.absolutePath, "--output", mixedEpub.absolutePath,
+            "--format", "EPUB2", "--device", "X4", "--options-token", autoOptions.token(),
+        ))
+        ZipFile(mixedEpub).use { zip ->
+            val entries = zip.entries().asSequence().filter { it.name.endsWith(".png") }.toList()
+            check(entries.size == 3) { "Expected three safely detected mixed-shape panels" }
+            val sizes = entries.map { entry ->
+                zip.getInputStream(entry).use { stream ->
+                    val img = ImageIO.read(stream) ?: error("Unreadable adaptive page")
+                    img.width to img.height
+                }
+            }
+            check(sizes.count { it == (800 to 480) } == 1) {
+                "Wide panel should use landscape: $sizes"
+            }
+            check(sizes.count { it == (480 to 800) } == 2) {
+                "Tall panels should use portrait: $sizes"
+            }
+        }
+        val mixedXtc = File(root, "mixed-auto.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", mixed.absolutePath, "--output", mixedXtc.absolutePath,
+            "--format", "XTC", "--device", "X4", "--options-token", autoOptions.token(),
+        ))
+        check(u16(mixedXtc.readBytes(), 6) == 3) { "Auto Fit XTC must retain three fixed-size frames" }
         val original = File(root, "original.xtch")
         NooirDesktopCli.main(arrayOf(
             "--input", input.absolutePath, "--output", original.absolutePath,
@@ -72,6 +147,6 @@ fun main() {
             "--format", "XTC", "--device", "X4", "--options-token", panelOptions.token(),
         ))
         check(u16(safe.readBytes(), 6) == 1) { "Splash pages must remain intact" }
-        println("Desktop panel exports passed: XTC, XTCH, EPUB2, EPUB3, CBZ, six screens, legacy OFF, splash fallback")
+        println("Desktop panel exports passed: XTC, XTCH, EPUB2, EPUB3, CBZ, six screens, all-format Auto Fit, legacy OFF, splash fallback")
     } finally { root.deleteRecursively() }
 }
