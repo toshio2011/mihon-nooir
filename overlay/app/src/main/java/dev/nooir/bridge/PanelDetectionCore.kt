@@ -160,10 +160,17 @@ object PanelDetectionCore {
                 adaptiveGutterCandidate(region, horizontal = true) else null
             val adaptiveVertical = if (cleanHorizontal == null && cleanVertical == null)
                 adaptiveGutterCandidate(region, horizontal = false) else null
-            val split = cleanHorizontal?.let { true to it }
-                ?: cleanVertical?.let { false to it }
-                ?: thinHorizontal?.let { true to it }
-                ?: thinVertical?.let { false to it }
+            // A tempting seam at the outer artwork margin may leave a blank
+            // child. Validate each candidate before it can hide a real gutter.
+            fun viable(horizontal: Boolean, axis: Int): Boolean {
+                val first = if (horizontal) region.copy(bottom = axis) else region.copy(right = axis)
+                val second = if (horizontal) region.copy(top = axis) else region.copy(left = axis)
+                return hasContent(first) && hasContent(second)
+            }
+            val split = cleanHorizontal?.takeIf { viable(true, it) }?.let { true to it }
+                ?: cleanVertical?.takeIf { viable(false, it) }?.let { false to it }
+                ?: thinHorizontal?.takeIf { viable(true, it) }?.let { true to it }
+                ?: thinVertical?.takeIf { viable(false, it) }?.let { false to it }
                 ?: when {
                     // Try a validated thin vertical strip before an uncertain
                     // horizontal band; otherwise panel mode behaves like rows.
