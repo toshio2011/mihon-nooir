@@ -28,6 +28,13 @@ fun main() {
     check(rtl.regions.map { centerGray(image, width, it) } == listOf(48, 35, 83, 70, 118, 105)) {
         "RTL must read top tier first, right to left within each tier"
     }
+    // Panel mode should reuse row tiers before resolving columns, rather than
+    // treating short within-tier vertical gutters as full-page columns.
+    val rowFirst = PanelDetectionCore.detect(width, height, image, true)
+    check(rowFirst.regions.map { centerGray(image, width, it) } ==
+        listOf(48, 35, 83, 70, 118, 105)) {
+        "Row-first partition must retain tier-first RTL reading order"
+    }
     val rowPlan = PanelDetectionCore.detectRows(width, height, image)
     check(!rowPlan.usedFullPageFallback && rowPlan.regions.size == 3) {
         "Row by Row must keep two columns together in each of three tiers: ${rowPlan.reason}"
