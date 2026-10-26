@@ -73,6 +73,13 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
             Text("Show full page before splits")
         }
         if (options.showFullPageBeforeSplits) Text("The complete original page appears before any multiple crops or slices. Single-screen pages are not duplicated.")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(checked = options.keepChapterFirstPageWhole, onCheckedChange = {
+                onChange(options.copy(preset = "Custom", keepChapterFirstPageWhole = it))
+            })
+            Text("Keep first page of each chapter whole")
+        }
+        Text("Prevents panel and row splitting on chapter opening pages, independently of full-page previews.")
         Text("Layout")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("AUTO" to "Auto", "PAGED" to "Pages", "WEBTOON" to "Webtoon").forEach { (value, title) ->
