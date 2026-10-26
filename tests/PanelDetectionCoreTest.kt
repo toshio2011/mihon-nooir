@@ -204,6 +204,21 @@ fun main() {
     }
     // The independent row detector should not inherit panel-only heuristics.
     check(PanelDetectionCore.detectRows(width, height, image).regions.size == 3)
+    // Two meaningful blocks separated by a clean gutter must still split.
+    // A decorative one-pixel border in the left block is not a third panel.
+    val borderW = 300
+    val borderH = 420
+    val borderOnly = ByteArray(borderW * borderH) { 255.toByte() }
+    for (y in 15 until 405) {
+        borderOnly[y * borderW + 40] = 35.toByte()
+        for (x in 170 until 287) borderOnly[y * borderW + x] = 90.toByte()
+    }
+    val borderPlan = PanelDetectionCore.detect(borderW, borderH, borderOnly, true)
+    check(borderPlan.usedFullPageFallback) {
+        "Border-only region must not become a standalone panel: ${borderPlan.regions}"
+    }
+    // Do not apply the new border-fragment heuristic to Row by Row.
+    check(PanelDetectionCore.detectRows(width, height, image).regions.size == 3)
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
