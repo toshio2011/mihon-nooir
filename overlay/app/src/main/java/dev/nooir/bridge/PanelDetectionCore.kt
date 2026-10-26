@@ -167,6 +167,9 @@ object PanelDetectionCore {
                 val second = if (horizontal) region.copy(top = axis) else region.copy(left = axis)
                 return hasContent(first) && hasContent(second)
             }
+            // Prefer rows when a horizontal seam is trustworthy. A full-height
+            // clean column wins over a merely thin/approximate row seam so tall
+            // panels spanning multiple tiers remain intact.
             val split = cleanHorizontal?.takeIf { viable(true, it) }?.let { true to it }
                 ?: cleanVertical?.takeIf { viable(false, it) }?.let { false to it }
                 ?: thinHorizontal?.takeIf { viable(true, it) }?.let { true to it }
