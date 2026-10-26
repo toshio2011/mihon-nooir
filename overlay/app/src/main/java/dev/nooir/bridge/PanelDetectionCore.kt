@@ -78,14 +78,17 @@ object PanelDetectionCore {
         if (plan.usedFullPageFallback) return listOf(PageRegion(0, 0, sourceWidth, sourceHeight))
         val padX = (sourceWidth.toLong() * paddingPercent / 100).toInt()
         val padY = (sourceHeight.toLong() * paddingPercent / 100).toInt()
+        // Extend both sides of interior cuts to retain border-adjacent dialogue.
+        val sharedX = maxOf(2, sourceWidth / 80)
+        val sharedY = maxOf(2, sourceHeight / 80)
         return plan.regions.map { r ->
             require(r.left in 0 until r.right && r.right <= thumbWidth &&
                 r.top in 0 until r.bottom && r.bottom <= thumbHeight)
             PageRegion(
-                ((r.left.toLong() * sourceWidth) / thumbWidth).toInt().minus(padX).coerceAtLeast(0),
-                ((r.top.toLong() * sourceHeight) / thumbHeight).toInt().minus(padY).coerceAtLeast(0),
-                ((r.right.toLong() * sourceWidth + thumbWidth - 1) / thumbWidth).toInt().plus(padX).coerceAtMost(sourceWidth),
-                ((r.bottom.toLong() * sourceHeight + thumbHeight - 1) / thumbHeight).toInt().plus(padY).coerceAtMost(sourceHeight),
+                ((r.left.toLong() * sourceWidth) / thumbWidth).toInt().minus(if (r.left > 0) maxOf(padX, sharedX) else 0).coerceAtLeast(0),
+                ((r.top.toLong() * sourceHeight) / thumbHeight).toInt().minus(if (r.top > 0) maxOf(padY, sharedY) else 0).coerceAtLeast(0),
+                ((r.right.toLong() * sourceWidth + thumbWidth - 1) / thumbWidth).toInt().plus(if (r.right < thumbWidth) maxOf(padX, sharedX) else 0).coerceAtMost(sourceWidth),
+                ((r.bottom.toLong() * sourceHeight + thumbHeight - 1) / thumbHeight).toInt().plus(if (r.bottom < thumbHeight) maxOf(padY, sharedY) else 0).coerceAtMost(sourceHeight),
             )
         }
     }
