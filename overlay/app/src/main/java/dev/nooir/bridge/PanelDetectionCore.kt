@@ -55,6 +55,10 @@ object PanelDetectionCore {
                     rowDetector.hasContent(it) && !rowDetector.isLikelyBorderFragment(it) } &&
                 candidates.none { it.width.toLong() * it.height * 100 <
                     row.width.toLong() * row.height * 2 } &&
+                // A hairline slice can pass the area threshold on a wide row.
+                // Preserve that row instead of exporting isolated lettering or borders.
+                candidates.none { it.width.toLong() * 100 < row.width.toLong() * 8 ||
+                    it.height.toLong() * 100 < row.height.toLong() * 8 } &&
                 !(candidates.size > 12 && candidates.count {
                     it.width.toLong() * it.height * 100 <
                         row.width.toLong() * row.height * 5
