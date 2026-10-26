@@ -40,6 +40,7 @@ class AndroidPageSource(private val context: Context) {
         options: MangaConversionOptions = MangaConversionOptions(),
         fixedFramebuffer: Boolean = true,
     ): Sequence<QuantizedPage> = sequence {
+        var sourceIndex = 0
         for (uri in inputUris.sortedWith { a, b -> NaturalPageOrder.compare(name(a), name(b)) }) {
             if (name(uri).endsWith(".cbz", true) || name(uri).endsWith(".zip", true)) {
                 val temp = File.createTempFile("nooir-cbz-", ".zip", context.cacheDir)
@@ -55,14 +56,24 @@ class AndroidPageSource(private val context: Context) {
                         for (entry in entries) {
                             // Two independent streams: first checks dimensions, second decodes.
                             val image = decode({ zip.getInputStream(entry) })
-                            try { for (page in render(image, width, height, depth, optionsForFile(entry.name, options), fixedFramebuffer)) yield(page) }
+                            val pageOptions = optionsForFile(entry.name, options).let {
+                                if (sourceIndex == 0 && options.keepChapterFirstPageWhole)
+                                    it.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED") else it
+                            }
+                            sourceIndex++
+                            try { for (page in render(image, width, height, depth, pageOptions, fixedFramebuffer)) yield(page) }
                             finally { image.recycle() }
                         }
                     }
                 } finally { temp.delete() }
             } else {
                 val image = decode({ resolver.openInputStream(uri) ?: error("Cannot open $uri") })
-                try { for (page in render(image, width, height, depth, optionsForFile(name(uri), options), fixedFramebuffer)) yield(page) }
+                val pageOptions = optionsForFile(name(uri), options).let {
+                    if (sourceIndex == 0 && options.keepChapterFirstPageWhole)
+                        it.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED") else it
+                }
+                sourceIndex++
+                try { for (page in render(image, width, height, depth, pageOptions, fixedFramebuffer)) yield(page) }
                 finally { image.recycle() }
             }
         }
