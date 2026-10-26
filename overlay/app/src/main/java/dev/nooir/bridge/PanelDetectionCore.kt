@@ -333,24 +333,36 @@ object PanelDetectionCore {
                 if (before < 18 || after < 18) continue
                 // A line crossing the seam is potentially a balloon or art.
                 // Don't split where an extended ink stroke bridges both sides.
-                var blocked = false
+                var bridges = 0
+                var longestBridge = 0
+                var consecutiveBridges = 0
+                var samples = 0
                 val radius = maxOf(3, length / 55)
                 var cross = if (horizontal) r.left else r.top
                 val limit = if (horizontal) r.right else r.bottom
                 while (cross < limit) {
                     var run = 0
+                    var bridged = false
                     for (offset in -radius..radius) {
                         val pos = axis + offset
                         val index = if (horizontal) pos * width + cross else cross * width + pos
                         if ((gray[index].toInt() and 255) < 180) {
                             run++
-                            if (run >= radius + 2) { blocked = true; break }
+                            if (run >= radius + 2) { bridged = true; break }
                         } else run = 0
                     }
-                    if (blocked) break
+                    samples++
+                    if (bridged) {
+                        bridges++
+                        consecutiveBridges++
+                        longestBridge = maxOf(longestBridge, consecutiveBridges)
+                    } else consecutiveBridges = 0
                     cross += step
                 }
-                if (blocked) continue
+                // Short border interruptions are common in scanned manga.
+                // Reject broad or sustained bridges, which may be dialogue/art.
+                if (bridges * 100 > samples * 3 ||
+                    longestBridge * 100 > samples * 2) continue
                 val score = minOf(before, after) - darkPercent(axis, 240)
                 if (score > bestScore) { bestScore = score; best = axis }
             }
