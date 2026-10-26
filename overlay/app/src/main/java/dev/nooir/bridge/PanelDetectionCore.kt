@@ -256,7 +256,7 @@ object PanelDetectionCore {
             val minChild = maxOf(8, (if (horizontal) height else width) * 6 / 100)
             val margin = maxOf(minChild, length * 7 / 100)
             if (length <= margin * 2 + 3 || span < 12) return null
-            val minGap = maxOf(2, length / 180)
+            val minGap = 1 // one-pixel separators are valid at thumbnail resolution
             var bestStart = -1
             var bestEnd = -1
             var runStart = -1
@@ -309,7 +309,7 @@ object PanelDetectionCore {
             // likely a balloon tail, not compression noise. Isolated dark
             // speckles are acceptable, but never cut through a sustained line.
             fun crossesStroke(axis: Int): Boolean {
-                if (axis <= bestStart || axis + 1 >= bestEnd) return true
+                if (axis <= origin || axis + 1 >= origin + length) return true
                 for (cross in 0 until span) {
                     val position = if (horizontal) r.left + cross else r.top + cross
                     fun ink(at: Int): Boolean = if (horizontal)
@@ -319,7 +319,7 @@ object PanelDetectionCore {
                 }
                 return false
             }
-            val safe = (bestStart + 1 until bestEnd - 1)
+            val safe = (bestStart until bestEnd)
                 .filter { it - origin >= minChild && origin + length - it >= minChild }
                 .filter { darkCount(it).toLong() * 200 <= span.toLong() && !crossesStroke(it) }
             return safe.minWithOrNull(compareBy<Int> { darkCount(it) }
@@ -355,15 +355,15 @@ object PanelDetectionCore {
                 }
                 return if (total == 0) 100 else dark * 100 / total
             }
-            val window = maxOf(2, length / 160)
+            val window = maxOf(1, length / 320)
             val flank = maxOf(window * 3, length / 18)
             var bestAxis: Int? = null
             var bestScore = 0
-            for (axis in origin + minChild + flank until origin + length - minChild - flank step window) {
+            for (axis in origin + minChild + flank until origin + length - minChild - flank) {
                 var corridor = 0
                 for (offset in -window..window) corridor += inkRatio(axis + offset)
                 corridor /= (window * 2 + 1)
-                if (corridor > 9) continue
+                if (corridor > 12) continue
                 // Reject continuous dark strokes crossing the proposed cut.
                 // A speech-balloon tail can be only one pixel thick along the
                 // gutter but dozens of pixels long ACROSS it. Density-based
