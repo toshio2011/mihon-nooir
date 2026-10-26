@@ -241,19 +241,19 @@ fun main() {
     // Thin candidate strips should not undo a valid row split.
     // Two substantial horizontal tiers remain readable as rows even if a
     // tiny dark sliver near a vertical seam tempts finer segmentation.
-    val thinW = 300
-    val thinH = 420
-    val thinPage = ByteArray(thinW * thinH) { 255.toByte() }
+    val sliverW = 300
+    val sliverH = 420
+    val sliverPage = ByteArray(sliverW * sliverH) { 255.toByte() }
     for (y in 10 until 175) {
-        for (x in 8 until 275) thinPage[y * thinW + x] = 95.toByte()
-        for (x in 283 until 294) thinPage[y * thinW + x] = 55.toByte()
+        for (x in 8 until 275) sliverPage[y * sliverW + x] = 95.toByte()
+        for (x in 283 until 294) sliverPage[y * sliverW + x] = 55.toByte()
     }
     for (y in 240 until 405) for (x in 10 until 290)
-        thinPage[y * thinW + x] = 100.toByte()
-    val thinRows = PanelDetectionCore.detectRows(thinW, thinH, thinPage)
-    val thinPanels = PanelDetectionCore.detect(thinW, thinH, thinPage, true)
-    check(!thinRows.usedFullPageFallback && thinRows.regions.size >= 2)
-    check(!thinPanels.usedFullPageFallback && thinPanels.regions.size >= 2) {
+        sliverPage[y * sliverW + x] = 100.toByte()
+    val sliverRows = PanelDetectionCore.detectRows(sliverW, sliverH, sliverPage)
+    val sliverPanels = PanelDetectionCore.detect(sliverW, sliverH, sliverPage, true)
+    check(!sliverRows.usedFullPageFallback && sliverRows.regions.size >= 2)
+    check(!sliverPanels.usedFullPageFallback && sliverPanels.regions.size >= 2) {
         "Thin panel candidate must not erase valid row boundaries"
     }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
