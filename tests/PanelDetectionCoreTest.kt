@@ -219,6 +219,25 @@ fun main() {
     }
     // Do not apply the new border-fragment heuristic to Row by Row.
     check(PanelDetectionCore.detectRows(width, height, image).regions.size == 3)
+    // Row-first fallback: a valid row split must survive even when one tier
+    // contains only a sparse border that panel validation refuses to split.
+    val tierW = 300
+    val tierH = 420
+    val mixedTiers = ByteArray(tierW * tierH) { 255.toByte() }
+    for (y in 12 until 175) for (x in 12 until 288)
+        mixedTiers[y * tierW + x] = 90.toByte()
+    for (y in 240 until 407) {
+        mixedTiers[y * tierW + 38] = 40.toByte()
+        for (x in 170 until 288) mixedTiers[y * tierW + x] = 85.toByte()
+    }
+    val expectedRows = PanelDetectionCore.detectRows(tierW, tierH, mixedTiers)
+    val mixedPanels = PanelDetectionCore.detect(tierW, tierH, mixedTiers, true)
+    check(!expectedRows.usedFullPageFallback && expectedRows.regions.size >= 2) {
+        "Fixture must have independent horizontal rows: ${expectedRows.reason}"
+    }
+    check(!mixedPanels.usedFullPageFallback && mixedPanels.regions.size >= 2) {
+        "A rejected panel must not undo successful row detection: ${mixedPanels.reason}"
+    }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
