@@ -195,7 +195,7 @@ object PanelDetectionCore {
          */
         private fun partialVerticalGutter(r: PageRegion): Int? {
             if (r.width < 72 || r.height < 48) return null
-            val margin = maxOf(12, r.width * 12 / 100)
+            val margin = maxOf(8, r.width * 5 / 100)
             val top = r.top + r.height / 8
             val bottom = r.bottom - r.height / 8
             if (bottom <= top) return null
@@ -216,11 +216,11 @@ object PanelDetectionCore {
                 for (dx in -band..band) corridor += darkness(x + dx)
                 corridor /= (band * 2 + 1)
                 if (corridor > 7) continue
-                val reach = maxOf(8, r.width / 8)
+                val reach = maxOf(5, r.width / 10)
                 if (x - reach <= r.left || x + reach >= r.right) continue
                 val leftInk = maxOf(darkness(x - reach), darkness(x - maxOf(4, reach / 2)))
                 val rightInk = maxOf(darkness(x + reach), darkness(x + reach / 2))
-                if (leftInk < 18 || rightInk < 18) continue
+                if (leftInk < 14 || rightInk < 14) continue
                 // A real gutter should remain mostly empty over the entire
                 // tier. Reject cuts crossing substantial artwork at its ends.
                 var fullInk = 0
@@ -256,8 +256,8 @@ object PanelDetectionCore {
             val length = if (horizontal) r.height else r.width
             val span = if (horizontal) r.width else r.height
             // Keep a minimum of 15% of the *whole page* on either side.
-            val minChild = maxOf(8, (if (horizontal) height else width) * 6 / 100)
-            val margin = maxOf(minChild, length * 7 / 100)
+            val minChild = maxOf(8, (if (horizontal) height else width) * 3 / 100)
+            val margin = maxOf(minChild, length * 3 / 100)
             if (length <= margin * 2 + 3 || span < 12) return null
             val minGap = 1 // one-pixel separators are valid at thumbnail resolution
             var bestStart = -1
