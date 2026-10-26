@@ -34,8 +34,22 @@ object PanelDetectionCore {
         if (height.toLong() > width.toLong() * 3L) return fallback("long strip: preserve existing webtoon slicing")
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
         val detector = Detector(width, height, grayscale)
-        val root = detector.partition(whole, 0) ?: return fallback("ambiguous gutters or too many regions")
-        val regions = PanelReadingOrder.flatten(root, rightToLeft)
+        // Row-first for manga tiers: use the same row detector as Row by Row,
+        // then recursively resolve columns within each tier. Only commit to
+        // the tier layout when it produces a valid, nonempty panel partition.
+        // Full-height columns are handled by the legacy recursive fallback.
+        val tiers = detector.partitionRows(whole)
+        val root = if (tiers.size > 1 && tiers.all { detector.hasContent(it) }) {
+            val nodes = tiers.map { detector.partition(it, 0) }
+            if (nodes.all { it != null }) {
+                nodes.filterNotNull().reduceRight { node, below ->
+                    PanelReadingOrder.Node.Split(true, node, below)
+                }
+            } else null
+        } else null
+        val resolved = root ?: Detector(width, height, grayscale).partition(whole, 0)
+            ?: return fallback("ambiguous gutters or too many regions")
+        val regions = PanelReadingOrder.flatten(resolved, rightToLeft)
             ?: return fallback("staggered layout: reading order uncertain")
         if (regions.size < 2) return fallback("single panel or splash page")
         if (regions.size > MAX_PANELS || regions.any { it.width <= 0 || it.height <= 0 }) {
