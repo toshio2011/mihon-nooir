@@ -238,6 +238,24 @@ fun main() {
     check(!mixedPanels.usedFullPageFallback && mixedPanels.regions.size >= 2) {
         "A rejected panel must not undo successful row detection: ${mixedPanels.reason}"
     }
+    // Thin candidate strips should not undo a valid row split.
+    // Two substantial horizontal tiers remain readable as rows even if a
+    // tiny dark sliver near a vertical seam tempts finer segmentation.
+    val thinW = 300
+    val thinH = 420
+    val thinPage = ByteArray(thinW * thinH) { 255.toByte() }
+    for (y in 10 until 175) {
+        for (x in 8 until 275) thinPage[y * thinW + x] = 95.toByte()
+        for (x in 283 until 294) thinPage[y * thinW + x] = 55.toByte()
+    }
+    for (y in 240 until 405) for (x in 10 until 290)
+        thinPage[y * thinW + x] = 100.toByte()
+    val thinRows = PanelDetectionCore.detectRows(thinW, thinH, thinPage)
+    val thinPanels = PanelDetectionCore.detect(thinW, thinH, thinPage, true)
+    check(!thinRows.usedFullPageFallback && thinRows.regions.size >= 2)
+    check(!thinPanels.usedFullPageFallback && thinPanels.regions.size >= 2) {
+        "Thin panel candidate must not erase valid row boundaries"
+    }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
