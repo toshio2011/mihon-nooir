@@ -157,10 +157,11 @@ object PanelDetectionCore {
             val split = cleanHorizontal?.let { true to it }
                 ?: cleanVertical?.let { false to it }
                 ?: when {
+                    // Try a validated thin vertical strip before an uncertain
+                    // horizontal band; otherwise panel mode behaves like rows.
+                    partialVerticalGutter(region) != null -> false to partialVerticalGutter(region)!!
                     adaptiveHorizontal == null -> adaptiveVertical?.let { false to it.first }
-                        ?: partialVerticalGutter(region)?.let { false to it }
-                    adaptiveVertical == null -> partialVerticalGutter(region)?.let { false to it }
-                        ?: adaptiveHorizontal.let { true to it.first }
+                    adaptiveVertical == null -> adaptiveHorizontal.let { true to it.first }
                     adaptiveVertical.second > adaptiveHorizontal.second -> false to adaptiveVertical.first
                     else -> true to adaptiveHorizontal.first
                 }
@@ -195,7 +196,7 @@ object PanelDetectionCore {
             val top = r.top + r.height / 8
             val bottom = r.bottom - r.height / 8
             if (bottom <= top) return null
-            val band = maxOf(2, r.width / 200)
+            val band = maxOf(0, r.width / 500)
             fun darkness(x: Int): Int {
                 var dark = 0
                 var count = 0
@@ -211,7 +212,7 @@ object PanelDetectionCore {
                 var corridor = 0
                 for (dx in -band..band) corridor += darkness(x + dx)
                 corridor /= (band * 2 + 1)
-                if (corridor > 5) continue
+                if (corridor > 7) continue
                 val reach = maxOf(8, r.width / 8)
                 if (x - reach <= r.left || x + reach >= r.right) continue
                 val leftInk = maxOf(darkness(x - reach), darkness(x - maxOf(4, reach / 2)))
