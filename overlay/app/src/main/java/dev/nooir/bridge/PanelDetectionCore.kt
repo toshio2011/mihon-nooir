@@ -59,6 +59,19 @@ object PanelDetectionCore {
             return fallback("unsafe panel dimensions")
         }
         if (regions.any { !detector.hasContent(it) }) return fallback("empty or tiny panel candidate")
+        // A full-page illustration or sparse chapter title can contain white
+        // corridors that look like gutters. Reject tiny fragments, but only in
+        // panel mode: row mode has its own independent acceptance rules.
+        // Use relative area, not fixed pixel dimensions, to remain profile-safe.
+        val wholeArea = width.toLong() * height
+        if (regions.any { it.width.toLong() * it.height * 100 < wholeArea * 2 }) {
+            return fallback("tiny fragment: likely lettering or decorative whitespace")
+        }
+        // Excessive subdivision is more characteristic of title lettering
+        // than a readable comic grid; preserve uncertain pages intact.
+        if (regions.size > 12 && regions.count {
+                it.width.toLong() * it.height * 100 < wholeArea * 5
+            } >= 4) return fallback("fragmented page: no confident panel grid")
         // The partition covers every pixel of the original thumbnail. Guard
         // padding in the renderer must further overlap edges, not remove them.
         if (!coversEntirePage(regions, width, height)) return fallback("uncovered image area")
