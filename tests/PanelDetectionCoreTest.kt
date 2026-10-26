@@ -172,6 +172,21 @@ fun main() {
     check(tallPlan.regions.any { it.height >= tallH * 9 / 10 }) {
         "Row-first must preserve the full-height panel"
     }
+    // Thin row seam with a tiny interruption from a panel border.
+    val interruptedW = 300
+    val interruptedH = 280
+    val interrupted = ByteArray(interruptedW * interruptedH) { 255.toByte() }
+    for (y in 8 until 139) for (x in 8 until 292)
+        interrupted[y * interruptedW + x] = 100.toByte()
+    for (y in 141 until 272) for (x in 8 until 292)
+        interrupted[y * interruptedW + x] = 110.toByte()
+    // A short border fragment crosses the otherwise pale horizontal seam.
+    for (x in 145 until 148) for (y in 138 until 142)
+        interrupted[y * interruptedW + x] = 60.toByte()
+    val interruptedRows = PanelDetectionCore.detectRows(interruptedW, interruptedH, interrupted)
+    check(!interruptedRows.usedFullPageFallback && interruptedRows.regions.size == 2) {
+        "Short border interruptions must not hide a valid horizontal row seam"
+    }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
