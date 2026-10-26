@@ -34,51 +34,31 @@ object PanelDetectionCore {
         if (height.toLong() > width.toLong() * 3L) return fallback("long strip: preserve existing webtoon slicing")
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
         val detector = Detector(width, height, grayscale)
-        // Row-first for manga tiers: use the same row detector as Row by Row,
-        // then recursively resolve columns within each tier. Only commit to
-        // the tier layout when it produces a valid, nonempty panel partition.
-        // Full-height columns are handled by the legacy recursive fallback.
-        val tiers = detector.partitionRows(whole)
-        // A clean full-height column seam takes precedence over rows: those
-        // rows could otherwise slice a tall panel spanning multiple tiers.
-        val fullHeightColumn = detector.hasCleanFullHeightColumn(whole)
-        val root = if (!fullHeightColumn && tiers.size > 1 && tiers.all { detector.hasContent(it) }) {
-            val nodes = tiers.map { detector.partition(it, 0) }
-            if (nodes.all { it != null }) {
-                nodes.filterNotNull().reduceRight { node, below ->
-                    PanelReadingOrder.Node.Split(true, node, below)
-                }
-            } else null
-        } else null
-        val resolved = root ?: Detector(width, height, grayscale).partition(whole, 0)
-            ?: return fallback("ambiguous gutters or too many regions")
-        val regions = PanelReadingOrder.flatten(resolved, rightToLeft)
-            ?: return fallback("staggered layout: reading order uncertain")
-        if (regions.size < 2) return fallback("single panel or splash page")
-        if (regions.size > MAX_PANELS || regions.any { it.width <= 0 || it.height <= 0 }) {
-            return fallback("unsafe panel dimensions")
+        // Row detection is authoritative. Each row is independently eligible
+        // for finer panel partitioning; a rejected panel split keeps that row.
+        // If no row seam exists, try panel detection on the whole page.
+        val rows = detector.partitionRows(whole)
+        val output = mutableListOf<PageRegion>()
+        for (row in rows) {
+            val rowDetector = Detector(width, height, grayscale)
+            val node = rowDetector.partition(row, 0)
+            val candidates = node?.let { PanelReadingOrder.flatten(it, rightToLeft) }
+            val valid = candidates != null && candidates.size in 2..MAX_PANELS &&
+                candidates.all { it.width > 0 && it.height > 0 &&
+                    rowDetector.hasContent(it) && !rowDetector.isLikelyBorderFragment(it) } &&
+                candidates.none { it.width.toLong() * it.height * 100 <
+                    row.width.toLong() * row.height * 2 } &&
+                !(candidates.size > 12 && candidates.count {
+                    it.width.toLong() * it.height * 100 <
+                        row.width.toLong() * row.height * 5
+                } >= 4) &&
+                coversRegion(candidates, row)
+            if (valid) output.addAll(candidates!!) else output.add(row)
         }
-        if (regions.any { !detector.hasContent(it) }) return fallback("empty or tiny panel candidate")
-        if (regions.any { detector.isLikelyBorderFragment(it) }) {
-            return fallback("border-only fragment: preserve full page")
+        if (output.size !in 2..MAX_PANELS || !coversEntirePage(output, width, height)) {
+            return fallback("no validated rows or panels")
         }
-        // A full-page illustration or sparse chapter title can contain white
-        // corridors that look like gutters. Reject tiny fragments, but only in
-        // panel mode: row mode has its own independent acceptance rules.
-        // Use relative area, not fixed pixel dimensions, to remain profile-safe.
-        val wholeArea = width.toLong() * height
-        if (regions.any { it.width.toLong() * it.height * 100 < wholeArea * 2 }) {
-            return fallback("tiny fragment: likely lettering or decorative whitespace")
-        }
-        // Excessive subdivision is more characteristic of title lettering
-        // than a readable comic grid; preserve uncertain pages intact.
-        if (regions.size > 12 && regions.count {
-                it.width.toLong() * it.height * 100 < wholeArea * 5
-            } >= 4) return fallback("fragmented page: no confident panel grid")
-        // The partition covers every pixel of the original thumbnail. Guard
-        // padding in the renderer must further overlap edges, not remove them.
-        if (!coversEntirePage(regions, width, height)) return fallback("uncovered image area")
-        return PanelPlan(regions, false, "validated white-gutter partition")
+        return PanelPlan(output, false, "row-first partition with per-row panel fallback")
     }
 
     /**
@@ -124,6 +104,18 @@ object PanelDetectionCore {
                 ((r.bottom.toLong() * sourceHeight + thumbHeight - 1) / thumbHeight).toInt().plus(if (r.bottom < thumbHeight) maxOf(padY, sharedY) else 0).coerceAtMost(sourceHeight),
             )
         }
+    }
+
+    private fun coversRegion(regions: List<PageRegion>, parent: PageRegion): Boolean {
+        val area = regions.sumOf { it.width.toLong() * it.height }
+        if (area != parent.width.toLong() * parent.height) return false
+        return regions.all { it.left >= parent.left && it.top >= parent.top &&
+            it.right <= parent.right && it.bottom <= parent.bottom } &&
+            regions.indices.all { i -> (i + 1 until regions.size).all { j ->
+                val a = regions[i]; val b = regions[j]
+                minOf(a.right, b.right) <= maxOf(a.left, b.left) ||
+                    minOf(a.bottom, b.bottom) <= maxOf(a.top, b.top)
+            } }
     }
 
     private fun coversEntirePage(regions: List<PageRegion>, width: Int, height: Int): Boolean {
