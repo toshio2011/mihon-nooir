@@ -123,6 +123,7 @@ object PanelDetectionCore {
                     return
                 }
                 val axis = bestGutter(region, horizontal = true)
+                    ?: thinLineGutter(region, horizontal = true)
                     ?: adaptiveGutter(region, horizontal = true)
                 if (axis == null) {
                     rows += region
@@ -149,6 +150,8 @@ object PanelDetectionCore {
             // leaving multi-column manga grouped or in the wrong hierarchy.
             val cleanHorizontal = bestGutter(region, horizontal = true)
             val cleanVertical = bestGutter(region, horizontal = false)
+            val thinHorizontal = if (cleanHorizontal == null) thinLineGutter(region, true) else null
+            val thinVertical = if (cleanVertical == null) thinLineGutter(region, false) else null
             // A clear vertical separator is stronger evidence of distinct
             // columns than an imperfect horizontal band (often just whitespace
             // inside a panel). For imperfect gutters in both directions,
@@ -159,6 +162,8 @@ object PanelDetectionCore {
                 adaptiveGutterCandidate(region, horizontal = false) else null
             val split = cleanHorizontal?.let { true to it }
                 ?: cleanVertical?.let { false to it }
+                ?: thinHorizontal?.let { true to it }
+                ?: thinVertical?.let { false to it }
                 ?: when {
                     // Try a validated thin vertical strip before an uncertain
                     // horizontal band; otherwise panel mode behaves like rows.
@@ -248,6 +253,69 @@ object PanelDetectionCore {
                     best = x
                     scoreBest = score
                 }
+            }
+            return best
+        }
+
+        /**
+         * Detect a single long, narrow light seam even when it has no broad
+         * white band. Both row and panel modes share this guarded detector.
+         * A seam needs dark content on both sides, not just a white page margin.
+         */
+        private fun thinLineGutter(r: PageRegion, horizontal: Boolean): Int? {
+            val length = if (horizontal) r.height else r.width
+            val span = if (horizontal) r.width else r.height
+            val origin = if (horizontal) r.top else r.left
+            val minChild = maxOf(8, (if (horizontal) height else width) * 3 / 100)
+            if (length < minChild * 2 + 6 || span < 28) return null
+            val step = maxOf(1, span / 350)
+            fun darkPercent(axis: Int, threshold: Int): Int {
+                var dark = 0
+                var total = 0
+                var cross = if (horizontal) r.left else r.top
+                val limit = if (horizontal) r.right else r.bottom
+                while (cross < limit) {
+                    val index = if (horizontal) axis * width + cross else cross * width + axis
+                    if ((gray[index].toInt() and 255) < threshold) dark++
+                    total++
+                    cross += step
+                }
+                return dark * 100 / maxOf(1, total)
+            }
+            var best: Int? = null
+            var bestScore = 0
+            val reach = maxOf(4, length / 14)
+            for (axis in origin + minChild until origin + length - minChild) {
+                // Strong evidence of a long pale seam; tolerate minor ink noise.
+                if (darkPercent(axis, 240) > 6 || darkPercent(axis, 180) > 2) continue
+                if (axis - reach <= origin || axis + reach >= origin + length) continue
+                val before = maxOf(darkPercent(axis - reach, 220),
+                    darkPercent(axis - maxOf(2, reach / 2), 220))
+                val after = maxOf(darkPercent(axis + reach, 220),
+                    darkPercent(axis + maxOf(2, reach / 2), 220))
+                if (before < 18 || after < 18) continue
+                // A line crossing the seam is potentially a balloon or art.
+                // Don't split where an extended ink stroke bridges both sides.
+                var blocked = false
+                val radius = maxOf(3, length / 55)
+                var cross = if (horizontal) r.left else r.top
+                val limit = if (horizontal) r.right else r.bottom
+                while (cross < limit) {
+                    var run = 0
+                    for (offset in -radius..radius) {
+                        val pos = axis + offset
+                        val index = if (horizontal) pos * width + cross else cross * width + pos
+                        if ((gray[index].toInt() and 255) < 180) {
+                            run++
+                            if (run >= radius + 2) { blocked = true; break }
+                        } else run = 0
+                    }
+                    if (blocked) break
+                    cross += step
+                }
+                if (blocked) continue
+                val score = minOf(before, after) - darkPercent(axis, 240)
+                if (score > bestScore) { bestScore = score; best = axis }
             }
             return best
         }
