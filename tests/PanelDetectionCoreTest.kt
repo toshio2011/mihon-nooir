@@ -187,6 +187,23 @@ fun main() {
     check(!interruptedRows.usedFullPageFallback && interruptedRows.regions.size == 2) {
         "Short border interruptions must not hide a valid horizontal row seam"
     }
+    // A sparse chapter title composed of isolated short ink strokes must not
+    // be treated as a reliable grid of panels. Preserve the original page.
+    val titleW = 300
+    val titleH = 420
+    val title = ByteArray(titleW * titleH) { 255.toByte() }
+    for (i in 0 until 7) {
+        val x0 = 30 + (i % 4) * 62
+        val y0 = 65 + (i / 4) * 85
+        for (y in y0 until y0 + 12) for (x in x0 until x0 + 22)
+            title[y * titleW + x] = 65.toByte()
+    }
+    val titlePlan = PanelDetectionCore.detect(titleW, titleH, title, true)
+    check(titlePlan.usedFullPageFallback) {
+        "Sparse lettering must remain whole, not become panels: ${titlePlan.regions}"
+    }
+    // The independent row detector should not inherit panel-only heuristics.
+    check(PanelDetectionCore.detectRows(width, height, image).regions.size == 3)
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
