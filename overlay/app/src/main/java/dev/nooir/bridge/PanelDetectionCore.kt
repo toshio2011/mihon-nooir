@@ -59,6 +59,9 @@ object PanelDetectionCore {
             return fallback("unsafe panel dimensions")
         }
         if (regions.any { !detector.hasContent(it) }) return fallback("empty or tiny panel candidate")
+        if (regions.any { detector.isLikelyBorderFragment(it) }) {
+            return fallback("border-only fragment: preserve full page")
+        }
         // A full-page illustration or sparse chapter title can contain white
         // corridors that look like gutters. Reject tiny fragments, but only in
         // panel mode: row mode has its own independent acceptance rules.
@@ -541,6 +544,30 @@ object PanelDetectionCore {
                 }
             }
             return bestAxis?.let { it to bestScore }
+        }
+
+        /**
+         * Reject an isolated thin rule masquerading as a panel. A sparse title
+         * or logo can still have meaningful shapes, so only reject regions
+         * where nearly all dark pixels occupy a very thin horizontal/vertical
+         * band. This applies to Panel by Panel only, after partitioning.
+         */
+        fun isLikelyBorderFragment(r: PageRegion): Boolean {
+            if (r.width < 12 || r.height < 12) return false
+            val step = maxOf(1, minOf(r.width, r.height) / 180)
+            val cols = IntArray((r.width + step - 1) / step)
+            val rows = IntArray((r.height + step - 1) / step)
+            var ink = 0
+            for (iy in rows.indices) for (ix in cols.indices) {
+                val pixel = gray[(r.top + iy * step) * width + r.left + ix * step].toInt() and 255
+                if (pixel < INK) { ink++; cols[ix]++; rows[iy]++ }
+            }
+            val total = cols.size * rows.size
+            if (ink == 0 || ink * 100 >= total * 7) return false
+            // Concentrated single straight stroke, not a sparse illustration.
+            val vertical = cols.maxOrNull() ?: 0
+            val horizontal = rows.maxOrNull() ?: 0
+            return vertical * 100 >= ink * 85 || horizontal * 100 >= ink * 85
         }
 
         fun hasContent(r: PageRegion): Boolean {
