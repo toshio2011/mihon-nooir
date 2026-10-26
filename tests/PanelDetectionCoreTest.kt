@@ -157,6 +157,21 @@ fun main() {
     check(!thinPanels.usedFullPageFallback && thinPanels.regions.size == 2) {
         "A one-pixel horizontal seam must separate panels: ${thinPanels.reason}"
     }
+    // A full-height column boundary must not be destroyed by row-first
+    // splitting of a partial-width horizontal tier.
+    val tallW = 300
+    val tallH = 420
+    val tall = ByteArray(tallW * tallH) { 255.toByte() }
+    for (y in 8 until 412) for (x in 8 until 142) tall[y * tallW + x] = 80.toByte()
+    for (y in 8 until 196) for (x in 156 until 292) tall[y * tallW + x] = 95.toByte()
+    for (y in 210 until 412) for (x in 156 until 292) tall[y * tallW + x] = 105.toByte()
+    val tallPlan = PanelDetectionCore.detect(tallW, tallH, tall, true)
+    check(!tallPlan.usedFullPageFallback && tallPlan.regions.size == 3) {
+        "Tall column and two stacked panels must remain three intact regions: ${tallPlan.reason}"
+    }
+    check(tallPlan.regions.any { it.height >= tallH * 9 / 10 }) {
+        "Row-first must preserve the full-height panel"
+    }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
