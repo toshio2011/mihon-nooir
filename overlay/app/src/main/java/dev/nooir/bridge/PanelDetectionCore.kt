@@ -39,11 +39,18 @@ object PanelDetectionCore {
         // If no row seam exists, try panel detection on the whole page.
         val rows = detector.partitionRows(whole)
         val output = mutableListOf<PageRegion>()
-        for (row in rows) {
+        for ((index, row) in rows.withIndex()) {
+            // Reserve one output slot for every remaining detected row.
+            // Extra panel candidates must never force a page-wide fallback.
+            val available = MAX_PANELS - output.size - (rows.size - index - 1)
+            if (available < 2) {
+                output.add(row)
+                continue
+            }
             val rowDetector = Detector(width, height, grayscale)
             val node = rowDetector.partition(row, 0)
             val candidates = node?.let { PanelReadingOrder.flatten(it, rightToLeft) }
-            val valid = candidates != null && candidates.size in 2..MAX_PANELS &&
+            val valid = candidates != null && candidates.size in 2..available &&
                 candidates.all { it.width > 0 && it.height > 0 &&
                     rowDetector.hasContent(it) && !rowDetector.isLikelyBorderFragment(it) } &&
                 candidates.none { it.width.toLong() * it.height * 100 <
