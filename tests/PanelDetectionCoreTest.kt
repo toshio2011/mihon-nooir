@@ -136,6 +136,20 @@ fun main() {
     check(!nestedPlan.usedFullPageFallback && nestedPlan.regions.size == 4) {
         "Nested three-column tier must produce four panels: ${nestedPlan.reason}, ${nestedPlan.regions}"
     }
+    // One-pixel horizontal seam: row and panel modes must both split.
+    val thinW = 240
+    val thinH = 240
+    val thinRow = ByteArray(thinW * thinH) { 255.toByte() }
+    for (y in 8 until 119) for (x in 8 until thinW - 8) thinRow[y * thinW + x] = 90.toByte()
+    for (y in 120 until thinH - 8) for (x in 8 until thinW - 8) thinRow[y * thinW + x] = 90.toByte()
+    val thinRows = PanelDetectionCore.detectRows(thinW, thinH, thinRow)
+    check(!thinRows.usedFullPageFallback && thinRows.regions.size == 2) {
+        "A one-pixel horizontal seam must separate rows: ${thinRows.reason}"
+    }
+    val thinPanels = PanelDetectionCore.detect(thinW, thinH, thinRow, true)
+    check(!thinPanels.usedFullPageFallback && thinPanels.regions.size == 2) {
+        "A one-pixel horizontal seam must separate panels: ${thinPanels.reason}"
+    }
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
