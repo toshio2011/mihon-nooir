@@ -39,7 +39,10 @@ object PanelDetectionCore {
         // the tier layout when it produces a valid, nonempty panel partition.
         // Full-height columns are handled by the legacy recursive fallback.
         val tiers = detector.partitionRows(whole)
-        val root = if (tiers.size > 1 && tiers.all { detector.hasContent(it) }) {
+        // A clean full-height column seam takes precedence over rows: those
+        // rows could otherwise slice a tall panel spanning multiple tiers.
+        val fullHeightColumn = detector.hasCleanFullHeightColumn(whole)
+        val root = if (!fullHeightColumn && tiers.size > 1 && tiers.all { detector.hasContent(it) }) {
             val nodes = tiers.map { detector.partition(it, 0) }
             if (nodes.all { it != null }) {
                 nodes.filterNotNull().reduceRight { node, below ->
@@ -129,6 +132,12 @@ object PanelDetectionCore {
          * white-strip detector as panel mode, but scan each remaining row
          * independently so short/uneven horizontal gaps are not missed.
          */
+        fun hasCleanFullHeightColumn(region: PageRegion): Boolean {
+            val axis = bestGutter(region, horizontal = false) ?: return false
+            return hasContent(region.copy(right = axis)) &&
+                hasContent(region.copy(left = axis))
+        }
+
         fun partitionRows(whole: PageRegion): List<PageRegion> {
             val rows = mutableListOf<PageRegion>()
             fun visit(region: PageRegion, depth: Int) {
