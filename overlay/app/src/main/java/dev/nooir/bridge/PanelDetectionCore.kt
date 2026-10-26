@@ -145,19 +145,23 @@ object PanelDetectionCore {
                     rows += region
                     return
                 }
-                val axis = bestGutter(region, horizontal = true)
-                    ?: thinLineGutter(region, horizontal = true)
-                    ?: adaptiveGutter(region, horizontal = true)
+                // A tempting blank page margin can outrank the real row seam.
+                // Validate each candidate before trying the next detector.
+                fun valid(axis: Int?): Int? {
+                    if (axis == null) return null
+                    val upper = region.copy(bottom = axis)
+                    val lower = region.copy(top = axis)
+                    return axis.takeIf { hasContent(upper) && hasContent(lower) }
+                }
+                val axis = valid(bestGutter(region, horizontal = true))
+                    ?: valid(thinLineGutter(region, horizontal = true))
+                    ?: valid(adaptiveGutter(region, horizontal = true))
                 if (axis == null) {
                     rows += region
                     return
                 }
                 val upper = region.copy(bottom = axis)
                 val lower = region.copy(top = axis)
-                if (!hasContent(upper) || !hasContent(lower)) {
-                    rows += region
-                    return
-                }
                 visit(upper, depth + 1)
                 visit(lower, depth + 1)
             }
