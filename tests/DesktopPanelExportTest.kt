@@ -39,6 +39,20 @@ private fun mixedOrientationGrid(): BufferedImage {
     } finally { g.dispose() }
     return image
 }
+private fun widePanelStrip(): BufferedImage {
+    val image = BufferedImage(480, 240, BufferedImage.TYPE_INT_RGB)
+    val g = image.createGraphics()
+    try {
+        g.color = java.awt.Color.WHITE
+        g.fillRect(0, 0, 480, 240)
+        g.color = java.awt.Color(78, 78, 78)
+        g.fillRect(12, 12, 213, 216)
+        g.color = java.awt.Color(98, 98, 98)
+        g.fillRect(255, 12, 213, 216)
+    } finally { g.dispose() }
+    return image
+}
+
 private fun u16(bytes: ByteArray, at: Int) =
     (bytes[at].toInt() and 255) or ((bytes[at + 1].toInt() and 255) shl 8)
 
@@ -51,6 +65,41 @@ fun main() {
             panelMode = "PANEL_BY_PANEL", includeCover = false,
             cropWhiteMargins = true, layout = "PAGED", dither = false,
         )
+        // The Windows converter must honor the same independent row mode
+        // as Android. Internal white columns must NOT split a horizontal row.
+        val rowOptions = panelOptions.copy(panelMode = "ROW_BY_ROW")
+        val rowOutput = File(root, "rows.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", input.absolutePath, "--output", rowOutput.absolutePath,
+            "--format", "XTC", "--device", "X4", "--options-token", rowOptions.token(),
+        ))
+        check(u16(rowOutput.readBytes(), 6) == 3) {
+            "Row by Row must retain exactly three horizontal tiers, not six panels"
+        }
+        val rowAuto = File(root, "rows-auto.epub")
+        NooirDesktopCli.main(arrayOf(
+            "--input", input.absolutePath, "--output", rowAuto.absolutePath,
+            "--format", "EPUB2", "--device", "X4",
+            "--options-token", rowOptions.copy(orientation = "AUTO_FIT").token(),
+        ))
+        ZipFile(rowAuto).use { zip ->
+            check(zip.entries().asSequence().count { it.name.endsWith(".png") } == 3) {
+                "Auto Fit must not split horizontal rows back into vertical panels"
+            }
+        }
+
+        // Both platforms must recognize clear panel gutters in wide strips.
+        val wideInput = File(root, "wide").apply { mkdirs() }
+        check(ImageIO.write(widePanelStrip(), "png", File(wideInput, "wide.png")))
+        val wideOutput = File(root, "wide-panels.xtch")
+        NooirDesktopCli.main(arrayOf(
+            "--input", wideInput.absolutePath, "--output", wideOutput.absolutePath,
+            "--format", "XTCH", "--device", "X4", "--options-token", panelOptions.token(),
+        ))
+        check(u16(wideOutput.readBytes(), 6) == 2) {
+            "Wide Japanese manga strip should become two RTL panel frames"
+        }
+
         for ((format, ext) in listOf("XTC" to "xtc", "XTCH" to "xtch",
             "EPUB2" to "epub", "EPUB" to "epub", "CBZ" to "cbz")) {
             val output = File(root, "panels-$format.$ext")

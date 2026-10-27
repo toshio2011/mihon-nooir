@@ -210,11 +210,24 @@ object NooirDesktopCli {
         }
     }
 
+    /** Identical source-pixel seam policy to the Android bitmap adapter. */
+    private fun safePanelSlices(
+        src: BufferedImage, panel: PageRegion, viewWidth: Int, viewHeight: Int,
+        rightToLeft: Boolean, overlapPercent: Int,
+    ): List<PageRegion> = PanelSafeSlicePlanner.plan(
+        panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
+    ) { x, y ->
+        val pixel = src.getRGB(x, y)
+        val alpha = (pixel ushr 24) and 255
+        val lum = (((pixel ushr 16) and 255) * 299 +
+            ((pixel ushr 8) and 255) * 587 + (pixel and 255) * 114) / 1000
+        (lum * alpha + 255 * (255 - alpha)) / 255 < 247
+    }
+
     /** Same bounded OCR-free panel detector as Android, with a Java2D thumbnail adapter. */
     private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<PageRegion>? {
-        if (options.panelMode != "PANEL_BY_PANEL") return null
-        if (src.height.toLong() > src.width.toLong() * 3L ||
-            src.width.toLong() * 100L > src.height.toLong() * 135L) return null
+        if (options.panelMode != "PANEL_BY_PANEL" && options.panelMode != "ROW_BY_ROW") return null
+        if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
         val w = (src.width * scale).toInt().coerceAtLeast(1)
         val h = (src.height * scale).toInt().coerceAtLeast(1)
@@ -234,14 +247,16 @@ object NooirDesktopCli {
             ((((c ushr 16) and 255) * 299 + ((c ushr 8) and 255) * 587 +
                 (c and 255) * 114) / 1000).toByte()
         }
-        val plan = PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
+        val plan = if (options.panelMode == "ROW_BY_ROW")
+            PanelDetectionCore.detectRows(w, h, gray)
+        else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
         return if (plan.usedFullPageFallback) null
             else PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
     }
 
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean): Sequence<QuantizedPage> = sequence {
-        val auto = options.panelMode == "PANEL_BY_PANEL" && options.orientation == "AUTO_FIT"
+        val auto = options.panelMode != "OFF" && options.orientation == "AUTO_FIT"
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
         val manualViewHeight = if (manualRotate) width else height
@@ -250,17 +265,30 @@ object NooirDesktopCli {
             detectedPanels.map { trimDetectedPanel(src, it) }
         else detectedPanels
         val slices: List<PanelFitSlice> = when {
+            // Row by Row means exactly one screen per detected horizontal tier.
+            // Never split a row again on its internal vertical panel gutters.
+            panels != null && options.panelMode == "ROW_BY_ROW" && auto ->
+                PanelAutoFit.plan(
+                    panels, minOf(width, height), maxOf(width, height),
+                    options.rightToLeft, options.overlapPercent,
+                    preserveWholePanels = true,
+                )
+            panels != null && options.panelMode == "ROW_BY_ROW" ->
+                panels.map { PanelFitSlice(it, manualRotate) }
             panels != null && auto -> PanelAutoFit.plan(
                 panels, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
                 preserveWholePanels = true,
-            )
-            panels != null -> panels.map { panel ->
-                // Panel by Panel means one complete confirmed panel per frame.
-                // Cropping whitespace must never turn a normal frame into
-                // additional page slices merely by changing its aspect ratio.
-                PanelFitSlice(panel, manualRotate)
+            ).flatMap { fit ->
+                val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
+                val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
+                safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
+                    options.overlapPercent).map { PanelFitSlice(it, fit.landscape) }
             }
+            panels != null -> panels.flatMap { panel ->
+                safePanelSlices(src, panel, manualViewWidth, manualViewHeight,
+                    options.rightToLeft, options.overlapPercent)
+            }.map { PanelFitSlice(it, manualRotate) }
             else -> PageSlicePlanner.plan(
                 src.width, src.height, manualViewWidth, manualViewHeight,
                 options.layout, options.splitSpreads, options.rightToLeft,

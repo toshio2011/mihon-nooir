@@ -68,6 +68,15 @@ class TestOverlay(unittest.TestCase):
             desktop_cli = (ROOT/'desktop/cli/NooirDesktopCli.kt').read_text()
             self.assertIn('PanelWhitespaceCrop.trim(region)', desktop_cli)
             self.assertIn('detectedPanels.map { trimDetectedPanel(src, it) }', desktop_cli)
+            self.assertTrue((root/'app/src/main/java/dev/nooir/bridge/PanelSafeSlicePlanner.kt').exists())
+            self.assertIn('PanelSafeSlicePlanner.plan(', panel_src)
+            self.assertIn('PanelSafeSlicePlanner.plan(', desktop_cli)
+            # Keep the same split/no-cut decision in both platform adapters.
+            self.assertIn('options.overlapPercent)', panel_src)
+            self.assertIn('options.overlapPercent)', desktop_cli)
+            self.assertIn('PanelDetectionCore.detectRows(w, h, gray)', desktop_cli)
+            self.assertIn('panels != null && options.panelMode == "ROW_BY_ROW"', panel_src)
+            self.assertIn('panels != null && options.panelMode == "ROW_BY_ROW"', desktop_cli)
 
 
             self.assertIn('fun inject(nooirMangaExportWorker', (graph/'AppGraph.kt').read_text())
