@@ -39,6 +39,7 @@ object PanelDetectionCore {
         // If no row seam exists, try panel detection on the whole page.
         val rows = detector.partitionRows(whole)
         val output = mutableListOf<PageRegion>()
+        var recoveredRows = 0
         for ((index, row) in rows.withIndex()) {
             // Reserve one output slot for every remaining detected row.
             // Extra panel candidates must never force a page-wide fallback.
@@ -64,12 +65,29 @@ object PanelDetectionCore {
                         row.width.toLong() * row.height * 5
                 } >= 4) &&
                 coversRegion(candidates, row)
-            if (valid) output.addAll(candidates!!) else output.add(row)
+            if (valid) {
+                output.addAll(candidates!!)
+            } else {
+                // The normal recursive candidate tree may over-split one small
+                // region and be rejected as a whole. Only *after* that rejection,
+                // retry independent vertical seams inside this exact row. A
+                // failed retry leaves the existing grouped-row fallback intact.
+                val recovered = rowDetector.retryRejectedRowColumns(
+                    row, available, rightToLeft,
+                )
+                if (recovered != null) {
+                    output.addAll(recovered)
+                    recoveredRows++
+                } else output.add(row)
+            }
         }
         if (output.size !in 2..MAX_PANELS || !coversEntirePage(output, width, height)) {
             return fallback("no validated rows or panels")
         }
-        return PanelPlan(output, false, "row-first partition with per-row panel fallback")
+        val reason = if (recoveredRows > 0)
+            "row-first partition with rejected-row column recovery"
+        else "row-first partition with per-row panel fallback"
+        return PanelPlan(output, false, reason)
     }
 
     /**
@@ -155,6 +173,97 @@ object PanelDetectionCore {
             val axis = bestGutter(region, horizontal = false) ?: return false
             return hasContent(region.copy(right = axis)) &&
                 hasContent(region.copy(left = axis))
+        }
+
+        /**
+         * A *second chance* exclusively for rejected Panel by Panel results.
+         *
+         * The main recursive detector can reject an entire row if a single
+         * proposed child is a tiny border/text fragment. Try vertical columns
+         * without recursively splitting their interior artwork into more rows.
+         * Only keep a cut when BOTH columns are substantial, contain art spread
+         * through their height, and the proposed seam is near-white. Otherwise
+         * return null and leave the row grouped, exactly as before.
+         *
+         * detectRows() never calls this function.
+         */
+        fun retryRejectedRowColumns(
+            row: PageRegion, maximum: Int, rightToLeft: Boolean,
+        ): List<PageRegion>? {
+            if (maximum < 2 || row.width < 72 || row.height < 40) return null
+
+            fun likelyIllustratedColumn(r: PageRegion): Boolean {
+                // Keep conservative dimensions so individual letters, decorative
+                // rules and narrow white edge fragments cannot become frames.
+                if (r.width.toLong() * 100 < row.width.toLong() * 18 ||
+                    r.width.toLong() * r.height * 100 <
+                    row.width.toLong() * row.height * 8) return false
+                if (!hasContent(r) || isLikelyBorderFragment(r)) return false
+
+                // A one-line caption can have dark pixels on both sides of
+                // several vertical word spaces; that does not make it a manga
+                // panel. Require ink distributed vertically over the candidate.
+                val dx = maxOf(1, r.width / 96)
+                val dy = maxOf(1, r.height / 180)
+                var first = r.bottom
+                var last = r.top
+                for (y in r.top until r.bottom step dy) {
+                    var ink = 0
+                    for (x in r.left until r.right step dx)
+                        if ((gray[y * width + x].toInt() and 255) < INK) ink++
+                    if (ink >= 3) {
+                        first = minOf(first, y)
+                        last = maxOf(last, y)
+                    }
+                }
+                return first < last && (last - first).toLong() * 100 >=
+                    r.height.toLong() * 48
+            }
+
+            fun safeVerticalSeam(r: PageRegion, axis: Int): Boolean {
+                if (axis <= r.left + 2 || axis >= r.right - 2) return false
+                var inkOnAxis = 0
+                for (y in r.top until r.bottom) {
+                    fun value(x: Int) = gray[y * width + x].toInt() and 255
+                    if (value(axis) < 235) inkOnAxis++
+                    // Protect visible strokes and balloon tails spanning a
+                    // proposed seam, even when average ink density is tiny.
+                    if (value(axis - 1) < 180 && value(axis) < 180 &&
+                        value(axis + 1) < 180) return false
+                }
+                return inkOnAxis.toLong() * 100 <= r.height.toLong() * 2
+            }
+
+            val columns = mutableListOf(row)
+            while (columns.size < maximum) {
+                var changed = false
+                for (i in columns.indices) {
+                    val current = columns[i]
+                    if (current.width < 72 || current.height < 40) continue
+                    val options = listOfNotNull(
+                        bestGutter(current, horizontal = false),
+                        thinLineGutter(current, horizontal = false),
+                        partialVerticalGutter(current),
+                        adaptiveGutter(current, horizontal = false),
+                    ).distinct()
+                    val axis = options.firstOrNull { cut ->
+                        safeVerticalSeam(current, cut) &&
+                            likelyIllustratedColumn(current.copy(right = cut)) &&
+                            likelyIllustratedColumn(current.copy(left = cut))
+                    } ?: continue
+                    columns.removeAt(i)
+                    columns.add(i, current.copy(right = axis))
+                    columns.add(i + 1, current.copy(left = axis))
+                    changed = true
+                    break
+                }
+                if (!changed) break
+            }
+            // The exact rectangles cover the rejected parent, without
+            // cropping or dropping source pixels. Reading order is per-row.
+            return columns.takeIf { it.size in 2..maximum }?.let {
+                if (rightToLeft) it.reversed() else it
+            }
         }
 
         fun partitionRows(whole: PageRegion): List<PageRegion> {
