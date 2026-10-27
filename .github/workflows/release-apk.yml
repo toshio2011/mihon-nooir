@@ -59,6 +59,16 @@ jobs:
           tag="v$version"
           apk=$(find upstream/app/build/outputs/apk/foss -maxdepth 1 -name '*.apk' -type f -print -quit)
           test -n "$apk"
+          # Refuse to publish an APK built under the temporary diagnostic
+          # package identity, or any identity other than the one users retain.
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk"
+          tools_dir=$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          test -x "$tools_dir/aapt" && test -x "$tools_dir/apksigner"
+          "$tools_dir/apksigner" verify --verbose "$apk"
+          badging=$("$tools_dir/aapt" dump badging "$apk")
+          grep -Fq "name='dev.nooir.mihon.foss'" <<< "$badging" || { echo 'Unexpected APK package ID; release blocked'; exit 1; }
+          grep -Fq "versionName='$version'" <<< "$badging" || { echo 'Unexpected APK version; release blocked'; exit 1; }
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag exists; refusing overwrite"
             exit 1
