@@ -86,3 +86,8 @@ java -Djava.awt.headless=true -cp "$tmp/desktop-panel-tests.jar" DesktopPanelExp
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelAutoFit.kt} \
   tests/PanelAutoFitTest.kt -include-runtime -d "$tmp/panel-auto-fit.jar"
 java -jar "$tmp/panel-auto-fit.jar"
+
+# Opt-in panel crop: shrink paper borders without losing artwork or balloons.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelWhitespaceCrop.kt} \
+  tests/PanelWhitespaceCropTest.kt -include-runtime -d "$tmp/panel-crop.jar"
+java -jar "$tmp/panel-crop.jar"
