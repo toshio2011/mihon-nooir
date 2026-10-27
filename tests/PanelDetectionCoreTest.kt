@@ -61,6 +61,17 @@ fun main() {
             "Panel geometry dropped source content at ($x,$y)"
         }
     }
+    // No visible gutters: the adaptive candidates can both be absent. This
+    // must preserve the original page rather than dereference a null candidate.
+    for (shade in listOf(0, 110, 220, 246, 255)) {
+        val seamless = ByteArray(width * height) { shade.toByte() }
+        for (rtlMode in listOf(true, false)) {
+            val plan = PanelDetectionCore.detect(width, height, seamless, rtlMode)
+            check(plan.usedFullPageFallback && plan.regions == listOf(PageRegion(0, 0, width, height))) {
+                "Uniform shade $shade must remain intact in RTL=$rtlMode"
+            }
+        }
+    }
     val full = ByteArray(width * height) { 110.toByte() }
     val splash = PanelDetectionCore.detect(width, height, full, true)
     check(splash.usedFullPageFallback && splash.regions == listOf(PageRegion(0, 0, width, height)))
