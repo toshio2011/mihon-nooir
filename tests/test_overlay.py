@@ -65,6 +65,10 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('PanelWhitespaceCrop.trim(region)', panel_src)
             self.assertIn('detectedPanels.map { trimDetectedPanel(src, it) }', panel_src)
             self.assertTrue((root/'app/src/main/java/dev/nooir/bridge/PanelWhitespaceCrop.kt').exists())
+            desktop_cli = (ROOT/'desktop/cli/NooirDesktopCli.kt').read_text()
+            self.assertIn('PanelWhitespaceCrop.trim(region)', desktop_cli)
+            self.assertIn('detectedPanels.map { trimDetectedPanel(src, it) }', desktop_cli)
+
 
             self.assertIn('fun inject(nooirMangaExportWorker', (graph/'AppGraph.kt').read_text())
             self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
