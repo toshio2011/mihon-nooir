@@ -43,6 +43,18 @@ def secure(upstream: Path) -> None:
 
 """, "")
 
+    # The original helper is unsafe on Android 16 when REQUEST_INSTALL_PACKAGES
+    # is absent. Even though onboarding no longer calls it, remove the unused
+    # helper so a future screen cannot accidentally reintroduce this crash.
+    # If upstream repurposes Permissions.kt, fail closed and review the change.
+    permissions_helper = upstream / "app/src/main/java/eu/kanade/presentation/util/Permissions.kt"
+    helper_source = permissions_helper.read_text(encoding="utf-8")
+    if (helper_source.count("fun rememberRequestPackageInstallsPermissionState(") != 1 or
+            helper_source.count("context.packageManager.canRequestPackageInstalls()") != 1 or
+            helper_source.count("\\nfun ") != 1):
+        raise RuntimeError("Upstream permission helper changed; review before removing")
+    permissions_helper.unlink()
+
     manifest = upstream / "app/src/main/AndroidManifest.xml"
 
     for permission in (
