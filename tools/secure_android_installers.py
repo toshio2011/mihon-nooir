@@ -43,6 +43,37 @@ def secure(upstream: Path) -> None:
 
 """, "")
 
+    # The Extensions tab also calls the same helper. The fork only installs
+    # store-signed extensions privately, so an Android-wide install-permission
+    # warning in this screen is both wrong and fatal on Android 16.
+    extensions_screen = upstream / "app/src/main/java/eu/kanade/presentation/browse/ExtensionsScreen.kt"
+    replace_once(extensions_screen,
+        "import androidx.compose.foundation.clickable\\n", "")
+    replace_once(extensions_screen,
+        "import eu.kanade.presentation.components.WarningBanner\\n", "")
+    replace_once(extensions_screen,
+        "import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState\\n", "")
+    replace_once(extensions_screen,
+        "import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission\\n", "")
+    replace_once(extensions_screen,
+        "    val context = LocalContext.current\\n    var notLoadedState by remember { mutableStateOf<Extension.NotLoaded?>(null) }\\n    val installGranted = rememberRequestPackageInstallsPermissionState(initialValue = true)\\n",
+        "    var notLoadedState by remember { mutableStateOf<Extension.NotLoaded?>(null) }\\n")
+    replace_once(extensions_screen,
+        """        if (!installGranted && state.installer?.requiresSystemPermission == true) {
+            item(key = "extension-permissions-warning") {
+                WarningBanner(
+                    textRes = MR.strings.ext_permission_install_apps_warning,
+                    modifier = Modifier.clickable {
+                        context.launchRequestPackageInstallsPermission()
+                    },
+                )
+            }
+        }
+
+""",
+        "",
+    )
+
     # The original helper is unsafe on Android 16 when REQUEST_INSTALL_PACKAGES
     # is absent. Even though onboarding no longer calls it, remove the unused
     # helper so a future screen cannot accidentally reintroduce this crash.
