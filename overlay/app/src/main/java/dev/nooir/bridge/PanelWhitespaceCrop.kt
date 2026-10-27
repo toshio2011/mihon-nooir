@@ -40,6 +40,17 @@ object PanelWhitespaceCrop {
             minOf(panel.bottom, maxOf(bottom + guard, panel.bottom - maxTrimY)),
         )
         if (candidate.width <= 0 || candidate.height <= 0) return panel
+        // The coarse first pass is only a *proposal*. Check every pixel that
+        // would be discarded, including tiny lettering and pale pencil strokes
+        // between sample lines. An excluded ink pixel makes trimming unsafe.
+        // The callback caches one bitmap row; this requires no new full image.
+        for (y in panel.top until panel.bottom) {
+            for (x in panel.left until panel.right) {
+                if (x >= candidate.left && x < candidate.right &&
+                    y >= candidate.top && y < candidate.bottom) continue
+                if (isInk(x, y)) return panel
+            }
+        }
         // Ignore negligible changes instead of adding per-panel reflow jitter.
         if (candidate.width.toLong() * candidate.height * 100 >=
             panel.width.toLong() * panel.height * 98) return panel
