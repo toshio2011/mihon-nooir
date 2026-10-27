@@ -277,5 +277,40 @@ fun main() {
     check(PanelDetectionCore.detect(width, height, image, true).regions == rtl.regions) {
         "Panel ordering must be deterministic across runs"
     }
+    // Panel-only retry: the first horizontal tier has a clean right/left
+    // column seam, but a tiny text-like stripe inside the left column
+    // tempts the normal recursive detector into a rejected small child.
+    // Recover the two substantial columns instead of losing all separation.
+    val retryW = 360
+    val retryH = 600
+    val rejectedRowPage = ByteArray(retryW * retryH) { 255.toByte() }
+    for (y in 5 until 16) for (x in 8 until 164)
+        rejectedRowPage[y * retryW + x] = 65.toByte()
+    for (y in 42 until 395) for (x in 8 until 164)
+        rejectedRowPage[y * retryW + x] = 95.toByte()
+    for (y in 5 until 395) for (x in 195 until 352)
+        rejectedRowPage[y * retryW + x] = 110.toByte()
+    for (y in 430 until 590) for (x in 10 until 350)
+        rejectedRowPage[y * retryW + x] = 85.toByte()
+    val unmodifiedRows = PanelDetectionCore.detectRows(retryW, retryH, rejectedRowPage)
+    check(!unmodifiedRows.usedFullPageFallback && unmodifiedRows.regions.size == 2) {
+        "Independent Row by Row must retain exactly two tiers"
+    }
+    val recoveredPanels = PanelDetectionCore.detect(retryW, retryH, rejectedRowPage, true)
+    check(!recoveredPanels.usedFullPageFallback && recoveredPanels.regions.size == 3 &&
+        recoveredPanels.reason.contains("rejected-row column recovery")) {
+        "Rejected small fragment must not undo safe columns: ${recoveredPanels.reason} ${recoveredPanels.regions}"
+    }
+    check(recoveredPanels.regions[0].left > recoveredPanels.regions[1].left) {
+        "RTL must read the recovered right column before the left"
+    }
+    check(recoveredPanels.regions.last().top > recoveredPanels.regions.first().bottom) {
+        "A recovered tier must not reorder the original rows"
+    }
+    val retryLtr = PanelDetectionCore.detect(retryW, retryH, rejectedRowPage, false)
+    check(retryLtr.regions.size == 3 && retryLtr.regions[0].left < retryLtr.regions[1].left)
+    check(PanelDetectionCore.detectRows(retryW, retryH, rejectedRowPage).regions ==
+        unmodifiedRows.regions) { "Panel-only retry must never mutate Row by Row behavior" }
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
