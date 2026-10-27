@@ -204,7 +204,36 @@ major, minor, patch = map(int, version.split("."))
 assert major <= 20 and minor <= 99 and patch <= 9999, "Version part too large"
 version_code = major * 1_000_000 + minor * 10_000 + patch
 app_build = upstream / "app/build.gradle.kts"
-replace_once(app_build, 'versionCode = 39', f'versionCode = {version_code}')
+# Upstream version changes between releases; preserve a strict single-match guard.
+build_text = app_build.read_text()
+build_text, code_matches = re.subn(r'(?m)^(\\s*versionCode = )\\d+\\s*
+build_text = app_build.read_text()
+build_text, name_matches = re.subn(r'(?m)^(\\s*versionName = )"[^"]+"\\s*
+# Never offer the original Mihon APK as a fork update.
+updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
+replace_once(updater, '"mihonapp/mihon-preview"', '"toshio2011/mihon-nooir"')
+replace_once(updater, '"mihonapp/mihon"', '"toshio2011/mihon-nooir"')
+print("Mihon Nooir integration overlay applied to", upstream), lambda m: m.group(1) + str(version_code), build_text)
+if code_matches != 1:
+    raise RuntimeError(f"Expected exactly one upstream versionCode, got {code_matches}")
+app_build.write_text(build_text)
+replace_once(app_build, 'versionName = "0.21.3"', f'versionName = "{version}"')
+# Never offer the original Mihon APK as a fork update.
+updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
+replace_once(updater, '"mihonapp/mihon-preview"', '"toshio2011/mihon-nooir"')
+replace_once(updater, '"mihonapp/mihon"', '"toshio2011/mihon-nooir"')
+print("Mihon Nooir integration overlay applied to", upstream), lambda m: m.group(1) + f'"{version}"', build_text)
+if name_matches != 1:
+    raise RuntimeError(f"Expected exactly one upstream versionName, got {name_matches}")
+app_build.write_text(build_text)
+# Never offer the original Mihon APK as a fork update.
+updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
+replace_once(updater, '"mihonapp/mihon-preview"', '"toshio2011/mihon-nooir"')
+replace_once(updater, '"mihonapp/mihon"', '"toshio2011/mihon-nooir"')
+print("Mihon Nooir integration overlay applied to", upstream), lambda m: m.group(1) + str(version_code), build_text)
+if code_matches != 1:
+    raise RuntimeError(f"Expected exactly one upstream versionCode, got {code_matches}")
+app_build.write_text(build_text)
 replace_once(app_build, 'versionName = "0.21.3"', f'versionName = "{version}"')
 # Never offer the original Mihon APK as a fork update.
 updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
