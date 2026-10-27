@@ -204,8 +204,8 @@ major, minor, patch = map(int, version.split("."))
 assert major <= 20 and minor <= 99 and patch <= 9999, "Version part too large"
 version_code = major * 1_000_000 + minor * 10_000 + patch
 app_build = upstream / "app/build.gradle.kts"
-replace_once(app_build, 'versionCode = 38', f'versionCode = {version_code}')
-replace_once(app_build, 'versionName = "0.21.2"', f'versionName = "{version}"')
+replace_once(app_build, 'versionCode = 39', f'versionCode = {version_code}')
+replace_once(app_build, 'versionName = "0.21.3"', f'versionName = "{version}"')
 # Never offer the original Mihon APK as a fork update.
 updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
 replace_once(updater, '"mihonapp/mihon-preview"', '"toshio2011/mihon-nooir"')
