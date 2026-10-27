@@ -97,7 +97,7 @@ jobs:
             unzip -tq "$apk" >/dev/null
             "$tools_dir/apksigner" verify --verbose --print-certs "$apk"
             badging=$("$tools_dir/aapt" dump badging "$apk")
-            grep -Fq "name='dev.nooir.mihontrial.foss'" <<< "$badging"
+            grep -Fq "name='dev.nooir.mihon.foss'" <<< "$badging"
             grep -Fq "versionCode='$version_code'" <<< "$badging"
             grep -Fq "versionName='$version'" <<< "$badging"
             grep -Fq "application-label:'MihonNooir'" <<< "$badging"
