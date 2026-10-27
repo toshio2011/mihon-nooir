@@ -76,6 +76,18 @@ class ExtensionInstaller {
     }
 }
 """)
+        loader = write("app/src/main/java/eu/kanade/tachiyomi/extension/util/ExtensionLoader.kt", """import java.io.File
+class ExtensionLoader {
+        val target = File(getPrivateExtensionDir(context), "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION")
+        try {
+            target.delete()
+            file.copyAndSetReadOnlyTo(target, overwrite = true)
+        } catch (e: Exception) {
+            target.delete()
+            throw e
+        }
+}
+""")
         onboarding = write("app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt", """import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState
 import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
 class PermissionStep {
@@ -139,6 +151,12 @@ class PermissionStep {
             self.assertNotIn("ExtensionInstallService", xml)
             self.assertNotIn("ExtensionInstallActivity", xml)
             self.assertIn('android:value="true"', xml)
+            loader_source = (root / "app/src/main/java/eu/kanade/tachiyomi/extension/util/ExtensionLoader.kt").read_text()
+            self.assertIn("import java.io.IOException", loader_source)
+            self.assertIn("file.copyAndSetReadOnlyTo(staged, overwrite = true)", loader_source)
+            self.assertIn("staged.renameTo(target)", loader_source)
+            self.assertIn("staged.delete()", loader_source)
+            self.assertNotIn("target.delete()", loader_source)
             source = extension.read_text()
             self.assertIn("installApkPrivately(downloadId, tempFile, packageInfo)", source)
             self.assertNotIn("startAndroidInstaller(", source)
