@@ -193,6 +193,23 @@ object NooirDesktopCli {
         ).takeIf { it.width > 0 && it.height > 0 } ?: region
     }
 
+    /** Same guarded trim and orientation logic as Android for detected panels. */
+    private fun trimDetectedPanel(src: BufferedImage, region: PageRegion): PageRegion {
+        val row = IntArray(region.width)
+        var loadedY = -1
+        return PanelWhitespaceCrop.trim(region) { x, y ->
+            if (loadedY != y) {
+                src.getRGB(region.left, y, region.width, 1, row, 0, region.width)
+                loadedY = y
+            }
+            val pixel = row[x - region.left]
+            val alpha = (pixel ushr 24) and 255
+            val lum = (((pixel ushr 16) and 255) * 299 +
+                ((pixel ushr 8) and 255) * 587 + (pixel and 255) * 114) / 1000
+            (lum * alpha + 255 * (255 - alpha)) / 255 < 249
+        }
+    }
+
     /** Same bounded OCR-free panel detector as Android, with a Java2D thumbnail adapter. */
     private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<PageRegion>? {
         if (options.panelMode != "PANEL_BY_PANEL") return null
@@ -228,16 +245,22 @@ object NooirDesktopCli {
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
         val manualViewHeight = if (manualRotate) width else height
-        val panels = detectPanels(src, options)
+        val detectedPanels = detectPanels(src, options)
+        val panels = if (detectedPanels != null && options.cropWhiteMargins)
+            detectedPanels.map { trimDetectedPanel(src, it) }
+        else detectedPanels
         val slices: List<PanelFitSlice> = when {
             panels != null && auto -> PanelAutoFit.plan(
                 panels, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
+                preserveWholePanels = true,
             )
-            panels != null -> panels.flatMap { panel ->
-                PanelViewportPlanner.plan(panel, manualViewWidth, manualViewHeight,
-                    options.rightToLeft, options.overlapPercent)
-            }.map { PanelFitSlice(it, manualRotate) }
+            panels != null -> panels.map { panel ->
+                // Panel by Panel means one complete confirmed panel per frame.
+                // Cropping whitespace must never turn a normal frame into
+                // additional page slices merely by changing its aspect ratio.
+                PanelFitSlice(panel, manualRotate)
+            }
             else -> PageSlicePlanner.plan(
                 src.width, src.height, manualViewWidth, manualViewHeight,
                 options.layout, options.splitSpreads, options.rightToLeft,
@@ -252,7 +275,7 @@ object NooirDesktopCli {
             val rotate = fixedFramebuffer && landscape && frameWidth < frameHeight
             val vw = if (rotate) frameHeight else frameWidth
             val vh = if (rotate) frameWidth else frameHeight
-            // Padded panel crops must never be trimmed again: that can cut balloons.
+            // Already trimmed detected panels retain their safety padding.
             val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, region) else region
             val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)

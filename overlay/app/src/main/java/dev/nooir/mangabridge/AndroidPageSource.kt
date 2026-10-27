@@ -17,6 +17,7 @@ import dev.nooir.bridge.NaturalPageOrder
 import dev.nooir.bridge.PanelDetectionCore
 import dev.nooir.bridge.PanelViewportPlanner
 import dev.nooir.bridge.PanelAutoFit
+import dev.nooir.bridge.PanelWhitespaceCrop
 import dev.nooir.bridge.PanelFitSlice
 import dev.nooir.bridge.PageRegion
 import java.io.ByteArrayOutputStream
@@ -146,6 +147,28 @@ class AndroidPageSource(private val context: Context) {
         }
     }
 
+    /**
+     * Pixel scanning is bounded to one row buffer rather than decoding or
+     * retaining another full bitmap. The crop is opt-in and is applied only
+     * after the full-coverage panel detector has accepted a split.
+     */
+    private fun trimDetectedPanel(src: Bitmap, region: PageRegion): PageRegion {
+        val row = IntArray(region.width)
+        var loadedY = -1
+        return PanelWhitespaceCrop.trim(region) { x, y ->
+            if (loadedY != y) {
+                src.getPixels(row, 0, region.width, region.left, y, region.width, 1)
+                loadedY = y
+            }
+            val c = row[x - region.left]
+            val alpha = Color.alpha(c)
+            val lum = (Color.red(c) * 299 + Color.green(c) * 587 +
+                Color.blue(c) * 114) / 1000
+            // Include faint letter outlines; transparent PNG pixels are white.
+            (lum * alpha + 255 * (255 - alpha)) / 255 < 249
+        }
+    }
+
     private fun imageExtension(name: String): Boolean {
         val ext = name.substringAfterLast('.', "").lowercase()
         return ext in setOf("png", "jpg", "jpeg", "webp", "bmp", "gif")
@@ -254,7 +277,13 @@ class AndroidPageSource(private val context: Context) {
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
         val manualViewHeight = if (manualRotate) width else height
-        val panels = detectPanels(src, options)
+        // The previous pipeline disabled margin trimming for detected panels,
+        // leaving large bright borders around otherwise valid individual crops.
+        // Trim only when requested, before Auto Fit chooses orientation.
+        val detectedPanels = detectPanels(src, options)
+        val panels = if (detectedPanels != null && options.cropWhiteMargins)
+            detectedPanels.map { trimDetectedPanel(src, it) }
+        else detectedPanels
         val slices: List<PanelFitSlice> = when {
             panels != null && auto -> PanelAutoFit.plan(
                 panels, minOf(width, height), maxOf(width, height),

@@ -88,6 +88,13 @@ class ExtensionLoader {
         }
 }
 """)
+        permissions_helper = write(
+            "app/src/main/java/eu/kanade/presentation/util/Permissions.kt",
+            "package eu.kanade.presentation.util\n"
+            "@Composable\nfun rememberRequestPackageInstallsPermissionState(initialValue: Boolean = false): Boolean {\n"
+            "    val value = context.packageManager.canRequestPackageInstalls()\n"
+            "    return value\n}\n",
+        )
         onboarding = write("app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt", """import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState
 import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
 class PermissionStep {
@@ -105,6 +112,33 @@ class PermissionStep {
 
             OtherPermission()
         }
+}
+""")
+        extensions_screen = write("app/src/main/java/eu/kanade/presentation/browse/ExtensionsScreen.kt", """import androidx.compose.foundation.clickable
+import eu.kanade.presentation.components.WarningBanner
+import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState
+import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
+fun Content() {
+    val context = LocalContext.current
+    var notLoadedState by remember { mutableStateOf<Extension.NotLoaded?>(null) }
+    val installGranted = rememberRequestPackageInstallsPermissionState(initialValue = true)
+
+    FastScrollLazyColumn(
+        contentPadding = contentPadding + topSmallPaddingValues,
+    ) {
+        if (!installGranted && state.installer?.requiresSystemPermission == true) {
+            item(key = "extension-permissions-warning") {
+                WarningBanner(
+                    textRes = MR.strings.ext_permission_install_apps_warning,
+                    modifier = Modifier.clickable {
+                        context.launchRequestPackageInstallsPermission()
+                    },
+                )
+            }
+        }
+
+        state.items.forEach { (header, items) -> }
+    }
 }
 """)
         settings = write("app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsAdvancedScreen.kt", """class SettingsAdvancedScreen {
@@ -138,6 +172,14 @@ class PermissionStep {
             root = pathlib.Path(d)
             manifest, extension, settings, graph, to_delete = self.fixture(root)
             MODULE.secure(root)
+            self.assertFalse((root / "app/src/main/java/eu/kanade/presentation/util/Permissions.kt").exists())
+            extensions_text = (root / "app/src/main/java/eu/kanade/presentation/browse/ExtensionsScreen.kt").read_text()
+            self.assertNotIn("rememberRequestPackageInstallsPermissionState", extensions_text)
+            self.assertNotIn("launchRequestPackageInstallsPermission", extensions_text)
+            self.assertNotIn("extension-permissions-warning", extensions_text)
+            self.assertNotIn("installGranted", extensions_text)
+            self.assertNotIn("WarningBanner", extensions_text)
+            self.assertIn("state.items.forEach", extensions_text)
             onboarding = (root / "app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt").read_text()
             self.assertNotIn("rememberRequestPackageInstallsPermissionState", onboarding)
             self.assertNotIn("launchRequestPackageInstallsPermission", onboarding)
