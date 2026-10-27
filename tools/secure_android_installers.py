@@ -155,7 +155,7 @@ def secure(upstream: Path) -> None:
     loader_source = loader.read_text(encoding="utf-8")
     staged_marker = 'val staged = File(target.parentFile, "${target.name}.part")'
     if staged_marker not in loader_source:
-        replace_once(loader, "import java.io.File\\n", "import java.io.File\\nimport java.io.IOException\\n")
+        replace_once(loader, "import java.io.File\n", "import java.io.File\nimport java.io.IOException\n")
         replace_once(
             loader,
             '''        val target = File(getPrivateExtensionDir(context), "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION")
