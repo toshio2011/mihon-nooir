@@ -58,9 +58,15 @@ object PanelSafeSlicePlanner {
         val overlap = overlapPercent.coerceIn(0, MAX_OVERLAP_PERCENT)
         while (cursor.toLong() + segment < end) {
             if (slices.size >= MAX_FRAMES - 1) return listOf(panel)
+            // Don't emit a tiny unreadable tail when an otherwise clean
+            // last frame can safely include it without cutting artwork.
+            if (end - (cursor + segment) < segment * 35 / 100) break
             val ideal = cursor + segment
             val low = maxOf(cursor + segment * 65 / 100, cursor + 3)
-            val high = minOf(end - segment * 35 / 100, ideal + segment / 10)
+            // With overlap, the next ideal position moves backwards; search
+            // far enough ahead to recover the same real white corridor.
+            val high = minOf(end - segment * 35 / 100,
+                ideal + segment * maxOf(10, overlap + 2) / 100)
             if (low > high) return listOf(panel)
 
             // Search outward from the ideal frame length. Keep the source
