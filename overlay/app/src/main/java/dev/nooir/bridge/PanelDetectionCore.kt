@@ -225,7 +225,13 @@ object PanelDetectionCore {
                 var inkOnAxis = 0
                 for (y in r.top until r.bottom) {
                     fun value(x: Int) = gray[y * width + x].toInt() and 255
-                    if (value(axis) < 235) inkOnAxis++
+                    val center = value(axis)
+                    if (center < 235) inkOnAxis++
+                    // This is an optional second chance, not the main panel
+                    // detector: even one unmistakably dark pixel directly on
+                    // the proposed cut might be a fine balloon tail or text.
+                    // Prefer the unchanged grouped row to a risky cut.
+                    if (center < 220) return false
                     // Protect visible strokes and balloon tails spanning a
                     // proposed seam, even when average ink density is tiny.
                     if (value(axis - 1) < 180 && value(axis) < 180 &&
