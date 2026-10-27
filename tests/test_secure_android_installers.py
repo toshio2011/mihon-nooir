@@ -88,6 +88,13 @@ class ExtensionLoader {
         }
 }
 """)
+        permissions_helper = write(
+            "app/src/main/java/eu/kanade/presentation/util/Permissions.kt",
+            "package eu.kanade.presentation.util\\n"
+            "@Composable\\nfun rememberRequestPackageInstallsPermissionState(initialValue: Boolean = false): Boolean {\\n"
+            "    val value = context.packageManager.canRequestPackageInstalls()\\n"
+            "    return value\\n}\\n",
+        )
         onboarding = write("app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt", """import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState
 import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
 class PermissionStep {
@@ -138,6 +145,7 @@ class PermissionStep {
             root = pathlib.Path(d)
             manifest, extension, settings, graph, to_delete = self.fixture(root)
             MODULE.secure(root)
+            self.assertFalse((root / "app/src/main/java/eu/kanade/presentation/util/Permissions.kt").exists())
             onboarding = (root / "app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt").read_text()
             self.assertNotIn("rememberRequestPackageInstallsPermissionState", onboarding)
             self.assertNotIn("launchRequestPackageInstallsPermission", onboarding)
