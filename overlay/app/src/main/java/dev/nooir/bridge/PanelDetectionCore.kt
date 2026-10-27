@@ -222,21 +222,39 @@ object PanelDetectionCore {
 
             fun safeVerticalSeam(r: PageRegion, axis: Int): Boolean {
                 if (axis <= r.left + 2 || axis >= r.right - 2) return false
+                val edgeBand = maxOf(3, r.height / 16)
+                // A horizontal border running across BOTH panels may cross an
+                // otherwise completely white vertical gutter right at the top
+                // or bottom of a tier. Those pixels are guarded by source-region
+                // overlap. Do not mistake an interior balloon tail for a frame.
+                val frameRuleCache = IntArray(r.height) { -1 }
+                fun fullWidthFrameRule(y: Int): Boolean {
+                    val relativeY = y - r.top
+                    if (relativeY >= edgeBand && relativeY < r.height - edgeBand) return false
+                    if (frameRuleCache[relativeY] >= 0)
+                        return frameRuleCache[relativeY] == 1
+                    var dark = 0
+                    for (x in r.left until r.right)
+                        if ((gray[y * width + x].toInt() and 255) < INK) dark++
+                    val rule = dark.toLong() * 100 >= r.width.toLong() * 55
+                    frameRuleCache[relativeY] = if (rule) 1 else 0
+                    return rule
+                }
                 var inkOnAxis = 0
                 for (y in r.top until r.bottom) {
                     fun value(x: Int) = gray[y * width + x].toInt() and 255
                     val center = value(axis)
                     if (center < 235) inkOnAxis++
-                    // This is an optional second chance, not the main panel
-                    // detector: even one unmistakably dark pixel directly on
-                    // the proposed cut might be a fine balloon tail or text.
-                    // Prefer the unchanged grouped row to a risky cut.
-                    if (center < 220) return false
-                    // Protect visible strokes and balloon tails spanning a
-                    // proposed seam, even when average ink density is tiny.
-                    if (value(axis - 1) < 180 && value(axis) < 180 &&
-                        value(axis + 1) < 180) return false
+                    // Retain the strict veto everywhere except an actual
+                    // near-edge, full-width frame rule. Isolated dark specks,
+                    // captions and thin balloon tails still veto the split.
+                    val allowedFrame = center < 220 && fullWidthFrameRule(y)
+                    if (center < 220 && !allowedFrame) return false
+                    if (!allowedFrame && value(axis - 1) < 180 &&
+                        center < 180 && value(axis + 1) < 180) return false
                 }
+                // Border exceptions are sparse; sustained artwork occupying
+                // the divider is still unsafe even near the outer edges.
                 return inkOnAxis.toLong() * 100 <= r.height.toLong() * 2
             }
 
