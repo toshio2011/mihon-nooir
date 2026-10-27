@@ -78,6 +78,12 @@ jobs:
           fi
           # Do not merely hide the prompt: the old lifecycle helper itself
           # invokes canRequestPackageInstalls() and crashed on Android 16.
+          extensions=upstream/app/src/main/java/eu/kanade/presentation/browse/ExtensionsScreen.kt
+          test -f "$extensions"
+          if grep -Eq 'rememberRequestPackageInstallsPermissionState|launchRequestPackageInstallsPermission|extension-permissions-warning|ext_permission_install_apps_warning' "$extensions"; then
+            echo "Unsafe Android installation-permission UI remains in the Extensions tab"
+            exit 1
+          fi
           test ! -e upstream/app/src/main/java/eu/kanade/presentation/util/Permissions.kt
           if grep -R -n 'canRequestPackageInstalls()' upstream/app/src/main/java/eu/kanade/presentation; then
             echo 'Unsafe package-install permission helper remains in presentation sources'
