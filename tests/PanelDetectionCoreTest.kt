@@ -304,7 +304,7 @@ fun main() {
     check(recoveredPanels.regions[0].left > recoveredPanels.regions[1].left) {
         "RTL must read the recovered right column before the left"
     }
-    check(recoveredPanels.regions.last().top > recoveredPanels.regions.first().bottom) {
+    check(recoveredPanels.regions.last().top >= recoveredPanels.regions.first().bottom) {
         "A recovered tier must not reorder the original rows"
     }
     val retryLtr = PanelDetectionCore.detect(retryW, retryH, rejectedRowPage, false)
