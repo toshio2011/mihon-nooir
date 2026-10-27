@@ -312,6 +312,26 @@ fun main() {
     check(PanelDetectionCore.detectRows(retryW, retryH, rejectedRowPage).regions ==
         unmodifiedRows.regions) { "Panel-only retry must never mutate Row by Row behavior" }
 
+    // Real manga commonly joins two adjacent panel frames with one thin
+    // horizontal border at the BOTTOM of the row. It is safe to retain the
+    // whole line in both padded output panels; do not let this near-edge
+    // continuation hide otherwise separate illustrated columns.
+    val borderedRetry = rejectedRowPage.copyOf()
+    for (y in 392 until 395) for (x in 8 until 352)
+        borderedRetry[y * retryW + x] = 35.toByte()
+    val borderedRows = PanelDetectionCore.detectRows(retryW, retryH, borderedRetry)
+    val borderedPanels = PanelDetectionCore.detect(retryW, retryH, borderedRetry, true)
+    check(!borderedRows.usedFullPageFallback && borderedRows.regions.size == 2) {
+        "A low frame rule must not change horizontal tier detection"
+    }
+    check(!borderedPanels.usedFullPageFallback && borderedPanels.regions.size == 3 &&
+        borderedPanels.reason.contains("rejected-row column recovery")) {
+        "A near-edge full-width frame rule must not veto two safe panels: ${borderedPanels.reason} ${borderedPanels.regions}"
+    }
+    check(borderedPanels.regions[0].left > borderedPanels.regions[1].left)
+    // Existing one-pixel interior balloon bridge is tested below and must
+    // still block recovery even though a broad border may be allowed at edges.
+
     // A thin speech-balloon tail crossing the entire apparent column gutter
     // is not a clean vertical separation. Reject the optional recovery even
     // if the dark line is only one thumbnail pixel tall.
