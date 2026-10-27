@@ -224,6 +224,7 @@ object PanelDetectionCore {
                     // Try a validated thin vertical strip before an uncertain
                     // horizontal band; otherwise panel mode behaves like rows.
                     partialVerticalGutter(region) != null -> false to partialVerticalGutter(region)!!
+                    adaptiveHorizontal == null && adaptiveVertical == null -> null
                     adaptiveHorizontal == null -> adaptiveVertical?.let { false to it.first }
                     adaptiveVertical == null -> adaptiveHorizontal.let { true to it.first }
                     adaptiveVertical.second > adaptiveHorizontal.second -> false to adaptiveVertical.first
