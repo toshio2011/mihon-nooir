@@ -248,6 +248,16 @@ class AndroidPageSource(private val context: Context) {
             detectedPanels.map { trimDetectedPanel(src, it) }
         else detectedPanels
         val slices: List<PanelFitSlice> = when {
+            // Row by Row means exactly one screen per detected horizontal tier.
+            // Never split a row again on its internal vertical panel gutters.
+            panels != null && options.panelMode == "ROW_BY_ROW" && auto ->
+                PanelAutoFit.plan(
+                    panels, minOf(width, height), maxOf(width, height),
+                    options.rightToLeft, options.overlapPercent,
+                    preserveWholePanels = true,
+                )
+            panels != null && options.panelMode == "ROW_BY_ROW" ->
+                panels.map { PanelFitSlice(it, manualRotate) }
             panels != null && auto -> PanelAutoFit.plan(
                 panels, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
