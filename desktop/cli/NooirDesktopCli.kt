@@ -210,6 +210,20 @@ object NooirDesktopCli {
         }
     }
 
+    /** Identical source-pixel seam policy to the Android bitmap adapter. */
+    private fun safePanelSlices(
+        src: BufferedImage, panel: PageRegion, viewWidth: Int, viewHeight: Int,
+        rightToLeft: Boolean, overlapPercent: Int,
+    ): List<PageRegion> = PanelSafeSlicePlanner.plan(
+        panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
+    ) { x, y ->
+        val pixel = src.getRGB(x, y)
+        val alpha = (pixel ushr 24) and 255
+        val lum = (((pixel ushr 16) and 255) * 299 +
+            ((pixel ushr 8) and 255) * 587 + (pixel and 255) * 114) / 1000
+        (lum * alpha + 255 * (255 - alpha)) / 255 < 247
+    }
+
     /** Same bounded OCR-free panel detector as Android, with a Java2D thumbnail adapter. */
     private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<PageRegion>? {
         if (options.panelMode != "PANEL_BY_PANEL") return null
@@ -254,13 +268,16 @@ object NooirDesktopCli {
                 panels, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
                 preserveWholePanels = true,
-            )
-            panels != null -> panels.map { panel ->
-                // Panel by Panel means one complete confirmed panel per frame.
-                // Cropping whitespace must never turn a normal frame into
-                // additional page slices merely by changing its aspect ratio.
-                PanelFitSlice(panel, manualRotate)
+            ).flatMap { fit ->
+                val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
+                val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
+                safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
+                    options.overlapPercent).map { PanelFitSlice(it, fit.landscape) }
             }
+            panels != null -> panels.flatMap { panel ->
+                safePanelSlices(src, panel, manualViewWidth, manualViewHeight,
+                    options.rightToLeft, options.overlapPercent)
+            }.map { PanelFitSlice(it, manualRotate) }
             else -> PageSlicePlanner.plan(
                 src.width, src.height, manualViewWidth, manualViewHeight,
                 options.layout, options.splitSpreads, options.rightToLeft,
