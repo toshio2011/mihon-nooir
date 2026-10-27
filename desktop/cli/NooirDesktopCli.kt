@@ -253,11 +253,14 @@ object NooirDesktopCli {
             panels != null && auto -> PanelAutoFit.plan(
                 panels, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
+                preserveWholePanels = true,
             )
-            panels != null -> panels.flatMap { panel ->
-                PanelViewportPlanner.plan(panel, manualViewWidth, manualViewHeight,
-                    options.rightToLeft, options.overlapPercent)
-            }.map { PanelFitSlice(it, manualRotate) }
+            panels != null -> panels.map { panel ->
+                // Panel by Panel means one complete confirmed panel per frame.
+                // Cropping whitespace must never turn a normal frame into
+                // additional page slices merely by changing its aspect ratio.
+                PanelFitSlice(panel, manualRotate)
+            }
             else -> PageSlicePlanner.plan(
                 src.width, src.height, manualViewWidth, manualViewHeight,
                 options.layout, options.splitSpreads, options.rightToLeft,
