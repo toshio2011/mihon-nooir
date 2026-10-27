@@ -240,12 +240,18 @@ object PanelDetectionCore {
                 for (i in columns.indices) {
                     val current = columns[i]
                     if (current.width < 72 || current.height < 40) continue
-                    val options = listOfNotNull(
-                        bestGutter(current, horizontal = false),
-                        thinLineGutter(current, horizontal = false),
-                        partialVerticalGutter(current),
-                        adaptiveGutter(current, horizontal = false),
-                    ).distinct()
+                    // Expensive imperfect-gutter searches run only when
+                    // the preceding, more reliable proposal is rejected.
+                    val options = sequence {
+                        val clean = bestGutter(current, horizontal = false)
+                        if (clean != null) yield(clean)
+                        val thin = thinLineGutter(current, horizontal = false)
+                        if (thin != null) yield(thin)
+                        val partial = partialVerticalGutter(current)
+                        if (partial != null) yield(partial)
+                        val adaptive = adaptiveGutter(current, horizontal = false)
+                        if (adaptive != null) yield(adaptive)
+                    }.distinct()
                     val axis = options.firstOrNull { cut ->
                         safeVerticalSeam(current, cut) &&
                             likelyIllustratedColumn(current.copy(right = cut)) &&
