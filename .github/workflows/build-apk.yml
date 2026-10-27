@@ -76,6 +76,13 @@ jobs:
             echo "Obsolete Android package-install permission check remains in onboarding"
             exit 1
           fi
+          # Do not merely hide the prompt: the old lifecycle helper itself
+          # invokes canRequestPackageInstalls() and crashed on Android 16.
+          test ! -e upstream/app/src/main/java/eu/kanade/presentation/util/Permissions.kt
+          if grep -R -n 'canRequestPackageInstalls()' upstream/app/src/main/java/eu/kanade/presentation; then
+            echo 'Unsafe package-install permission helper remains in presentation sources'
+            exit 1
+          fi
           echo "Verified onboarding no longer references package-install permission APIs"
       - name: Assemble fork (FOSS APK)
         working-directory: upstream
