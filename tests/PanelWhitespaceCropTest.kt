@@ -18,6 +18,15 @@ fun main() {
     check(fitted.left <= 140 && fitted.top <= 280)
     check(fitted.right >= 260 && fitted.bottom >= 520)
 
+    // A one-pixel speech-mark or faint outline between the coarse lattice
+    // positions is still content. Never crop it away just to fill the screen.
+    val offGridInk = PanelWhitespaceCrop.trim(frame) { x, y ->
+        (x in 54..345 && y in 200..600) || (x == 19 && y == 17)
+    }
+    check(offGridInk == frame) {
+        "A small missed edge detail must veto proposed trimming"
+    }
+
     // A panel touching the left and upper page edges must preserve them.
     val edge = PanelWhitespaceCrop.trim(frame) { x, y ->
         x in 0..270 && y in 0..500
