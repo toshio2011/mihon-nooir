@@ -62,7 +62,8 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('NooirMangaExportWorker.enqueue', (manga/'MangaViewModel.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirMangaExportWorker.kt').exists())
             self.assertIn('fun inject(nooirMangaExportWorker', (graph/'AppGraph.kt').read_text())
-            self.assertIn('dev.nooir.mihon',(app/'build.gradle.kts').read_text())
+            self.assertIn('applicationId = "dev.nooir.mihon"', (app/'build.gradle.kts').read_text())
+            self.assertNotIn('mihontrial', (app/'build.gradle.kts').read_text())
             version = (ROOT/'config/version.txt').read_text().strip()
             major, minor, patch = map(int, version.split('.'))
             version_code = major * 1_000_000 + minor * 10_000 + patch
