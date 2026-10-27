@@ -74,6 +74,9 @@ class TestOverlay(unittest.TestCase):
             # Keep the same split/no-cut decision in both platform adapters.
             self.assertIn('options.overlapPercent)', panel_src)
             self.assertIn('options.overlapPercent)', desktop_cli)
+            self.assertIn('PanelDetectionCore.detectRows(w, h, gray)', desktop_cli)
+            self.assertIn('panels != null && options.panelMode == "ROW_BY_ROW"', panel_src)
+            self.assertIn('panels != null && options.panelMode == "ROW_BY_ROW"', desktop_cli)
 
 
             self.assertIn('fun inject(nooirMangaExportWorker', (graph/'AppGraph.kt').read_text())
