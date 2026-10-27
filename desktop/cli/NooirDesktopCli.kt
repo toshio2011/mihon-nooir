@@ -226,9 +226,8 @@ object NooirDesktopCli {
 
     /** Same bounded OCR-free panel detector as Android, with a Java2D thumbnail adapter. */
     private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<PageRegion>? {
-        if (options.panelMode != "PANEL_BY_PANEL") return null
-        if (src.height.toLong() > src.width.toLong() * 3L ||
-            src.width.toLong() * 100L > src.height.toLong() * 135L) return null
+        if (options.panelMode != "PANEL_BY_PANEL" && options.panelMode != "ROW_BY_ROW") return null
+        if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
         val w = (src.width * scale).toInt().coerceAtLeast(1)
         val h = (src.height * scale).toInt().coerceAtLeast(1)
@@ -248,14 +247,16 @@ object NooirDesktopCli {
             ((((c ushr 16) and 255) * 299 + ((c ushr 8) and 255) * 587 +
                 (c and 255) * 114) / 1000).toByte()
         }
-        val plan = PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
+        val plan = if (options.panelMode == "ROW_BY_ROW")
+            PanelDetectionCore.detectRows(w, h, gray)
+        else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
         return if (plan.usedFullPageFallback) null
             else PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
     }
 
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean): Sequence<QuantizedPage> = sequence {
-        val auto = options.panelMode == "PANEL_BY_PANEL" && options.orientation == "AUTO_FIT"
+        val auto = options.panelMode != "OFF" && options.orientation == "AUTO_FIT"
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
         val manualViewHeight = if (manualRotate) width else height
