@@ -312,5 +312,20 @@ fun main() {
     check(PanelDetectionCore.detectRows(retryW, retryH, rejectedRowPage).regions ==
         unmodifiedRows.regions) { "Panel-only retry must never mutate Row by Row behavior" }
 
+    // A thin speech-balloon tail crossing the entire apparent column gutter
+    // is not a clean vertical separation. Reject the optional recovery even
+    // if the dark line is only one thumbnail pixel tall.
+    val protectedRetry = rejectedRowPage.copyOf()
+    for (x in 164 until 195) protectedRetry[211 * retryW + x] = 70.toByte()
+    val bridgedRows = PanelDetectionCore.detectRows(retryW, retryH, protectedRetry)
+    val bridgedPanels = PanelDetectionCore.detect(retryW, retryH, protectedRetry, true)
+    check(!bridgedRows.usedFullPageFallback && bridgedRows.regions.size == 2) {
+        "A tiny column bridge must not affect independent horizontal rows"
+    }
+    check(!bridgedPanels.usedFullPageFallback &&
+        bridgedPanels.regions.size == 2) {
+        "Never recover columns across a thin speech-balloon tail: ${bridgedPanels.regions}"
+    }
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
