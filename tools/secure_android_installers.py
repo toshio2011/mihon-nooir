@@ -51,7 +51,7 @@ def secure(upstream: Path) -> None:
     helper_source = permissions_helper.read_text(encoding="utf-8")
     if (helper_source.count("fun rememberRequestPackageInstallsPermissionState(") != 1 or
             helper_source.count("context.packageManager.canRequestPackageInstalls()") != 1 or
-            helper_source.count("\\nfun ") != 1):
+            helper_source.count("\nfun ") != 1):
         raise RuntimeError("Upstream permission helper changed; review before removing")
     permissions_helper.unlink()
 
