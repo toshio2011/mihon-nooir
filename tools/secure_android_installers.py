@@ -149,13 +149,16 @@ def secure(upstream: Path) -> None:
         raise RuntimeError("Uninstall-package call remained")
     ext_installer.write_text(src, encoding="utf-8")
 
-    # Backport Mihon v0.21.3 private-extension replacement safety without
-    # importing its unrelated Android-wide package installer machinery.
+    # Mihon v0.21.3 already stages private extensions before replacing them.
+    # Keep the backport for older upstream pins, without applying it twice.
     loader = upstream / EXT / "util/ExtensionLoader.kt"
-    replace_once(loader, "import java.io.File\n", "import java.io.File\nimport java.io.IOException\n")
-    replace_once(
-        loader,
-        '''        val target = File(getPrivateExtensionDir(context), "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION")
+    loader_source = loader.read_text(encoding="utf-8")
+    staged_marker = 'val staged = File(target.parentFile, "${target.name}.part")'
+    if staged_marker not in loader_source:
+        replace_once(loader, "import java.io.File\n", "import java.io.File\nimport java.io.IOException\n")
+        replace_once(
+            loader,
+            '''        val target = File(getPrivateExtensionDir(context), "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION")
         try {
             target.delete()
             file.copyAndSetReadOnlyTo(target, overwrite = true)
@@ -164,7 +167,7 @@ def secure(upstream: Path) -> None:
             throw e
         }
 ''',
-        '''        val target = File(getPrivateExtensionDir(context), "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION")
+            '''        val target = File(getPrivateExtensionDir(context), "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION")
         val staged = File(target.parentFile, "${target.name}.part")
         try {
             file.copyAndSetReadOnlyTo(staged, overwrite = true)
@@ -173,7 +176,9 @@ def secure(upstream: Path) -> None:
             staged.delete()
         }
 ''',
-    )
+        )
+    elif "import java.io.IOException" not in loader_source:
+        raise RuntimeError("Staged private-extension replacement lacks IOException import")
 
     # Remove installer UI that would otherwise expose unsupported unsafe modes.
     settings = upstream / "app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsAdvancedScreen.kt"
