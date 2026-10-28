@@ -28,6 +28,19 @@ replace_once(gradle, '    testImplementation(libs.bundles.test)\n',
     '    androidTestImplementation(libs.androidx.test.junit)\n' +
     '    androidTestImplementation("androidx.test:runner:1.7.0")\n')
 
+# The instrumentation runner executes inside the minified FOSS app. R8 can
+# remove methods from androidx.tracing.Trace that ordinary app code does not
+# reference; AndroidJUnitRunner 1.7.0 calls beginSection() on startup. Keep
+# the tiny class so this is a genuine release-equivalent FOSS smoke test,
+# rather than weakening minification or changing the shipping application ID.
+r8_rules = upstream / "app/proguard-rules.pro"
+if not r8_rules.is_file():
+    raise RuntimeError("Upstream app proguard-rules.pro is missing")
+r8_rules.write_text(r8_rules.read_text() +
+    "\\n# Required by AndroidJUnitRunner on minified FOSS test builds.\\n" +
+    "-keep class androidx.tracing.Trace { *; }\\n")
+
+
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
 replace_once(vm, "import android.content.Context\n", "import android.content.Context\nimport android.net.Uri\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.MihonNooirExporter\nimport dev.nooir.mangabridge.MangaConversionOptions\nimport dev.nooir.mangabridge.NooirMangaExportWorker\n")
 replace_once(vm, "import eu.kanade.tachiyomi.data.download.DownloadManager\n", "import eu.kanade.tachiyomi.data.download.DownloadManager\nimport eu.kanade.tachiyomi.data.download.DownloadProvider\n")
