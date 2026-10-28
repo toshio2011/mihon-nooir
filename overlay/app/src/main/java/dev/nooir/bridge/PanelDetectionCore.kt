@@ -62,17 +62,6 @@ object PanelDetectionCore {
                 continue
             }
             val rowDetector = Detector(width, height, grayscale, trace)
-            // A whole detected horizontal tier can consist of just a page
-            // frame, a few decorative rules, or sparse lettering. Recursively
-            // splitting that tier turns thin strokes into standalone viewports
-            // and can multiply a single border into several almost-white
-            // screens. Preserve the entire tier, including all its pixels;
-            // this guard belongs ONLY to Panel by Panel, not detectRows().
-            if (rowDetector.isSparseRow(row)) {
-                trace?.invoke(PanelDebugEvent("tier", row, "keep", "sparse thumbnail tier"))
-                output.add(row)
-                continue
-            }
             // Conan source 21: a shallow, almost uninked FINAL tier may be
             // merely the foot of the illustrated row above it. Do not promote
             // its vertical rule fragments into independent rotated pages.
@@ -102,6 +91,20 @@ object PanelDetectionCore {
                     trace?.invoke(PanelDebugEvent("tier", row, "keep",
                         "terminal ruled footer has no safe adjacent full-width partition"))
                 }
+                continue
+            }
+            // Sparse terminal footers should be considered for safe absorption
+            // BEFORE this generic no-split rule. Otherwise a nearly blank
+            // footer is preserved as its own unnecessary reading frame.
+            // A whole detected horizontal tier can consist of just a page
+            // frame, a few decorative rules, or sparse lettering. Recursively
+            // splitting that tier turns thin strokes into standalone viewports
+            // and can multiply a single border into several almost-white
+            // screens. Preserve the entire tier, including all its pixels;
+            // this guard belongs ONLY to Panel by Panel, not detectRows().
+            if (rowDetector.isSparseRow(row)) {
+                trace?.invoke(PanelDebugEvent("tier", row, "keep", "sparse thumbnail tier"))
+                output.add(row)
                 continue
             }
             val node = rowDetector.partition(row, 0)
@@ -298,7 +301,7 @@ object PanelDetectionCore {
          * eligible for independent panel splitting. This does not delete ink.
          */
         fun isShallowUnframedTier(row: PageRegion): Boolean {
-            if (row.height.toLong() * 100 > height.toLong() * 8 ||
+            if (row.height.toLong() * 100 > height.toLong() * 9 ||
                 row.height.toLong() * 100 > row.width.toLong() * 14) return false
             val edge = maxOf(2, minOf(8, row.height / 8))
             fun hasFrameRail(start: Int, end: Int): Boolean {
