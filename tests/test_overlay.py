@@ -96,6 +96,9 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('MAX_ORIGINAL_TOTAL', debug_src)
             self.assertIn('CreateDocument("application/zip")', dialog_src)
             self.assertIn('Save latest panel diagnostics ZIP', dialog_src)
+            queue_src = (root/'app/src/main/java/dev/nooir/mangabridge/NooirActivityQueueDialog.kt').read_text()
+            self.assertIn('NooirMangaExportWorker.KEY_PANEL_DIAGNOSTICS', queue_src)
+            self.assertIn('Panel diagnostics: ', queue_src)
             self.assertIn('options.panelDiagnostics && options.panelMode == "PANEL_BY_PANEL"', exporter_src)
 
             self.assertIn('PanelSafeSlicePlanner.plan(', panel_src)
