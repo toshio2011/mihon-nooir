@@ -77,6 +77,38 @@ fun main() {
         "Long single strokes must remain within an intact panel"
     }
 
+    // Real-user regression shape: a 800x480 sparse bordered manga frame.
+    // Previously, rejection by the panel detector sent the entire image
+    // to the legacy page slicer, producing an intact view plus three almost-
+    // blank magnified rule fragments. The caller now uses isSparse() BEFORE
+    // detection/fallback and returns exactly this one whole PageRegion.
+    val conanShape = PageRegion(0, 0, 800, 480)
+    val frameInk: (Int, Int) -> Boolean = { x, y ->
+        (x in 160..740 && y in 216..219) ||
+            ((x == 169 || x == 715) && y in 155..285)
+    }
+    check(PanelSafeSlicePlanner.isSparse(conanShape, frameInk)) {
+        "Sparse border-only Conan-like source must qualify for whole-page fallback"
+    }
+    val singleFallback = if (PanelSafeSlicePlanner.isSparse(conanShape, frameInk))
+        listOf(conanShape) else PanelSafeSlicePlanner.plan(
+            conanShape, 480, 800, true, 8, frameInk
+        )
+    check(singleFallback == listOf(conanShape)) {
+        "Sparse fallback must emit exactly one complete viewing frame"
+    }
+    // Keep legitimately illustrated manga eligible for all existing slicing.
+    val illustrated: (Int, Int) -> Boolean = { x, y ->
+        (x in 70..360 && y in 70..420) ||
+            (x in 420..760 && y in 50..430)
+    }
+    check(!PanelSafeSlicePlanner.isSparse(conanShape, illustrated)) {
+        "Do not suppress normally illustrated two-panel story pages"
+    }
+    check(PanelSafeSlicePlanner.isSparse(PageRegion(0, 0, 32, 48)) { _, _ -> false }) {
+        "Blank pages still belong to a single intact frame"
+    }
+
     // Horizontal stitching must not reverse the top-to-bottom reading order.
     check(tallCut.first().top < tallCut.last().top)
 
