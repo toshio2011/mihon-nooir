@@ -187,6 +187,68 @@ object PanelDetectionCore {
          *
          * detectRows() never calls this function.
          */
+        /**
+         * Return a bounded shortlist of other nearly-white vertical gutters.
+         *
+         * The usual bestGutter() intentionally returns only the *widest* gap.
+         * On manga with a large blank outer margin, that gap can be rejected
+         * because its right-hand child has no artwork, while a shorter genuine
+         * separator between two panels is never offered to the retry.
+         *
+         * Inspect each thumbnail column once, group adjoining pale columns,
+         * and nominate the least-inked center of each group. The caller must
+         * still pass every substantial-art / safe-seam check before splitting.
+         * Used only by rejected Panel by Panel rows, never by detectRows().
+         */
+        private fun alternateCleanVerticalSeams(row: PageRegion): List<Int> {
+            val margin = maxOf(8, row.width * 18 / 100)
+            if (row.width <= 2 * margin + 3 || row.height < 40) return emptyList()
+            data class Gap(val start: Int, val end: Int, val axis: Int)
+            val gaps = mutableListOf<Gap>()
+            var start = -1
+            val paleAxes = mutableListOf<Pair<Int, Int>>()
+            fun finish(end: Int) {
+                if (start >= 0 && paleAxes.isNotEmpty()) {
+                    val midpoint = (start + end - 1) / 2
+                    val best = paleAxes.minWithOrNull(
+                        compareBy<Pair<Int, Int>> { it.second }
+                            .thenBy { kotlin.math.abs(it.first - midpoint) }
+                    )!!
+                    gaps += Gap(start, end, best.first)
+                }
+                start = -1
+                paleAxes.clear()
+            }
+            val end = row.right - margin
+            for (x in row.left + margin until end) {
+                var white = 0
+                var dark = 0
+                for (y in row.top until row.bottom) {
+                    val lightness = gray[y * width + x].toInt() and 255
+                    if (lightness >= WHITE) white++
+                    if (lightness < INK) dark++
+                }
+                // This is only a proposal: 97% white and <=2% ink
+                // do not grant a split. The strict full-row guard below does.
+                val plausible = white.toLong() * 100 >= row.height.toLong() * 97 &&
+                    dark.toLong() * 100 <= row.height.toLong() * 2
+                if (!plausible) {
+                    finish(x)
+                    continue
+                }
+                if (start < 0) start = x
+                // Decide at the END of the run, once its true midpoint is
+                // known. Ties should choose its center, never its first edge.
+                paleAxes += x to dark
+            }
+            finish(end)
+            // Keep the retry bounded, even on pathological checkerboards.
+            // The widest proposals come first, but every one is independently
+            // checked for artwork on BOTH sides and a truly safe seam.
+            return gaps.sortedWith(compareByDescending<Gap> { it.end - it.start }
+                .thenBy { it.start }).take(12).map { it.axis }
+        }
+
         fun retryRejectedRowColumns(
             row: PageRegion, maximum: Int, rightToLeft: Boolean,
         ): List<PageRegion>? {
@@ -269,6 +331,10 @@ object PanelDetectionCore {
                     val options = sequence {
                         val clean = bestGutter(current, horizontal = false)
                         if (clean != null) yield(clean)
+                        // Consider alternative interior gutters only when
+                        // the original best-gutter proposal fails validation.
+                        for (alternate in alternateCleanVerticalSeams(current))
+                            yield(alternate)
                         val thin = thinLineGutter(current, horizontal = false)
                         if (thin != null) yield(thin)
                         val partial = partialVerticalGutter(current)

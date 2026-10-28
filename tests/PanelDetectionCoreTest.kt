@@ -366,6 +366,33 @@ fun main() {
     // Existing one-pixel interior balloon bridge is tested below and must
     // still block recovery even though a broad border may be allowed at edges.
 
+    // A very wide blank right margin can be brighter and wider than the
+    // real separator between two panels. The rejected-row recovery should
+    // try the inner panel gutter rather than mistaking the outer paper edge
+    // for a third panel or abandoning the two illustrated columns.
+    val marginedW = 480
+    val margined = ByteArray(marginedW * retryH) { 255.toByte() }
+    for (y in 0 until retryH) for (x in 0 until retryW)
+        margined[y * marginedW + x] = rejectedRowPage[y * retryW + x]
+    val marginedRows = PanelDetectionCore.detectRows(marginedW, retryH, margined)
+    check(!marginedRows.usedFullPageFallback && marginedRows.regions.size == 2) {
+        "The existing row detector must keep the two horizontal tiers"
+    }
+    val marginedPanels = PanelDetectionCore.detect(marginedW, retryH, margined, true)
+    check(!marginedPanels.usedFullPageFallback &&
+        marginedPanels.regions.size >= 3) {
+        "A wide blank outer margin must not hide both illustrated columns: ${marginedPanels.reason} ${marginedPanels.regions}"
+    }
+    check(marginedPanels.regions.take(2).all { it.top < 420 } &&
+        marginedPanels.regions[0].left > marginedPanels.regions[1].left &&
+        marginedPanels.regions[0].left in 160..205) {
+        "Recovered RTL columns should split near the actual inner gutter, not the outer paper margin"
+    }
+    check(marginedPanels.regions.sumOf { it.width.toLong() * it.height } ==
+        marginedW.toLong() * retryH) {
+        "Alternate-gutter recovery must preserve every source pixel"
+    }
+
     // A thin speech-balloon tail crossing the entire apparent column gutter
     // is not a clean vertical separation. Reject the optional recovery even
     // if the dark line is only one thumbnail pixel tall.
