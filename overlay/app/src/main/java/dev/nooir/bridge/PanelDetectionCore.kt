@@ -276,14 +276,35 @@ object PanelDetectionCore {
                         val adaptive = adaptiveGutter(current, horizontal = false)
                         if (adaptive != null) yield(adaptive)
                     }.distinct()
-                    val axis = options.firstOrNull { cut ->
-                        safeVerticalSeam(current, cut) &&
-                            likelyIllustratedColumn(current.copy(right = cut)) &&
-                            likelyIllustratedColumn(current.copy(left = cut))
-                    } ?: continue
+                    // A gutter detector may pick the strongest axis inside
+                    // a light strip even when that specific column contains
+                    // one scanner speck. A safe neighbour 1–8 pixels away may
+                    // keep the same genuine panel boundary. This bounded
+                    // search runs ONLY after the normal panel plan was rejected.
+                    val radius = minOf(8, maxOf(2, current.width / 75))
+                    var axis: Int? = null
+                    for (proposal in options) {
+                        for (distance in 0..radius) {
+                            val neighbours = if (distance == 0) listOf(proposal)
+                                else listOf(proposal - distance, proposal + distance)
+                            for (cut in neighbours) {
+                                if (cut <= current.left + 2 || cut >= current.right - 2) continue
+                                if (safeVerticalSeam(current, cut) &&
+                                    likelyIllustratedColumn(current.copy(right = cut)) &&
+                                    likelyIllustratedColumn(current.copy(left = cut))) {
+                                    axis = cut
+                                    break
+                                }
+                            }
+                            if (axis != null) break
+                        }
+                        if (axis != null) break
+                    }
+                    if (axis == null) continue
+                    val cut = axis
                     columns.removeAt(i)
-                    columns.add(i, current.copy(right = axis))
-                    columns.add(i + 1, current.copy(left = axis))
+                    columns.add(i, current.copy(right = cut))
+                    columns.add(i + 1, current.copy(left = cut))
                     changed = true
                     break
                 }
