@@ -19,11 +19,15 @@ fun main() {
     check(MangaConversionOptions.fromToken(custom.token()) == custom)
     val panel = custom.copy(panelMode = "PANEL_BY_PANEL")
     check(MangaConversionOptions.fromToken(panel.token()) == panel)
-    check(panel.token().split("|").size == 19)
+    check(panel.token().split("|").size == 20)
     val autoFit = panel.copy(orientation = "AUTO_FIT")
     check(MangaConversionOptions.fromToken(autoFit.token()) == autoFit)
-    check(autoFit.token().split("|").size == 19) { "Auto Fit must not break old job token length" }
+    check(autoFit.token().split("|").size == 20) { "Auto Fit must retain the diagnostic job flag" }
     check(MangaConversionOptions.fromToken(custom.token()).orientation == "LANDSCAPE")
+    val debug = panel.copy(panelDiagnostics = true)
+    check(MangaConversionOptions.fromToken(debug.token()) == debug)
+    check(!MangaConversionOptions.fromToken(debug.token().substringBeforeLast("|")).panelDiagnostics)
+    check(!MangaConversionOptions.fromToken(defaults.token().substringBeforeLast("|")).panelDiagnostics)
 
     check(MangaConversionOptions.fromToken(custom.token().substringBeforeLast("|")).keepChapterFirstPageWhole)
     check(MangaConversionOptions.fromToken(panel.token().substringBeforeLast("|") + "|UNKNOWN").keepChapterFirstPageWhole)
