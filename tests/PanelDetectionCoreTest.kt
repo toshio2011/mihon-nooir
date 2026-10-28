@@ -445,5 +445,48 @@ fun main() {
         "Never recover columns across a thin speech-balloon tail: ${bridgedPanels.regions}"
     }
 
+    // A published-like asymmetric panel layout: the narrow right-hand
+    // illustrated column is genuine art, NOT a thin caption, despite a wide
+    // empty paper margin outside it. Both illustrated columns share a dark
+    // horizontal BOTTOM frame rule. Only the interior paper corridor is a
+    // candidate cut; the bottom frame must remain covered by both padded
+    // outputs without removing pixels. This uses synthetic rectangles only.
+    val asymmetricW = 480
+    val asymmetricH = 800
+    val asymmetric = ByteArray(asymmetricW * asymmetricH) { 255.toByte() }
+    fun inkRect(l: Int, t: Int, r: Int, b: Int, gray: Int) {
+        for (y in t until b) for (x in l until r)
+            asymmetric[y * asymmetricW + x] = gray.toByte()
+    }
+    inkRect(30, 24, 329, 400, 90) // large left manga panel
+    inkRect(350, 24, 440, 400, 110) // narrower but tall right manga panel
+    inkRect(30, 399, 440, 403, 35) // shared bottom frame border
+    inkRect(30, 438, 440, 548, 100) // meaningful second row
+    inkRect(30, 580, 440, 785, 110) // meaningful third row
+    val asymmetricRows = PanelDetectionCore.detectRows(asymmetricW, asymmetricH, asymmetric)
+    val asymmetricPanels = PanelDetectionCore.detect(asymmetricW, asymmetricH, asymmetric, true)
+    check(!asymmetricRows.usedFullPageFallback &&
+        asymmetricRows.regions.size >= 3) {
+        "Fixture must yield upper, middle and lower horizontal rows: ${asymmetricRows.regions}"
+    }
+    check(!asymmetricPanels.usedFullPageFallback) {
+        "Confident bordered columns should not trigger a whole-page fallback"
+    }
+    val upper = asymmetricPanels.regions.filter { it.top < 410 }
+    check(upper.size == 2 && upper[0].left > upper[1].left) {
+        "Narrow framed right panel must precede wide left panel in RTL: ${asymmetricPanels.regions}"
+    }
+    check(upper[0].left in 329..350 && upper[1].right in 329..350) {
+        "Split must use the inner panel gutter, not the outside paper margin: ${upper}"
+    }
+    check(asymmetricPanels.regions.sumOf { it.width.toLong() * it.height } ==
+        asymmetricW.toLong() * asymmetricH) {
+        "Asymmetric narrow-panel recovery must conserve every source pixel"
+    }
+    check(PanelDetectionCore.detectRows(asymmetricW, asymmetricH, asymmetric).regions ==
+        asymmetricRows.regions) {
+        "Panel-only column retry must never alter Row by Row mode"
+    }
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
