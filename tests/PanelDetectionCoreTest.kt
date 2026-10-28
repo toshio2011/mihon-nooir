@@ -270,6 +270,43 @@ fun main() {
     check(!sliverPanels.usedFullPageFallback && sliverPanels.regions.size >= 2) {
         "Thin panel candidate must not erase valid row boundaries"
     }
+    // Sparse ruled tier (similar geometry to a manga page footer): it has
+    // enough ink to be a real row, but not enough independent illustration to
+    // justify recursively dividing frame borders into multiple reading frames.
+    // The row remains present whole; no pixels or decorative strokes are lost.
+    val sparseW = 480
+    val sparseH = 600
+    val sparseTiers = ByteArray(sparseW * sparseH) { 255.toByte() }
+    // Two dark illustrated panels in the top half, intentionally splittable.
+    for (y in 10 until 300) {
+        for (x in 10 until 225) sparseTiers[y * sparseW + x] = 90.toByte()
+        for (x in 250 until 470) sparseTiers[y * sparseW + x] = 110.toByte()
+    }
+    // A bottom section containing ONLY a long horizontal rule with two thin
+    // connected vertical strokes. Its ink fraction is less than 3 percent.
+    for (y in 465 until 472) for (x in 30 until 450)
+        sparseTiers[y * sparseW + x] = 70.toByte()
+    for (y in 409 until 588) {
+        sparseTiers[y * sparseW + 55] = 65.toByte()
+        sparseTiers[y * sparseW + 439] = 65.toByte()
+    }
+    val baselineSparseRows = PanelDetectionCore.detectRows(sparseW, sparseH, sparseTiers)
+    check(!baselineSparseRows.usedFullPageFallback &&
+        baselineSparseRows.regions.size == 2) {
+        "Test fixture needs two independent horizontal tiers: ${baselineSparseRows.reason}, ${baselineSparseRows.regions}"
+    }
+    val sparsePanels = PanelDetectionCore.detect(sparseW, sparseH, sparseTiers, true)
+    val ruledTier = baselineSparseRows.regions.last()
+    check(!sparsePanels.usedFullPageFallback && sparsePanels.regions.size == 3 &&
+        sparsePanels.regions.last() == ruledTier) {
+        "Panel mode must keep a sparse border-only row intact, while still splitting real artwork: ${sparsePanels.regions}"
+    }
+    check(sparsePanels.regions[0].left > sparsePanels.regions[1].left) {
+        "Upper illustrated panels must retain RTL reading order"
+    }
+    check(PanelDetectionCore.detectRows(sparseW, sparseH, sparseTiers).regions ==
+        baselineSparseRows.regions) { "The independent Row by Row implementation must remain unchanged" }
+
     // Existing WEBTOON and ambiguous wide spreads retain fallback.
     check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
     check(PanelDetectionCore.detect(400, 100, ByteArray(40_000) { 80.toByte() }, true).usedFullPageFallback)
