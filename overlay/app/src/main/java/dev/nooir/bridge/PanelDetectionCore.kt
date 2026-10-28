@@ -94,19 +94,23 @@ object PanelDetectionCore {
                     "validated ${candidates!!.size} panel candidates"))
                 output.addAll(candidates!!)
             } else {
-                val rejected = when {
-                    candidates == null -> "recursive partition unavailable"
-                    candidates.size !in 2..available -> "candidate count outside permitted range"
-                    candidates.any { !rowDetector.hasContent(it) } -> "candidate has insufficient ink"
-                    candidates.any { rowDetector.isLikelyBorderFragment(it) } -> "candidate resembles border or text stroke"
-                    candidates.any { it.width.toLong() * it.height * 100 <
-                        row.width.toLong() * row.height * 2 } -> "candidate below minimum area"
-                    candidates.any { it.width.toLong() * 100 < row.width.toLong() * 8 ||
-                        it.height.toLong() * 100 < row.height.toLong() * 8 } -> "candidate too narrow or short"
-                    candidates.size > 12 -> "excessive small candidate fragments"
-                    else -> "candidate coverage invalid"
-                }
-                trace?.invoke(PanelDebugEvent("tier", row, "reject", rejected))
+                // Don't spend time inspecting rejected candidates when the
+                // user has not explicitly enabled diagnostics.
+                if (trace != null) {
+                    val rejected = when {
+                        candidates == null -> "recursive partition unavailable"
+                        candidates.size !in 2..available -> "candidate count outside permitted range"
+                        candidates.any { !rowDetector.hasContent(it) } -> "candidate has insufficient ink"
+                        candidates.any { rowDetector.isLikelyBorderFragment(it) } -> "candidate resembles border or text stroke"
+                        candidates.any { it.width.toLong() * it.height * 100 <
+                            row.width.toLong() * row.height * 2 } -> "candidate below minimum area"
+                        candidates.any { it.width.toLong() * 100 < row.width.toLong() * 8 ||
+                            it.height.toLong() * 100 < row.height.toLong() * 8 } -> "candidate too narrow or short"
+                        candidates.size > 12 -> "excessive small candidate fragments"
+                        else -> "candidate coverage invalid"
+                    }
+                    trace.invoke(PanelDebugEvent("tier", row, "reject", rejected))
+                    }
                 // The normal recursive candidate tree may over-split one small
                 // region and be rejected as a whole. Only *after* that rejection,
                 // retry independent vertical seams inside this exact row. A
@@ -463,7 +467,7 @@ object PanelDetectionCore {
                             "rightNotIllustrated=$rightNotIllustrated"))
                         continue
                     }
-                    val cut = axis
+                    val cut = requireNotNull(axis)
                     trace?.invoke(PanelDebugEvent("column-retry", current, "split",
                         "safe vertical seam x=$cut after $attempted attempts"))
                     columns.removeAt(i)
