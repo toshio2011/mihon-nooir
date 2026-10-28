@@ -25,6 +25,9 @@ fun main() {
     val rtl = PanelDetectionCore.detect(width, height, image, true)
     check(!rtl.usedFullPageFallback) { "Clean 2x3 panel grid should be detected: ${rtl.reason}" }
     check(rtl.regions.size == 6) { "Expected 6 panels, got ${rtl.regions.size}" }
+    check(!rtl.reason.contains("rejected-row column recovery")) {
+        "Already valid 2x3 panel layouts must never take the recovery path"
+    }
     check(rtl.regions.map { centerGray(image, width, it) } == listOf(48, 35, 83, 70, 118, 105)) {
         "RTL must read top tier first, right to left within each tier"
     }
@@ -277,5 +280,106 @@ fun main() {
     check(PanelDetectionCore.detect(width, height, image, true).regions == rtl.regions) {
         "Panel ordering must be deterministic across runs"
     }
+    // Panel-only retry: the first horizontal tier has a clean right/left
+    // column seam, but a tiny text-like stripe inside the left column
+    // tempts the normal recursive detector into a rejected small child.
+    // Recover the two substantial columns instead of losing all separation.
+    val retryW = 360
+    val retryH = 600
+    val rejectedRowPage = ByteArray(retryW * retryH) { 255.toByte() }
+    for (y in 5 until 16) for (x in 8 until 164)
+        rejectedRowPage[y * retryW + x] = 65.toByte()
+    for (y in 42 until 395) for (x in 8 until 164)
+        rejectedRowPage[y * retryW + x] = 95.toByte()
+    for (y in 5 until 395) for (x in 195 until 352)
+        rejectedRowPage[y * retryW + x] = 110.toByte()
+    for (y in 430 until 590) for (x in 10 until 350)
+        rejectedRowPage[y * retryW + x] = 85.toByte()
+    val unmodifiedRows = PanelDetectionCore.detectRows(retryW, retryH, rejectedRowPage)
+    check(!unmodifiedRows.usedFullPageFallback && unmodifiedRows.regions.size == 2) {
+        "Independent Row by Row must retain exactly two tiers"
+    }
+    val recoveredPanels = PanelDetectionCore.detect(retryW, retryH, rejectedRowPage, true)
+    check(!recoveredPanels.usedFullPageFallback && recoveredPanels.regions.size == 3 &&
+        recoveredPanels.reason.contains("rejected-row column recovery")) {
+        "Rejected small fragment must not undo safe columns: ${recoveredPanels.reason} ${recoveredPanels.regions}"
+    }
+    // A second-chance split may improve readability, but it must never omit
+    // even a single original pixel or duplicate a source region.
+    check(recoveredPanels.regions.sumOf { it.width.toLong() * it.height } ==
+        retryW.toLong() * retryH) {
+        "Recovered columns must conserve the entire source-page area"
+    }
+    for (y in 0 until retryH step 7) for (x in 0 until retryW step 5) {
+        check(recoveredPanels.regions.count {
+            x in it.left until it.right && y in it.top until it.bottom
+        } == 1) { "Recovered panels overlap or omit source artwork at ($x,$y)" }
+    }
+    check(recoveredPanels.regions[0].left > recoveredPanels.regions[1].left) {
+        "RTL must read the recovered right column before the left"
+    }
+    check(recoveredPanels.regions.last().top >= recoveredPanels.regions.first().bottom) {
+        "A recovered tier must not reorder the original rows"
+    }
+    val retryLtr = PanelDetectionCore.detect(retryW, retryH, rejectedRowPage, false)
+    check(retryLtr.regions.size == 3 && retryLtr.regions[0].left < retryLtr.regions[1].left)
+    check(PanelDetectionCore.detectRows(retryW, retryH, rejectedRowPage).regions ==
+        unmodifiedRows.regions) { "Panel-only retry must never mutate Row by Row behavior" }
+
+    // Real manga commonly joins two adjacent panel frames with one thin
+    // horizontal border at the BOTTOM of the row. It is safe to retain the
+    // whole line in both padded output panels; do not let this near-edge
+    // continuation hide otherwise separate illustrated columns.
+    val borderedRetry = rejectedRowPage.copyOf()
+    for (y in 392 until 395) for (x in 8 until 352)
+        borderedRetry[y * retryW + x] = 35.toByte()
+    val borderedRows = PanelDetectionCore.detectRows(retryW, retryH, borderedRetry)
+    val borderedPanels = PanelDetectionCore.detect(retryW, retryH, borderedRetry, true)
+    check(!borderedRows.usedFullPageFallback && borderedRows.regions.size == 2) {
+        "A low frame rule must not change horizontal tier detection"
+    }
+    check(!borderedPanels.usedFullPageFallback && borderedPanels.regions.size == 3 &&
+        borderedPanels.reason.contains("rejected-row column recovery")) {
+        "A near-edge full-width frame rule must not veto two safe panels: ${borderedPanels.reason} ${borderedPanels.regions}"
+    }
+    check(borderedPanels.regions[0].left > borderedPanels.regions[1].left)
+    // An allowed outer-edge frame never grants permission to cut a balloon
+    // tail in the center of the SAME row.
+    val mixedBorderAndTail = borderedRetry.copyOf()
+    for (x in 164 until 195) mixedBorderAndTail[211 * retryW + x] = 45.toByte()
+    val mixedProtected = PanelDetectionCore.detect(retryW, retryH, mixedBorderAndTail, true)
+    check(!mixedProtected.usedFullPageFallback && mixedProtected.regions.size == 2) {
+        "Near-edge border exception must not bypass interior balloon protection: ${mixedProtected.regions}"
+    }
+    // The narrow local search must likewise avoid a tiny unexpected interior
+    // ink mark on the suggested axis, using a neighbouring safe column only.
+    val dottedBorder = borderedRetry.copyOf()
+    dottedBorder[211 * retryW + 180] = 25.toByte()
+    val dottedRecovery = PanelDetectionCore.detect(retryW, retryH, dottedBorder, true)
+    check(!dottedRecovery.usedFullPageFallback && dottedRecovery.regions.size == 3) {
+        "Isolated gutter dot must not undo a recoverable border-separated panel tier"
+    }
+    check(dottedRecovery.regions.none { part ->
+        (part.right == 180 || part.left == 180)
+    }) { "Do not place a recovery cut directly through the dark dot" }
+
+    // Existing one-pixel interior balloon bridge is tested below and must
+    // still block recovery even though a broad border may be allowed at edges.
+
+    // A thin speech-balloon tail crossing the entire apparent column gutter
+    // is not a clean vertical separation. Reject the optional recovery even
+    // if the dark line is only one thumbnail pixel tall.
+    val protectedRetry = rejectedRowPage.copyOf()
+    for (x in 164 until 195) protectedRetry[211 * retryW + x] = 70.toByte()
+    val bridgedRows = PanelDetectionCore.detectRows(retryW, retryH, protectedRetry)
+    val bridgedPanels = PanelDetectionCore.detect(retryW, retryH, protectedRetry, true)
+    check(!bridgedRows.usedFullPageFallback && bridgedRows.regions.size == 2) {
+        "A tiny column bridge must not affect independent horizontal rows"
+    }
+    check(!bridgedPanels.usedFullPageFallback &&
+        bridgedPanels.regions.size == 2) {
+        "Never recover columns across a thin speech-balloon tail: ${bridgedPanels.regions}"
+    }
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
