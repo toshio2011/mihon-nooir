@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import struct
 import sys
+import zlib
 import zipfile
 
 MAX_ZIP = 120 * 1024 * 1024
@@ -35,6 +36,73 @@ def rects(value, width, height, field):
         x1, y1, x2, y2 = rect
         require(0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height,
                 f"{field}[{index}] exceeds its coordinate space")
+
+
+def verify_gray_png(png, width, height):
+    """Validate PNG chunks, decompress scanlines, and require opaque RGB=gray."""
+    require(png.startswith(b"\x89PNG\r\n\x1a\n"), "Bad PNG signature")
+    position = 8
+    joined = []
+    kind = None
+    seen_end = False
+    while position < len(png):
+        require(position + 12 <= len(png), "Truncated PNG chunk")
+        size = struct.unpack(">I", png[position:position + 4])[0]
+        require(size <= 3 * 1024 * 1024 and position + 12 + size <= len(png),
+                "Invalid PNG chunk size")
+        tag = png[position + 4:position + 8]
+        body = png[position + 8:position + 8 + size]
+        checksum = struct.unpack(">I", png[position + 8 + size:position + 12 + size])[0]
+        require(zlib.crc32(tag + body) & 0xffffffff == checksum,
+                "Invalid PNG chunk checksum")
+        if tag == b"IHDR":
+            require(kind is None and size == 13, "Duplicate/malformed PNG header")
+            pw, ph, depth, kind, compression, filtering, interlace = struct.unpack(">IIBBBBB", body)
+            require((pw, ph) == (width, height) and depth == 8 and kind in (0, 2, 6)
+                    and compression == filtering == interlace == 0,
+                    "PNG must contain non-interlaced 8-bit grayscale/RGB/RGBA pixels")
+        elif tag == b"IDAT":
+            joined.append(body)
+        elif tag == b"IEND":
+            require(size == 0 and position + 12 == len(png), "Trailing bytes after PNG")
+            seen_end = True
+        position += 12 + size
+    require(kind is not None and seen_end and joined, "Incomplete PNG")
+    bpp = {0: 1, 2: 3, 6: 4}[kind]
+    stride = width * bpp
+    max_raw = height * (stride + 1)
+    decompress = zlib.decompressobj()
+    raw = decompress.decompress(b"".join(joined), max_raw + 1)
+    require(len(raw) <= max_raw and decompress.eof, "PNG pixel payload out of bounds")
+    raw += decompress.flush()
+    require(len(raw) == max_raw, "PNG scanline length mismatch")
+    previous = bytearray(stride)
+    offset = 0
+    for _ in range(height):
+        method = raw[offset]
+        row = bytearray(raw[offset + 1:offset + 1 + stride])
+        require(method <= 4, "Unsupported PNG scanline filter")
+        for i in range(stride):
+            left = row[i - bpp] if i >= bpp else 0
+            up = previous[i]
+            corner = previous[i - bpp] if i >= bpp else 0
+            if method == 1: predict = left
+            elif method == 2: predict = up
+            elif method == 3: predict = (left + up) // 2
+            elif method == 4:
+                p = left + up - corner
+                distances = (abs(p - left), abs(p - up), abs(p - corner))
+                predict = (left, up, corner)[distances.index(min(distances))]
+            else: predict = 0
+            row[i] = (row[i] + predict) & 255
+        if kind != 0:
+            for i in range(0, stride, bpp):
+                require(row[i] == row[i + 1] == row[i + 2],
+                        "PNG is not lossless grayscale")
+                if bpp == 4:
+                    require(row[i + 3] == 255, "Unexpected thumbnail transparency")
+        previous = row
+        offset += stride + 1
 
 def inspect(path, frame=None):
     path = Path(path)
@@ -90,9 +158,7 @@ def inspect(path, frame=None):
             require(tw <= 600 and th <= 900 and tw * th <= 1_048_576,
                     f"Detector thumbnail unbounded on page {n}")
             png = archive.read(png_name)
-            require(png[:8] == b"\x89PNG\r\n\x1a\n" and
-                    len(png) >= 24 and struct.unpack(">II", png[16:24]) == (tw, th),
-                    f"Thumbnail dimensions/magic differ from detector JSON on page {n}")
+            verify_gray_png(png, tw, th)
             for key in ("detectorRegionsThumbnail",):
                 rects(item.get(key), tw, th, key)
             for key in ("sourceRegionsWithPadding", "preOverviewSlicesSource", "outputSlicesSource"):
