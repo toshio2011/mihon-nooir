@@ -73,8 +73,51 @@ object PanelDetectionCore {
                 output.add(row)
                 continue
             }
+            // Conan source 21: a shallow, almost uninked FINAL tier may be
+            // merely the foot of the illustrated row above it. Do not promote
+            // its vertical rule fragments into independent rotated pages.
+            // When the previous tier is a full-width partition of stable
+            // side-by-side columns, extend those columns through the footer.
+            // This conserves EVERY source pixel; otherwise keep the tier whole.
+            if (index == rows.lastIndex && index > 0 &&
+                row.bottom == height && rowDetector.isShallowUnframedTier(row) &&
+                rowDetector.isLowInkFooter(row)) {
+                val previousRow = rows[index - 1]
+                val adjacent = output.indices.filter { ix ->
+                    val r = output[ix]
+                    r.top == previousRow.top && r.bottom == row.top
+                }.sortedBy { output[it].left }
+                val joinsSafely = adjacent.size in 1..3 &&
+                    output[adjacent.first()].left == 0 &&
+                    output[adjacent.last()].right == width &&
+                    adjacent.zipWithNext().all { (a, b) ->
+                        output[a].right == output[b].left
+                    }
+                if (joinsSafely) {
+                    for (ix in adjacent) output[ix] = output[ix].copy(bottom = row.bottom)
+                    trace?.invoke(PanelDebugEvent("tier", row, "absorb",
+                        "terminal ruled footer retained inside preceding illustrated tier"))
+                } else {
+                    output.add(row)
+                    trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                        "terminal ruled footer has no safe adjacent full-width partition"))
+                }
+                continue
+            }
             val node = rowDetector.partition(row, 0)
             val candidates = node?.let { PanelReadingOrder.flatten(it, rightToLeft) }
+            // Conan source 66: the multi-word title row generated five tiny
+            // "panels". A shallow, UNFRAMED top-band with 3+ recursive pieces
+            // has insufficient visual evidence to classify word groups as
+            // illustrated panels. Keep the band intact; retain real art below.
+            if (row.bottom.toLong() * 4 <= height.toLong() &&
+                rowDetector.isShallowUnframedTier(row) &&
+                candidates != null && candidates.size >= 3) {
+                output.add(row)
+                trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                    "shallow unframed headline candidate fragments"))
+                continue
+            }
             val valid = candidates != null && candidates.size in 2..available &&
                 candidates.all { it.width > 0 && it.height > 0 &&
                     rowDetector.hasContent(it) && !rowDetector.isLikelyBorderFragment(it) } &&
@@ -250,6 +293,39 @@ object PanelDetectionCore {
             return samples > 0 && ink.toLong() * 100 < samples.toLong() * 3
         }
 
+        /** Only a short unframed tier can be treated as a suspect header/footer.
+         * A genuine short comic strip with top/bottom frame rails remains
+         * eligible for independent panel splitting. This does not delete ink.
+         */
+        fun isShallowUnframedTier(row: PageRegion): Boolean {
+            if (row.height.toLong() * 100 > height.toLong() * 8 ||
+                row.height.toLong() * 100 > row.width.toLong() * 14) return false
+            val edge = maxOf(2, minOf(8, row.height / 8))
+            fun hasFrameRail(start: Int, end: Int): Boolean {
+                for (y in start until end) {
+                    var dark = 0
+                    for (x in row.left until row.right)
+                        if ((gray[y * width + x].toInt() and 255) < INK) dark++
+                    if (dark.toLong() * 100 >= row.width.toLong() * 65) return true
+                }
+                return false
+            }
+            val topRail = hasFrameRail(row.top, minOf(row.bottom, row.top + edge))
+            val bottomRail = hasFrameRail(maxOf(row.top, row.bottom - edge), row.bottom)
+            return !(topRail && bottomRail)
+        }
+
+        /** The footer merger requires little actual artwork as well as short
+         * dimensions. An ink-heavy or framed short story panel stays separate.
+         */
+        fun isLowInkFooter(row: PageRegion): Boolean {
+            var ink = 0
+            for (y in row.top until row.bottom)
+                for (x in row.left until row.right)
+                    if ((gray[y * width + x].toInt() and 255) < INK) ink++
+            return ink.toLong() * 100 < row.width.toLong() * row.height * 12
+        }
+
         fun hasCleanFullHeightColumn(region: PageRegion): Boolean {
             val axis = bestGutter(region, horizontal = false) ?: return false
             return hasContent(region.copy(right = axis)) &&
@@ -388,10 +464,20 @@ object PanelDetectionCore {
                     fun value(x: Int) = gray[y * width + x].toInt() and 255
                     val center = value(axis)
                     if (center < 235) inkOnAxis++
-                    // Retain the strict veto everywhere except an actual
-                    // near-edge, full-width frame rule. Isolated dark specks,
-                    // captions and thin balloon tails still veto the split.
-                    val allowedFrame = center < 220 && fullWidthFrameRule(y)
+                    // Shared panel frame lines have antialiased fringes:
+                    // Conan source 26 had a fully framed horizontal border at
+                    // y=452..454, followed by one dim line at y=455. Treat a
+                    // 1-2px fringe next to a genuine near-edge, full-width
+                    // frame as part of that frame, not a balloon crossing.
+                    // All interior strokes still veto the cut. The separate
+                    // 2%-of-height ink budget remains unchanged.
+                    val nearEdge = y - r.top < edgeBand ||
+                        r.bottom - 1 - y < edgeBand
+                    val allowedFrame = center < 220 && nearEdge &&
+                        (-2..2).any { delta ->
+                            val neighbor = y + delta
+                            neighbor in r.top until r.bottom && fullWidthFrameRule(neighbor)
+                        }
                     if (center < 220 && !allowedFrame) return false
                     if (!allowedFrame && value(axis - 1) < 180 &&
                         center < 180 && value(axis + 1) < 180) return false
