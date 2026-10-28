@@ -38,7 +38,15 @@ if not r8_rules.is_file():
     raise RuntimeError("Upstream app proguard-rules.pro is missing")
 r8_rules.write_text(r8_rules.read_text() +
     "\n# Required by AndroidJUnitRunner on minified FOSS test builds.\n" +
-    "-keep class androidx.tracing.Trace { *; }\n")
+    "-keep class androidx.tracing.Trace { *; }\n" +
+    "# The Android instrumentation APK is compiled independently from the\n" +
+    "# minified app APK. Preserve the exact method signatures called by its\n" +
+    "# synthetic CBZ / private diagnostic ZIP regression.\n" +
+    "-keep class dev.nooir.mangabridge.MangaConversionOptions { *; }\n" +
+    "-keep class dev.nooir.mangabridge.AndroidPageSource { *; }\n" +
+    "-keep class dev.nooir.mangabridge.PanelDiagnosticArchive { *; }\n" +
+    "-keep class dev.nooir.mangabridge.PanelDiagnosticArchive$* { *; }\n" +
+    "-keep class dev.nooir.bridge.QuantizedPage { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
