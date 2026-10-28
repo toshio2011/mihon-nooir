@@ -181,7 +181,9 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            set -euo pipefail
+            # android-emulator-runner executes script via /bin/sh, not Bash.
+            # Keep this POSIX-compatible so instrumentation actually executes.
+            set -eu
             find diagnostic-apks -type f -name '*.apk' -print
             app=$(find diagnostic-apks -name app-universal-foss.apk -print -quit)
             test_apk=$(find diagnostic-apks -name '*androidTest*.apk' -print -quit)
