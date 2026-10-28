@@ -116,9 +116,25 @@ object PanelDetectionCore {
             if (row.bottom.toLong() * 4 <= height.toLong() &&
                 rowDetector.isShallowUnframedTier(row) &&
                 candidates != null && candidates.size >= 3) {
-                output.add(row)
-                trace?.invoke(PanelDebugEvent("tier", row, "keep",
-                    "shallow unframed headline candidate fragments"))
+                // A previous full-width, unframed header can be joined to
+                // this adjacent short word band. Separating the two cuts
+                // through anti-aliased letters at the seam (Conan source 66):
+                // sourceRegions padding makes the duplicate clipped glyphs
+                // visible in the output. Absorb only exact full-width top
+                // neighbors, keep all pixels, and never modify real panels.
+                val previous = output.lastOrNull()
+                if (previous != null && previous.left == row.left &&
+                    previous.right == row.right && previous.bottom == row.top &&
+                    previous.top.toLong() * 8 <= height.toLong() &&
+                    row.bottom.toLong() * 4 <= height.toLong()) {
+                    output[output.lastIndex] = previous.copy(bottom = row.bottom)
+                    trace?.invoke(PanelDebugEvent("tier", row, "absorb",
+                        "shallow headline joined to adjacent full-width header"))
+                } else {
+                    output.add(row)
+                    trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                        "shallow unframed headline candidate fragments"))
+                }
                 continue
             }
             val valid = candidates != null && candidates.size in 2..available &&
