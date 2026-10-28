@@ -253,6 +253,9 @@ class AndroidPageSource(private val context: Context) {
         val sourceWhole = PageRegion(0, 0, src.width, src.height)
         val sparseWhole = if (options.panelMode == "PANEL_BY_PANEL" &&
             options.layout != "WEBTOON" &&
+            // Auto-detected long webtoons still need their existing scrolling
+            // slices, even when a particular strip has little artwork.
+            src.height.toLong() <= src.width.toLong() * 3L &&
             PanelSafeSlicePlanner.isSparse(sourceWhole) { x, y -> inkAt(src, x, y) }
         ) sourceWhole else null
         val detectedPanels = if (sparseWhole != null) listOf(sparseWhole)
