@@ -1,5 +1,8 @@
 # MangaNooir — project handover and continuation guide
 
+> [!IMPORTANT]
+> **LATEST HANDOVER — 28 OCTOBER 2026:** Start with **[docs/HANDOVER_2026-10-28.md](HANDOVER_2026-10-28.md)**. It is the authoritative dated snapshot for Conan Panel by Panel QA, merged PRs #47–#50, and unfinished **draft PR #51 (private Panel Diagnostic ZIP)**. The older October 20–21 status, public v1.0.11, main v1.0.1, and draft PR #21 claims **below** are archived historical facts and are **NOT CURRENT**. As of October 28, main source version is **1.0.16**, while the most recent published release is **v1.0.12**; the diagnostic feature is **not yet merged or released**. Always recheck GitHub head and CI.
+
 
 > [!IMPORTANT]
 > **LATEST HANDOVER — 21 OCTOBER 2026:** Read **[docs/HANDOVER_2026-10-21.md](HANDOVER_2026-10-21.md)** first. It contains the current PR, branch, CI, EPUB 2, XTC/XTCH, device-profile, test and next-step status. The summary and status table later in **this** file are a historical snapshot and must NOT be interpreted as the current state.
