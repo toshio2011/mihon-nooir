@@ -26,7 +26,7 @@ import java.util.zip.ZipOutputStream
  * No manga title, chapter name, URI or source URL is written into this archive.
  * Users must explicitly export the ZIP from the dialog to share these images.
  */
-internal class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
+class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
     companion object {
         private const val MAX_PAGES = 3000
         private const val MAX_TRACE_EVENTS = 384
@@ -55,7 +55,7 @@ internal class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                 "MihonNooir panel diagnostic ZIP v1\n" +
                 "Only created when the user enables Panel diagnostics in conversion settings.\n" +
                 "Contains source manga artwork: DO NOT share publicly without permission.\n" +
-                "The detector/NN? No OCR or AI: it uses grayscale thumbnail pixels.\n" +
+                "No OCR or AI: the detector analyzes grayscale thumbnail pixels.\n" +
                 "thumbnails/*.png contains the EXACT grayscale pixels sent to the detector (PNG is lossless).\n" +
                 "pages/*.json contains chapter/page ordinals (not titles), source dimensions,\n" +
                 "detector regions, padding, accepted/rejected tier reasons, final render regions,\n" +
@@ -209,9 +209,9 @@ internal class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                     })
                     .put("outputFrameStartOneBased", start)
                     .put("outputFrameCount", rendered.size)
-                    .put("events", JSONArray().also { arr ->
+                    .put("events", JSONArray().also { eventArray ->
                         events.forEach { event ->
-                            arr.put(JSONObject().put("stage", event.stage)
+                            eventArray.put(JSONObject().put("stage", event.stage)
                                 .put("region", arr(event.region))
                                 .put("decision", event.decision)
                                 .put("detail", event.detail))
