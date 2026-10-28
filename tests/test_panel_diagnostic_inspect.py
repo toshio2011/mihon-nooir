@@ -38,20 +38,25 @@ def page(n, start, count):
         "showFullPageBeforeSplits": True,
         "detectorRegionsThumbnail": [[0, 0, 2, 1]],
         "sourceRegionsWithPadding": [[0, 0, 200, 100]],
-        "preOverviewSlicesSource": [[0, 0, 100, 100]],
-        "outputSlicesSource": [[0, 0, 200, 100]] * count,
+        "preOverviewSlicesSource": (
+            [[0, 0, 100, 100], [100, 0, 200, 100]] if count > 1
+            else [[0, 0, 200, 100]]),
+        "outputSlicesSource": (
+            [[0, 0, 200, 100], [0, 0, 100, 100], [100, 0, 200, 100]]
+            if count > 1 else [[0, 0, 200, 100]]),
         "outputRotated": [False] * count,
+        "traceTruncated": False, "traceDroppedEvents": 0,
         "outputFrameStartOneBased": start, "outputFrameCount": count,
         "events": [{"stage": "tier", "region": [0, 0, 2, 1],
                     "decision": "reject", "detail": "unsafe seam"}],
     }
 
 def make_zip(path, overrides=None, png=None, duplicate=False):
-    first = page(1, 2, 2)
-    second = page(2, 4, 1)
+    first = page(1, 2, 3)
+    second = page(2, 5, 1)
     summary = {"schema": 1, "complete": True,
-               "sourcePageCount": 2, "outputFrameCountExcludingCover": 3,
-               "separateCoverFrameCount": 1, "outputFrameCountIncludingCover": 4,
+               "sourcePageCount": 2, "outputFrameCountExcludingCover": 4,
+               "separateCoverFrameCount": 1, "outputFrameCountIncludingCover": 5,
                "originalImageCount": 0}
     components = {"first": first, "second": second, "summary": summary}
     if overrides:
@@ -86,12 +91,12 @@ class DiagnosticInspectionTest(unittest.TestCase):
         make_zip(self.path)
         result = self.valid()
         self.assertEqual(result["sourcePages"], 2)
-        self.assertEqual(result["totalOutputFrames"], 4)
+        self.assertEqual(result["totalOutputFrames"], 5)
         self.assertEqual(result["suspiciousSourceOrdinals"], [1, 2])
         self.assertEqual(validator.inspect(self.path, 1)["frameDetails"],
                          {"separateCover": True})
         self.assertEqual(validator.inspect(self.path, 3)["frameDetails"]["sourceOrdinal"], 1)
-        self.assertEqual(validator.inspect(self.path, 4)["frameDetails"]["sourceOrdinal"], 2)
+        self.assertEqual(validator.inspect(self.path, 5)["frameDetails"]["sourceOrdinal"], 2)
 
     def assert_invalid(self, overrides=None, png=None, duplicate=False):
         make_zip(self.path, overrides, png, duplicate)
@@ -121,6 +126,13 @@ class DiagnosticInspectionTest(unittest.TestCase):
 
     def test_colored_thumbnail_rejected(self):
         self.assert_invalid(png=png_gray(colored=True))
+
+    def test_overview_frame_must_not_disappear(self):
+        self.assert_invalid([("first", "outputSlicesSource",
+                              [[0, 0, 100, 100], [100, 0, 200, 100], [0, 0, 200, 100]])])
+
+    def test_truncated_trace_must_be_declared(self):
+        self.assert_invalid([("first", "traceTruncated", True)])
 
     def test_missing_output_frame_rejected(self):
         make_zip(self.path)
