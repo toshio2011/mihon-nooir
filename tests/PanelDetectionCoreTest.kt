@@ -488,5 +488,28 @@ fun main() {
         "Panel-only column retry must never alter Row by Row mode"
     }
 
+    // Diagnostic tracing must be observational. It cannot change the
+    // accepted rectangle geometry or independently run the panel detector.
+    val panelEvents = mutableListOf<dev.nooir.bridge.PanelDebugEvent>()
+    val traced = PanelDetectionCore.detect(asymmetricW, asymmetricH, asymmetric, true) {
+        panelEvents.add(it)
+    }
+    check(traced == asymmetricPanels)
+    check(panelEvents.any { it.stage == "row-search" && it.decision == "split" }) {
+        "Debug ZIP needs accepted row seam coordinates"
+    }
+    check(panelEvents.any { it.stage == "tier" && it.decision == "accept" }) {
+        "Debug ZIP needs accepted tier/column details"
+    }
+    val rowEvents = mutableListOf<dev.nooir.bridge.PanelDebugEvent>()
+    check(PanelDetectionCore.detectRows(asymmetricW, asymmetricH, asymmetric) {
+        rowEvents.add(it)
+    } == asymmetricRows)
+    check(rowEvents.any { it.stage == "page" && it.decision == "accept" })
+    val fallbackEvents = mutableListOf<dev.nooir.bridge.PanelDebugEvent>()
+    check(PanelDetectionCore.detect(100, 400, ByteArray(40_000) { 80.toByte() },
+        true) { fallbackEvents.add(it) }.usedFullPageFallback)
+    check(fallbackEvents.any { it.decision == "fallback" && it.detail.contains("long strip") })
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
