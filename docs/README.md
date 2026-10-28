@@ -1,5 +1,7 @@
 # MangaNooir — user guides
 
+**Developer handover (28 October 2026):** [Latest MihonNooir panel QA, merged fixes, draft diagnostics and next steps](HANDOVER_2026-10-28.md). This is a development snapshot; the currently published app version and available UI features can differ from test branches.
+
 [← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
