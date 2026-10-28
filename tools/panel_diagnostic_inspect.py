@@ -170,6 +170,16 @@ def inspect(path, frame=None):
             require(count == len(item["outputSlicesSource"]) ==
                     len(item.get("outputRotated", [])),
                     f"Output slice geometry count mismatch on page {n}")
+            planned = item["preOverviewSlicesSource"]
+            actual = item["outputSlicesSource"]
+            if item.get("showFullPageBeforeSplits") and len(planned) > 1:
+                require(actual == [[0, 0, w, h]] + planned,
+                        f"Full Page Before Splits overview or ordering lost on page {n}")
+                require(item["outputRotated"][0] is False,
+                        f"Full-page overview must be portrait on page {n}")
+            else:
+                require(actual == planned,
+                        f"Unexpected inserted or missing panel frame on page {n}")
             require(all(type(v) is bool for v in item["outputRotated"]),
                     f"Invalid rotation flags on page {n}")
             require(type(item.get("rtl")) is bool and
@@ -178,7 +188,13 @@ def inspect(path, frame=None):
             require(item.get("mode") == "PANEL_BY_PANEL" or
                     item.get("path") == "whole-page",
                     f"Unexpected detector mode for page {n}")
-            for event in item.get("events", []):
+            events = item.get("events", [])
+            dropped = item.get("traceDroppedEvents")
+            require(isinstance(events, list) and len(events) <= 384 and
+                    type(dropped) is int and dropped >= 0 and
+                    item.get("traceTruncated") is (dropped > 0),
+                    f"Unbounded or undeclared trace truncation on page {n}")
+            for event in events:
                 rect = event.get("region")
                 # Android skip events use source coordinates; detector events use thumb coordinates.
                 limitw, limith = (w, h) if event.get("stage") == "android" else (tw, th)
@@ -187,6 +203,8 @@ def inspect(path, frame=None):
             if original is not None:
                 require(original == f"originals/{stem}.source" and original in names,
                         f"Wrong original-image reference for page {n}")
+                require(item.get("originalBytes") == archive.getinfo(original).file_size,
+                        f"Original byte size mismatch on page {n}")
             if frame is not None and start <= frame < start + count:
                 hit = {"sourceOrdinal": n,
                        "chapterOrdinal": item.get("chapterOrdinal"),
