@@ -206,13 +206,18 @@ object PanelDetectionCore {
             data class Gap(val start: Int, val end: Int, val axis: Int)
             val gaps = mutableListOf<Gap>()
             var start = -1
-            var lowestInk = Int.MAX_VALUE
-            var bestAxis = -1
+            val paleAxes = mutableListOf<Pair<Int, Int>>()
             fun finish(end: Int) {
-                if (start >= 0 && bestAxis >= 0) gaps += Gap(start, end, bestAxis)
+                if (start >= 0 && paleAxes.isNotEmpty()) {
+                    val midpoint = (start + end - 1) / 2
+                    val best = paleAxes.minWithOrNull(
+                        compareBy<Pair<Int, Int>> { it.second }
+                            .thenBy { kotlin.math.abs(it.first - midpoint) }
+                    )!!
+                    gaps += Gap(start, end, best.first)
+                }
                 start = -1
-                lowestInk = Int.MAX_VALUE
-                bestAxis = -1
+                paleAxes.clear()
             }
             val end = row.right - margin
             for (x in row.left + margin until end) {
@@ -232,15 +237,9 @@ object PanelDetectionCore {
                     continue
                 }
                 if (start < 0) start = x
-                // Prefer a center away from either boundary of the pale run,
-                // rather than a border pixel of a neighbouring artwork panel.
-                val midpoint = (start + x) / 2
-                if (dark < lowestInk || (dark == lowestInk &&
-                        kotlin.math.abs(x - midpoint) <
-                        kotlin.math.abs(bestAxis - midpoint))) {
-                    lowestInk = dark
-                    bestAxis = x
-                }
+                // Decide at the END of the run, once its true midpoint is
+                // known. Ties should choose its center, never its first edge.
+                paleAxes += x to dark
             }
             finish(end)
             // Keep the retry bounded, even on pathological checkerboards.
