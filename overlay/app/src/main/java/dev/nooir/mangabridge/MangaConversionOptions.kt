@@ -119,7 +119,7 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
             }
             Text("Experimental. Creates a private ZIP with detector thumbnails, original artwork samples, " +
                 "split reasons and output-frame mapping. Does not change the book. " +
-                "Images may be copyrighted; review before sharing. After export, open this dialog " +
+                "Images may be copyrighted; review before sharing. The switch resets after this job. After export, open this dialog " +
                 "again and choose Save latest diagnostics ZIP.")
         }
         Text("Book packaging")
