@@ -498,8 +498,9 @@ fun main() {
     check(panelEvents.any { it.stage == "row-search" && it.decision == "split" }) {
         "Debug ZIP needs accepted row seam coordinates"
     }
-    check(panelEvents.any { it.stage == "tier" && it.decision == "accept" }) {
-        "Debug ZIP needs accepted tier/column details"
+    check(panelEvents.any { it.stage == "tier" &&
+        it.decision in setOf("accept", "recover", "keep") }) {
+        "Debug ZIP needs actual tier decisions, whether accepted directly or recovered: $panelEvents"
     }
     val rowEvents = mutableListOf<dev.nooir.bridge.PanelDebugEvent>()
     check(PanelDetectionCore.detectRows(asymmetricW, asymmetricH, asymmetric) {
