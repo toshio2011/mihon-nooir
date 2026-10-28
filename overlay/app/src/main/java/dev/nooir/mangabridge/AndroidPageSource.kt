@@ -218,19 +218,21 @@ class AndroidPageSource(private val context: Context) {
      * white corridor is visible. Never cut at an arbitrary screen boundary.
      * If no corridor exists, retain the complete panel rather than clip text.
      */
-    private fun safePanelSlices(
-        src: Bitmap, panel: PageRegion, viewWidth: Int, viewHeight: Int,
-        rightToLeft: Boolean, overlapPercent: Int,
-    ): List<PageRegion> = PanelSafeSlicePlanner.plan(
-        panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
-    ) { x, y ->
+    private fun inkAt(src: Bitmap, x: Int, y: Int): Boolean {
         val color = src.getPixel(x, y)
         val alpha = Color.alpha(color)
         val lum = (Color.red(color) * 299 + Color.green(color) * 587 +
             Color.blue(color) * 114) / 1000
         // Transparent pixels are paper, but faint solid balloon strokes are ink.
-        (lum * alpha + 255 * (255 - alpha)) / 255 < 247
+        return (lum * alpha + 255 * (255 - alpha)) / 255 < 247
     }
+
+    private fun safePanelSlices(
+        src: Bitmap, panel: PageRegion, viewWidth: Int, viewHeight: Int,
+        rightToLeft: Boolean, overlapPercent: Int,
+    ): List<PageRegion> = PanelSafeSlicePlanner.plan(
+        panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
+    ) { x, y -> inkAt(src, x, y) }
 
     private fun render(
         src: Bitmap, width: Int, height: Int, depth: Int,
@@ -243,11 +245,30 @@ class AndroidPageSource(private val context: Context) {
         // The previous pipeline disabled margin trimming for detected panels,
         // leaving large bright borders around otherwise valid individual crops.
         // Trim only when requested, before Auto Fit chooses orientation.
-        val detectedPanels = detectPanels(src, options)
-        val panels = if (detectedPanels != null && options.cropWhiteMargins)
+        // Critical fallback guard: rejected panel detection returns null and
+        // normally enters the legacy PageSlicePlanner, which can create several
+        // enlarged border-only viewports. Check the *original page* before
+        // either detector or legacy slicer. Only Panel by Panel uses this path:
+        // OFF, Row by Row and explicit legacy WEBTOON remain untouched.
+        val sourceWhole = PageRegion(0, 0, src.width, src.height)
+        val sparseWhole = if (options.panelMode == "PANEL_BY_PANEL" &&
+            options.layout != "WEBTOON" &&
+            PanelSafeSlicePlanner.isSparse(sourceWhole) { x, y -> inkAt(src, x, y) }
+        ) sourceWhole else null
+        val detectedPanels = if (sparseWhole != null) listOf(sparseWhole)
+            else detectPanels(src, options)
+        // A sparse full-page fallback must not be trimmed, and must not be
+        // passed back through any slicing stage. Every source pixel survives.
+        val panels = if (sparseWhole == null && detectedPanels != null && options.cropWhiteMargins)
             detectedPanels.map { trimDetectedPanel(src, it) }
         else detectedPanels
         val slices: List<PanelFitSlice> = when {
+            sparseWhole != null -> listOf(PanelFitSlice(
+                sparseWhole,
+                if (auto) PanelAutoFit.landscapeFor(
+                    sparseWhole, minOf(width, height), maxOf(width, height),
+                ) else manualRotate,
+            ))
             // Row by Row means exactly one screen per detected horizontal tier.
             // Never split a row again on its internal vertical panel gutters.
             panels != null && options.panelMode == "ROW_BY_ROW" && auto ->
