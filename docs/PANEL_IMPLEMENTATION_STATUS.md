@@ -1,5 +1,7 @@
 # Automatic Panel-by-Panel Export — implementation status
 
+> **Current status — 28 October 2026:** This file contains the original Phase A/B *historical* checklist, written before integration. The panel exporter is now integrated experimentally on `main` through [PR #43](https://github.com/toshio2011/mihon-nooir/pull/43), [PR #44](https://github.com/toshio2011/mihon-nooir/pull/44), [PR #45](https://github.com/toshio2011/mihon-nooir/pull/45), and [PR #46](https://github.com/toshio2011/mihon-nooir/pull/46). The integrated Android CI [#40619824694](https://github.com/toshio2011/mihon-nooir/actions/runs/40619824694) passed. The user confirmed the Extensions crash was fixed on REDMAGIC Android 16; **this does not establish complete manga-panel correctness, X4 reading quality, or safe public-release signing**. The most recent public release is still v1.0.12. See [Panel EPUB comparison QA](PANEL_EXPORT_QA.md) for source-identical old/new tests. Old headings and unchecked boxes below describe the earlier phases, not today's merged status.
+
 **Design source:** [PR #29 — approved handoff](https://github.com/toshio2011/mihon-nooir/pull/29) / `docs/AUTOMATIC_PANEL_BY_PANEL_EXPORT.md` on `docs/automatic-panel-export-design`.
 
 **Status:** Phase A geometry in PR #30; Phase B Android + desktop opt-in integration on a separate development branch. **Not merged, not released, and not physically validated**. The approved design PR #29 remains draft. Folio Nooir unchanged.
