@@ -49,6 +49,9 @@ fun main() {
     val footerPlan = PanelDetectionCore.detect(fw, fh, footer, true) { footerEvents.add(it) }
     check(!footerPlan.usedFullPageFallback) { "Footer case lost real panels: ${footerPlan.reason}" }
     coveredExactly(footerPlan.regions, fw, fh)
+    check(footerEvents.any { it.stage == "tier" && it.decision == "absorb" }) {
+        "Fixture must exercise actual terminal-footer absorption, not a lucky unsplit row: $footerEvents"
+    }
     check(footerPlan.regions.none { it.top >= fh - 60 }) {
         "A 42px border/footer must not become a separate rotated frame: ${footerPlan.regions}"
     }
@@ -109,6 +112,10 @@ fun main() {
     val titlePlan = PanelDetectionCore.detect(tw, th, title, true) { titleEvents.add(it) }
     check(!titlePlan.usedFullPageFallback) { "Title fixture must retain story art" }
     coveredExactly(titlePlan.regions, tw, th)
+    check(titleEvents.any { it.stage == "tier" && it.decision == "keep" &&
+        it.detail.contains("shallow unframed headline") }) {
+        "Fixture must exercise the title-fragment guard, not a lucky unrelated fallback"
+    }
     check(titlePlan.regions.none { it.bottom <= th / 4 && it.width < tw / 3 }) {
         "Shallow top title band became standalone word fragments: ${titlePlan.regions}"
     }
