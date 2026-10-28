@@ -54,6 +54,29 @@ fun main() {
     check(rtl.first().right == wide.right && rtl.last().left == wide.left)
     covered(rtl, wide)
 
+    // A giant, mostly-white ruled strip must remain ONE frame rather than
+    // becoming four or five isolated border/blank screens. Preserve every
+    // stroke as part of the original rectangle; do not discard the strip.
+    val sparseWide = PageRegion(0, 0, 2400, 240)
+    val sparseInk: (Int, Int) -> Boolean = { x, y ->
+        (x in 80..2320 && y in 112..117) ||
+            ((x == 100 || x == 2200) && y in 30..210)
+    }
+    check(PanelSafeSlicePlanner.plan(sparseWide, 800, 480, true, 8, sparseInk) ==
+        listOf(sparseWide)) {
+        "Sparse ruled strips must not create multiple almost-blank viewports"
+    }
+    // A small but real speech balloon does not justify an arbitrary viewport
+    // split. Retaining the whole frame is safer when the picture is uncertain.
+    val sparseTall = PageRegion(0, 0, 240, 2400)
+    val sparseTallInk: (Int, Int) -> Boolean = { x, y ->
+        (x in 95..101 && y in 90..2300)
+    }
+    check(PanelSafeSlicePlanner.plan(sparseTall, 480, 800, true, 0, sparseTallInk) ==
+        listOf(sparseTall)) {
+        "Long single strokes must remain within an intact panel"
+    }
+
     // Horizontal stitching must not reverse the top-to-bottom reading order.
     check(tallCut.first().top < tallCut.last().top)
 
