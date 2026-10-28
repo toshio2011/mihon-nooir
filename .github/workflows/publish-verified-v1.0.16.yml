@@ -1,0 +1,187 @@
+name: Publish MihonNooir v1.0.16 — verified Conan Android build
+# One-shot public experimental release. Source is frozen to the last green
+# user-tested Conan Panel EPUB commit, not the later failed title-polish commit.
+on:
+  push:
+    branches: [release/android-v1.0.16-conan]
+    paths:
+      - docs/releases/v1.0.16.md
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: mihon-nooir-v1.0.16-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout frozen release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify version, unchanged green source, successful exact-commit CI, and no existing release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          source_sha=30681a3f80a2c4e4a31376603e6def60269c8ed2
+          test "$(tr -d '\r\n' < config/version.txt)" = '1.0.16'
+          test -s docs/releases/v1.0.16.md
+          git merge-base --is-ancestor "$source_sha" HEAD
+          unexpected=$(git diff --name-only "$source_sha" HEAD |
+            grep -Ev '^(\.github/workflows/publish-verified-v1\.0\.16\.yml|docs/releases/v1\.0\.16\.md)$' || true)
+          if [ -n "$unexpected" ]; then
+            echo "Release source changed after the green, user-tested Conan build: $unexpected" >&2
+            exit 1
+          fi
+          test "$(gh api repos/"$GH_REPO"/actions/runs/40690833060 --jq .head_sha)" = "$source_sha"
+          test "$(gh api repos/"$GH_REPO"/actions/runs/40690833060 --jq .conclusion)" = 'success'
+          if gh release view v1.0.16 --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo 'v1.0.16 already published; will not replace it.' >&2
+            exit 1
+          fi
+
+      - name: Verify stable Android signing credentials before starting any build
+        shell: bash
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEY_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ALIAS_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEY_B64" || -z "$KEY_PASS" || -z "$KEY_ALIAS" || -z "$ALIAS_PASS" ]]; then
+            echo 'Persistent Android signing credentials are missing. Release blocked; no debug APK may be published.' >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/nooir-release.keystore"
+          test -s "$RUNNER_TEMP/nooir-release.keystore"
+
+      - name: Validate host tests and offline diagnostic inspector
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          bash tests/run.sh
+
+      - name: Pin Mihon upstream revision
+        id: pin
+        shell: bash
+        run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned Mihon upstream
+        uses: actions/checkout@v4
+        with:
+          repository: mihonapp/mihon
+          ref: ${{ steps.pin.outputs.sha }}
+          path: upstream
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Apply fork overlay and restrict installation privileges
+        run: |
+          python3 tools/apply_overlay.py upstream
+          python3 tools/secure_android_installers.py upstream
+
+      - name: Compile persistent-key-signed Android FOSS APK variants
+        working-directory: upstream
+        env:
+          MIHON_GITHUB_RELEASE: 'true'
+          storeFile: ${{ runner.temp }}/nooir-release.keystore
+          storePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
+
+      - name: Block debug signatures, mismatched certificates or bad APK identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(upstream/app/build/outputs/apk/foss/*.apk)
+          if (( ${#apks[@]} != 5 )); then
+            echo "Expected exactly five FOSS APK variants, got ${#apks[@]}" >&2
+            exit 1
+          fi
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          test -x "$build_tools/apksigner" && test -x "$build_tools/aapt"
+          cert=''
+          for apk in "${apks[@]}"; do
+            unzip -tq "$apk" >/dev/null
+            signer=$("$build_tools/apksigner" verify --verbose --print-certs "$apk")
+            grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<< "$signer"
+            if grep -Fq 'CN=Android Debug' <<< "$signer"; then
+              echo "Refusing to publish a debug-signed APK: $(basename "$apk")" >&2
+              exit 1
+            fi
+            fingerprint=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "$signer" | head -n 1)
+            test -n "$fingerprint"
+            if [[ -n "$cert" && "$fingerprint" != "$cert" ]]; then
+              echo "The APK variants are not signed with one persistent certificate" >&2
+              exit 1
+            fi
+            cert="$fingerprint"
+            badging=$("$build_tools/aapt" dump badging "$apk")
+            grep -Fq "name='dev.nooir.mihontrial.foss'" <<< "$badging"
+            grep -Fq "versionCode='1000016'" <<< "$badging"
+            grep -Fq "versionName='1.0.16'" <<< "$badging"
+            grep -Fq "application-label:'MihonNooir'" <<< "$badging"
+            permissions=$("$build_tools/aapt" dump permissions "$apk")
+            for denied in REQUEST_INSTALL_PACKAGES REQUEST_DELETE_PACKAGES UPDATE_PACKAGES_WITHOUT_USER_ACTION; do
+              if grep -Fq "android.permission.$denied" <<< "$permissions"; then
+                echo "Unsafe installation permission in $(basename "$apk"): $denied" >&2
+                exit 1
+              fi
+            done
+            echo "Verified signed release variant: $(basename "$apk")"
+          done
+
+      - name: Stage verified release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp upstream/app/build/outputs/apk/foss/*-foss.apk dist/
+          (cd dist && sha256sum ./*-foss.apk > SHA256SUMS.txt)
+          test -s dist/app-arm64-v8a-foss.apk
+          test -s dist/app-universal-foss.apk
+
+      - name: Publish experimental v1.0.16 prerelease (never overwrite)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view v1.0.16 --repo "$GH_REPO" > /dev/null 2>&1; then
+            echo 'Release already exists; refusing overwrite.' >&2
+            exit 1
+          fi
+          gh release create v1.0.16 dist/*-foss.apk dist/SHA256SUMS.txt \
+            --repo "$GH_REPO" \
+            --target "$GITHUB_SHA" \
+            --title 'MihonNooir v1.0.16 — Android Experimental' \
+            --notes-file docs/releases/v1.0.16.md \
+            --prerelease
+
+      - name: Securely remove signing keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/nooir-release.keystore"
