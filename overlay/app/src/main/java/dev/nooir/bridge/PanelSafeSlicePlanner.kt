@@ -31,6 +31,28 @@ object PanelSafeSlicePlanner {
             panel.height.toLong() * viewportWidth * 2
         if (!tall && !wide) return listOf(panel)
 
+        // A very wide or tall region can consist almost exclusively of frame
+        // rules. Cutting every blank corridor in that region creates multiple
+        // almost-white screens from what should be one intact sparse tier.
+        // Sample at most ~180 x 180 source positions; on extremely large CBZ
+        // pages this cannot turn into millions of getPixel() calls.
+        //
+        // Use the SAME ink callback as the full-pixel corridor checks. If less
+        // than 3% of samples contain ink, prefer fitting the WHOLE source
+        // region, retaining faint lines and all source pixels. Illustrated
+        // long panels still use the existing safe corridor splitter.
+        val stepX = maxOf(1, (panel.width + 179) / 180)
+        val stepY = maxOf(1, (panel.height + 179) / 180)
+        var ink = 0
+        var samples = 0
+        for (y in panel.top until panel.bottom step stepY)
+            for (x in panel.left until panel.right step stepX) {
+                samples++
+                if (inkAt(x, y)) ink++
+            }
+        if (samples > 0 && ink.toLong() * 100 < samples.toLong() * 3)
+            return listOf(panel)
+
         val start = if (tall) panel.top else panel.left
         val end = if (tall) panel.bottom else panel.right
         val segment = (if (tall) panel.width.toLong() * viewportHeight / viewportWidth
