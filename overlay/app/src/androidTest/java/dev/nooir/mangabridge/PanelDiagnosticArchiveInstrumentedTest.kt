@@ -133,6 +133,10 @@ class PanelDiagnosticArchiveInstrumentedTest {
                                 // The detector observes unquantized source pixels.
                                 assertEquals(Color.rgb(90, 90, 90), thumb.getPixel(80, 80))
                                 assertEquals(Color.WHITE, thumb.getPixel(235, 100))
+                                // page2.png must precede page10.png regardless of ZIP insertion order.
+                                val expectedGray = if (n == 1) 120 else 140
+                                assertEquals(Color.rgb(expectedGray, expectedGray, expectedGray),
+                                    thumb.getPixel(80, 500))
                             } finally { thumb.recycle() }
                             nextFrame += count
                         }
