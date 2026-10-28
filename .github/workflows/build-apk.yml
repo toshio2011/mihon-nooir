@@ -93,6 +93,9 @@ jobs:
       - name: Assemble fork (FOSS APK)
         working-directory: upstream
         run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
+      - name: Compile Android FOSS diagnostic instrumentation APK
+        working-directory: upstream
+        run: bash ./gradlew :app:assembleFossAndroidTest -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
       - name: Verify one-app APK identity, version, signing and archive
         shell: bash
         run: |
@@ -139,3 +142,56 @@ jobs:
             upstream/app/build/outputs/apk/foss/*.apk
             upstream/app/build/outputs/apk/foss/SHA256SUMS.txt
           if-no-files-found: error
+      - name: Upload emulator-only instrumentation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihon-nooir-foss-instrumentation
+          path: |
+            upstream/app/build/outputs/apk/foss/app-universal-foss.apk
+            upstream/app/build/outputs/apk/androidTest/foss/*.apk
+          if-no-files-found: error
+
+  android-panel-zip-smoke:
+    # Test the real Android ContentResolver, Bitmap, detector, CBZ and ZIP
+    # pipeline, not just a JVM imitation of the source code.
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download exact CI-built app and test APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: mihon-nooir-foss-instrumentation
+          path: diagnostic-apks
+      - name: Enable KVM for emulator acceleration
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise diagnostic ZIP on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            set -euo pipefail
+            find diagnostic-apks -type f -name '*.apk' -print
+            app=$(find diagnostic-apks -name app-universal-foss.apk -print -quit)
+            test_apk=$(find diagnostic-apks -name '*androidTest*.apk' -print -quit)
+            test -s "$app" && test -s "$test_apk"
+            adb install -r "$app"
+            adb install -r "$test_apk"
+            adb shell am instrument -w -r -e class dev.nooir.mangabridge.PanelDiagnosticArchiveInstrumentedTest dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner | tee diagnostic-instrumentation.txt
+            grep -Eq '^OK \(1 test\)' diagnostic-instrumentation.txt
+      - name: Upload instrumentation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihon-nooir-panel-zip-device-smoke
+          path: diagnostic-instrumentation.txt
+          if-no-files-found: warn
