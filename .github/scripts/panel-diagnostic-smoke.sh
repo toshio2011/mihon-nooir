@@ -3,6 +3,19 @@
 # individual 'script:' lines in separate shells, so shell variables do not
 # survive across YAML lines.
 set -euo pipefail
+
+capture_android_failure() {
+  local status="$1"
+  trap - ERR
+  echo "Android diagnostic test failed (exit $status). Capturing crash evidence."
+  adb logcat -d -v threadtime -t 5000 > android-panel-diagnostic-logcat.txt || true
+  echo "AndroidRuntime/test runner crash lines:"
+  grep -n -E -A 16 -B 4 'FATAL EXCEPTION|AndroidRuntime|INSTRUMENTATION_RESULT|Process crashed|AssertionFailedError|ClassNotFoundException|NoClassDefFoundError|Unable to instantiate' android-panel-diagnostic-logcat.txt | tail -n 180 || true
+  adb shell pm list instrumentation > android-panel-instrumentation-packages.txt || true
+  exit "$status"
+}
+trap 'capture_android_failure $?' ERR
+
 echo "Checking exact-commit app and Android instrumentation APKs"
 find diagnostic-apks -type f -name '*.apk' -print
 app="diagnostic-apks/foss/app-universal-foss.apk"
@@ -12,6 +25,8 @@ test -s "$test_apk"
 
 adb install -r "$app"
 adb install -r "$test_apk"
+adb shell pm list instrumentation | tee android-panel-instrumentation-packages.txt
+adb logcat -c
 
 echo "Running Android CBZ-to-panel diagnostics parity/integrity test"
 adb shell am instrument -w -r \
