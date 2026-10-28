@@ -33,7 +33,7 @@ The trace is **observational**. It records accepted horizontal seams, sparse-tie
 - Up to 24 suspicious pages may include *original source bytes* (max 8 MiB each, 80 MiB combined). Every processed page still has an exact detector thumbnail even when its original is omitted.
 - No title, manga filename, chapter name, source ID, URL, account identifier or device IP is serialized. The images themselves can still be copyrighted or visually identifying, so **review before sharing**.
 - Files stay within app-private storage until you select **Save latest panel diagnostics ZIP**. Turning the toggle off affects future captures; it does not automatically delete an already saved ZIP.
-- Enabling debug adds extra work and disk I/O. Keep it OFF for normal exports.
+- The diagnostic switch is one-job-only: starting an export resets its saved preference to OFF, while preserving the flag for the job already queued. Enabling debug adds extra work and disk I/O.
 
 ## Known Conan cases to investigate
 
