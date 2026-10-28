@@ -124,6 +124,7 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
         private val sourceHeight: Int,
     ) {
         private val events = ArrayList<PanelDebugEvent>()
+        private var droppedEvents = 0
         private var thumbWidth = 0
         private var thumbHeight = 0
         private var gray: ByteArray? = null
@@ -132,7 +133,7 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
         private var actualMode = "unexamined"
         private var fallback = ""
         val trace: (PanelDebugEvent) -> Unit = { event ->
-            if (events.size < MAX_TRACE_EVENTS) events += event
+            if (events.size < MAX_TRACE_EVENTS) events += event else droppedEvents++
         }
 
         fun noteSkipped(reason: String) {
@@ -238,6 +239,8 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                     })
                     .put("outputFrameStartOneBased", start)
                     .put("outputFrameCount", rendered.size)
+                    .put("traceTruncated", droppedEvents > 0)
+                    .put("traceDroppedEvents", droppedEvents)
                     .put("events", JSONArray().also { eventArray ->
                         events.forEach { event ->
                             eventArray.put(JSONObject().put("stage", event.stage)
