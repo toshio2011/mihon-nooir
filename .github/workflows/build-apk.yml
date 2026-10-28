@@ -158,6 +158,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Checkout same-commit offline ZIP inspector
+        uses: actions/checkout@v4
       - name: Download exact CI-built app and test APKs
         uses: actions/download-artifact@v4
         with:
@@ -188,10 +190,19 @@ jobs:
             adb install -r "$test_apk"
             adb shell am instrument -w -r -e class dev.nooir.mangabridge.PanelDiagnosticArchiveInstrumentedTest dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner | tee diagnostic-instrumentation.txt
             grep -Eq '^OK \(1 test\)' diagnostic-instrumentation.txt
+            # Google APIs emulator supports adb root. Inspect the actual private
+            # ZIP created by Android rather than a Python-reconstructed stand-in.
+            adb root
+            adb wait-for-device
+            adb pull /data/user/0/dev.nooir.mihontrial.foss/files/manganooir_panel_debug/latest.zip android-runtime-panel-diagnostic.zip
+            python3 tools/panel_diagnostic_inspect.py android-runtime-panel-diagnostic.zip --json | tee android-panel-diagnostic-inspection.json
       - name: Upload instrumentation results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mihon-nooir-panel-zip-device-smoke
-          path: diagnostic-instrumentation.txt
+          path: |
+            diagnostic-instrumentation.txt
+            android-runtime-panel-diagnostic.zip
+            android-panel-diagnostic-inspection.json
           if-no-files-found: warn
