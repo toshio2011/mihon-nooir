@@ -227,23 +227,34 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                         it.decision == "reject" }
                 if (suspected && rawInput != null && originals < MAX_ORIGINAL_PAGES &&
                     originalBytes < MAX_ORIGINAL_TOTAL) {
-                    val data = ByteArrayOutputStream()
-                    rawInput().use { input ->
-                        val buffer = ByteArray(32 * 1024)
-                        while (data.size() <= MAX_ORIGINAL_SIZE) {
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            data.write(buffer, 0, n)
+                    // Some SAF providers cannot reopen an image stream.
+                    // An unavailable optional original MUST NOT invalidate
+                    // the exact detector thumbnail or the useful trace ZIP.
+                    val data = runCatching {
+                        ByteArrayOutputStream().also { output ->
+                            rawInput().use { input ->
+                                val buffer = ByteArray(32 * 1024)
+                                while (output.size() <= MAX_ORIGINAL_SIZE) {
+                                    val n = input.read(buffer)
+                                    if (n < 0) break
+                                    if (n > 0) output.write(buffer, 0, n)
+                                }
+                            }
+                        }
+                    }.getOrNull()
+                    when {
+                        data == null -> snapshot.put("originalImageSkipped", "source cannot be reopened")
+                        data.size() > MAX_ORIGINAL_SIZE ||
+                            originalBytes + data.size() > MAX_ORIGINAL_TOTAL ->
+                            snapshot.put("originalImageSkipped", "size limit")
+                        else -> {
+                            entry("originals/$id.source") { write(data.toByteArray()) }
+                            originals++
+                            originalBytes += data.size()
+                            snapshot.put("originalImage", "originals/$id.source")
+                            snapshot.put("originalBytes", data.size())
                         }
                     }
-                    if (data.size() <= MAX_ORIGINAL_SIZE &&
-                        originalBytes + data.size() <= MAX_ORIGINAL_TOTAL) {
-                        entry("originals/$id.source") { write(data.toByteArray()) }
-                        originals++
-                        originalBytes += data.size()
-                        snapshot.put("originalImage", "originals/$id.source")
-                        snapshot.put("originalBytes", data.size())
-                    } else snapshot.put("originalImageSkipped", "size limit")
                 }
                 entry("pages/$id.json") { write(snapshot.toString(2).toByteArray(Charsets.UTF_8)) }
             } catch (e: Exception) {
