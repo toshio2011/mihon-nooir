@@ -49,6 +49,16 @@ object PanelDetectionCore {
                 continue
             }
             val rowDetector = Detector(width, height, grayscale)
+            // A whole detected horizontal tier can consist of just a page
+            // frame, a few decorative rules, or sparse lettering. Recursively
+            // splitting that tier turns thin strokes into standalone viewports
+            // and can multiply a single border into several almost-white
+            // screens. Preserve the entire tier, including all its pixels;
+            // this guard belongs ONLY to Panel by Panel, not detectRows().
+            if (rowDetector.isSparseRow(row)) {
+                output.add(row)
+                continue
+            }
             val node = rowDetector.partition(row, 0)
             val candidates = node?.let { PanelReadingOrder.flatten(it, rightToLeft) }
             val valid = candidates != null && candidates.size in 2..available &&
@@ -169,6 +179,31 @@ object PanelDetectionCore {
          * white-strip detector as panel mode, but scan each remaining row
          * independently so short/uneven horizontal gaps are not missed.
          */
+        /**
+         * A row with fewer than three percent dark thumbnail samples is not
+         * sufficient evidence for subdividing its internal page rules.
+         *
+         * This NEVER removes the row: the caller preserves its complete
+         * geometry as one screen (and the usual optional overview still works).
+         * Content-rich rows, including genuinely narrow ink-filled panels,
+         * continue through the existing detector completely unchanged.
+         *
+         * Uses a bounded, coarse measurement; in doubtful cases the safer
+         * outcome is one intact row, not multiple invented panel frames.
+         */
+        fun isSparseRow(row: PageRegion): Boolean {
+            val step = maxOf(1, minOf(row.width, row.height) / 160)
+            var ink = 0
+            var samples = 0
+            for (y in row.top until row.bottom step step) {
+                for (x in row.left until row.right step step) {
+                    samples++
+                    if ((gray[y * width + x].toInt() and 255) < INK) ink++
+                }
+            }
+            return samples > 0 && ink.toLong() * 100 < samples.toLong() * 3
+        }
+
         fun hasCleanFullHeightColumn(region: PageRegion): Boolean {
             val axis = bestGutter(region, horizontal = false) ?: return false
             return hasContent(region.copy(right = axis)) &&
