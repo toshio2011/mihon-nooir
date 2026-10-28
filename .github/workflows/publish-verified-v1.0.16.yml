@@ -92,8 +92,18 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # Ubuntu Actions already includes a working Android SDK. The optional
+      # setup-android action attempts to install obsolete package "tools" on
+      # newer runners and fails even though the full build-apk workflow works
+      # with the preinstalled SDK.
+      - name: Verify preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk" && test -d "$sdk"
+          test -d "$sdk/build-tools"
+          echo "Using runner Android SDK at $sdk"
 
       - name: Apply fork overlay and restrict installation privileges
         run: |
