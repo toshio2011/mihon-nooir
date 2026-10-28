@@ -329,6 +329,26 @@ fun main() {
         "A near-edge full-width frame rule must not veto two safe panels: ${borderedPanels.reason} ${borderedPanels.regions}"
     }
     check(borderedPanels.regions[0].left > borderedPanels.regions[1].left)
+    // An allowed outer-edge frame never grants permission to cut a balloon
+    // tail in the center of the SAME row.
+    val mixedBorderAndTail = borderedRetry.copyOf()
+    for (x in 164 until 195) mixedBorderAndTail[211 * retryW + x] = 45.toByte()
+    val mixedProtected = PanelDetectionCore.detect(retryW, retryH, mixedBorderAndTail, true)
+    check(!mixedProtected.usedFullPageFallback && mixedProtected.regions.size == 2) {
+        "Near-edge border exception must not bypass interior balloon protection: ${mixedProtected.regions}"
+    }
+    // The narrow local search must likewise avoid a tiny unexpected interior
+    // ink mark on the suggested axis, using a neighbouring safe column only.
+    val dottedBorder = borderedRetry.copyOf()
+    dottedBorder[211 * retryW + 180] = 25.toByte()
+    val dottedRecovery = PanelDetectionCore.detect(retryW, retryH, dottedBorder, true)
+    check(!dottedRecovery.usedFullPageFallback && dottedRecovery.regions.size == 3) {
+        "Isolated gutter dot must not undo a recoverable border-separated panel tier"
+    }
+    check(dottedRecovery.regions.none { part ->
+        (part.right == 180 || part.left == 180)
+    }) { "Do not place a recovery cut directly through the dark dot" }
+
     // Existing one-pixel interior balloon bridge is tested below and must
     // still block recovery even though a broad border may be allowed at edges.
 
