@@ -192,4 +192,6 @@ jobs:
             diagnostic-instrumentation.txt
             android-runtime-panel-diagnostic.zip
             android-panel-diagnostic-inspection.json
+            android-panel-diagnostic-logcat.txt
+            android-panel-instrumentation-packages.txt
           if-no-files-found: warn
