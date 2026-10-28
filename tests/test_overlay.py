@@ -62,6 +62,12 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('androidTestImplementation(libs.androidx.test.junit)', gradle_text)
             self.assertIn('-keep class androidx.tracing.Trace { *; }',
                           (app/'proguard-rules.pro').read_text())
+            rules = (app/'proguard-rules.pro').read_text()
+            for java_class in ('MangaConversionOptions', 'AndroidPageSource',
+                               'PanelDiagnosticArchive'):
+                self.assertIn('-keep class dev.nooir.mangabridge.' + java_class +
+                              ' { *; }', rules)
+            self.assertIn('-keep class dev.nooir.bridge.QuantizedPage { *; }', rules)
             self.assertTrue((root/'app/src/androidTest/java/dev/nooir/mangabridge/PanelDiagnosticArchiveInstrumentedTest.kt').exists())
             self.assertIn('NooirExportDialog',(manga/'MangaScreen.kt').read_text())
             self.assertIn('nooirSaveQuick', (manga/'MangaScreen.kt').read_text())
