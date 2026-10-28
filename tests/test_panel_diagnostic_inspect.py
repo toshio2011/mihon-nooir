@@ -104,7 +104,7 @@ class DiagnosticInspectionTest(unittest.TestCase):
             self.valid()
 
     def test_noncontiguous_frame_mapping(self):
-        self.assert_invalid([("second", "outputFrameStartOneBased", 5)])
+        self.assert_invalid([("second", "outputFrameStartOneBased", 6)])
 
     def test_bad_source_geometry(self):
         self.assert_invalid([("second", "outputSlicesSource", [[0, 0, 201, 100]])])
