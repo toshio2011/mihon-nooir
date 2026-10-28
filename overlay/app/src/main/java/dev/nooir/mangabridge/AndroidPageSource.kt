@@ -114,7 +114,12 @@ class AndroidPageSource(private val context: Context) {
      * original decoded Bitmap is retained for rendering, never sent anywhere.
      * An uncertain page uses exactly the previous page slicing behavior.
      */
-    private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<PageRegion>? {
+    // A detected row can be sparse BEFORE sourceRegions adds overlap padding.
+    // Carry this decision to rendering; retesting the padded crop may include
+    // dark pixels from its illustrated neighbour and wrongly re-enable cuts.
+    private data class DetectedPanel(val region: PageRegion, val preserveWhole: Boolean)
+
+    private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<DetectedPanel>? {
         if (options.panelMode != "PANEL_BY_PANEL" && options.panelMode != "ROW_BY_ROW") return null
         if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
@@ -137,12 +142,23 @@ class AndroidPageSource(private val context: Context) {
                 else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
             if (plan.usedFullPageFallback) return null
             val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
-            // A genuine panel can be very wide or tall. Screen occupancy is
-            // not evidence that the detector found a fragment: the shared
-            // detector already requires ink content, guarded gutters, full
-            // coverage and unambiguous reading order. Never discard valid
-            // panels solely because they would be small when fitted.
-            return regions
+            // Decide on the UNPADDED thumbnail region. Source overlap
+            // padding is essential for artwork safety but can pull dark
+            // strokes from a neighbouring illustrated tier into a nearly
+            // empty row. Measuring the padded output later defeats the
+            // sparse-row guard and creates border-only zoom frames.
+            //
+            // Every region remains present, with its original source pixels.
+            // This only controls whether an otherwise-valid elongated region
+            // is further divided by the viewport slicer.
+            return regions.mapIndexed { index, region ->
+                val sparse = options.panelMode == "PANEL_BY_PANEL" &&
+                    options.layout != "WEBTOON" &&
+                    PanelSafeSlicePlanner.isSparse(plan.regions[index]) { x, y ->
+                        (gray[y * w + x].toInt() and 255) < 220
+                    }
+                DetectedPanel(region, sparse)
+            }
         } finally {
             if (thumb !== src) thumb.recycle()
         }
@@ -218,19 +234,21 @@ class AndroidPageSource(private val context: Context) {
      * white corridor is visible. Never cut at an arbitrary screen boundary.
      * If no corridor exists, retain the complete panel rather than clip text.
      */
-    private fun safePanelSlices(
-        src: Bitmap, panel: PageRegion, viewWidth: Int, viewHeight: Int,
-        rightToLeft: Boolean, overlapPercent: Int,
-    ): List<PageRegion> = PanelSafeSlicePlanner.plan(
-        panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
-    ) { x, y ->
+    private fun inkAt(src: Bitmap, x: Int, y: Int): Boolean {
         val color = src.getPixel(x, y)
         val alpha = Color.alpha(color)
         val lum = (Color.red(color) * 299 + Color.green(color) * 587 +
             Color.blue(color) * 114) / 1000
         // Transparent pixels are paper, but faint solid balloon strokes are ink.
-        (lum * alpha + 255 * (255 - alpha)) / 255 < 247
+        return (lum * alpha + 255 * (255 - alpha)) / 255 < 247
     }
+
+    private fun safePanelSlices(
+        src: Bitmap, panel: PageRegion, viewWidth: Int, viewHeight: Int,
+        rightToLeft: Boolean, overlapPercent: Int,
+    ): List<PageRegion> = PanelSafeSlicePlanner.plan(
+        panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
+    ) { x, y -> inkAt(src, x, y) }
 
     private fun render(
         src: Bitmap, width: Int, height: Int, depth: Int,
@@ -243,35 +261,65 @@ class AndroidPageSource(private val context: Context) {
         // The previous pipeline disabled margin trimming for detected panels,
         // leaving large bright borders around otherwise valid individual crops.
         // Trim only when requested, before Auto Fit chooses orientation.
-        val detectedPanels = detectPanels(src, options)
+        // Critical fallback guard: rejected panel detection returns null and
+        // normally enters the legacy PageSlicePlanner, which can create several
+        // enlarged border-only viewports. Check the *original page* before
+        // either detector or legacy slicer. Only Panel by Panel uses this path:
+        // OFF, Row by Row and explicit legacy WEBTOON remain untouched.
+        val sourceWhole = PageRegion(0, 0, src.width, src.height)
+        val sparseWhole = if (options.panelMode == "PANEL_BY_PANEL" &&
+            options.layout != "WEBTOON" &&
+            // Auto-detected long webtoons still need their existing scrolling
+            // slices, even when a particular strip has little artwork.
+            src.height.toLong() <= src.width.toLong() * 3L &&
+            PanelSafeSlicePlanner.isSparse(sourceWhole) { x, y -> inkAt(src, x, y) }
+        ) sourceWhole else null
+        val detectedPanels = if (sparseWhole != null)
+            listOf(DetectedPanel(sparseWhole, true))
+        else detectPanels(src, options)
+        // A sparse source or tier must never be trimmed/re-sliced; preserving
+        // the full, padded region also retains border-adjacent speech balloons.
         val panels = if (detectedPanels != null && options.cropWhiteMargins)
-            detectedPanels.map { trimDetectedPanel(src, it) }
+            detectedPanels.map { panel ->
+                if (panel.preserveWhole) panel
+                else panel.copy(region = trimDetectedPanel(src, panel.region))
+            }
         else detectedPanels
         val slices: List<PanelFitSlice> = when {
+            sparseWhole != null -> listOf(PanelFitSlice(
+                sparseWhole,
+                if (auto) PanelAutoFit.landscapeFor(
+                    sparseWhole, minOf(width, height), maxOf(width, height),
+                ) else manualRotate,
+            ))
             // Row by Row means exactly one screen per detected horizontal tier.
             // Never split a row again on its internal vertical panel gutters.
             panels != null && options.panelMode == "ROW_BY_ROW" && auto ->
                 PanelAutoFit.plan(
-                    panels, minOf(width, height), maxOf(width, height),
+                    panels.map { it.region }, minOf(width, height), maxOf(width, height),
                     options.rightToLeft, options.overlapPercent,
                     preserveWholePanels = true,
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
-                panels.map { PanelFitSlice(it, manualRotate) }
+                panels.map { PanelFitSlice(it.region, manualRotate) }
             panels != null && auto -> PanelAutoFit.plan(
-                panels, minOf(width, height), maxOf(width, height),
+                panels.map { it.region }, minOf(width, height), maxOf(width, height),
                 options.rightToLeft, options.overlapPercent,
                 preserveWholePanels = true,
-            ).flatMap { fit ->
+            ).flatMapIndexed { index, fit ->
                 val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
                 val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
-                safePanelSlices(src, fit.region, vw, vh, options.rightToLeft, options.overlapPercent)
-                    .map { PanelFitSlice(it, fit.landscape) }
+                val parts = if (panels[index].preserveWhole) listOf(fit.region)
+                else safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
+                    options.overlapPercent)
+                parts.map { PanelFitSlice(it, fit.landscape) }
             }
             panels != null -> panels.flatMap { panel ->
-                safePanelSlices(src, panel, manualViewWidth, manualViewHeight,
+                val parts = if (panel.preserveWhole) listOf(panel.region)
+                else safePanelSlices(src, panel.region, manualViewWidth, manualViewHeight,
                     options.rightToLeft, options.overlapPercent)
-            }.map { PanelFitSlice(it, manualRotate) }
+                parts.map { PanelFitSlice(it, manualRotate) }
+            }
             else -> PageSlicePlanner.plan(
                 src.width, src.height, manualViewWidth, manualViewHeight,
                 options.layout, options.splitSpreads, options.rightToLeft,

@@ -63,7 +63,14 @@ class TestOverlay(unittest.TestCase):
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirMangaExportWorker.kt').exists())
             panel_src = (root/'app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt').read_text()
             self.assertIn('PanelWhitespaceCrop.trim(region)', panel_src)
-            self.assertIn('detectedPanels.map { trimDetectedPanel(src, it) }', panel_src)
+            # Sparse detector rows must carry their original no-split decision
+            # through protective padding and optional margin trimming.
+            self.assertIn('detectedPanels.map { panel ->', panel_src)
+            self.assertIn('if (panel.preserveWhole) panel', panel_src)
+            self.assertIn('panel.copy(region = trimDetectedPanel(src, panel.region))', panel_src)
+            self.assertIn('PanelSafeSlicePlanner.isSparse(plan.regions[index])', panel_src)
+            self.assertIn('if (panels[index].preserveWhole) listOf(fit.region)', panel_src)
+            self.assertIn('if (panel.preserveWhole) listOf(panel.region)', panel_src)
             self.assertTrue((root/'app/src/main/java/dev/nooir/bridge/PanelWhitespaceCrop.kt').exists())
             desktop_cli = (ROOT/'desktop/cli/NooirDesktopCli.kt').read_text()
             self.assertIn('PanelWhitespaceCrop.trim(region)', desktop_cli)
