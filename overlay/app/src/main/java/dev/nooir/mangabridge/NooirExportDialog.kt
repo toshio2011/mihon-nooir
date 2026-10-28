@@ -168,8 +168,10 @@ fun NooirExportDialog(
                     TextButton(onClick = { diagnosticsPicker.launch("MihonNooir-panel-diagnostics.zip") }) {
                         Text("Save latest panel diagnostics ZIP")
                     }
-                    Text("Stored privately after the last completed debug export. Saving here makes " +
-                        "a user-chosen copy; no automatic sharing or upload.")
+                    Text("Last diagnostic ZIP created: " +
+                        java.text.DateFormat.getDateTimeInstance().format(
+                            java.util.Date(diagnosticsFile.lastModified())) +
+                        ". Stored privately; no automatic sharing or upload.")
                 }
                 if (diagnosticsSaveStatus.isNotBlank()) Text(diagnosticsSaveStatus)
                 TextButton(onClick = { previewPicker.launch(arrayOf("image/*", "application/zip", "application/x-cbz", "application/vnd.comicbook+zip")) }) {
