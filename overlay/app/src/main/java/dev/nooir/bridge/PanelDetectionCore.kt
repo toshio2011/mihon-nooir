@@ -426,24 +426,46 @@ object PanelDetectionCore {
                     // search runs ONLY after the normal panel plan was rejected.
                     val radius = minOf(8, maxOf(2, current.width / 75))
                     var axis: Int? = null
+                    var attempted = 0
+                    var unsafeSeam = 0
+                    var leftNotIllustrated = 0
+                    var rightNotIllustrated = 0
                     for (proposal in options) {
                         for (distance in 0..radius) {
                             val neighbours = if (distance == 0) listOf(proposal)
                                 else listOf(proposal - distance, proposal + distance)
                             for (cut in neighbours) {
                                 if (cut <= current.left + 2 || cut >= current.right - 2) continue
-                                if (safeVerticalSeam(current, cut) &&
-                                    likelyIllustratedColumn(current.copy(right = cut)) &&
-                                    likelyIllustratedColumn(current.copy(left = cut))) {
-                                    axis = cut
-                                    break
+                                attempted++
+                                if (!safeVerticalSeam(current, cut)) {
+                                    unsafeSeam++
+                                    continue
                                 }
+                                if (!likelyIllustratedColumn(current.copy(right = cut))) {
+                                    leftNotIllustrated++
+                                    continue
+                                }
+                                if (!likelyIllustratedColumn(current.copy(left = cut))) {
+                                    rightNotIllustrated++
+                                    continue
+                                }
+                                axis = cut
+                                break
                             }
                             if (axis != null) break
                         }
                         if (axis != null) break
                     }
-                    val cut = axis ?: continue
+                    if (axis == null) {
+                        trace?.invoke(PanelDebugEvent("column-retry", current, "reject",
+                            "attempted=$attempted unsafeSeam=$unsafeSeam " +
+                            "leftNotIllustrated=$leftNotIllustrated " +
+                            "rightNotIllustrated=$rightNotIllustrated"))
+                        continue
+                    }
+                    val cut = axis
+                    trace?.invoke(PanelDebugEvent("column-retry", current, "split",
+                        "safe vertical seam x=$cut after $attempted attempts"))
                     columns.removeAt(i)
                     columns.add(i, current.copy(right = cut))
                     columns.add(i + 1, current.copy(left = cut))
@@ -537,14 +559,20 @@ object PanelDetectionCore {
                     else -> true to adaptiveHorizontal.first
                 }
             if (split == null) {
+                trace?.invoke(PanelDebugEvent("recursive", region, "keep",
+                    "no validated clean, thin or adaptive gutter"))
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
                 return PanelReadingOrder.Node.Leaf(region)
             }
             val (isHorizontal, mid) = split
+            trace?.invoke(PanelDebugEvent("recursive", region, "split",
+                if (isHorizontal) "horizontal candidate y=$mid" else "vertical candidate x=$mid"))
             val first = if (isHorizontal) region.copy(bottom = mid) else region.copy(right = mid)
             val second = if (isHorizontal) region.copy(top = mid) else region.copy(left = mid)
             if (!hasContent(first) || !hasContent(second)) {
+                trace?.invoke(PanelDebugEvent("recursive", region, "reject",
+                    "candidate would leave an ink-poor child"))
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
                 return PanelReadingOrder.Node.Leaf(region)
