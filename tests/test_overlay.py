@@ -76,6 +76,24 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('PanelWhitespaceCrop.trim(region)', desktop_cli)
             self.assertIn('detectedPanels.map { trimDetectedPanel(src, it) }', desktop_cli)
             self.assertTrue((root/'app/src/main/java/dev/nooir/bridge/PanelSafeSlicePlanner.kt').exists())
+            # Diagnostics must be explicitly opted into, kept outside the
+            # book/archive output and available through a user-chosen SAF URI.
+            debug_src = (root/'app/src/main/java/dev/nooir/mangabridge/PanelDiagnosticArchive.kt').read_text()
+            opts_src = (root/'app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt').read_text()
+            dialog_src = (root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').read_text()
+            exporter_src = (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text()
+            self.assertIn('val panelDiagnostics: Boolean = false', opts_src)
+            self.assertIn('PanelDiagnosticArchive(tempFolder)', exporter_src)
+            self.assertIn('diagnostics?.publish(context)', exporter_src)
+            self.assertIn('ZipOutputStream(', debug_src)
+            self.assertIn('sourceRegionsWithPadding', debug_src)
+            self.assertIn('detectorThumbnail', debug_src)
+            self.assertIn('outputFrameStartOneBased', debug_src)
+            self.assertIn('MAX_ORIGINAL_TOTAL', debug_src)
+            self.assertIn('CreateDocument("application/zip")', dialog_src)
+            self.assertIn('Save latest panel diagnostics ZIP', dialog_src)
+            self.assertIn('options.panelDiagnostics && options.panelMode == "PANEL_BY_PANEL"', exporter_src)
+
             self.assertIn('PanelSafeSlicePlanner.plan(', panel_src)
             self.assertIn('PanelSafeSlicePlanner.plan(', desktop_cli)
             # Keep the same split/no-cut decision in both platform adapters.
