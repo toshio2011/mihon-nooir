@@ -8,6 +8,7 @@ class TestOverlay(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp); app=root/'app'; app.mkdir()
             (app/'build.gradle.kts').write_text('    namespace = "eu.kanade.tachiyomi"\napplicationId = "app.mihon"\nversionCode = 39\nversionName = "0.21.3"\ndependencies {\n    testImplementation(libs.bundles.test)\n}\n')
+            (app/'proguard-rules.pro').write_text('# existing Mihon R8 rules\n')
             manga=root/'app/src/main/java/eu/kanade/tachiyomi/ui/manga'
             manga.mkdir(parents=True)
             (manga/'MangaViewModel.kt').write_text('import android.content.Context\nimport eu.kanade.tachiyomi.data.download.DownloadManager\n    private val downloadManager: DownloadManager,\n    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n')
@@ -59,6 +60,8 @@ class TestOverlay(unittest.TestCase):
             gradle_text = (app/'build.gradle.kts').read_text()
             self.assertIn('testBuildType = "foss"', gradle_text)
             self.assertIn('androidTestImplementation(libs.androidx.test.junit)', gradle_text)
+            self.assertIn('-keep class androidx.tracing.Trace { *; }',
+                          (app/'proguard-rules.pro').read_text())
             self.assertTrue((root/'app/src/androidTest/java/dev/nooir/mangabridge/PanelDiagnosticArchiveInstrumentedTest.kt').exists())
             self.assertIn('NooirExportDialog',(manga/'MangaScreen.kt').read_text())
             self.assertIn('nooirSaveQuick', (manga/'MangaScreen.kt').read_text())
