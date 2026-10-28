@@ -300,8 +300,7 @@ object PanelDetectionCore {
                         }
                         if (axis != null) break
                     }
-                    if (axis == null) continue
-                    val cut = axis
+                    val cut = axis ?: continue
                     columns.removeAt(i)
                     columns.add(i, current.copy(right = cut))
                     columns.add(i + 1, current.copy(left = cut))
