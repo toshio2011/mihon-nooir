@@ -13,6 +13,10 @@ import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
+import java.io.FilterOutputStream
+import java.io.IOException
+import java.io.OutputStream
+import java.util.zip.ZipFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -38,9 +42,32 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
             File(context.filesDir, "manganooir_panel_debug/latest.zip")
     }
 
+    // Enforce the bound on compressed bytes actually written, including ZIP headers
+    // and the final directory. File.length() alone lags buffered writes.
+    private class CappedOutputStream(output: OutputStream, private val limit: Long) :
+        FilterOutputStream(output) {
+        var written = 0L
+            private set
+
+        override fun write(value: Int) {
+            if (written >= limit) throw IOException("Diagnostic ZIP size limit reached")
+            out.write(value)
+            written++
+        }
+
+        override fun write(bytes: ByteArray, offset: Int, count: Int) {
+            if (count < 0 || count.toLong() > limit - written)
+                throw IOException("Diagnostic ZIP size limit reached")
+            out.write(bytes, offset, count)
+            written += count
+        }
+    }
+
     private val file = File(workDir, "panel-diagnostics.zip")
-    private val zip = ZipOutputStream(BufferedOutputStream(file.outputStream()))
+    private val bounded = CappedOutputStream(BufferedOutputStream(file.outputStream()), MAX_ZIP_SIZE)
+    private val zip = ZipOutputStream(bounded)
     private var sourceCount = 0
+    private var completedPages = 0
     private var outputCount = 0
     private var coverCount = 0
     private var originals = 0
@@ -57,6 +84,7 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                 "Contains source manga artwork: DO NOT share publicly without permission.\n" +
                 "No OCR or AI: the detector analyzes grayscale thumbnail pixels.\n" +
                 "thumbnails/*.png contains the EXACT grayscale pixels sent to the detector (PNG is lossless).\n" +
+                "summary.json contains the completed source and output frame counts.\n" +
                 "pages/*.json contains chapter/page ordinals (not titles), source dimensions,\n" +
                 "detector regions, padding, accepted/rejected tier reasons, final render regions,\n" +
                 "and one-based output frame numbers including any separate cover.\n" +
@@ -80,7 +108,7 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
     }
 
     fun beginPage(chapter: Int, withinChapter: Int, src: Bitmap): Page? {
-        if (error != null || sourceCount >= MAX_PAGES || file.length() >= MAX_ZIP_SIZE) {
+        if (error != null || sourceCount >= MAX_PAGES || bounded.written >= MAX_ZIP_SIZE) {
             if (error == null) error = "Diagnostic size/page limit reached; incomplete archive"
             return null
         }
@@ -190,6 +218,7 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                     .put("thumbWidth", thumbWidth)
                     .put("thumbHeight", thumbHeight)
                     .put("detectorThumbnail", "thumbnails/$id.png")
+                    .put("detectorEvaluated", plan != null)
                     .put("mode", options.panelMode)
                     .put("layout", options.layout)
                     .put("orientation", options.orientation)
@@ -257,29 +286,66 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                     }
                 }
                 entry("pages/$id.json") { write(snapshot.toString(2).toByteArray(Charsets.UTF_8)) }
+                completedPages++
             } catch (e: Exception) {
                 error = "Diagnostic capture failed: " + e.javaClass.simpleName
             }
         }
     }
 
-    /** Writes only a *successful* and closed archive to app-private storage. */
+    /** Writes only a complete, verifiable ZIP to app-private storage.
+     * The last successful archive stays intact if validation or replacement fails.
+     */
     fun publish(context: Context): String {
+        if (error == null && (sourceCount == 0 || completedPages != sourceCount)) {
+            error = "Diagnostic ZIP is incomplete; previous capture preserved"
+        }
+        if (error == null) {
+            try {
+                entry("summary.json") {
+                    write(JSONObject()
+                        .put("schema", 1)
+                        .put("complete", true)
+                        .put("sourcePageCount", sourceCount)
+                        .put("outputFrameCountExcludingCover", outputCount)
+                        .put("separateCoverFrameCount", coverCount)
+                        .put("outputFrameCountIncludingCover", outputCount + coverCount)
+                        .put("originalImageCount", originals)
+                        .toString(2).toByteArray(Charsets.UTF_8))
+                }
+            } catch (e: Exception) {
+                error = "Diagnostic summary failed: " + e.javaClass.simpleName
+            }
+        }
         close()
         if (error != null) return requireNotNull(error)
         return try {
+            check(file.length() in 1..MAX_ZIP_SIZE) { "Diagnostic ZIP exceeds size bound" }
+            ZipFile(file).use { archive ->
+                check(archive.getEntry("summary.json") != null)
+                check(archive.getEntry("README.txt") != null)
+                for (page in 1..sourceCount) {
+                    val id = page.toString().padStart(5, '0')
+                    check(archive.getEntry("pages/$id.json") != null)
+                    check(archive.getEntry("thumbnails/$id.png") != null)
+                }
+            }
             val destination = latestFile(context)
             check(destination.parentFile?.mkdirs() == true || destination.parentFile?.isDirectory == true)
             val fresh = File(destination.parentFile, "latest-new.zip")
-            file.copyTo(fresh, overwrite = true)
-            check(fresh.renameTo(destination) || run {
-                fresh.copyTo(destination, overwrite = true)
+            try {
+                file.copyTo(fresh, overwrite = true)
+                // POSIX rename within the same private directory replaces atomically.
+                // Never fall back to direct overwrite: an interrupted copy could
+                // destroy the user's previous successful diagnostic archive.
+                check(fresh.renameTo(destination)) { "Atomic diagnostic replacement failed" }
+            } finally {
                 fresh.delete()
-                true
-            })
+            }
             "Ready: Save latest panel diagnostics ZIP from the Export dialog"
         } catch (e: Exception) {
-            "Diagnostic ZIP could not be stored: " + e.javaClass.simpleName
+            "Diagnostic ZIP could not be stored; previous capture preserved: " +
+                e.javaClass.simpleName
         }
     }
 
