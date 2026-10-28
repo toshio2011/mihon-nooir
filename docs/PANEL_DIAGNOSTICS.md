@@ -18,6 +18,7 @@ Only the **last successfully captured diagnostic ZIP** is kept in app-private st
 ## Contents of the ZIP
 
 - `README.txt`: brief format, privacy and cap summary.
+- `summary.json`: completed archive marker, total source page count, one-based output-frame count including any separate cover, and number of original source samples. Incomplete, cancelled, or oversized captures must never replace a previous valid ZIP.
 - `thumbnails/00001.png`: **lossless, exact grayscale image** that the panel detector received at up to 600×900, with no post-export resampling or e-reader quantization. These are essential for reproducing seam decisions.
 - `pages/00001.json`: which chapter/page it came from (1-based ordinals; no manga title or source URL), original decoded dimensions, detector image size, original regions in **thumbnail coordinates**, mapped regions in **source coordinates** with protective padding, accepted/rejected trace events, and actual final screen rectangles.
 - `originals/00001.source` (only when present): unmodified original compressed source bytes for a limited selection of suspicious pages. The generic extension is deliberate; inspect their file signatures before opening.
@@ -44,3 +45,21 @@ The trace is **observational**. It records accepted horizontal seams, sparse-tie
 | P311–P315 / Row R227 | Did the panel tree mistake short title/typographic strokes for actual independent illustrated panels? |
 
 Fix the **cause** after inspecting the original detector input and real output geometry; never globally delete low-ink frames because a manga may intentionally contain sparse lettering, end matter or blank artwork.
+
+
+## Validate a saved ZIP offline
+
+Do **not** upload or commit the ZIP to a public GitHub issue. It may contain original copyrighted pages. On a trusted computer with Python 3, run:
+
+```bash
+python3 tools/panel_diagnostic_inspect.py "MihonNooir-panel-diagnostics.zip" --json
+python3 tools/panel_diagnostic_inspect.py "MihonNooir-panel-diagnostics.zip" --frame 143
+```
+
+The inspector checks archive integrity and entry CRC, fully decodes the PNG grayscale scanlines, verifies frame-number continuity (including the extra cover/overview frames), confirms each output rectangle is within its source coordinates, and checks original-image caps and sensitive JSON field names. It reports **source ordinals** for frames whose detector rejected cuts or whose export produced four or more views; this is evidence to investigate, **not** a claim that those frames are wrong.
+
+The `--frame` argument is the **one-based output frame from that same export**. Do not apply old Detective Conan frame numbers to a new export without first checking alignment. Match the exported EPUB's spine to `outputFrameStartOneBased` and `outputFrameCount` in the ZIP. Exported cover images and Full Page Before Splits previews count as frames. If cover handling or EPUB reader numbering differs, verify the actual EPUB spine before attributing a source page.
+
+The inspector cannot reconstruct the unavailable full-resolution source image when `originalImage` is absent, and cannot infer whether a split is narratively good from frame counts. For Conan P113–P114, P143, and P311–P315, inspect the original detector grayscale input, rejected seam events, sampled source bytes (if present), and same-run EPUB together before altering the detector.
+
+**Archive safety:** Capture is limited to 3,000 pages, 120 MiB compressed, 24 optional originals, 8 MiB per original and 80 MiB originals total. A close, validation, size or atomic-replacement failure must keep the prior successful private ZIP intact. The ZIP is available only after the book output succeeds; the choice to save/share remains with the user.
