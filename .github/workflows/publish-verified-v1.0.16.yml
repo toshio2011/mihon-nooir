@@ -124,37 +124,56 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          stage='initialization'
+          apk='(no APK selected)'
+          trap 'echo "APK release verification stopped at stage: $stage; file: $(basename "$apk")" >&2' ERR
           shopt -s nullglob
           apks=(upstream/app/build/outputs/apk/foss/*.apk)
+          echo "Found ${#apks[@]} output APK files"
           if (( ${#apks[@]} != 5 )); then
             echo "Expected exactly five FOSS APK variants, got ${#apks[@]}" >&2
             exit 1
           fi
+          stage='locate APK signing and inspection tools'
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           test -x "$build_tools/apksigner" && test -x "$build_tools/aapt"
           cert=''
           for apk in "${apks[@]}"; do
+            echo "Inspecting APK: $(basename "$apk")"
+            stage='ZIP integrity'
             unzip -tq "$apk" >/dev/null
+            stage='cryptographic signature verification'
             signer=$("$build_tools/apksigner" verify --verbose --print-certs "$apk")
+            stage='APK Signature Scheme v2'
             grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<< "$signer"
+            stage='reject Android Debug certificate'
             if grep -Fq 'CN=Android Debug' <<< "$signer"; then
               echo "Refusing to publish a debug-signed APK: $(basename "$apk")" >&2
               exit 1
             fi
+            stage='extract signer SHA-256 fingerprint'
             fingerprint=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "$signer" | head -n 1)
             test -n "$fingerprint"
+            stage='compare persistent signing certificate across variants'
             if [[ -n "$cert" && "$fingerprint" != "$cert" ]]; then
               echo "The APK variants are not signed with one persistent certificate" >&2
               exit 1
             fi
             cert="$fingerprint"
+            stage='read Android manifest package information'
             badging=$("$build_tools/aapt" dump badging "$apk")
+            stage='verify package identifier'
             grep -Fq "name='dev.nooir.mihontrial.foss'" <<< "$badging"
+            stage='verify version code'
             grep -Fq "versionCode='1000016'" <<< "$badging"
+            stage='verify version name'
             grep -Fq "versionName='1.0.16'" <<< "$badging"
+            stage='verify app label'
             grep -Fq "application-label:'MihonNooir'" <<< "$badging"
+            stage='read Android permissions'
             permissions=$("$build_tools/aapt" dump permissions "$apk")
             for denied in REQUEST_INSTALL_PACKAGES REQUEST_DELETE_PACKAGES UPDATE_PACKAGES_WITHOUT_USER_ACTION; do
+              stage="reject privileged installer permission $denied"
               if grep -Fq "android.permission.$denied" <<< "$permissions"; then
                 echo "Unsafe installation permission in $(basename "$apk"): $denied" >&2
                 exit 1
