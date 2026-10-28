@@ -36,15 +36,17 @@ The trace is **observational**. It records accepted horizontal seams, sparse-tie
 - Files stay within app-private storage until you select **Save latest panel diagnostics ZIP**. Turning the toggle off affects future captures; it does not automatically delete an already saved ZIP.
 - The diagnostic switch is one-job-only: starting an export resets its saved preference to OFF, while preserving the flag for the job already queued. Enabling debug adds extra work and disk I/O.
 
-## Known Conan cases to investigate
+## Confirmed Conan examples (28 October 2026)
 
-| Previous output | Question to answer from debug ZIP |
+A private user-provided same-export Panel EPUB, Row EPUB and diagnostic ZIP were inspected. The **diagnostic capture is valid** (67 source pages, 330 output frames including cover). Read the [exact source/trace mappings and targeted regression brief](PANEL_CONAN_DIAGNOSTIC_FINDINGS_2026-10-28.md) before changing the detector.
+
+| Frame numbers in **that** Panel export | Confirmed cause from trace |
 |---|---|
-| P113–P114, Row R78 | Was a sparse bottom tier classified as one panel, and was it later split after applying guard padding? |
-| P143 / Row R96 | Which original divider proposal failed: seam pixels, insufficient distributed ink, border rule or margin? |
-| P311–P315 / Row R227 | Did the panel tree mistake short title/typographic strokes for actual independent illustrated panels? |
+| P113–P114 (source 21) | A 42-pixel-high **terminal border/footer tier** was rejected recursively but wrongly accepted by column retry as two independent panels |
+| P143 (source 26) | Two genuine upper illustrated panels remained **grouped** after a recursive minimum-area rejection and 45 unsafe-seam retry rejections |
+| P311–P315 (source 66) | A 58-pixel-high **typographic title band** was accepted as five panel candidates; exact detector thumbnail is available, original source sample was omitted by the ZIP's 24-image cap |
 
-Fix the **cause** after inspecting the original detector input and real output geometry; never globally delete low-ink frames because a manga may intentionally contain sparse lettering, end matter or blank artwork.
+These output numbers are **not stable identifiers** after re-export. Match by source ordinal and overview. The corrections are still **proposals, not implemented**. Fix the cause, preserve all content, and never globally delete low-ink frames: sparse lettering, end matter and intentionally blank artwork may be legitimate.
 
 
 ## Validate a saved ZIP offline
