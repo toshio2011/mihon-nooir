@@ -119,6 +119,17 @@ fun main() {
     check(titlePlan.regions.none { it.bottom <= th / 4 && it.width < tw / 3 }) {
         "Shallow top title band became standalone word fragments: ${titlePlan.regions}"
     }
+    // The previous export preserved each text row but still cut the upper
+    // letters at the seam and duplicated them inside overlap padding.
+    // One adjacent, full-width header region avoids that without OCR.
+    val intactHeaders = titlePlan.regions.filter { it.top == 0 && it.bottom <= th / 4 }
+    check(intactHeaders.size == 1 && intactHeaders.single().bottom >= th * 15 / 100) {
+        "Adjacent title lines must share one unclipped header viewport: ${titlePlan.regions}"
+    }
+    check(titleEvents.any { it.stage == "tier" && it.decision == "absorb" &&
+        it.detail.contains("headline") }) {
+        "Title-band header absorption must be recorded in the diagnostic ZIP"
+    }
     check(titlePlan.regions.count { it.top >= 180 && it.width < tw * 3 / 4 } >= 6) {
         "Guard may not silently combine ordinary illustrated story panels: ${titlePlan.regions}"
     }
