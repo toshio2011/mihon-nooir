@@ -11,7 +11,7 @@ This feature does **not** change panel detection, rendering or e-reader formats.
 3. Open **More conversion settings**, set **Panel by Panel**, then turn on **Save panel diagnostics after this export**. This switch is OFF by default.
 4. Tap **Save file** (EPUB/CBZ/etc.) or **Send to XTEink** as normal. Export runs in the existing foreground queue. It also captures diagnostics from the original pages without altering the exported book.
 5. After the job **succeeds**, reopen the Export dialog and tap **Save latest panel diagnostics ZIP**. Choose a folder with Android's file picker. The diagnostic ZIP is otherwise private and is **not automatically uploaded**.
-6. Only share the ZIP if you have permission to share the manga imagery inside. Send the ZIP **along with the EPUB** when investigating issues, preferably with the same chapter selection and conversion settings.
+6. Only share the ZIP if you have permission to share the manga imagery inside. Send the ZIP **along with the EPUB** when investigating issues, preferably with the same chapter selection and conversion settings. The diagnostic toggle resets to OFF for the next export.
 
 Only the **last successfully captured diagnostic ZIP** is kept in app-private storage; another diagnostic export replaces it. Save your ZIP through the file picker before starting another debug run. If a capture exceeds its limits or encounters an error, the book should still export; the job result includes a diagnostic status.
 
