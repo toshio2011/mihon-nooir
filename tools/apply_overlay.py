@@ -37,8 +37,8 @@ r8_rules = upstream / "app/proguard-rules.pro"
 if not r8_rules.is_file():
     raise RuntimeError("Upstream app proguard-rules.pro is missing")
 r8_rules.write_text(r8_rules.read_text() +
-    "\\n# Required by AndroidJUnitRunner on minified FOSS test builds.\\n" +
-    "-keep class androidx.tracing.Trace { *; }\\n")
+    "\n# Required by AndroidJUnitRunner on minified FOSS test builds.\n" +
+    "-keep class androidx.tracing.Trace { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
