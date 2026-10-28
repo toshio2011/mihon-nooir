@@ -109,7 +109,10 @@ fun NooirExportDialog(
             .putString("host", host.trim())
             .putString("destination", destination.trim())
             .apply()
-        options.save(prefs)
+        // Diagnostics may contain copyrighted pages. Do not leave the capture
+        // toggle enabled for the user's next ordinary export: the current
+        // work request still receives the explicitly chosen options below.
+        options.copy(panelDiagnostics = false).save(prefs)
     }
     val canExport = !quickExport || (onlineSource && selectedChapterCount >= 1)
     val profile = NooirDeviceProfiles.forId(device)
