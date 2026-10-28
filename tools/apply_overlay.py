@@ -18,6 +18,16 @@ for source in (root / "overlay").rglob("*.kt"):
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
 
+# Only the experimental diagnostic branch adds an on-device instrumentation
+# regression. It targets the same FOSS APK configuration as the test artifact.
+gradle = upstream / "app/build.gradle.kts"
+replace_once(gradle, '    namespace = "eu.kanade.tachiyomi"\n',
+    '    namespace = "eu.kanade.tachiyomi"\n    testBuildType = "foss"\n')
+replace_once(gradle, '    testImplementation(libs.bundles.test)\n',
+    '    testImplementation(libs.bundles.test)\n' +
+    '    androidTestImplementation(libs.androidx.test.junit)\n' +
+    '    androidTestImplementation("androidx.test:runner:1.7.0")\n')
+
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
 replace_once(vm, "import android.content.Context\n", "import android.content.Context\nimport android.net.Uri\nimport dev.nooir.bridge.ExportFormat\nimport dev.nooir.mangabridge.MihonNooirExporter\nimport dev.nooir.mangabridge.MangaConversionOptions\nimport dev.nooir.mangabridge.NooirMangaExportWorker\n")
 replace_once(vm, "import eu.kanade.tachiyomi.data.download.DownloadManager\n", "import eu.kanade.tachiyomi.data.download.DownloadManager\nimport eu.kanade.tachiyomi.data.download.DownloadProvider\n")
