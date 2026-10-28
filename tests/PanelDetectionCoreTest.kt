@@ -25,6 +25,9 @@ fun main() {
     val rtl = PanelDetectionCore.detect(width, height, image, true)
     check(!rtl.usedFullPageFallback) { "Clean 2x3 panel grid should be detected: ${rtl.reason}" }
     check(rtl.regions.size == 6) { "Expected 6 panels, got ${rtl.regions.size}" }
+    check(!rtl.reason.contains("rejected-row column recovery")) {
+        "Already valid 2x3 panel layouts must never take the recovery path"
+    }
     check(rtl.regions.map { centerGray(image, width, it) } == listOf(48, 35, 83, 70, 118, 105)) {
         "RTL must read top tier first, right to left within each tier"
     }
@@ -300,6 +303,17 @@ fun main() {
     check(!recoveredPanels.usedFullPageFallback && recoveredPanels.regions.size == 3 &&
         recoveredPanels.reason.contains("rejected-row column recovery")) {
         "Rejected small fragment must not undo safe columns: ${recoveredPanels.reason} ${recoveredPanels.regions}"
+    }
+    // A second-chance split may improve readability, but it must never omit
+    // even a single original pixel or duplicate a source region.
+    check(recoveredPanels.regions.sumOf { it.width.toLong() * it.height } ==
+        retryW.toLong() * retryH) {
+        "Recovered columns must conserve the entire source-page area"
+    }
+    for (y in 0 until retryH step 7) for (x in 0 until retryW step 5) {
+        check(recoveredPanels.regions.count {
+            x in it.left until it.right && y in it.top until it.bottom
+        } == 1) { "Recovered panels overlap or omit source artwork at ($x,$y)" }
     }
     check(recoveredPanels.regions[0].left > recoveredPanels.regions[1].left) {
         "RTL must read the recovered right column before the left"
