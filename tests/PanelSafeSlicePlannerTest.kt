@@ -109,6 +109,30 @@ fun main() {
         "Blank pages still belong to a single intact frame"
     }
 
+    // The precise missed PR48 case: a sparse lower tier is a proper reading
+    // region, but sourceRegions adds an overlap safety band from a dense panel
+    // immediately above. Re-testing the padded rectangle gives a FALSE
+    // non-sparse result and enables three pointless border zooms.
+    //
+    // Classification must happen on the unpadded detector region and travel
+    // with its (padded) output; none of the added safety pixels are removed.
+    val quietTier = PageRegion(0, 400, 480, 600)
+    val paddedTier = PageRegion(0, 380, 480, 600)
+    val neighboringArt: (Int, Int) -> Boolean = { x, y ->
+        (x in 5..474 && y in 380..399) ||
+            (x in 60..420 && y in 510..512)
+    }
+    val preserveQuietTier = PanelSafeSlicePlanner.isSparse(quietTier, neighboringArt)
+    check(preserveQuietTier) { "Actual detector tier is sparse" }
+    check(!PanelSafeSlicePlanner.isSparse(paddedTier, neighboringArt)) {
+        "Overlapping art must demonstrate why re-testing the padded tier is unsafe"
+    }
+    val tierScreens = if (preserveQuietTier) listOf(paddedTier)
+        else PanelSafeSlicePlanner.plan(paddedTier, 480, 800, true, 8, neighboringArt)
+    check(tierScreens == listOf(paddedTier)) {
+        "Pass the original sparse-tier decision through padding to preserve one frame"
+    }
+
     // Horizontal stitching must not reverse the top-to-bottom reading order.
     check(tallCut.first().top < tallCut.last().top)
 
