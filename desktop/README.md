@@ -1,6 +1,6 @@
 ## Continue Reading for downloaded series (Windows preview)
 
-Open **Local library → Downloaded series**. The new **Start / Continue selected series** button opens the last-read available chapter for that series, falling back to its first available downloaded chapter if it has not been read yet. **Continue last read** opens the most recently read available chapter across all downloaded series. The series list shows which chapter is currently resumable.
+From **Local library**, click **Continue last downloaded manga** to reopen the most recently read available CBZ chapter in one step. Alternatively, open **Downloaded series**. The new **Start / Continue selected series** button opens the last-read available chapter for that series, falling back to its first available downloaded chapter if it has not been read yet. **Continue last read** opens the most recently read available chapter across all downloaded series. The series list shows which chapter is currently resumable.
 
 This uses the existing atomic local-library history and the reader's independent saved per-file page position; it does **not** introduce a second reading database, contact Suwayomi, download missing chapters, or change Android. Missing CBZs are skipped; the source catalog and original files remain unchanged. Synthetic JVM regression covers first-time reading, persisted history after restart, multiple series and missing-file fallback. The real Windows UI still needs click-through testing.
 
