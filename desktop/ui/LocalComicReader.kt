@@ -4,6 +4,9 @@ import dev.nooir.bridge.NaturalPageOrder
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.Color
+import java.awt.Point
+import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.Image
 import java.awt.RenderingHints
@@ -31,6 +34,8 @@ import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.JSlider
+import javax.swing.JSpinner
+import javax.swing.SpinnerNumberModel
 import javax.swing.KeyStroke
 import javax.swing.SwingWorker
 
@@ -117,6 +122,74 @@ internal object LocalComicReader {
         }
 }
 
+/**
+ * Painting happens on demand without creating gigantic scaled preview images.
+ * At most two source pages are kept decoded for a single active spread.
+ */
+private class ReaderCanvas : JComponent() {
+    private var pages: List<BufferedImage> = emptyList()
+    private var visualRightToLeft = true
+    private var scale = 1.0
+    private val gap = 12
+    private val padding = 10
+
+    fun configure(
+        decoded: List<BufferedImage>, rtl: Boolean,
+        fit: String, zoomPercent: Int, viewport: Dimension,
+    ) {
+        pages = decoded
+        visualRightToLeft = rtl
+        if (decoded.isEmpty()) {
+            preferredSize = Dimension(maxOf(1, viewport.width), maxOf(1, viewport.height))
+            revalidate()
+            repaint()
+            return
+        }
+        val naturalWidth = decoded.sumOf { it.width.toLong() } + (decoded.size - 1) * gap
+        val naturalHeight = decoded.maxOf { it.height }
+        val vw = maxOf(1, viewport.width - 2 * padding)
+        val vh = maxOf(1, viewport.height - 2 * padding)
+        val baseScale = when (fit) {
+            "Fit width" -> vw.toDouble() / naturalWidth
+            "Original pixels" -> 1.0
+            else -> minOf(vw.toDouble() / naturalWidth, vh.toDouble() / naturalHeight)
+        }
+        // Avoid allocating extreme window surfaces, even for unusual zooms.
+        scale = minOf(baseScale * (zoomPercent.coerceIn(50, 200) / 100.0),
+            12_000.0 / naturalWidth, 12_000.0 / naturalHeight)
+        val w = (naturalWidth * scale).toInt().coerceIn(1, 12_000) + padding * 2
+        val h = (naturalHeight * scale).toInt().coerceIn(1, 12_000) + padding * 2
+        val size = Dimension(w, h)
+        if (preferredSize != size) {
+            preferredSize = size
+            revalidate()
+        }
+        repaint()
+    }
+
+    override fun paintComponent(g: Graphics) {
+        super.paintComponent(g)
+        val g2 = g.create() as Graphics2D
+        try {
+            g2.color = Color(32, 32, 35)
+            g2.fillRect(0, 0, width, height)
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            val ordered = if (visualRightToLeft) pages.reversed() else pages
+            var x = padding
+            for (img in ordered) {
+                val w = (img.width * scale).toInt().coerceAtLeast(1)
+                val h = (img.height * scale).toInt().coerceAtLeast(1)
+                val y = padding + ((height - 2 * padding - h) / 2).coerceAtLeast(0)
+                g2.drawImage(img, x, y, w, h, null)
+                x += w + (gap * scale).toInt().coerceAtLeast(1)
+            }
+        } finally {
+            g2.dispose()
+        }
+    }
+}
+
 private class LocalComicWindow(
     private val source: File,
     private val pages: List<String>,
@@ -125,79 +198,134 @@ private class LocalComicWindow(
     private val bookmarkId = MessageDigest.getInstance("SHA-256")
         .digest(source.canonicalPath.toByteArray(Charsets.UTF_8))
         .take(24).joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
+
     private var pageIndex = bookmarks.getInt(bookmarkId, 0).coerceIn(0, pages.lastIndex)
-    private var currentImage: BufferedImage? = null
-    private val pageLabel = JLabel("Loading...", JLabel.CENTER)
-    private val scroller = JScrollPane(pageLabel)
+    private var currentImages: List<BufferedImage> = emptyList()
+    private val canvas = ReaderCanvas()
+    private val scroller = JScrollPane(canvas)
     private val status = JLabel()
-    private val rtl = JCheckBox("RTL arrows", true)
+    private val rtl = JCheckBox("RTL", bookmarks.getBoolean("layout-rtl", true))
+    private val twoPage = JCheckBox("Two pages", bookmarks.getBoolean("layout-two-page", false))
+    private val firstAlone = JCheckBox("First page alone", bookmarks.getBoolean("layout-first-alone", true))
     private val sizing = JComboBox(arrayOf("Fit page", "Fit width", "Original pixels"))
     private val zoom = JSlider(50, 200, 100)
+    private val jump = JSpinner(SpinnerNumberModel(pageIndex + 1, 1, pages.size, 1))
     private val previous = JButton("Previous")
     private val next = JButton("Next")
     private var generation = 0
+    private var updatingJump = false
 
     init {
         defaultCloseOperation = DISPOSE_ON_CLOSE
         minimumSize = Dimension(600, 440)
-        setSize(1000, 760)
+        setSize(1080, 760)
         setLocationRelativeTo(null)
-        pageLabel.border = BorderFactory.createEmptyBorder(10, 10, 10, 10)
         add(scroller, BorderLayout.CENTER)
         val controls = JPanel().apply {
-            add(previous); add(next); add(rtl); add(sizing); add(JLabel("Zoom")); add(zoom)
+            add(previous); add(next)
+            add(rtl); add(twoPage); add(firstAlone)
+            add(sizing); add(JLabel("Zoom")); add(zoom)
+            add(JLabel("Go to page")); add(jump)
         }
         add(controls, BorderLayout.NORTH)
         add(status, BorderLayout.SOUTH)
         previous.addActionListener { move(-1) }
         next.addActionListener { move(1) }
+        rtl.addActionListener {
+            bookmarks.putBoolean("layout-rtl", rtl.isSelected)
+            repaintPage()
+        }
+        twoPage.addActionListener {
+            bookmarks.putBoolean("layout-two-page", twoPage.isSelected)
+            firstAlone.isEnabled = twoPage.isSelected
+            // Recompute the currently displayed spread from the saved anchor.
+            showPage()
+        }
+        firstAlone.isEnabled = twoPage.isSelected
+        firstAlone.addActionListener {
+            bookmarks.putBoolean("layout-first-alone", firstAlone.isSelected)
+            showPage()
+        }
         sizing.addActionListener { repaintPage() }
         zoom.addChangeListener { if (!zoom.valueIsAdjusting) repaintPage() }
+        jump.addChangeListener {
+            if (!updatingJump) {
+                val requested = ((jump.value as Number).toInt() - 1).coerceIn(0, pages.lastIndex)
+                if (requested != pageIndex) {
+                    pageIndex = requested
+                    bookmarks.putInt(bookmarkId, pageIndex)
+                    showPage()
+                }
+            }
+        }
         scroller.viewport.addComponentListener(object : ComponentAdapter() {
             override fun componentResized(e: ComponentEvent?) = repaintPage()
         })
-        bindKey("RIGHT", "next-or-prev") { move(if (rtl.isSelected) -1 else 1) }
-        bindKey("LEFT", "prev-or-next") { move(if (rtl.isSelected) 1 else -1) }
-        bindKey("PAGE_DOWN", "next-page") { move(1) }
-        bindKey("PAGE_UP", "previous-page") { move(-1) }
-        bindKey("SPACE", "space-next") { move(1) }
+        bindKey("RIGHT", "reader-right") { move(if (rtl.isSelected) -1 else 1) }
+        bindKey("LEFT", "reader-left") { move(if (rtl.isSelected) 1 else -1) }
+        bindKey("PAGE_DOWN", "reader-next") { move(1) }
+        bindKey("PAGE_UP", "reader-previous") { move(-1) }
+        bindKey("SPACE", "reader-space") { move(1) }
+        bindKey("HOME", "reader-first") { jumpTo(0) }
+        bindKey("END", "reader-last") { jumpTo(pages.lastIndex) }
         showPage()
     }
 
     private fun bindKey(key: String, name: String, action: () -> Unit) {
-        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(key), name)
+        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(KeyStroke.getKeyStroke(key), name)
         rootPane.actionMap.put(name, object : AbstractAction() {
             override fun actionPerformed(e: java.awt.event.ActionEvent?) = action()
         })
     }
 
-    private fun move(delta: Int) {
-        val nextIndex = (pageIndex + delta).coerceIn(0, pages.lastIndex)
-        if (nextIndex == pageIndex) return
-        pageIndex = nextIndex
-        bookmarks.putInt(bookmarkId, pageIndex)
-        showPage()
+    private fun jumpTo(target: Int) {
+        val newPage = target.coerceIn(0, pages.lastIndex)
+        if (newPage != pageIndex) {
+            pageIndex = newPage
+            bookmarks.putInt(bookmarkId, pageIndex)
+            showPage()
+        }
+    }
+
+    private fun move(direction: Int) {
+        jumpTo(DesktopReadingLayout.move(
+            pages.size, pageIndex, direction, twoPage.isSelected, firstAlone.isSelected,
+        ))
     }
 
     private fun showPage() {
-        val index = pageIndex
-        val selected = pages[index]
+        val indices = DesktopReadingLayout.visibleIndices(
+            pages.size, pageIndex, twoPage.isSelected, firstAlone.isSelected,
+        )
+        // Persist the first page of a spread so a restart always resumes at
+        // the same visually displayed pair, not the second half of a spread.
+        pageIndex = indices.first()
+        bookmarks.putInt(bookmarkId, pageIndex)
         val request = ++generation
-        currentImage = null
-        pageLabel.icon = null
-        pageLabel.text = "Loading page ${index + 1}..."
-        status.text = "Page ${index + 1} / ${pages.size} — ${selected.take(100)}"
-        previous.isEnabled = index > 0
-        next.isEnabled = index < pages.lastIndex
-        object : SwingWorker<BufferedImage, Unit>() {
-            override fun doInBackground(): BufferedImage = LocalComicPages.read(source, selected)
+        currentImages = emptyList()
+        repaintPage()
+        val first = indices.first() + 1
+        val last = indices.last() + 1
+        status.text = "Loading ${if (first == last) "page $first" else "pages $first–$last"} / ${pages.size}..."
+        previous.isEnabled = pageIndex > 0
+        next.isEnabled = indices.last() < pages.lastIndex
+        updatingJump = true
+        jump.value = pageIndex + 1
+        updatingJump = false
+        object : SwingWorker<List<BufferedImage>, Unit>() {
+            override fun doInBackground(): List<BufferedImage> =
+                indices.map { index -> LocalComicPages.read(source, pages[index]) }
             override fun done() {
                 if (!this@LocalComicWindow.isDisplayable || request != generation) return
                 try {
-                    currentImage = get()
+                    currentImages = get()
                     repaintPage()
+                    status.text = "Page ${if (first == last) "$first" else "$first–$last"} / ${pages.size}" +
+                        " — ${pages[indices.first()].take(90)}"
+                    scroller.viewport.viewPosition = Point(0, 0)
                 } catch (e: Exception) {
-                    pageLabel.text = "Cannot read this page. Try Next or Previous."
+                    status.text = "Cannot read this page. Use Next or Previous."
                     JOptionPane.showMessageDialog(this@LocalComicWindow,
                         e.cause?.message ?: e.message ?: "Page load failed",
                         "MihonNooir Reader", JOptionPane.WARNING_MESSAGE)
@@ -207,19 +335,7 @@ private class LocalComicWindow(
     }
 
     private fun repaintPage() {
-        val src = currentImage ?: return
-        val viewport = scroller.viewport.extentSize
-        if (viewport.width <= 0 || viewport.height <= 0) return
-        val factor = when (sizing.selectedItem as String) {
-            "Fit width" -> viewport.width.toDouble() / src.width
-            "Original pixels" -> 1.0
-            else -> minOf(viewport.width.toDouble() / src.width,
-                viewport.height.toDouble() / src.height)
-        } * (zoom.value / 100.0)
-        val width = (src.width * factor).toInt().coerceIn(1, 12_000)
-        val height = (src.height * factor).toInt().coerceIn(1, 12_000)
-        val scaled = src.getScaledInstance(width, height, Image.SCALE_SMOOTH)
-        pageLabel.icon = ImageIcon(scaled)
-        pageLabel.text = ""
+        canvas.configure(currentImages, rtl.isSelected,
+            sizing.selectedItem as String, zoom.value, scroller.viewport.extentSize)
     }
 }
