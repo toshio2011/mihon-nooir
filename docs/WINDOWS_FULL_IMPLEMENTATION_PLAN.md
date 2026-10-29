@@ -34,6 +34,7 @@ No DRM bypass, bundled copyrighted manga, unapproved sources, hidden extension i
 - [x] Recover desktop GUI/source browser/selected chapter export code from draft PR #28 without overwriting newer Android source or tests.
 - [x] Restore Java 21/Windows `jpackage` unsigned app-image workflow with v1.0.16 panel-engine dependencies.
 - [x] Expose full desktop panel/row settings and enable local folder/CBZ conversion.
+- [x] Add first offline local CBZ/image-folder reader with natural filename order, keyboard paging, RTL arrow mapping, fit/zoom and persisted per-file progress; test archive path safety. This is **not** the online/offline Suwayomi chapter reader yet.
 - [x] Preserve first-page and full-page-overview semantics; add Kotlin tests for actual XTC/XTCH/EPUB2 outputs.
 - [ ] Pass full Android FOSS CI, host converter suites, Windows JVM/headless UI tests and packaged Windows executable smoke. No source/media uploaded to a public repo.
 - [ ] Compare Windows outputs against Android for a matched legal fixture; byte-level where deterministic, page geometry/reading order otherwise.
