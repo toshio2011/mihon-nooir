@@ -124,8 +124,8 @@ fun main() {
             ReaderChapter(3, "Chapter 3", zip),
         ), 0)
         check(sequence.adjacent(-1) == null)
-        val chapter3 = sequence.adjacent(1)
-        check(chapter3?.current?.id == 3) { "Chapter navigation should skip missing archives" }
+        val chapter3 = checkNotNull(sequence.adjacent(1))
+        check(chapter3.current.id == 3) { "Chapter navigation should skip missing archives" }
         check(chapter3.adjacent(-1)?.current?.id == 1)
         check(chapter3.adjacent(1) == null)
         check(runCatching { sequence.adjacent(0) }.isFailure)
