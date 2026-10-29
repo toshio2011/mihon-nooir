@@ -120,6 +120,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val refresh = JButton("Refresh chapters")
     private val export = JButton("Export selected chapters")
     private val saveOffline = JButton("Save downloaded chapters offline")
+    private val queueOffline = JButton("Queue downloaded chapters")
+    private val offlineJobs = JButton("Offline jobs")
     private val details = JLabel("Select a manga to view its chapters")
     private val pageInfo = JLabel("Page 1")
     private val controls = mutableListOf<JButton>()
@@ -198,6 +200,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply { add(downloadMissing) })
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(refresh); add(export); add(saveOffline)
+                add(queueOffline); add(offlineJobs)
             })
         }
         val chapterPanel = JPanel(BorderLayout(4, 4)).apply {
@@ -224,7 +227,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
-            saveOffline, conversionSettings, localImport, localReader, localLibrary,
+            saveOffline, queueOffline, offlineJobs,
+            conversionSettings, localImport, localReader, localLibrary,
             startServer, stopServer, getServer)
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
@@ -260,6 +264,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
         export.addActionListener { exportSelected() }
         saveOffline.addActionListener { saveSelectedOffline() }
+        queueOffline.addActionListener { queueSelectedOffline() }
+        offlineJobs.addActionListener { openOfflineJobs() }
         localImport.addActionListener { exportLocal() }
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
@@ -530,6 +536,46 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 "Conversion complete:\\n${file.absolutePath}",
                 "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
         })
+    }
+
+    private fun openOfflineJobs() {
+        try {
+            OfflineSaveQueue.portOf(endpoint.text.trim())
+            OfflineSaveQueueScreen.open(endpoint.text.trim())
+        } catch (e: Exception) {
+            showError(e.message ?: "Enter a valid localhost Suwayomi address")
+        }
+    }
+
+    /** This records jobs only; it does not connect to a source or download. */
+    private fun queueSelectedOffline() {
+        val selected = currentManga ?: run {
+            showError("Choose a manga to add offline jobs")
+            return
+        }
+        val chosen = chapterList.selectedValuesList
+        if (chosen.isEmpty() || chosen.size > OfflineChapterSaver.MAX_BATCH) {
+            showError("Choose 1 to ${OfflineChapterSaver.MAX_BATCH} chapters for the offline queue")
+            return
+        }
+        if (chosen.any { !it.downloaded }) {
+            showError("Only chapters already downloaded in Suwayomi can be queued for offline copying.")
+            return
+        }
+        val baseUrl = endpoint.text.trim()
+        try {
+            val confirmation = JOptionPane.showConfirmDialog(this,
+                "Add ${chosen.size} already-downloaded chapter(s) to the persistent offline queue?\\n" +
+                    "No network request starts until you choose Run pending in Offline jobs.",
+                "Queue offline chapters", JOptionPane.YES_NO_OPTION)
+            if (confirmation != JOptionPane.YES_OPTION) return
+            val queued = OfflineSaveQueue().enqueue(baseUrl,
+                selected.id, chosen.map { it.id })
+            status.text = "${queued.size} offline job(s) recorded. Run them from Offline jobs."
+            OfflineSaveQueueScreen.open(baseUrl)
+        } catch (e: Exception) {
+            showError(e.message ?: "Could not add offline save jobs")
+        }
     }
 
     private fun saveSelectedOffline() {
