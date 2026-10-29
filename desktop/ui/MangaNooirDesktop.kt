@@ -101,6 +101,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val conversionSettings = JButton("Conversion settings")
     private val localImport = JButton("Convert local folder / CBZ")
     private val localReader = JButton("Read local comic")
+    private val localLibrary = JButton("Local library")
     private var options = MangaConversionOptions.preset("Manga")
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
@@ -127,7 +128,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
         val connect = JButton("Connect / reload sources")
         val header = JPanel(FlowLayout(FlowLayout.LEFT, 10, 8)).apply {
-            add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library); add(localImport); add(localReader)
+            add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library); add(localLibrary); add(localImport); add(localReader)
         }
         add(header, BorderLayout.NORTH)
 
@@ -205,7 +206,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
-            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings, localImport, localReader)
+            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings, localImport, localReader, localLibrary)
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
         }
@@ -232,6 +233,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         export.addActionListener { exportSelected() }
         localImport.addActionListener { exportLocal() }
         localReader.addActionListener { openLocalReader() }
+        localLibrary.addActionListener { LocalLibraryScreen.open() }
         setPaging()
         loadSources()
     }
