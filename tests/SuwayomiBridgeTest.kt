@@ -2,6 +2,9 @@ import com.sun.net.httpserver.HttpServer
 import dev.nooir.desktop.suwayomi.MiniJson
 import dev.nooir.desktop.suwayomi.SuwayomiClient
 import dev.nooir.desktop.suwayomi.SuwayomiToNooir
+import dev.nooir.desktop.ui.OfflineChapterSaver
+import dev.nooir.desktop.ui.LocalLibraryStore
+import dev.nooir.desktop.ui.LocalComicPages
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -125,6 +128,29 @@ fun main() {
             }
         }
         check(queued.get() == 1) { "Already-downloaded chapters should not be queued again" }
+
+        // Real locally served CBZ bytes -> Windows offline bookshelf. Downloads
+        // are explicit and never trigger source enqueue without user action.
+        val offlineIndex = File(root, "offline-library-index").toPath()
+        val offlineLibrary = LocalLibraryStore(offlineIndex)
+        val offlineSaver = OfflineChapterSaver(offlineLibrary, File(root, "offline-books").toPath())
+        check(runCatching { offlineSaver.save(client, 1, listOf(11, 11)) }.isFailure)
+        check(runCatching { offlineSaver.save(client, 1, listOf(999)) }.isFailure)
+        val savedChapters = offlineSaver.save(client, 1, listOf(11, 12))
+        check(savedChapters.size == 2 && savedChapters.all { it.isFile })
+        check(offlineLibrary.books().size == 2)
+        check(LocalComicPages.names(savedChapters.first()) == listOf("page2.png", "page10.png"))
+        val fetchCount = fetched.get()
+        check(offlineSaver.save(client, 1, listOf(11, 12)).size == 2)
+        check(fetched.get() == fetchCount) { "Existing offline CBZ must be reused without network download" }
+        check(queued.get() == 1) { "Offline book save must never enqueue source downloads" }
+        check(LocalLibraryStore(offlineIndex).books().size == 2) {
+            "Imported chapters must remain in local library after Windows restart"
+        }
+        check(File(root, "offline-books").listFiles().orEmpty().none {
+            it.name.startsWith(".chapter-")
+        }) { "Offline save must not leave partial chapter download files" }
+
         check(runCatching { SuwayomiToNooir.main(flags) }.isFailure) { "Output collision must fail" }
         val bad = File(root, "unsafe.cbz")
         ZipOutputStream(bad.outputStream()).use { zip ->
