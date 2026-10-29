@@ -52,7 +52,7 @@ internal class OfflineSaveQueue(
                 uri.host in setOf("127.0.0.1", "localhost", "::1") &&
                 uri.port in 1..65535 && uri.userInfo == null &&
                 uri.rawQuery == null && uri.rawFragment == null &&
-                (uri.rawPath == null || uri.rawPath.isEmpty())) {
+                (uri.rawPath == null || uri.rawPath.isEmpty() || uri.rawPath == "/")) {
                 "Offline jobs require a localhost-only Suwayomi URL and explicit port"
             }
             return uri.port
