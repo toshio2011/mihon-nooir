@@ -1,3 +1,9 @@
+## Offline Windows reader: explicit bookmarks and fullscreen (preview)
+
+The local CBZ/folder reader and saved offline series now support **up to 100 explicit bookmarks per comic** without replacing the separate last-read position. Use **Bookmark page** or Ctrl+B to add/remove a saved page; **Bookmarks...** lists that comic's saved pages, with actions to jump or remove. Bookmarks persist under `~/.mihonnooir/reader-bookmarks-v1.tsv` as **hashed local file paths**, not the user's filenames or comic pages. Moving or renaming a comic changes its bookmark identity until a migration/repair feature is added. Corrupted bookmark indexes are preserved for manual repair, never silently overwritten.
+
+Use **Fullscreen (F11)** to enter/leave fullscreen reading; **Esc** leaves fullscreen without closing the comic. The reader's toolbar is split into navigation and display-mode rows for smaller Windows displays. Bookmark persistence has standalone Kotlin regression tests; fullscreen and webtoon behavior still require actual Windows display/keyboard testing before production release.
+
 > **Windows full-product work (29 October 2026):** Development is active on [`feature/windows-full-v1.0.16`](https://github.com/toshio2011/mihon-nooir/tree/feature/windows-full-v1.0.16). It restores the GUI prototype onto the tested Android v1.0.16 conversion engine, exposes **Panel by Panel, Row by Row, Auto Fit, full-page overview and first-chapter-page preservation**, and adds **local image-folder/CBZ conversion and a basic offline comic reader** (natural page ordering, fit/zoom, arrow keys, and saved position) that do not need Suwayomi. The Windows app is **not yet fully released**: the managed backend, real source test, reader, queues, Wi-Fi transfer and installer are development milestones. See [the full Windows implementation plan](../docs/WINDOWS_FULL_IMPLEMENTATION_PLAN.md). Preserve Android source and safety gates.
 
 

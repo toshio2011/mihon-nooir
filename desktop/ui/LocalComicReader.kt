@@ -8,6 +8,11 @@ import java.awt.Color
 import java.awt.Point
 import java.awt.Graphics
 import java.awt.Graphics2D
+import java.awt.GraphicsDevice
+import java.awt.Rectangle
+import java.awt.GridLayout
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.awt.Image
 import java.awt.RenderingHints
 import java.awt.event.ComponentAdapter
@@ -219,6 +224,16 @@ private class LocalComicWindow(
     private val next = JButton("Next")
     private val previousChapter = JButton("Previous chapter")
     private val nextChapter = JButton("Next chapter")
+    private val pageBookmarks = ReaderBookmarkStore()
+    private val markedPages = runCatching {
+        pageBookmarks.list(source).map { it.pageIndex }.toMutableSet()
+    }.getOrDefault(mutableSetOf())
+    private val toggleBookmark = JButton("Bookmark page")
+    private val showBookmarks = JButton("Bookmarks...")
+    private val fullscreen = JCheckBox("Fullscreen (F11)")
+    private var fullscreenDevice: GraphicsDevice? = null
+    private var preFullscreenBounds: Rectangle? = null
+    private var preFullscreenState = JFrame.NORMAL
     private var generation = 0
     private var updatingJump = false
 
@@ -229,16 +244,22 @@ private class LocalComicWindow(
         setLocationRelativeTo(null)
         readerArea.add(scroller, BorderLayout.CENTER)
         add(readerArea, BorderLayout.CENTER)
-        val controls = JPanel().apply {
+        // Two rows prevent a crowded toolbar from clipping on smaller laptops.
+        val navigation = JPanel().apply {
             add(previous); add(next)
             if (chapterSequence != null) {
                 add(previousChapter); add(nextChapter)
             }
+            add(JLabel("Go to page")); add(jump)
+            add(toggleBookmark); add(showBookmarks); add(fullscreen)
+        }
+        val displayModes = JPanel().apply {
             add(rtl); add(twoPage); add(firstAlone); add(webtoon)
             add(sizing); add(JLabel("Zoom")); add(zoom)
-            add(JLabel("Go to page")); add(jump)
         }
-        add(controls, BorderLayout.NORTH)
+        add(JPanel(GridLayout(2, 1)).apply {
+            add(navigation); add(displayModes)
+        }, BorderLayout.NORTH)
         add(status, BorderLayout.SOUTH)
         previous.addActionListener { move(-1) }
         next.addActionListener { move(1) }
@@ -246,6 +267,20 @@ private class LocalComicWindow(
         nextChapter.isEnabled = chapterSequence?.adjacent(1) != null
         previousChapter.addActionListener { switchChapter(-1) }
         nextChapter.addActionListener { switchChapter(1) }
+        toggleBookmark.addActionListener { toggleCurrentBookmark() }
+        showBookmarks.addActionListener { openBookmarks() }
+        fullscreen.addActionListener { setFullscreen(fullscreen.isSelected) }
+        addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent?) {
+                webtoonView?.close()
+                fullscreenDevice?.let { device ->
+                    if (device.fullScreenWindow === this@LocalComicWindow)
+                        device.fullScreenWindow = null
+                }
+                fullscreenDevice = null
+                currentImages = emptyList()
+            }
+        })
         rtl.addActionListener {
             bookmarks.putBoolean("layout-rtl", rtl.isSelected)
             repaintPage()
@@ -291,6 +326,17 @@ private class LocalComicWindow(
             bindKey("ctrl PAGE_UP", "reader-previous-chapter") { switchChapter(-1) }
             bindKey("ctrl PAGE_DOWN", "reader-next-chapter") { switchChapter(1) }
         }
+        bindKey("ctrl B", "reader-bookmark-page") { toggleCurrentBookmark() }
+        bindKey("F11", "reader-fullscreen") {
+            fullscreen.isSelected = !fullscreen.isSelected
+            setFullscreen(fullscreen.isSelected)
+        }
+        bindKey("ESCAPE", "reader-exit-fullscreen") {
+            if (fullscreenDevice != null) {
+                fullscreen.isSelected = false
+                setFullscreen(false)
+            }
+        }
         if (webtoon.isSelected) changeReaderMode() else showPage()
     }
 
@@ -314,6 +360,7 @@ private class LocalComicWindow(
                 onVisiblePage = { page ->
                     if (isDisplayable && webtoon.isSelected) {
                         pageIndex = page
+                        updateBookmarkButton()
                         bookmarks.putInt(bookmarkId, pageIndex)
                         updatingJump = true
                         jump.value = pageIndex + 1
@@ -339,6 +386,89 @@ private class LocalComicWindow(
         readerArea.revalidate()
         readerArea.repaint()
         showPage()
+    }
+
+    private fun updateBookmarkButton() {
+        toggleBookmark.text = if (pageIndex in markedPages) "Remove bookmark"
+            else "Bookmark page"
+    }
+
+    private fun toggleCurrentBookmark() {
+        try {
+            if (pageIndex in markedPages) {
+                pageBookmarks.remove(source, pageIndex)
+                markedPages.remove(pageIndex)
+            } else {
+                pageBookmarks.add(source, pageIndex)
+                markedPages.add(pageIndex)
+            }
+            updateBookmarkButton()
+        } catch (e: Exception) {
+            JOptionPane.showMessageDialog(this,
+                e.message ?: "Cannot update reader bookmark",
+                "MihonNooir bookmarks", JOptionPane.WARNING_MESSAGE)
+        }
+    }
+
+    private fun openBookmarks() {
+        try {
+            val entries = pageBookmarks.list(source)
+            if (entries.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "No pages bookmarked in this comic yet.",
+                    "MihonNooir bookmarks", JOptionPane.INFORMATION_MESSAGE)
+                return
+            }
+            val choices = entries.map { "Page ${it.pageIndex + 1}" }.toTypedArray()
+            val chosen = JOptionPane.showInputDialog(this,
+                "Choose a saved page for this comic:", "Saved page bookmarks",
+                JOptionPane.QUESTION_MESSAGE, null, choices, choices.first()) as? String ?: return
+            val selectedIndex = choices.indexOf(chosen)
+            if (selectedIndex < 0) return
+            val selectedPage = entries[selectedIndex].pageIndex
+            val decision = JOptionPane.showOptionDialog(this,
+                "Page ${selectedPage + 1} of ${pages.size}",
+                "Saved page bookmark", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null,
+                arrayOf("Go to page", "Remove bookmark", "Cancel"), "Go to page")
+            when (decision) {
+                0 -> jumpTo(selectedPage.coerceIn(0, pages.lastIndex))
+                1 -> {
+                    pageBookmarks.remove(source, selectedPage)
+                    markedPages.remove(selectedPage)
+                    updateBookmarkButton()
+                }
+            }
+        } catch (e: Exception) {
+            JOptionPane.showMessageDialog(this, e.message ?: "Cannot load saved bookmarks",
+                "MihonNooir bookmarks", JOptionPane.WARNING_MESSAGE)
+        }
+    }
+
+    private fun setFullscreen(requested: Boolean) {
+        if (requested == (fullscreenDevice != null)) return
+        try {
+            if (requested) {
+                val device = graphicsConfiguration.device
+                require(device.fullScreenWindow == null || device.fullScreenWindow === this) {
+                    "This display is already being used in fullscreen mode"
+                }
+                preFullscreenBounds = Rectangle(bounds)
+                preFullscreenState = extendedState
+                device.fullScreenWindow = this
+                fullscreenDevice = device
+            } else {
+                val device = fullscreenDevice
+                if (device?.fullScreenWindow === this) device.fullScreenWindow = null
+                fullscreenDevice = null
+                preFullscreenBounds?.let { bounds = it }
+                extendedState = preFullscreenState
+            }
+        } catch (e: Exception) {
+            fullscreen.isSelected = fullscreenDevice != null
+            JOptionPane.showMessageDialog(this,
+                e.message ?: "Fullscreen is unavailable on this display",
+                "MihonNooir reader", JOptionPane.WARNING_MESSAGE)
+        }
     }
 
     private fun bindKey(key: String, name: String, action: () -> Unit) {
@@ -380,6 +510,7 @@ private class LocalComicWindow(
 
     private fun showPage() {
         if (webtoon.isSelected) {
+            updateBookmarkButton()
             status.text = "Loading webtoon page ${pageIndex + 1} / ${pages.size}..."
             webtoonView?.open(pageIndex)
             previous.isEnabled = pageIndex > 0
@@ -392,6 +523,7 @@ private class LocalComicWindow(
         // Persist the first page of a spread so a restart always resumes at
         // the same visually displayed pair, not the second half of a spread.
         pageIndex = indices.first()
+        updateBookmarkButton()
         bookmarks.putInt(bookmarkId, pageIndex)
         val request = ++generation
         currentImages = emptyList()

@@ -157,3 +157,9 @@ java -Djava.awt.headless=true -cp "$tmp/windows-remote-offline-handoff-tests.jar
 kotlinc desktop/ui/RemoteChapterQueue.kt tests/RemoteChapterBatchTest.kt \
   -include-runtime -d "$tmp/windows-remote-batch-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-remote-batch-tests.jar" RemoteChapterBatchTestKt
+
+# Windows-only multiple explicit page bookmarks, independently persisted
+# from resume position; no Android app or server-side changes.
+kotlinc desktop/ui/ReaderBookmarkStore.kt tests/ReaderBookmarkStoreTest.kt \
+  -include-runtime -d "$tmp/windows-reader-bookmarks-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-reader-bookmarks-tests.jar" ReaderBookmarkStoreTestKt
