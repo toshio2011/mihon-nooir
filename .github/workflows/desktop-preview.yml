@@ -72,7 +72,15 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          jpackage --type app-image --name MihonNooir-Preview --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --dest package/output --java-options '-Dfile.encoding=UTF-8'
+          # jpackage's default jlink image intentionally strips native
+          # commands (including java.exe). The managed Suwayomi backend needs
+          # an actual Java launcher from the SAME runtime as the desktop app.
+          # Keep all JDK modules until a real Suwayomi integration smoke test
+          # proves a smaller compatible module set.
+          & "$env:JAVA_HOME/bin/jlink.exe" --add-modules ALL-MODULE-PATH --output package/full-runtime --strip-debug --no-man-pages --no-header-files
+          if ($LASTEXITCODE -ne 0) { throw "jlink failed: $LASTEXITCODE" }
+          if (!(Test-Path 'package/full-runtime/bin/java.exe')) { throw 'Explicit runtime is missing java.exe' }
+          jpackage --type app-image --name MihonNooir-Preview --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --runtime-image package/full-runtime --dest package/output --java-options '-Dfile.encoding=UTF-8'
           if ($LASTEXITCODE -ne 0) { throw "jpackage failed: $LASTEXITCODE" }
           $app = 'package/output/MihonNooir-Preview'
           if (!(Test-Path "$app/MihonNooir-Preview.exe")) { throw 'Windows launcher missing from app image' }
