@@ -121,3 +121,11 @@ kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiProcessManager.k
   tests/WindowsSuwayomiProcessManagerTest.kt \
   -include-runtime -d "$tmp/windows-suwayomi-manager-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-suwayomi-manager-tests.jar" WindowsSuwayomiProcessManagerTestKt
+
+# Windows-only optional first-run server installer: verifies the official
+# download path via localhost fixtures and never executes a downloaded JAR.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiProcessManager.kt,OfficialSuwayomiCache.kt} \
+  tests/VerifiedSuwayomiCacheTest.kt \
+  -include-runtime -d "$tmp/windows-verified-server-cache-tests.jar"
+java --add-modules jdk.httpserver -Djava.awt.headless=true \
+  -cp "$tmp/windows-verified-server-cache-tests.jar" VerifiedSuwayomiCacheTestKt
