@@ -18,7 +18,12 @@ internal object DesktopReadingLayout {
     fun move(pageCount: Int, anchor: Int, direction: Int, twoPage: Boolean, firstAlone: Boolean = true): Int {
         require(direction == -1 || direction == 1) { "Direction must be previous or next" }
         val now = visibleIndices(pageCount, anchor, twoPage, firstAlone)
-        if (direction == 1) return (now.last() + 1).coerceAtMost(pageCount - 1)
+        // At the last spread, keep its canonical first page. Returning the
+        // final physical page would redisplay the SAME spread and make the
+        // Next button repeat pages indefinitely (e.g. a two-page book).
+        if (direction == 1) {
+            return if (now.last() == pageCount - 1) now.first() else now.last() + 1
+        }
         if (now.first() == 0) return 0
         // The previous group starts at the previous spread, except for
         // a standalone first page at the beginning of a book.
