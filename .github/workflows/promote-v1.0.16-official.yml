@@ -1,0 +1,82 @@
+name: Promote MihonNooir v1.0.16 to official release
+
+on:
+  push:
+    branches: [release/android-v1.0.16-conan]
+    paths:
+      - docs/releases/v1.0.16-official.md
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: mihonnooir-v1.0.16-official-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout official release notes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify the existing stable-signed release and recorded APK assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < config/version.txt)" = '1.0.16'
+          test -s docs/releases/v1.0.16-official.md
+          test "$(gh api repos/"$GH_REPO"/actions/runs/40796819404 --jq .conclusion)" = 'success'
+          test "$(gh api repos/"$GH_REPO"/actions/runs/40796819404 --jq .head_sha)" = 'bad62d4103bd132aef1807ed2e41edb0258eb624'
+          release="repos/$GH_REPO/releases/tags/v1.0.16"
+          test "$(gh api "$release" --jq .draft)" = 'false'
+          test "$(gh api "$release" --jq .tag_name)" = 'v1.0.16'
+          test "$(gh api "$release" --jq .target_commitish)" = 'bad62d4103bd132aef1807ed2e41edb0258eb624'
+          gh api "$release" --jq '.assets[].name' > "$RUNNER_TEMP/nooir-asset-names.txt"
+          for name in app-arm64-v8a-foss.apk app-armeabi-v7a-foss.apk app-universal-foss.apk app-x86-foss.apk app-x86_64-foss.apk SHA256SUMS.txt; do
+            grep -Fxq "$name" "$RUNNER_TEMP/nooir-asset-names.txt"
+          done
+          gh api "$release" --jq '.assets[] | "\(.id) \(.name) \(.size)"' | sort > "$RUNNER_TEMP/nooir-assets-before.txt"
+          test "$(wc -l < "$RUNNER_TEMP/nooir-assets-before.txt")" -eq 6
+          if [ "$(gh api "$release" --jq .prerelease)" = 'false' ]; then
+            echo 'v1.0.16 is already official; no changes needed.'
+            echo 'already_official=true' >> "$GITHUB_ENV"
+          fi
+
+      - name: Mark existing v1.0.16 as official (no APK replacement)
+        if: env.already_official != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release edit v1.0.16 --repo "$GH_REPO" \
+            --title 'MihonNooir v1.0.16' \
+            --notes-file docs/releases/v1.0.16-official.md \
+            --prerelease=false \
+            --latest
+
+      - name: Confirm official status, same tag and unchanged signed APK assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release="repos/$GH_REPO/releases/tags/v1.0.16"
+          test "$(gh api "$release" --jq .draft)" = 'false'
+          test "$(gh api "$release" --jq .prerelease)" = 'false'
+          test "$(gh api "$release" --jq .tag_name)" = 'v1.0.16'
+          test "$(gh api "$release" --jq .target_commitish)" = 'bad62d4103bd132aef1807ed2e41edb0258eb624'
+          gh api "$release" --jq '.assets[] | "\(.id) \(.name) \(.size)"' | sort > "$RUNNER_TEMP/nooir-assets-after.txt"
+          diff -u "$RUNNER_TEMP/nooir-assets-before.txt" "$RUNNER_TEMP/nooir-assets-after.txt"
+          echo 'v1.0.16 is the official public GitHub release; all six assets are unchanged.'
