@@ -114,3 +114,10 @@ kotlinc \
   tests/DesktopGuiModelTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+
+# Windows-only lifecycle: launch arguments, pinned JAR, loopback binding and
+# refusal to claim an external server. No Suwayomi jar is executed in CI.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiProcessManager.kt} \
+  tests/WindowsSuwayomiProcessManagerTest.kt \
+  -include-runtime -d "$tmp/windows-suwayomi-manager-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-suwayomi-manager-tests.jar" WindowsSuwayomiProcessManagerTestKt
