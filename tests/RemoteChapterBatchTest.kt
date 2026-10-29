@@ -44,6 +44,27 @@ fun main() {
         check(queue.list().all { it.state == RemoteChapterState.PENDING }) {
             "Queue All must not submit any downloads to Suwayomi"
         }
+        // Queue capacity can be reclaimed intentionally, without remote
+        // requests or deletion of any manga files.
+        val toForget = saved.take(2).map { it.id }
+        check(runCatching { queue.forgetSafe(listOf("not-a-job")) }.isFailure)
+        check(runCatching { queue.forgetSafe(listOf(toForget[0], toForget[0])) }.isFailure)
+        val originalCount = queue.list().size
+        queue.forgetSafe(toForget)
+        check(queue.list().size == originalCount - 2)
+        check(queue.list().none { it.id in toForget })
+        check(RemoteChapterQueue(root).list().size == originalCount - 2)
+        val reclaimed = queue.addAllMissing(endpoint, 7, listOf(488, 489))
+        check(reclaimed.size == 2)
+        check(queue.list().size == originalCount)
+        val locked = checkNotNull(queue.claim(endpoint))
+        check(runCatching { queue.forgetSafe(listOf(locked.id)) }.isFailure) {
+            "Potentially submitted jobs cannot be forgotten"
+        }
+        queue.interrupted(locked.id)
+        check(runCatching { queue.forgetSafe(listOf(locked.id)) }.isFailure) {
+            "Uncertain remote jobs cannot be forgotten"
+        }
         println("Windows bounded Download All passed: 20-selected limit, 500 cap, restart, dedup, atomic refusal")
     } finally {
         root.toFile().deleteRecursively()

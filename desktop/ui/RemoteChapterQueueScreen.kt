@@ -46,6 +46,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
     private val refresh = JButton("Refresh")
     private val localJobs = JButton("Offline CBZ copy jobs")
     private val queueCompleted = JButton("Queue selected as offline CBZ")
+    private val forgetSafe = JButton("Forget safe queue records")
     private val stageAfterDownload = JCheckBox("Also prepare offline CBZ jobs after verified downloads (no copying)")
     private val status = JLabel("No source download requests run without your approval")
     private val stopRequested = AtomicBoolean(false)
@@ -88,6 +89,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
                 add(this@RemoteChapterQueueWindow.refresh)
                 add(this@RemoteChapterQueueWindow.localJobs)
                 add(this@RemoteChapterQueueWindow.queueCompleted)
+                add(this@RemoteChapterQueueWindow.forgetSafe)
             }, BorderLayout.NORTH)
             add(stageAfterDownload, BorderLayout.SOUTH)
         }, BorderLayout.NORTH)
@@ -109,6 +111,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
         refresh.addActionListener { reload() }
         localJobs.addActionListener { OfflineSaveQueueScreen.open(endpoint) }
         queueCompleted.addActionListener { queueSelectedCompleted() }
+        forgetSafe.addActionListener { forgetSelectedSafe() }
         reload()
     }
 
@@ -117,6 +120,11 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
         val selected = selectedJobs.singleOrNull()
         queueCompleted.isEnabled = !active && selectedJobs.size in 1..20 &&
             selectedJobs.all { it.port == port && it.state == RemoteChapterState.DOWNLOADED }
+        forgetSafe.isEnabled = !active && selectedJobs.size in 1..20 &&
+            selectedJobs.all {
+                it.port == port && it.state in setOf(RemoteChapterState.PENDING,
+                    RemoteChapterState.DOWNLOADED, RemoteChapterState.CANCELED)
+            }
         submit.isEnabled = !active && entries.elements().asSequence().any {
             it.state == RemoteChapterState.PENDING
         }
@@ -142,6 +150,33 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
             warn(e.message ?: "Cannot load download queue")
         }
         updateControls()
+    }
+
+    /** Reclaim bounded queue space without touching remotely running jobs. */
+    private fun forgetSelectedSafe() {
+        if (active) return
+        val selected = list.selectedValuesList
+        if (selected.size !in 1..20 || selected.any {
+                it.port != port || it.state !in setOf(RemoteChapterState.PENDING,
+                    RemoteChapterState.DOWNLOADED, RemoteChapterState.CANCELED)
+            }) {
+            warn("Choose 1–20 unsent, downloaded or canceled records only")
+            return
+        }
+        val approved = JOptionPane.showConfirmDialog(this,
+            "Forget " + selected.size + " local queue record(s)?\n" +
+                "This removes only MihonNooir request history. It does NOT delete\n" +
+                "Suwayomi downloads or saved offline CBZ files, and does NOT\n" +
+                "cancel any server-side downloads. Uncertain requests cannot be forgotten.",
+            "Forget safe request records", JOptionPane.YES_NO_OPTION)
+        if (approved != JOptionPane.YES_OPTION) return
+        try {
+            queue.forgetSafe(selected.map { it.id })
+            reload()
+            status.text = "${selected.size} safe queue record(s) removed. Original manga files remain."
+        } catch (e: Exception) {
+            warn(e.message ?: "Cannot remove selected request records")
+        }
     }
 
     /** Save no comic files here: enqueue user-selected *completed* jobs only. */

@@ -139,7 +139,7 @@ internal class RemoteChapterQueue(
             val port = portOf(endpoint)
             require(mangaId > 0 && chapterIds.size in 1..batchLimit &&
                 chapterIds.all { it > 0 } && chapterIds.distinct().size == chapterIds.size) {
-                "Choose 1 to 20 distinct chapters"
+                "Choose 1 to $batchLimit distinct chapters"
             }
             val jobs = load()
             // Capacity is checked before changes are persisted. An oversized
@@ -206,6 +206,26 @@ internal class RemoteChapterQueue(
         RemoteChapterState.WAITING)
     fun cancelPending(id: String) = change(id,
         setOf(RemoteChapterState.PENDING), RemoteChapterState.CANCELED)
+
+    /**
+     * User-requested metadata cleanup ONLY. Never discard a request that
+     * might still be running remotely or whose mutation outcome is uncertain.
+     * No source contact, manga deletion or offline CBZ deletion.
+     */
+    fun forgetSafe(ids: List<String>) = synchronized(lock) {
+        require(ids.size in 1..20 && ids.distinct().size == ids.size) {
+            "Choose 1 to 20 unique queue records"
+        }
+        val jobs = load()
+        val safe = setOf(RemoteChapterState.PENDING, RemoteChapterState.DOWNLOADED,
+            RemoteChapterState.CANCELED)
+        require(ids.all { id -> jobs.any { it.id == id && it.state in safe } }) {
+            "Only unsent pending, downloaded or canceled request records can be forgotten"
+        }
+        val retained = jobs.filterNot { it.id in ids }
+        save(retained)
+        ids.forEach(owned::remove)
+    }
 
     private fun change(id: String, allowed: Set<RemoteChapterState>,
         state: RemoteChapterState, message: String = "") = synchronized(lock) {
