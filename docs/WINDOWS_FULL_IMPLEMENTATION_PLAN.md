@@ -48,6 +48,7 @@ No DRM bypass, bundled copyrighted manga, unapproved sources, hidden extension i
 ### W2 — Managed Suwayomi backend
 
 - [x] Implement an **explicitly user-approved** process manager for pinned `Suwayomi-Server-v2.4.2366.jar`: loopback-only server flags, dedicated root directory, bounded GraphQL readiness, safe output log, startup refusal on occupied ports and ownership-limited stop/shutdown. Expose Start/Stop controls in Windows GUI; no silent jar download or installation.
+- [x] Implement an optional **consent-gated verified GitHub download** of the same pinned 183 MB Suwayomi JAR, atomic local cache, SHA-256 and ZIP manifest checks, failure cleanup, and explicit Download & start button. Tests use a synthetic JAR and localhost HTTP server; actual full-sized JAR and real Windows runtime remain unverified.
 - [x] Add JVM process-launch security contract tests; require bundled Windows app-image to include `java.exe`.
 - [ ] Select and audit the officially released server artifact and its SHA-256 + license, validate executable startup/API/storage/auth/extensions on real Windows, and package it as an app-managed dependency; **not bundled yet**.
 - [ ] Perform real end-to-end integration with a legally accessible test title: add trusted source → search → download chapters → produce EPUB2 and XTC.
