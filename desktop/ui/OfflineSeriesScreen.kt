@@ -154,8 +154,13 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
 
     private fun readSelected() {
         val chapter = chapterList.selectedValue ?: return
+        val manga = seriesList.selectedValue ?: return
         if (!chapter.available) return
-        if (LocalComicReader.open(chapter.file, this)) {
+        val chapters = manga.chapters.map { ReaderChapter(it.chapterId, it.chapterTitle, it.file) }
+        val index = chapters.indexOfFirst { it.id == chapter.chapterId }
+        if (index < 0) return
+        val readerSequence = ReaderChapterSequence(manga.title, chapters, index)
+        if (LocalComicReader.open(chapter.file, this, readerSequence)) {
             try {
                 library.markOpened(chapter.file)
             } catch (e: Exception) {
