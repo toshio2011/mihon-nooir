@@ -7,6 +7,9 @@ import dev.nooir.desktop.ui.ReaderChapter
 import dev.nooir.desktop.ui.ReaderChapterSequence
 import dev.nooir.desktop.ui.WebtoonWindow
 import dev.nooir.desktop.ui.LocalLibraryStore
+import dev.nooir.desktop.ui.OfflineReadingResume
+import dev.nooir.desktop.ui.OfflineSeries
+import dev.nooir.desktop.ui.OfflineSeriesChapter
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -149,6 +152,45 @@ fun main() {
         }
         check(LocalComicPages.names(zip) == listOf("page 2.png", "page 10.png"))
         check(LocalComicPages.read(zip, "page 10.png").height == 48)
+        // Continue reading uses already-persisted local timestamps and keeps
+        // the reader's existing per-file page position independent.
+        val secondZip = File(folder, "chapter-three.cbz")
+        val otherZip = File(folder, "other-series.cbz")
+        zip.copyTo(secondZip)
+        zip.copyTo(otherZip)
+        val missing = File(folder, "missing.cbz")
+        val firstSeries = OfflineSeries(77, "Saved Series", listOf(
+            OfflineSeriesChapter(77, "Saved Series", 1, "Chapter One", 1.0, 3, zip),
+            OfflineSeriesChapter(77, "Saved Series", 2, "Chapter Missing", 2.0, 2, missing),
+            OfflineSeriesChapter(77, "Saved Series", 3, "Chapter Three", 3.0, 1, secondZip),
+        ))
+        val otherSeries = OfflineSeries(88, "Other Series", listOf(
+            OfflineSeriesChapter(88, "Other Series", 8, "Other Chapter", 1.0, 1, otherZip),
+        ))
+        val missingSeries = OfflineSeries(99, "No CBZ", listOf(
+            OfflineSeriesChapter(99, "No CBZ", 9, "Missing", 1.0, 1, missing),
+        ))
+        val resumeIndex = File(folder, "resume-library-index").toPath()
+        val resumeStore = LocalLibraryStore(resumeIndex)
+        for (archive in listOf(zip, secondZip, otherZip)) resumeStore.add(archive)
+        val noHistory = resumeStore.books()
+        check(OfflineReadingResume.forSeries(firstSeries, noHistory)?.chapter?.chapterId == 1)
+        check(OfflineReadingResume.forSeries(missingSeries, noHistory) == null)
+        check(OfflineReadingResume.mostRecent(listOf(firstSeries, otherSeries), noHistory) == null)
+        resumeStore.markOpened(zip, 1000L)
+        resumeStore.markOpened(otherZip, 2000L)
+        resumeStore.markOpened(secondZip, 3000L)
+        val restartedHistory = LocalLibraryStore(resumeIndex).books()
+        check(OfflineReadingResume.forSeries(firstSeries, restartedHistory)?.chapter?.chapterId == 3)
+        check(OfflineReadingResume.mostRecent(listOf(firstSeries, otherSeries),
+            restartedHistory)?.chapter?.chapterId == 3)
+        // Missing "last opened" CBZ must be skipped instead of fetching it.
+        check(secondZip.delete())
+        val afterRemoval = LocalLibraryStore(resumeIndex).books()
+        check(OfflineReadingResume.forSeries(firstSeries, afterRemoval)?.chapter?.chapterId == 1)
+        check(OfflineReadingResume.mostRecent(listOf(firstSeries, otherSeries),
+            afterRemoval)?.series?.mangaId == 88)
+        check(OfflineReadingResume.mostRecent(listOf(missingSeries), afterRemoval) == null)
         val sequence = ReaderChapterSequence("Fixture Manga", listOf(
             ReaderChapter(1, "Chapter 1", zip),
             ReaderChapter(2, "Missing chapter", File(folder, "missing.cbz")),
