@@ -1,6 +1,7 @@
 package dev.nooir.desktop.ui
 
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.event.MouseAdapter
@@ -25,6 +26,37 @@ import javax.swing.ListSelectionModel
 internal object OfflineSeriesScreen {
     fun open() {
         OfflineSeriesWindow().isVisible = true
+    }
+
+    /**
+     * One-click offline resume from the local bookshelf. Returns false when
+     * there is no history or the selected downloaded CBZ cannot open.
+     */
+    fun resumeLast(parent: Component?): Boolean {
+        try {
+            val catalog = OfflineSeriesCatalog()
+            val library = LocalLibraryStore()
+            val target = OfflineReadingResume.mostRecent(catalog.series(), library.books())
+                ?: run {
+                    JOptionPane.showMessageDialog(parent,
+                        "No previously read downloaded chapter is available. " +
+                            "Open Downloaded series to start reading a saved manga.",
+                        "MihonNooir Continue reading", JOptionPane.INFORMATION_MESSAGE)
+                    return false
+                }
+            val sequence = ReaderChapterSequence(target.series.title,
+                target.series.chapters.map {
+                    ReaderChapter(it.chapterId, it.chapterTitle, it.file)
+                }, target.series.chapters.indexOfFirst { it.chapterId == target.chapter.chapterId })
+            if (!LocalComicReader.open(target.chapter.file, parent, sequence)) return false
+            library.markOpened(target.chapter.file)
+            return true
+        } catch (e: Exception) {
+            JOptionPane.showMessageDialog(parent,
+                e.message ?: "Cannot resume downloaded manga",
+                "MihonNooir Continue reading", JOptionPane.WARNING_MESSAGE)
+            return false
+        }
     }
 }
 
@@ -189,13 +221,7 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
     }
 
     private fun continueRecentSeries() {
-        try {
-            val target = OfflineReadingResume.mostRecent(catalog.series(), library.books())
-                ?: return error("No previously read downloaded chapter is currently available")
-            openChapter(target.series, target.chapter)
-        } catch (e: Exception) {
-            error(e.message ?: "Cannot resume the last read series")
-        }
+        if (OfflineSeriesScreen.resumeLast(this)) reload()
     }
 
     private fun readSelected() {
