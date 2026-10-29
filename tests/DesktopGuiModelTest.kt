@@ -2,6 +2,7 @@ import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
 import dev.nooir.desktop.ui.LocalComicPages
+import dev.nooir.desktop.ui.DesktopReadingLayout
 import dev.nooir.desktop.ui.LocalLibraryStore
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -52,6 +53,42 @@ fun main() {
         check(!reloaded.panelDiagnostics)
     }
     check(MangaConversionOptions.fromToken(null).panelMode == "OFF")
+    // Single page, manga-like cover, two-page spread, odd final page and RTL
+    // visual placement must all be deterministic and never skip a page.
+    val layout = DesktopReadingLayout
+    check(layout.visibleIndices(6, 0, true) == listOf(0))
+    check(layout.visibleIndices(6, 1, true) == listOf(1, 2))
+    check(layout.visibleIndices(6, 2, true) == listOf(1, 2))
+    check(layout.visibleIndices(6, 3, true) == listOf(3, 4))
+    check(layout.visibleIndices(6, 5, true) == listOf(5))
+    check(layout.visibleIndices(6, 2, false) == listOf(2))
+    check(layout.visibleIndices(6, 0, true, false) == listOf(0, 1))
+    check(layout.visibleIndices(6, 3, true, false) == listOf(2, 3))
+    check(layout.move(6, 0, 1, true) == 1)
+    check(layout.move(6, 1, 1, true) == 3)
+    check(layout.move(6, 3, -1, true) == 1)
+    check(layout.move(6, 1, -1, true) == 0)
+    check(layout.move(6, 5, 1, true) == 5)
+    check(layout.move(6, 0, -1, true) == 0)
+    check(layout.visualIndices(listOf(1, 2), true) == listOf(2, 1))
+    check(layout.visualIndices(listOf(1, 2), false) == listOf(1, 2))
+    check(runCatching { layout.visibleIndices(0, 0, true) }.isFailure)
+    check(runCatching { layout.visibleIndices(2, 2, true) }.isFailure)
+    // Across book lengths, forward navigation must cover each page exactly
+    // once in reading order even when the last spread has only one page.
+    for (count in 1..25) for (firstSolo in listOf(true, false)) {
+        var position = 0
+        val encountered = mutableListOf<Int>()
+        while (true) {
+            encountered += layout.visibleIndices(count, position, true, firstSolo)
+            val nextPosition = layout.move(count, position, 1, true, firstSolo)
+            if (nextPosition == position) break
+            position = nextPosition
+        }
+        check(encountered == (0 until count).toList()) {
+            "Double-page reader skipped or duplicated pages for count=$count, firstSolo=$firstSolo: $encountered"
+        }
+    }
     // Offline reader: pages sort naturally; archive entries are decoded
     // in-memory and unsafe ZIP paths are excluded.
     val folder = Files.createTempDirectory("mihonnooir-reader-smoke-").toFile()
@@ -107,5 +144,5 @@ fun main() {
     }
     // In headless CI we compile/load the real Swing GUI, but do not instantiate a JFrame.
     check(Class.forName("dev.nooir.desktop.ui.MangaNooirDesktop") != null)
-    println("Desktop GUI model tests passed: chapter selection, format extensions and headless-safe class loading")
+    println("Desktop GUI model tests passed: chapter selection, two-page and RTL paging, formats, offline files and headless GUI")
 }
