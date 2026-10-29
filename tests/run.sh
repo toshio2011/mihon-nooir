@@ -144,3 +144,10 @@ kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt} \
   -include-runtime -d "$tmp/windows-remote-chapter-queue-tests.jar"
 java --add-modules jdk.httpserver -Djava.awt.headless=true \
   -cp "$tmp/windows-remote-chapter-queue-tests.jar" RemoteChapterQueueTestKt
+
+# User-selected completed remote downloads become explicit offline CBZ jobs.
+# Neither a source request nor a CBZ copy runs during this handoff.
+kotlinc desktop/ui/{RemoteChapterQueue.kt,OfflineSaveQueue.kt,RemoteChapterOfflineHandoff.kt} \
+  tests/RemoteChapterOfflineHandoffTest.kt \
+  -include-runtime -d "$tmp/windows-remote-offline-handoff-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-remote-offline-handoff-tests.jar" RemoteChapterOfflineHandoffTestKt
