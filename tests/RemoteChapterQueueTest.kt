@@ -78,14 +78,20 @@ fun main() {
         val second = checkNotNull(queue.claim(endpoint))
         check(second.chapterId == 102)
         check(!runner.runClaimed(second, { true }))
-        check(queue.list()[1].state == RemoteChapterState.INTERRUPTED)
+        check(queue.list()[1].state == RemoteChapterState.PENDING) {
+            "Stopping before the mutation must leave a safely retryable pending job"
+        }
         check(submissions.get() == 1) { "Stop before submission cannot enqueue another chapter" }
-        queue.resumeMonitoring(second.id)
+        // A later, separately approved claim checks if an external download
+        // already finished before deciding to send a new mutation.
         served102.set(true)
-        val waiting = checkNotNull(queue.list().find { it.id == second.id })
-        check(waiting.state == RemoteChapterState.WAITING)
-        check(runner.resumeMonitoring(waiting, { false }))
-        check(submissions.get() == 1) { "Recheck must never enqueue a second request" }
+        val claimedAgain = checkNotNull(queue.claim(endpoint))
+        check(claimedAgain.id == second.id)
+        check(runner.runClaimed(claimedAgain, { false }))
+        check(queue.list()[1].state == RemoteChapterState.DOWNLOADED)
+        check(submissions.get() == 1) {
+            "Reapproved claim must not enqueue a chapter already downloaded"
+        }
 
         val third = queue.add(endpoint, 7, listOf(103)).single()
         val claimedThird = checkNotNull(queue.claim(endpoint))
