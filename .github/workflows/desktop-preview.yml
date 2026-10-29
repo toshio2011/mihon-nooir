@@ -78,6 +78,7 @@ jobs:
           if (!(Test-Path "$app/MihonNooir-Preview.exe")) { throw 'Windows launcher missing from app image' }
           if (!(Test-Path "$app/app")) { throw 'Packaged application files missing' }
           if (!(Test-Path "$app/runtime")) { throw 'Bundled Java runtime missing' }
+          if (!(Test-Path "$app/runtime/bin/java.exe")) { throw 'Bundled Java launcher missing for managed Suwayomi backend' }
           Compress-Archive -Path $app -DestinationPath package/MihonNooir-Windows-Preview.zip -CompressionLevel Optimal
           if (!(Test-Path package/MihonNooir-Windows-Preview.zip)) { throw 'Windows archive missing' }
           $hash = (Get-FileHash -Algorithm SHA256 'package/MihonNooir-Windows-Preview.zip').Hash.ToLowerInvariant()
