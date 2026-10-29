@@ -100,6 +100,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val downloadMissing = JCheckBox("Download missing chapters (explicit opt-in)")
     private val conversionSettings = JButton("Conversion settings")
     private val localImport = JButton("Convert local folder / CBZ")
+    private val localReader = JButton("Read local comic")
     private var options = MangaConversionOptions.preset("Manga")
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
@@ -126,7 +127,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
         val connect = JButton("Connect / reload sources")
         val header = JPanel(FlowLayout(FlowLayout.LEFT, 10, 8)).apply {
-            add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library); add(localImport)
+            add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library); add(localImport); add(localReader)
         }
         add(header, BorderLayout.NORTH)
 
@@ -204,7 +205,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
-            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings, localImport)
+            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings, localImport, localReader)
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
         }
@@ -230,6 +231,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
         export.addActionListener { exportSelected() }
         localImport.addActionListener { exportLocal() }
+        localReader.addActionListener { openLocalReader() }
         setPaging()
         loadSources()
     }
@@ -345,6 +347,16 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 if (it.chapterNumber >= 0) it.chapterNumber else Double.MAX_VALUE
             }.thenByDescending { it.sourceOrder }).forEach { chapters.addElement(it) }
         })
+    }
+
+    /** Browse offline CBZ / image folders without a backend or network. */
+    private fun openLocalReader() {
+        val picker = JFileChooser().apply {
+            dialogTitle = "Open local manga or comic"
+            fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
+        }
+        if (picker.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return
+        LocalComicReader.open(picker.selectedFile.canonicalFile, this)
     }
 
     /** Local conversion must work independently of Suwayomi or a network connection. */
