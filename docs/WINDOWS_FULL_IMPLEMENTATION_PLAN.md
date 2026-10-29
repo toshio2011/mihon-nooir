@@ -61,7 +61,8 @@ No DRM bypass, bundled copyrighted manga, unapproved sources, hidden extension i
 
 - [ ] Native cover grid, series detail, chapter view, downloaded marker, filters/categories/search/history.
 - [x] Extend the local CBZ/image-folder reader with **two-page spreads**, first-page-alone handling, correct RTL physical placement, direct page jump, zoom/fit, keyboard shortcuts, and saved per-book page position. Add **previous/next offline chapter** buttons in the grouped-series reader; preserve progress separately for each chapter. Synthetic page-count and skip-missing-chapter tests cover navigation; this remains an offline preview, not a full online reader.
-- [ ] Complete reader modes still outstanding: continuous webtoon, fullscreen, online chapter reader and richer bookmark management; verify on real Windows with large manga pages.
+- [x] Add first **continuous vertical webtoon preview** with a rolling three-page decoding buffer (36 million source pixels max), scroll-position tracking, asynchronous page loading, saved progress and explicit jump handling; test window coverage and capacity bounds.
+- [ ] Validate webtoon scrolling and large manga on a real Windows machine, including continuous transition at buffer boundaries; optimize any jump/repaint defects before calling this reader mode production-ready. Fullscreen, online chapter reading and richer bookmarks remain open.
 - [ ] Independent persistent download queue with retry/cancel, disk/memory/source limits and no duplicates; reopen downloads offline after app restart.
 - [ ] Explore Mihon backup import as an explicit, validated import flow. Never silently conflate Suwayomi and Android databases.
 
