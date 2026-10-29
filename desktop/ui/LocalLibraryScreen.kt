@@ -39,6 +39,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
     private val remove = JButton("Remove from library")
     private val reload = JButton("Refresh")
     private val series = JButton("Downloaded series")
+    private val resumeDownloaded = JButton("Continue last downloaded manga")
     private val information = JLabel("Choose a folder or CBZ comic to add")
     private val date = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         .withZone(ZoneId.systemDefault())
@@ -73,6 +74,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
             add(this@LocalLibraryWindow.remove)
             add(this@LocalLibraryWindow.reload)
             add(this@LocalLibraryWindow.series)
+            add(this@LocalLibraryWindow.resumeDownloaded)
         }
         add(buttons, BorderLayout.NORTH)
         add(JScrollPane(list), BorderLayout.CENTER)
@@ -87,12 +89,16 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
         remove.addActionListener { removeComic() }
         reload.addActionListener { refresh() }
         series.addActionListener { OfflineSeriesScreen.open() }
+        resumeDownloaded.addActionListener {
+            if (OfflineSeriesScreen.resumeLast(this)) refresh()
+        }
         refresh()
     }
 
     private fun updateControls() {
         add.isEnabled = !busy
         reload.isEnabled = !busy
+        resumeDownloaded.isEnabled = !busy
         val selected = list.selectedValue
         read.isEnabled = !busy && selected?.available == true
         remove.isEnabled = !busy && selected != null
