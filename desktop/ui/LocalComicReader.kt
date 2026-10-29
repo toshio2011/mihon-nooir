@@ -205,9 +205,12 @@ private class LocalComicWindow(
     private var currentImages: List<BufferedImage> = emptyList()
     private val canvas = ReaderCanvas()
     private val scroller = JScrollPane(canvas)
+    private val readerArea = JPanel(BorderLayout())
+    private var webtoonView: WebtoonStripView? = null
     private val status = JLabel()
     private val rtl = JCheckBox("RTL", bookmarks.getBoolean("layout-rtl", true))
     private val twoPage = JCheckBox("Two pages", bookmarks.getBoolean("layout-two-page", false))
+    private val webtoon = JCheckBox("Webtoon scroll", bookmarks.getBoolean("layout-webtoon", false))
     private val firstAlone = JCheckBox("First page alone", bookmarks.getBoolean("layout-first-alone", true))
     private val sizing = JComboBox(arrayOf("Fit page", "Fit width", "Original pixels"))
     private val zoom = JSlider(50, 200, 100)
@@ -224,13 +227,14 @@ private class LocalComicWindow(
         minimumSize = Dimension(600, 440)
         setSize(1080, 760)
         setLocationRelativeTo(null)
-        add(scroller, BorderLayout.CENTER)
+        readerArea.add(scroller, BorderLayout.CENTER)
+        add(readerArea, BorderLayout.CENTER)
         val controls = JPanel().apply {
             add(previous); add(next)
             if (chapterSequence != null) {
                 add(previousChapter); add(nextChapter)
             }
-            add(rtl); add(twoPage); add(firstAlone)
+            add(rtl); add(twoPage); add(firstAlone); add(webtoon)
             add(sizing); add(JLabel("Zoom")); add(zoom)
             add(JLabel("Go to page")); add(jump)
         }
@@ -248,11 +252,15 @@ private class LocalComicWindow(
         }
         twoPage.addActionListener {
             bookmarks.putBoolean("layout-two-page", twoPage.isSelected)
-            firstAlone.isEnabled = twoPage.isSelected
+            firstAlone.isEnabled = twoPage.isSelected && !webtoon.isSelected
             // Recompute the currently displayed spread from the saved anchor.
             showPage()
         }
-        firstAlone.isEnabled = twoPage.isSelected
+        webtoon.addActionListener {
+            bookmarks.putBoolean("layout-webtoon", webtoon.isSelected)
+            changeReaderMode()
+        }
+        firstAlone.isEnabled = twoPage.isSelected && !webtoon.isSelected
         firstAlone.addActionListener {
             bookmarks.putBoolean("layout-first-alone", firstAlone.isSelected)
             showPage()
@@ -283,6 +291,47 @@ private class LocalComicWindow(
             bindKey("ctrl PAGE_UP", "reader-previous-chapter") { switchChapter(-1) }
             bindKey("ctrl PAGE_DOWN", "reader-next-chapter") { switchChapter(1) }
         }
+        if (webtoon.isSelected) changeReaderMode() else showPage()
+    }
+
+    private fun changeReaderMode() {
+        webtoonView?.close()
+        webtoonView = null
+        readerArea.removeAll()
+        val continuous = webtoon.isSelected
+        twoPage.isEnabled = !continuous
+        firstAlone.isEnabled = !continuous && twoPage.isSelected
+        sizing.isEnabled = !continuous
+        zoom.isEnabled = !continuous
+        if (continuous) {
+            val view = WebtoonStripView(source, pages,
+                onVisiblePage = { page ->
+                    if (isDisplayable && webtoon.isSelected) {
+                        pageIndex = page
+                        bookmarks.putInt(bookmarkId, pageIndex)
+                        updatingJump = true
+                        jump.value = pageIndex + 1
+                        updatingJump = false
+                        status.text = "Webtoon — page ${pageIndex + 1} / ${pages.size}"
+                        previous.isEnabled = pageIndex > 0
+                        next.isEnabled = pageIndex < pages.lastIndex
+                    }
+                },
+                onError = { message ->
+                    if (isDisplayable && webtoon.isSelected) {
+                        status.text = "Webtoon page error"
+                        JOptionPane.showMessageDialog(this, message,
+                            "MihonNooir Reader", JOptionPane.WARNING_MESSAGE)
+                    }
+                },
+            )
+            webtoonView = view
+            readerArea.add(view, BorderLayout.CENTER)
+        } else {
+            readerArea.add(scroller, BorderLayout.CENTER)
+        }
+        readerArea.revalidate()
+        readerArea.repaint()
         showPage()
     }
 
@@ -314,12 +363,23 @@ private class LocalComicWindow(
     }
 
     private fun move(direction: Int) {
-        jumpTo(DesktopReadingLayout.move(
-            pages.size, pageIndex, direction, twoPage.isSelected, firstAlone.isSelected,
-        ))
+        if (webtoon.isSelected) {
+            jumpTo(pageIndex + direction)
+        } else {
+            jumpTo(DesktopReadingLayout.move(
+                pages.size, pageIndex, direction, twoPage.isSelected, firstAlone.isSelected,
+            ))
+        }
     }
 
     private fun showPage() {
+        if (webtoon.isSelected) {
+            status.text = "Loading webtoon page ${pageIndex + 1} / ${pages.size}..."
+            webtoonView?.open(pageIndex)
+            previous.isEnabled = pageIndex > 0
+            next.isEnabled = pageIndex < pages.lastIndex
+            return
+        }
         val indices = DesktopReadingLayout.visibleIndices(
             pages.size, pageIndex, twoPage.isSelected, firstAlone.isSelected,
         )
@@ -360,6 +420,7 @@ private class LocalComicWindow(
     }
 
     private fun repaintPage() {
+        if (webtoon.isSelected) return
         canvas.configure(currentImages, rtl.isSelected,
             sizing.selectedItem as String, zoom.value, scroller.viewport.extentSize)
     }
