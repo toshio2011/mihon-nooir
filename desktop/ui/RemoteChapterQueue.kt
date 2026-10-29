@@ -169,6 +169,9 @@ internal class RemoteChapterQueue(
         }
     }
 
+    /** Before enqueue is called, a stop cannot have reached the manga source. */
+    fun stoppedBeforeSubmission(id: String) = change(id,
+        setOf(RemoteChapterState.SUBMITTING), RemoteChapterState.PENDING)
     fun submitted(id: String) = change(id,
         setOf(RemoteChapterState.SUBMITTING), RemoteChapterState.WAITING)
     fun completed(id: String) = change(id,
