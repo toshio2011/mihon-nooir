@@ -9,6 +9,14 @@ On the development branch, the Windows app opens **offline by default**. **Local
 
 When connected to a user-configured localhost Suwayomi server, select chapters that Suwayomi already downloaded and press **Save downloaded chapters offline**. Up to 20 chapters per action are copied as validated CBZ archives into `~/.mihonnooir/downloaded-chapters/` and added to the local library. This never installs sources, enqueues missing remote downloads or overwrites archives. Real released Suwayomi integration, per-chapter progress/cancellation and the managed-backend packaging still need verification and implementation.
 
+### Managed Suwayomi process — opt-in development integration
+
+The Windows development GUI now offers **Start local Suwayomi** and **Stop managed server**. It starts only after explicit consent and a user-selected `Suwayomi-Server-v2.4.2366.jar`. For now, download that exact released JAR from the [official Suwayomi v2.4.2366 release](https://github.com/Suwayomi/Suwayomi-Server/releases/tag/v2.4.2366), verify its published checksum, then select it in the file dialog. **MihonNooir does not currently bundle, install or download the server itself.** This initial managed-process slice still needs validation with the real official JAR on Windows.
+
+The launcher uses the Java runtime from the Windows app and passes Suwayomi system settings to bind `server.ip=127.0.0.1`, `server.port=4567`, and set a separate `server.rootDir` at `~/.mihonnooir/managed-suwayomi`. It disables external tray/browser auto-launch, captures bounded startup readiness via localhost GraphQL and writes local process output to `server-output.log`. It refuses to claim port 4567 if another process already uses it; **Stop managed server never kills an external server** and closes only the process MihonNooir itself started. The app remains usable offline without any backend.
+
+**Still pending for an ordinary-user, one-click app:** pin and audit the redistributed server binary/license, incorporate checksum verification and the JAR into Windows packaging, complete real-server readiness and startup/shutdown tests on a Windows machine, support updates safely, and add a first-run trusted extension configuration flow. Do not represent this developer integration as an automatic bundled backend yet.
+
 **Status:** Windows portable preview is unsigned and under development; it is not yet the full stable Windows app or installer. The original Android release, signing keys, APK source and Folio Nooir firmware are unchanged.
 
 # MangaNooir Windows — D1 shared conversion spike (developer-only)
