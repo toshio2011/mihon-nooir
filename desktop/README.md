@@ -3,6 +3,8 @@
 
 ## Current Windows full-app development preview: local reading and library
 
+**Reader progress (this branch):** Local CBZ and image-folder reading now supports single page or optional **two-page spreads** with the first page kept alone, RTL/LTR visual placement, page jumping, zoom, fit-page/fit-width/original size and persistent reading position for each book. The downloaded-series reader exposes **Previous chapter / Next chapter** inside the reader, skipping missing local CBZs without automatically downloading anything. Use Ctrl+PageUp / Ctrl+PageDown between available chapters, and Left/Right or PageUp/PageDown between pages. Continuous webtoon/fullscreen and online chapter reading are still open milestones; this is not yet the full stable reader.
+
 On the development branch, the Windows app opens **offline by default**. **Local library** opens a persistent user-curated bookshelf. Add an image folder or CBZ archive, open a book for single-page reading with fit/zoom and RTL-aware arrow keys, and resume its last position after restarting the app. Removing a library entry does **not** delete the original comic. The index is stored in the user's home directory (`~/.mihonnooir/local-library-v1.txt`); comic pages stay where the user chose them.
 
 **Read local comic** opens a folder/CBZ directly, and **Convert local folder / CBZ** exports to EPUB2, EPUB3, XTC, XTCH or CBZ using the same tested Kotlin conversion engine and panel settings as Android. These workflows do not need a running Suwayomi backend.
