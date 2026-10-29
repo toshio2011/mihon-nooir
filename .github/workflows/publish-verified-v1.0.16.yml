@@ -160,10 +160,15 @@ jobs:
           lines = sys.stdin.read().splitlines()
           matches = []
           for line in lines:
-              if not re.search(r"(?i)signer\s*#?\s*1\b.*certificate.*SHA[-\s]*256.*digest", line):
-                  continue
-              found = re.findall(r"(?i)(?<![0-9a-f])(?:[0-9a-f]{2}:){31}[0-9a-f]{2}(?![0-9a-f])|(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])", line)
-              matches.extend(m.replace(":", "").lower() for m in found)
+              # Build Tools 36 reports "V2 Signer: certificate SHA-256 digest".
+              # Earlier apksigner versions used "Signer #1 certificate ...".
+              # Only accept a certificate SHA-256 field from a signer heading.
+              found = re.fullmatch(
+                  r"(?i)\s*(?:v2\s+signer|signer\s*#\s*1)\s*:?\s*certificate\s+SHA[-\s]*256\s+digest\s*:\s*([0-9a-f]{64})\s*",
+                  line,
+              )
+              if found:
+                  matches.append(found.group(1).lower())
           if len(matches) != 1:
               print(f"Expected one signer certificate SHA-256 digest; found {len(matches)}. Public output headings:", file=sys.stderr)
               for line in lines:
