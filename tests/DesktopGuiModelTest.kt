@@ -1,6 +1,15 @@
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
+import dev.nooir.desktop.ui.LocalComicPages
+import java.awt.Color
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.file.Files
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import javax.imageio.ImageIO
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 
 fun main() {
@@ -42,6 +51,36 @@ fun main() {
         check(!reloaded.panelDiagnostics)
     }
     check(MangaConversionOptions.fromToken(null).panelMode == "OFF")
+    // Offline reader: pages sort naturally; archive entries are decoded
+    // in-memory and unsafe ZIP paths are excluded.
+    val folder = Files.createTempDirectory("mihonnooir-reader-smoke-").toFile()
+    try {
+        val page = BufferedImage(32, 48, BufferedImage.TYPE_INT_RGB).apply {
+            val g = createGraphics()
+            try { g.color = Color.RED; g.fillRect(0, 0, 32, 48) } finally { g.dispose() }
+        }
+        val raw = ByteArrayOutputStream().use {
+            check(ImageIO.write(page, "png", it))
+            it.toByteArray()
+        }
+        File(folder, "page 10.png").writeBytes(raw)
+        File(folder, "page 2.png").writeBytes(raw)
+        check(LocalComicPages.names(folder) == listOf("page 2.png", "page 10.png"))
+        check(LocalComicPages.read(folder, "page 2.png").width == 32)
+        check(runCatching { LocalComicPages.read(folder, "../wrong.png") }.isFailure)
+        val zip = File(folder, "sample.cbz")
+        ZipOutputStream(zip.outputStream()).use { z ->
+            for (name in listOf("../secret.png", "page 10.png", "page 2.png")) {
+                z.putNextEntry(ZipEntry(name))
+                z.write(raw)
+                z.closeEntry()
+            }
+        }
+        check(LocalComicPages.names(zip) == listOf("page 2.png", "page 10.png"))
+        check(LocalComicPages.read(zip, "page 10.png").height == 48)
+    } finally {
+        folder.deleteRecursively()
+    }
     // In headless CI we compile/load the real Swing GUI, but do not instantiate a JFrame.
     check(Class.forName("dev.nooir.desktop.ui.MangaNooirDesktop") != null)
     println("Desktop GUI model tests passed: chapter selection, format extensions and headless-safe class loading")
