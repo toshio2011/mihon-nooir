@@ -60,7 +60,8 @@ No DRM bypass, bundled copyrighted manga, unapproved sources, hidden extension i
 ### W3 — Full manga library and reader
 
 - [ ] Native cover grid, series detail, chapter view, downloaded marker, filters/categories/search/history.
-- [ ] Read online/offline: page/webtoon/double-page, RTL/LTR, zoom, keyboard, fullscreen, progress/bookmark persistence.
+- [x] Extend the local CBZ/image-folder reader with **two-page spreads**, first-page-alone handling, correct RTL physical placement, direct page jump, zoom/fit, keyboard shortcuts, and saved per-book page position. Add **previous/next offline chapter** buttons in the grouped-series reader; preserve progress separately for each chapter. Synthetic page-count and skip-missing-chapter tests cover navigation; this remains an offline preview, not a full online reader.
+- [ ] Complete reader modes still outstanding: continuous webtoon, fullscreen, online chapter reader and richer bookmark management; verify on real Windows with large manga pages.
 - [ ] Independent persistent download queue with retry/cancel, disk/memory/source limits and no duplicates; reopen downloads offline after app restart.
 - [ ] Explore Mihon backup import as an explicit, validated import flow. Never silently conflate Suwayomi and Android databases.
 
