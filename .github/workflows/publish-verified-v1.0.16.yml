@@ -156,21 +156,21 @@ jobs:
             # Strictly accept ONE signer certificate SHA-256 fingerprint, never
             # a digest from an unrelated APK entry or arbitrary output line.
             fingerprint=$(python3 -c '
-import re, sys
-lines = sys.stdin.read().splitlines()
-matches = []
-for line in lines:
-    if not re.search(r"(?i)signer\s*#?\s*1\b.*certificate.*SHA[-\s]*256.*digest", line):
-        continue
-    found = re.findall(r"(?i)(?<![0-9a-f])(?:[0-9a-f]{2}:){31}[0-9a-f]{2}(?![0-9a-f])|(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])", line)
-    matches.extend(m.replace(":", "").lower() for m in found)
-if len(matches) != 1:
-    print(f"Expected one signer certificate SHA-256 digest; found {len(matches)}. Public output headings:", file=sys.stderr)
-    for line in lines:
-        if "digest" in line.lower():
-            print(re.sub(r"(?i)[a-f0-9]{16,}", "[redacted]", line[:160]), file=sys.stderr)
-    sys.exit(1)
-print(matches[0])
+          import re, sys
+          lines = sys.stdin.read().splitlines()
+          matches = []
+          for line in lines:
+              if not re.search(r"(?i)signer\s*#?\s*1\b.*certificate.*SHA[-\s]*256.*digest", line):
+                  continue
+              found = re.findall(r"(?i)(?<![0-9a-f])(?:[0-9a-f]{2}:){31}[0-9a-f]{2}(?![0-9a-f])|(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])", line)
+              matches.extend(m.replace(":", "").lower() for m in found)
+          if len(matches) != 1:
+              print(f"Expected one signer certificate SHA-256 digest; found {len(matches)}. Public output headings:", file=sys.stderr)
+              for line in lines:
+                  if "digest" in line.lower():
+                      print(re.sub(r"(?i)[a-f0-9]{16,}", "[redacted]", line[:160]), file=sys.stderr)
+              sys.exit(1)
+          print(matches[0])
 ' <<< "$signer")
             test -n "$fingerprint"
             stage='compare persistent signing certificate across variants'
