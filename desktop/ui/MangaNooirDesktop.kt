@@ -233,9 +233,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         addWindowListener(object : WindowAdapter() {
             override fun windowClosed(e: WindowEvent?) {
                 // Never block AWT while stopping the exact process we launched.
-                Thread({ managedServer.close() }, "nooir-managed-server-shutdown").apply {
-                    isDaemon = true
-                }.start()
+                Thread({ managedServer.close() }, "nooir-managed-server-shutdown").start()
             }
         })
         library.addActionListener { browse("library", 1) }
