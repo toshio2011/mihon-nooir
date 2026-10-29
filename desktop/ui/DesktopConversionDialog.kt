@@ -16,7 +16,10 @@ internal object DesktopConversionDialog {
     fun show(parent: Component, original: MangaConversionOptions): MangaConversionOptions? {
         val preset = JComboBox(arrayOf("Manga", "Manhwa", "Manhua", "Custom"))
         val layout = JComboBox(arrayOf("AUTO", "PAGED", "WEBTOON"))
-        val orientation = JComboBox(arrayOf("PORTRAIT", "LANDSCAPE"))
+        val orientation = JComboBox(arrayOf("PORTRAIT", "LANDSCAPE", "AUTO_FIT"))
+        val panelMode = JComboBox(arrayOf("OFF", "ROW_BY_ROW", "PANEL_BY_PANEL"))
+        val showOverview = JCheckBox("Full page before detailed splits")
+        val keepChapterFirstWhole = JCheckBox("Keep each chapter's first page whole")
         val crop = JCheckBox("Crop white margins")
         val split = JCheckBox("Split double-page spreads")
         val rtl = JCheckBox("Right-to-left reading")
@@ -37,6 +40,9 @@ internal object DesktopConversionDialog {
             preset.selectedItem = o.preset.takeIf { it in listOf("Manga", "Manhwa", "Manhua") } ?: "Custom"
             layout.selectedItem = o.layout
             orientation.selectedItem = o.orientation
+            panelMode.selectedItem = o.panelMode
+            showOverview.isSelected = o.showFullPageBeforeSplits
+            keepChapterFirstWhole.isSelected = o.keepChapterFirstPageWhole
             crop.isSelected = o.cropWhiteMargins
             split.isSelected = o.splitSpreads
             rtl.isSelected = o.rightToLeft
@@ -58,9 +64,16 @@ internal object DesktopConversionDialog {
             if (name != "Custom") populate(MangaConversionOptions.preset(name))
         }
 
+        // Auto Fit belongs to the panel/row workflow, not generic page slicing.
+        panelMode.addActionListener {
+            if (!updating && panelMode.selectedItem == "OFF" && orientation.selectedItem == "AUTO_FIT") {
+                orientation.selectedItem = "PORTRAIT"
+            }
+        }
         val panel = JPanel(GridLayout(0, 2, 10, 5)).apply {
             add(JLabel("Preset")); add(preset)
             add(JLabel("Page layout")); add(layout)
+            add(JLabel("Page extraction")); add(panelMode)
             add(JLabel("Orientation")); add(orientation)
             add(JLabel("Contrast (50 = neutral)")); add(contrast)
             add(JLabel("Long-strip overlap %")); add(overlap)
@@ -69,6 +82,7 @@ internal object DesktopConversionDialog {
             add(rtl); add(dither)
             add(clockwise); add(cover)
             add(missingCover); add(color)
+            add(showOverview); add(keepChapterFirstWhole)
             add(extended); add(JLabel("XTC/XTCH always grayscale"))
         }
         if (JOptionPane.showConfirmDialog(parent, panel, "MangaNooir conversion settings",
@@ -83,7 +97,14 @@ internal object DesktopConversionDialog {
             rightToLeft = rtl.isSelected,
             contrast = contrast.value as Int,
             dither = dither.isSelected,
-            orientation = orientation.selectedItem as String,
+            orientation = (orientation.selectedItem as String).takeUnless {
+                it == "AUTO_FIT" && panelMode.selectedItem == "OFF"
+            } ?: "PORTRAIT",
+            panelMode = panelMode.selectedItem as String,
+            showFullPageBeforeSplits = showOverview.isSelected,
+            keepChapterFirstPageWhole = keepChapterFirstWhole.isSelected,
+            // Android's private ZIP export is not implemented on the Windows adapter.
+            panelDiagnostics = false,
             overlapPercent = overlap.value as Int,
             landscapeClockwise = clockwise.isSelected,
             includeCover = cover.isSelected,
