@@ -85,7 +85,7 @@ internal object DesktopUiModel {
 
 private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val endpoint = JTextField("http://127.0.0.1:4567", 22)
-    private val status = JLabel("Connect to your locally running Suwayomi server")
+    private val status = JLabel("Offline ready — open Local library or connect to Suwayomi when needed")
     private val busy = AtomicBoolean(false)
 
     private val sources = DefaultListModel<SuwayomiSource>()
@@ -235,7 +235,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
         setPaging()
-        loadSources()
+        // Do not connect automatically on startup: a local-library-only user
+        // must be able to open and read manga with no server or network.
+        // The explicit Connect / reload sources button starts online browsing.
     }
 
     private fun client(baseUrl: String): SuwayomiClient = SuwayomiClient(
