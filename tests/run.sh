@@ -135,3 +135,12 @@ java --add-modules jdk.httpserver -Djava.awt.headless=true \
 kotlinc desktop/ui/OfflineSaveQueue.kt tests/OfflineSaveQueueTest.kt \
   -include-runtime -d "$tmp/windows-offline-save-queue-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-offline-save-queue-tests.jar" OfflineSaveQueueTestKt
+
+# True Suwayomi remote download requests: synthetic localhost GraphQL only.
+# No third-party manga, extension installation or Android build edits.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt} \
+  desktop/ui/{RemoteChapterQueue.kt,RemoteChapterRunner.kt} \
+  tests/RemoteChapterQueueTest.kt \
+  -include-runtime -d "$tmp/windows-remote-chapter-queue-tests.jar"
+java --add-modules jdk.httpserver -Djava.awt.headless=true \
+  -cp "$tmp/windows-remote-chapter-queue-tests.jar" RemoteChapterQueueTestKt
