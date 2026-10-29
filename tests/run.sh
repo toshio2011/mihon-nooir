@@ -53,7 +53,7 @@ kotlinc \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt \
   desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiToNooir.kt} \
-  desktop/ui/{LocalComicReader.kt,LocalLibraryStore.kt,OfflineChapterSaver.kt} \
+  desktop/ui/{LocalComicReader.kt,LocalLibraryStore.kt,OfflineSeriesCatalog.kt,OfflineChapterSaver.kt} \
   tests/SuwayomiBridgeTest.kt \
   -include-runtime -d "$tmp/suwayomi-bridge-tests.jar"
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/suwayomi-bridge-tests.jar" SuwayomiBridgeTestKt
