@@ -19,6 +19,7 @@ import java.util.UUID
  */
 internal class OfflineChapterSaver(
     private val library: LocalLibraryStore = LocalLibraryStore(),
+    private val catalog: OfflineSeriesCatalog = OfflineSeriesCatalog(),
     private val downloads: Path = Path.of(System.getProperty("user.home"),
         ".mihonnooir", "downloaded-chapters"),
 ) {
@@ -57,6 +58,7 @@ internal class OfflineChapterSaver(
                 val existingPages = LocalComicPages.names(target.toFile())
                 LocalComicPages.read(target.toFile(), existingPages.first())
                 library.add(target.toFile())
+                catalog.remember(manga.id, manga.title, chapter, target.toFile())
                 results.add(target.toFile())
                 continue
             }
@@ -71,6 +73,7 @@ internal class OfflineChapterSaver(
                     Files.move(temporary, target)
                 }
                 library.add(target.toFile())
+                catalog.remember(manga.id, manga.title, chapter, target.toFile())
                 results.add(target.toFile())
             } finally {
                 Files.deleteIfExists(temporary)
