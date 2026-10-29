@@ -72,7 +72,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          jpackage --type app-image --name MihonNooir-Preview --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MihonNooirDesktop --dest package/output --java-options '-Dfile.encoding=UTF-8'
+          jpackage --type app-image --name MihonNooir-Preview --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --dest package/output --java-options '-Dfile.encoding=UTF-8'
           if ($LASTEXITCODE -ne 0) { throw "jpackage failed: $LASTEXITCODE" }
           $app = 'package/output/MihonNooir-Preview'
           if (!(Test-Path "$app/MihonNooir-Preview.exe")) { throw 'Windows launcher missing from app image' }
