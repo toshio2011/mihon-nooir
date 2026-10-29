@@ -12,6 +12,7 @@ import dev.nooir.desktop.suwayomi.SuwayomiMangaCard
 import dev.nooir.desktop.suwayomi.SuwayomiSource
 import dev.nooir.desktop.suwayomi.SuwayomiToNooir
 import dev.nooir.desktop.suwayomi.SuwayomiProcessManager
+import dev.nooir.desktop.suwayomi.OfficialSuwayomiCache
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -106,6 +107,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val localReader = JButton("Read local comic")
     private val localLibrary = JButton("Local library")
     private val startServer = JButton("Start local Suwayomi")
+    private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
     private val managedServer = SuwayomiProcessManager()
     private var options = MangaConversionOptions.preset("Manga")
@@ -140,7 +142,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 add(startServer); add(stopServer)
             }, BorderLayout.NORTH)
             add(JPanel(FlowLayout(FlowLayout.LEFT, 10, 6)).apply {
-                add(localLibrary); add(localImport); add(localReader)
+                add(localLibrary); add(localImport); add(localReader); add(getServer)
             }, BorderLayout.SOUTH)
         }
         add(header, BorderLayout.NORTH)
@@ -223,12 +225,13 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
             saveOffline, conversionSettings, localImport, localReader, localLibrary,
-            startServer, stopServer)
+            startServer, stopServer, getServer)
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
         }
         connect.addActionListener { loadSources() }
         startServer.addActionListener { startManagedServer() }
+        getServer.addActionListener { downloadAndStartManagedServer() }
         stopServer.addActionListener { stopManagedServer() }
         addWindowListener(object : WindowAdapter() {
             override fun windowClosed(e: WindowEvent?) {
@@ -300,6 +303,43 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 }
             }
         }.execute()
+    }
+
+    /** Explicit user approval is mandatory; no silent binary downloads. */
+    private fun downloadAndStartManagedServer() {
+        if (managedServer.running) {
+            showError("Managed Suwayomi is already running")
+            return
+        }
+        val confirmation = JOptionPane.showConfirmDialog(this,
+            "Download the official Suwayomi ${SuwayomiProcessManager.PINNED_VERSION} " +
+                "JAR (about 183 MB) from GitHub?\\n\\n" +
+                "MihonNooir will validate the published SHA-256 digest before " +
+                "starting the server on localhost only.\\n" +
+                "No manga, extensions or third-party sources are downloaded automatically.\\n" +
+                "You can continue using local comics without this download.",
+            "Allow official Suwayomi download and local startup?",
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
+        )
+        if (confirmation != JOptionPane.YES_OPTION) return
+        runTask("Downloading and verifying official Suwayomi", {
+            val jar = OfficialSuwayomiCache().obtain { bytes, total ->
+                val progress = if (total != null && total > 0L)
+                    "${(bytes * 100 / total).coerceIn(0, 100)}%"
+                else "${bytes / (1024 * 1024)} MiB"
+                SwingUtilities.invokeLater {
+                    if (isDisplayable) status.text = "Downloading verified Suwayomi — $progress"
+                }
+            }
+            SwingUtilities.invokeLater {
+                if (isDisplayable) status.text = "Starting verified local Suwayomi..."
+            }
+            managedServer.start(jar)
+        }, { base ->
+            endpoint.text = base
+            status.text = "Verified managed Suwayomi ready on $base"
+            SwingUtilities.invokeLater { loadSources() }
+        })
     }
 
     private fun startManagedServer() {
