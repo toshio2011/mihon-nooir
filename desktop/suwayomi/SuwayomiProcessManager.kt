@@ -57,6 +57,7 @@ class SuwayomiProcessManager(
     private val url = "http://127.0.0.1:$port"
     @Volatile private var owned: Process? = null
     private val lock = Any()
+    @Volatile private var closed = false
 
     val endpoint: String get() = url
     val running: Boolean get() = owned?.isAlive == true
@@ -81,6 +82,7 @@ class SuwayomiProcessManager(
             }
         }
         synchronized(lock) {
+            check(!closed) { "Managed server session has already been closed" }
             require(owned?.isAlive != true) {
                 "A managed Suwayomi process is already running"
             }
@@ -111,14 +113,20 @@ class SuwayomiProcessManager(
             }
             error("Suwayomi did not pass GraphQL readiness within $startupTimeoutSeconds seconds. See ${root.resolve("server-output.log")}")
         } catch (e: Exception) {
-            close()
+            stop()
             throw e
         }
     }
 
-    /** Never kills or controls an external process on the same port. */
-    override fun close() {
+    /** Stop only the server started by this manager; allow another explicit start. */
+    fun stop() = terminate(closeManager = false)
+
+    /** Permanently close the session when the application window is disposed. */
+    override fun close() = terminate(closeManager = true)
+
+    private fun terminate(closeManager: Boolean) {
         val p: Process? = synchronized(lock) {
+            if (closeManager) closed = true
             val current = owned
             owned = null
             current
