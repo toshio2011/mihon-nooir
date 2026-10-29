@@ -295,8 +295,14 @@ private class LocalComicWindow(
     }
 
     private fun changeReaderMode() {
+        // Invalidate any in-flight single/spread worker before switching
+        // reader mode and release its decoded images from memory.
+        generation++
+        currentImages = emptyList()
         webtoonView?.close()
         webtoonView = null
+        canvas.configure(emptyList(), rtl.isSelected,
+            sizing.selectedItem as String, zoom.value, scroller.viewport.extentSize)
         readerArea.removeAll()
         val continuous = webtoon.isSelected
         twoPage.isEnabled = !continuous
