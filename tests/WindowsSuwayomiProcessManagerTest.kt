@@ -66,8 +66,18 @@ public class FakeSuwayomi {
         val port = ServerSocket(0, 4, InetAddress.getByName("127.0.0.1")).use {
             it.localPort
         }
-        val manager = SuwayomiProcessManager(root.resolve("server-data"),
+        val fakeJarDigest = SuwayomiProcessManager.sha256(jar.toFile())
+        check(fakeJarDigest != SuwayomiProcessManager.OFFICIAL_JAR_SHA256)
+        val refused = SuwayomiProcessManager(root.resolve("untrusted-server"),
             port = port)
+        check(runCatching { refused.start(jar.toFile(), 2) }.isFailure) {
+            "Production manager must refuse a renamed or tampered server JAR"
+        }
+        check(!refused.running && !SuwayomiProcessManager.portOccupied(port))
+        refused.close()
+        // Explicit test-only digest enables the harmless disposable JVM fixture.
+        val manager = SuwayomiProcessManager(root.resolve("server-data"),
+            port = port, expectedJarSha256 = fakeJarDigest)
         try {
             check(manager.start(jar.toFile(), startupTimeoutSeconds = 15) ==
                 "http://127.0.0.1:$port")
@@ -88,7 +98,7 @@ public class FakeSuwayomi {
         }
         ServerSocket(0, 4, InetAddress.getByName("127.0.0.1")).use { other ->
             val keeper = SuwayomiProcessManager(root.resolve("another-server"),
-                port = other.localPort)
+                port = other.localPort, expectedJarSha256 = fakeJarDigest)
             try {
                 check(runCatching { keeper.start(jar.toFile(), 1) }.isFailure) {
                     "Must refuse a port belonging to someone else"
