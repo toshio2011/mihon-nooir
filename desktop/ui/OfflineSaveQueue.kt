@@ -38,6 +38,7 @@ internal class OfflineSaveQueue(
         private const val HEADER = "MIHONNOOIR_OFFLINE_SAVE_QUEUE_V1"
         private const val MAX_BYTES = 512_000L
         private val gate = Any()
+        private val ownedRunningIds = mutableSetOf<String>()
         private val encoder = Base64.getUrlEncoder().withoutPadding()
         private val decoder = Base64.getUrlDecoder()
         private fun enc(text: String) =
@@ -79,7 +80,8 @@ internal class OfflineSaveQueue(
                 port = p[1].toInt(),
                 mangaId = p[2].toInt(),
                 chapterId = p[3].toInt(),
-                state = if (state == OfflineJobState.RUNNING) OfflineJobState.INTERRUPTED else state,
+                state = if (state == OfflineJobState.RUNNING &&
+                    p[0] !in ownedRunningIds) OfflineJobState.INTERRUPTED else state,
                 attempts = p[5].toInt(),
                 error = dec(p[6]),
             )
@@ -168,12 +170,14 @@ internal class OfflineSaveQueue(
                 attempts = (jobs[i].attempts + 1).coerceAtMost(1000), error = "")
             jobs[i] = claimed
             write(jobs)
+            ownedRunningIds.add(claimed.id)
             claimed
         }
     }
 
-    fun complete(id: String) = transition(id, setOf(OfflineJobState.INTERRUPTED), OfflineJobState.COMPLETED)
-    fun fail(id: String, message: String) = transition(id, setOf(OfflineJobState.INTERRUPTED),
+    fun complete(id: String) = transition(id, setOf(OfflineJobState.RUNNING),
+        OfflineJobState.COMPLETED)
+    fun fail(id: String, message: String) = transition(id, setOf(OfflineJobState.RUNNING),
         OfflineJobState.FAILED, message.take(250))
     fun retry(id: String) = transition(id,
         setOf(OfflineJobState.FAILED, OfflineJobState.INTERRUPTED), OfflineJobState.PENDING)
@@ -195,5 +199,6 @@ internal class OfflineSaveQueue(
         }
         jobs[i] = jobs[i].copy(state = target, error = message)
         write(jobs)
+        if (target != OfflineJobState.RUNNING) ownedRunningIds.remove(id)
     }
 }
