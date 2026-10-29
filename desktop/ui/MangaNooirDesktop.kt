@@ -11,12 +11,15 @@ import dev.nooir.desktop.suwayomi.SuwayomiManga
 import dev.nooir.desktop.suwayomi.SuwayomiMangaCard
 import dev.nooir.desktop.suwayomi.SuwayomiSource
 import dev.nooir.desktop.suwayomi.SuwayomiToNooir
+import dev.nooir.desktop.suwayomi.SuwayomiProcessManager
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.GridLayout
 import java.awt.event.ActionListener
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.io.File
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -102,6 +105,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val localImport = JButton("Convert local folder / CBZ")
     private val localReader = JButton("Read local comic")
     private val localLibrary = JButton("Local library")
+    private val startServer = JButton("Start local Suwayomi")
+    private val stopServer = JButton("Stop managed server")
+    private val managedServer = SuwayomiProcessManager()
     private var options = MangaConversionOptions.preset("Manga")
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
@@ -128,8 +134,14 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         setLocationRelativeTo(null)
 
         val connect = JButton("Connect / reload sources")
-        val header = JPanel(FlowLayout(FlowLayout.LEFT, 10, 8)).apply {
-            add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library); add(localLibrary); add(localImport); add(localReader)
+        val header = JPanel(BorderLayout()).apply {
+            add(JPanel(FlowLayout(FlowLayout.LEFT, 10, 8)).apply {
+                add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library)
+                add(startServer); add(stopServer)
+            }, BorderLayout.NORTH)
+            add(JPanel(FlowLayout(FlowLayout.LEFT, 10, 6)).apply {
+                add(localLibrary); add(localImport); add(localReader)
+            }, BorderLayout.SOUTH)
         }
         add(header, BorderLayout.NORTH)
 
@@ -210,11 +222,22 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
-            saveOffline, conversionSettings, localImport, localReader, localLibrary)
+            saveOffline, conversionSettings, localImport, localReader, localLibrary,
+            startServer, stopServer)
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
         }
         connect.addActionListener { loadSources() }
+        startServer.addActionListener { startManagedServer() }
+        stopServer.addActionListener { stopManagedServer() }
+        addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent?) {
+                // Never block AWT while stopping the exact process we launched.
+                Thread({ managedServer.close() }, "nooir-managed-server-shutdown").apply {
+                    isDaemon = true
+                }.start()
+            }
+        })
         library.addActionListener { browse("library", 1) }
         popular.addActionListener { browse("popular", 1) }
         latest.addActionListener { browse("latest", 1) }
@@ -240,6 +263,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
         setPaging()
+        stopServer.isEnabled = false
         // Do not connect automatically on startup: a local-library-only user
         // must be able to open and read manga with no server or network.
         // The explicit Connect / reload sources button starts online browsing.
@@ -273,9 +297,56 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                     listOf(endpoint, search, sourceList, mangaList, chapterList, format, device, downloadMissing)
                         .forEach { it.isEnabled = true }
                     setPaging()
+                    startServer.isEnabled = !managedServer.running
+                    stopServer.isEnabled = managedServer.running
                 }
             }
         }.execute()
+    }
+
+    private fun startManagedServer() {
+        if (managedServer.running) {
+            showError("Managed Suwayomi is already running")
+            return
+        }
+        val chooser = JFileChooser().apply {
+            dialogTitle = "Choose official Suwayomi-Server-v2.4.2366.jar"
+            fileSelectionMode = JFileChooser.FILES_ONLY
+        }
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return
+        val serverJar = chooser.selectedFile.canonicalFile
+        if (serverJar.name != SuwayomiProcessManager.PINNED_JAR) {
+            showError("Please choose the official ${SuwayomiProcessManager.PINNED_JAR} file.")
+            return
+        }
+        val consent = JOptionPane.showConfirmDialog(this,
+            "Start this local Java server?\\n\\n${serverJar.path}\\n\\n" +
+                "Only select a trusted jar from Suwayomi's official release. " +
+                "The process uses localhost and a separate MihonNooir data folder. " +
+                "We never download, install extensions, or connect remotely automatically.",
+            "Confirm local Suwayomi startup", JOptionPane.YES_NO_OPTION,
+        )
+        if (consent != JOptionPane.YES_OPTION) return
+        runTask("Starting local Suwayomi", {
+            managedServer.start(serverJar)
+        }, { base ->
+            endpoint.text = base
+            status.text = "Managed local Suwayomi ready on $base"
+            SwingUtilities.invokeLater { loadSources() }
+        })
+    }
+
+    private fun stopManagedServer() {
+        if (!managedServer.running) return
+        runTask("Stopping only our managed Suwayomi process", {
+            managedServer.stop()
+        }, {
+            sources.clear()
+            manga.clear()
+            chapters.clear()
+            currentManga = null
+            status.text = "Managed local Suwayomi stopped. Local reading remains available."
+        })
     }
 
     private fun loadSources() {
