@@ -1,3 +1,11 @@
+## Continue Reading for downloaded series (Windows preview)
+
+Open **Local library → Downloaded series**. The new **Start / Continue selected series** button opens the last-read available chapter for that series, falling back to its first available downloaded chapter if it has not been read yet. **Continue last read** opens the most recently read available chapter across all downloaded series. The series list shows which chapter is currently resumable.
+
+This uses the existing atomic local-library history and the reader's independent saved per-file page position; it does **not** introduce a second reading database, contact Suwayomi, download missing chapters, or change Android. Missing CBZs are skipped; the source catalog and original files remain unchanged. Synthetic JVM regression covers first-time reading, persisted history after restart, multiple series and missing-file fallback. The real Windows UI still needs click-through testing.
+
+---
+ 
 ## Offline Windows reader: explicit bookmarks and fullscreen (preview)
 
 The local CBZ/folder reader and saved offline series now support **up to 100 explicit bookmarks per comic** without replacing the separate last-read position. Use **Bookmark page** or Ctrl+B to add/remove a saved page; **Bookmarks...** lists that comic's saved pages, with actions to jump or remove. Bookmarks persist under `~/.mihonnooir/reader-bookmarks-v1.tsv` as **hashed local file paths**, not the user's filenames or comic pages. Moving or renaming a comic changes its bookmark identity until a migration/repair feature is added. Corrupted bookmark indexes are preserved for manual repair, never silently overwritten.
