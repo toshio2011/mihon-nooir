@@ -1,4 +1,5 @@
 import dev.nooir.bridge.ExportFormat
+import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 
@@ -23,6 +24,24 @@ fun main() {
     check(runCatching { DesktopUiModel.selectedChapterIds((1..501).map {
         SuwayomiChapter(it, "Chapter $it", it.toDouble(), it, true)
     }) }.isFailure)
+    // Windows and Android use one backwards-compatible settings token.
+    // Panel/row modes, Auto Fit and overview must survive GUI-to-CLI handoff.
+    for (mode in listOf("OFF", "ROW_BY_ROW", "PANEL_BY_PANEL")) {
+        val settings = MangaConversionOptions(
+            panelMode = mode,
+            orientation = if (mode == "OFF") "PORTRAIT" else "AUTO_FIT",
+            showFullPageBeforeSplits = mode != "OFF",
+            keepChapterFirstPageWhole = false,
+            panelDiagnostics = false,
+        )
+        val reloaded = MangaConversionOptions.fromToken(settings.token())
+        check(reloaded.panelMode == mode)
+        check(reloaded.orientation == settings.orientation)
+        check(reloaded.showFullPageBeforeSplits == settings.showFullPageBeforeSplits)
+        check(!reloaded.keepChapterFirstPageWhole)
+        check(!reloaded.panelDiagnostics)
+    }
+    check(MangaConversionOptions.fromToken(null).panelMode == "OFF")
     // In headless CI we compile/load the real Swing GUI, but do not instantiate a JFrame.
     check(Class.forName("dev.nooir.desktop.ui.MangaNooirDesktop") != null)
     println("Desktop GUI model tests passed: chapter selection, format extensions and headless-safe class loading")
