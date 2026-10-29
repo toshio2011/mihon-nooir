@@ -1,6 +1,6 @@
 <div align="center">
 
-# MangaNooir
+# MihonNooir
 
 **Your Mihon manga library, plus tools to prepare books for an e-reader.**
 
