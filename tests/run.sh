@@ -53,7 +53,7 @@ kotlinc \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt \
   desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiToNooir.kt} \
-  desktop/ui/{DesktopReadingLayout.kt,ReaderChapterSequence.kt,WebtoonWindow.kt,WebtoonStripView.kt,LocalComicReader.kt,LocalLibraryStore.kt,OfflineSeriesCatalog.kt,OfflineChapterSaver.kt} \
+  desktop/ui/{DesktopReadingLayout.kt,ReaderChapterSequence.kt,WebtoonWindow.kt,WebtoonStripView.kt,LocalComicReader.kt,LocalLibraryStore.kt,OfflineSeriesCatalog.kt,OfflineChapterSaver.kt,OfflineSaveQueue.kt} \
   tests/SuwayomiBridgeTest.kt \
   -include-runtime -d "$tmp/suwayomi-bridge-tests.jar"
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/suwayomi-bridge-tests.jar" SuwayomiBridgeTestKt
@@ -129,3 +129,9 @@ kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiProcessManager.k
   -include-runtime -d "$tmp/windows-verified-server-cache-tests.jar"
 java --add-modules jdk.httpserver -Djava.awt.headless=true \
   -cp "$tmp/windows-verified-server-cache-tests.jar" VerifiedSuwayomiCacheTestKt
+
+# Persistent Windows-only queue for explicit offline CBZ copies. No server,
+# Android app source or network connection is needed for these tests.
+kotlinc desktop/ui/OfflineSaveQueue.kt tests/OfflineSaveQueueTest.kt \
+  -include-runtime -d "$tmp/windows-offline-save-queue-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-offline-save-queue-tests.jar" OfflineSaveQueueTestKt
