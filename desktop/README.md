@@ -1,6 +1,12 @@
 > **Windows full-product work (29 October 2026):** Development is active on [`feature/windows-full-v1.0.16`](https://github.com/toshio2011/mihon-nooir/tree/feature/windows-full-v1.0.16). It restores the GUI prototype onto the tested Android v1.0.16 conversion engine, exposes **Panel by Panel, Row by Row, Auto Fit, full-page overview and first-chapter-page preservation**, and adds **local image-folder/CBZ conversion and a basic offline comic reader** (natural page ordering, fit/zoom, arrow keys, and saved position) that do not need Suwayomi. The Windows app is **not yet fully released**: the managed backend, real source test, reader, queues, Wi-Fi transfer and installer are development milestones. See [the full Windows implementation plan](../docs/WINDOWS_FULL_IMPLEMENTATION_PLAN.md). Preserve Android source and safety gates.
 
 
+## Completed Suwayomi downloads → offline CBZ copy jobs (Windows preview)
+
+In **Download requests**, select **1–20 DOWNLOADED** chapter requests (Ctrl/Shift select), then click **Queue selected as offline CBZ**. Confirm to create persistent CBZ-copy jobs, preserving the manga/chapter grouping. This action **does not contact Suwayomi, start any source download or copy CBZ files**; repeated clicks reuse pending/completed jobs. Open **Offline CBZ copy jobs** and explicitly click **Run pending** to begin validating and saving CBZs. Chapters still pending, waiting, failed or interrupted in the remote queue cannot be queued via this shortcut.
+
+**Stop before submission:** If monitoring is stopped *before* the chapter enqueue mutation is attempted, the request returns to PENDING and needs a new explicit Submit pending approval. If an enqueue was attempted, interrupted/failed requests still **only recheck status** and must not blindly resubmit. No remote cancellation or percentage progress is claimed. These boundaries are covered by headless Windows-only tests; real Windows/Suwayomi integration is still outstanding.
+
 ## Suwayomi remote chapter requests (experimental Windows-only)
 
 For chapters **not yet downloaded in Suwayomi**, select up to 20 chapters and choose **Queue missing chapter downloads**. This creates local requests only; it does **not** contact a manga source. Open **Download requests**, then explicitly approve **Submit pending** to ask your own localhost Suwayomi server to download them. MihonNooir checks each chapter's `isDownloaded` status to distinguish *waiting* from *fully downloaded*, and avoids enqueuing a chapter that is already complete.
