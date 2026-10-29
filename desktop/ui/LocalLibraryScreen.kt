@@ -38,6 +38,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
     private val read = JButton("Read selected")
     private val remove = JButton("Remove from library")
     private val reload = JButton("Refresh")
+    private val series = JButton("Downloaded series")
     private val information = JLabel("Choose a folder or CBZ comic to add")
     private val date = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         .withZone(ZoneId.systemDefault())
@@ -71,6 +72,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
             add(this@LocalLibraryWindow.read)
             add(this@LocalLibraryWindow.remove)
             add(this@LocalLibraryWindow.reload)
+            add(this@LocalLibraryWindow.series)
         }
         add(buttons, BorderLayout.NORTH)
         add(JScrollPane(list), BorderLayout.CENTER)
@@ -84,6 +86,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
         read.addActionListener { readComic() }
         remove.addActionListener { removeComic() }
         reload.addActionListener { refresh() }
+        series.addActionListener { OfflineSeriesScreen.open() }
         refresh()
     }
 
