@@ -4,6 +4,8 @@ import dev.nooir.desktop.suwayomi.SuwayomiClient
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.BorderFactory
@@ -33,6 +35,7 @@ internal object OfflineSaveQueueScreen {
 private class OfflineSaveQueueWindow(private val endpoint: String) :
     JFrame("MihonNooir — Offline save jobs") {
     private val queue = OfflineSaveQueue()
+    private val currentPort = OfflineSaveQueue.portOf(endpoint)
     private val model = DefaultListModel<OfflineSaveJob>()
     private val jobs = JList(model)
     private val run = JButton("Run pending")
@@ -50,6 +53,13 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
         setSize(1000, 580)
         setLocationRelativeTo(null)
         defaultCloseOperation = DISPOSE_ON_CLOSE
+        addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent?) {
+                // Never start more network work after the user closes this UI.
+                // The current CBZ copy is allowed to finish its atomic publish.
+                stopAfterCurrent.set(true)
+            }
+        })
         jobs.selectionMode = ListSelectionModel.SINGLE_SELECTION
         jobs.cellRenderer = object : DefaultListCellRenderer() {
             override fun getListCellRendererComponent(
@@ -91,7 +101,7 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
     private fun updateControls() {
         val selected = jobs.selectedValue
         run.isEnabled = !active && model.elements().asSequence().any {
-            it.state == OfflineJobState.PENDING && it.endpoint == endpoint
+            it.state == OfflineJobState.PENDING && it.port == currentPort
         }
         pause.isEnabled = active && !stopAfterCurrent.get()
         retry.isEnabled = !active && selected?.state in setOf(
@@ -111,7 +121,7 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
             if (selectedIndex >= 0) jobs.selectedIndex = selectedIndex
             if (!active) {
                 val waiting = entries.count {
-                    it.endpoint == endpoint && it.state == OfflineJobState.PENDING
+                    it.port == currentPort && it.state == OfflineJobState.PENDING
                 }
                 message.text = "$waiting pending offline save(s). Only Run pending starts copying."
             }
@@ -134,7 +144,7 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
     private fun runPending() {
         if (active) return
         val count = queue.list().count {
-            it.endpoint == endpoint && it.state == OfflineJobState.PENDING
+            it.port == currentPort && it.state == OfflineJobState.PENDING
         }
         if (count == 0) return
         val consent = JOptionPane.showConfirmDialog(this,
