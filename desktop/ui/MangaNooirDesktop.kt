@@ -122,6 +122,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val saveOffline = JButton("Save downloaded chapters offline")
     private val queueOffline = JButton("Queue downloaded chapters")
     private val offlineJobs = JButton("Offline jobs")
+    private val queueRemote = JButton("Queue missing chapter downloads")
+    private val remoteJobs = JButton("Download requests")
     private val details = JLabel("Select a manga to view its chapters")
     private val pageInfo = JLabel("Page 1")
     private val controls = mutableListOf<JButton>()
@@ -201,6 +203,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(refresh); add(export); add(saveOffline)
                 add(queueOffline); add(offlineJobs)
+                add(queueRemote); add(remoteJobs)
             })
         }
         val chapterPanel = JPanel(BorderLayout(4, 4)).apply {
@@ -227,7 +230,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
-            saveOffline, queueOffline, offlineJobs,
+            saveOffline, queueOffline, offlineJobs, queueRemote, remoteJobs,
             conversionSettings, localImport, localReader, localLibrary,
             startServer, stopServer, getServer)
         conversionSettings.addActionListener {
@@ -266,6 +269,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         saveOffline.addActionListener { saveSelectedOffline() }
         queueOffline.addActionListener { queueSelectedOffline() }
         offlineJobs.addActionListener { openOfflineJobs() }
+        queueRemote.addActionListener { queueSelectedRemoteDownloads() }
+        remoteJobs.addActionListener { openRemoteDownloads() }
         localImport.addActionListener { exportLocal() }
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
@@ -536,6 +541,48 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 "Conversion complete:\\n${file.absolutePath}",
                 "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
         })
+    }
+
+    /** Record missing chapters only. No source download begins here. */
+    private fun queueSelectedRemoteDownloads() {
+        val manga = currentManga ?: run {
+            showError("Select a manga first")
+            return
+        }
+        val missing = chapterList.selectedValuesList.filterNot { it.downloaded }
+        if (missing.isEmpty()) {
+            showError("Select chapters that are not yet downloaded in Suwayomi")
+            return
+        }
+        if (missing.size > 20) {
+            showError("Please queue at most 20 missing chapters per batch")
+            return
+        }
+        val base = endpoint.text.trim()
+        try {
+            val confirmed = JOptionPane.showConfirmDialog(this,
+                "Save ${missing.size} missing chapter(s) as pending requests?\\n" +
+                    "Nothing will download until you press Submit pending in Download requests.\\n" +
+                    "Suwayomi will use the sources/extensions you configured yourself.",
+                "Add remote download requests", JOptionPane.YES_NO_OPTION)
+            if (confirmed != JOptionPane.YES_OPTION) return
+            val requests = RemoteChapterQueue().add(base,
+                manga.id, missing.map { it.id })
+            status.text = "${requests.size} download request(s) recorded, not started."
+            RemoteChapterQueueScreen.open(base)
+        } catch (e: Exception) {
+            showError(e.message ?: "Cannot queue download requests")
+        }
+    }
+
+    private fun openRemoteDownloads() {
+        val base = endpoint.text.trim()
+        try {
+            RemoteChapterQueue.portOf(base)
+            RemoteChapterQueueScreen.open(base)
+        } catch (e: Exception) {
+            showError(e.message ?: "Enter a localhost Suwayomi address")
+        }
     }
 
     private fun openOfflineJobs() {
