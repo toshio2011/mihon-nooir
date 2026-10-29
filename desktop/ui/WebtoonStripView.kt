@@ -38,6 +38,7 @@ internal class WebtoonStripView(
     private var startIndex = 0
     private var decodedCount = 0
     private var generation = 0
+    private var pendingJump: Int? = null
     private var previousScrollY = 0
     private var suppressScrolling = false
 
@@ -59,11 +60,18 @@ internal class WebtoonStripView(
     fun close() {
         active = false
         generation++
+        pendingJump = null
         canvas.clear()
     }
 
     fun open(pageIndex: Int) {
         require(pageIndex in pageNames.indices)
+        // A fast page jump while the next strip is decoding must not get lost.
+        // Apply only the most recent requested page after the in-flight load.
+        if (loading) {
+            pendingJump = pageIndex
+            return
+        }
         load(pageIndex, Shift.INITIAL)
     }
 
@@ -116,12 +124,22 @@ internal class WebtoonStripView(
                         suppressScrolling = false
                         loading = false
                         reportVisiblePage()
+                        val jump = pendingJump
+                        pendingJump = null
+                        if (jump != null && jump != startIndex) {
+                            load(jump, Shift.INITIAL)
+                        }
                     }
                 } catch (e: Exception) {
                     suppressScrolling = false
                     loading = false
                     val cause = if (e is ExecutionException) e.cause ?: e else e
                     onError(cause.message ?: "Cannot display webtoon images")
+                    val jump = pendingJump
+                    pendingJump = null
+                    if (jump != null && jump != startIndex) {
+                        load(jump, Shift.INITIAL)
+                    }
                 }
             }
         }.execute()
@@ -179,7 +197,8 @@ internal class WebtoonStripView(
             if (images.isEmpty()) return
             val width = (viewportWidth - margin * 2).coerceIn(1, 12_000)
             displayWidths = images.map { img ->
-                minOf(width, maxOf(1, img.width * 4))
+                minOf(width, maxOf(1, (img.width.toLong() * 4)
+                    .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()))
             }
             heightSlots = images.mapIndexed { index, img ->
                 val w = displayWidths[index]
