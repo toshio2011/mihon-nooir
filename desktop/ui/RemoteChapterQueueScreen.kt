@@ -44,6 +44,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
     private val cancel = JButton("Cancel pending request")
     private val refresh = JButton("Refresh")
     private val localJobs = JButton("Offline CBZ copy jobs")
+    private val queueCompleted = JButton("Queue selected as offline CBZ")
     private val status = JLabel("No source download requests run without your approval")
     private val stopRequested = AtomicBoolean(false)
     private var active = false
@@ -58,7 +59,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
                 stopRequested.set(true)
             }
         })
-        list.selectionMode = ListSelectionModel.SINGLE_SELECTION
+        list.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
         list.cellRenderer = object : DefaultListCellRenderer() {
             override fun getListCellRendererComponent(
                 l: JList<*>?, value: Any?, index: Int, selected: Boolean,
@@ -83,6 +84,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
             add(this@RemoteChapterQueueWindow.cancel)
             add(this@RemoteChapterQueueWindow.refresh)
             add(this@RemoteChapterQueueWindow.localJobs)
+            add(this@RemoteChapterQueueWindow.queueCompleted)
         }, BorderLayout.NORTH)
         add(JScrollPane(list), BorderLayout.CENTER)
         add(status.apply {
@@ -101,11 +103,15 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
         }
         refresh.addActionListener { reload() }
         localJobs.addActionListener { OfflineSaveQueueScreen.open(endpoint) }
+        queueCompleted.addActionListener { queueSelectedCompleted() }
         reload()
     }
 
     private fun updateControls() {
-        val selected = list.selectedValue
+        val selectedJobs = list.selectedValuesList
+        val selected = selectedJobs.singleOrNull()
+        queueCompleted.isEnabled = !active && selectedJobs.size in 1..20 &&
+            selectedJobs.all { it.port == port && it.state == RemoteChapterState.DOWNLOADED }
         submit.isEnabled = !active && entries.elements().asSequence().any {
             it.state == RemoteChapterState.PENDING
         }
@@ -118,12 +124,11 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
 
     private fun reload() {
         try {
-            val selectedId = list.selectedValue?.id
+            val selectedIds = list.selectedValuesList.map { it.id }.toSet()
             val jobs = queue.list().filter { it.port == port }
             entries.clear()
             jobs.forEach(entries::addElement)
-            val index = jobs.indexOfFirst { it.id == selectedId }
-            if (index >= 0) list.selectedIndex = index
+            list.selectedIndices = jobs.indices.filter { jobs[it].id in selectedIds }.toIntArray()
             if (!active) status.text = "${jobs.count {
                 it.state == RemoteChapterState.PENDING
             }} pending. DOWNLOADED means stored in Suwayomi; use Offline jobs to copy CBZ."
@@ -131,6 +136,35 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
             warn(e.message ?: "Cannot load download queue")
         }
         updateControls()
+    }
+
+    /** Save no comic files here: enqueue user-selected *completed* jobs only. */
+    private fun queueSelectedCompleted() {
+        if (active) return
+        val selected = list.selectedValuesList
+        if (selected.size !in 1..20 || selected.any {
+                it.port != port || it.state != RemoteChapterState.DOWNLOADED
+            }) {
+            warn("Select 1 to 20 downloaded chapters from this server first")
+            return
+        }
+        val approved = JOptionPane.showConfirmDialog(this,
+            "Add " + selected.size + " completed chapter(s) to offline CBZ copy jobs?\\n" +
+                "This does not contact a manga source or copy any files yet.\\n" +
+                "Open Offline CBZ copy jobs and press Run pending to start copying.",
+            "Prepare offline CBZ copies", JOptionPane.YES_NO_OPTION)
+        if (approved != JOptionPane.YES_OPTION) return
+        try {
+            val queued = RemoteChapterOfflineHandoff(queue, OfflineSaveQueue())
+                .queueDownloaded(endpoint, selected.map { it.id })
+            status.text = queued.size.toString() +
+                " offline CBZ job(s) ready. Open Offline CBZ copy jobs and click Run pending."
+            reload()
+            status.text = queued.size.toString() +
+                " offline CBZ job(s) queued; copying will not start until Run pending."
+        } catch (e: Exception) {
+            warn(e.message ?: "Could not prepare offline CBZ copy jobs")
+        }
     }
 
     private fun client(): SuwayomiClient = SuwayomiClient(
