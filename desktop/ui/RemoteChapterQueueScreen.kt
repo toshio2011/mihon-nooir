@@ -149,8 +149,8 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
             return
         }
         val approved = JOptionPane.showConfirmDialog(this,
-            "Add " + selected.size + " completed chapter(s) to offline CBZ copy jobs?\\n" +
-                "This does not contact a manga source or copy any files yet.\\n" +
+            "Add " + selected.size + " completed chapter(s) to offline CBZ copy jobs?\n" +
+                "This does not contact a manga source or copy any files yet.\n" +
                 "Open Offline CBZ copy jobs and press Run pending to start copying.",
             "Prepare offline CBZ copies", JOptionPane.YES_NO_OPTION)
         if (approved != JOptionPane.YES_OPTION) return
