@@ -110,10 +110,10 @@ internal object LocalComicPages {
 }
 
 internal object LocalComicReader {
-    fun open(source: File, parent: Component?): Boolean =
+    fun open(source: File, parent: Component?, sequence: ReaderChapterSequence? = null): Boolean =
         try {
             val pages = LocalComicPages.names(source)
-            LocalComicWindow(source, pages).isVisible = true
+            LocalComicWindow(source, pages, sequence).isVisible = true
             true
         } catch (e: Exception) {
             JOptionPane.showMessageDialog(parent, e.message ?: "Cannot open comic",
@@ -193,7 +193,9 @@ private class ReaderCanvas : JComponent() {
 private class LocalComicWindow(
     private val source: File,
     private val pages: List<String>,
-) : JFrame("MihonNooir Reader — ${source.name}") {
+    private val chapterSequence: ReaderChapterSequence? = null,
+) : JFrame("MihonNooir Reader — " +
+    (chapterSequence?.let { "${it.seriesTitle} / ${it.current.title}" } ?: source.name)) {
     private val bookmarks = Preferences.userRoot().node("dev/nooir/mihonnooir/reader")
     private val bookmarkId = MessageDigest.getInstance("SHA-256")
         .digest(source.canonicalPath.toByteArray(Charsets.UTF_8))
@@ -212,6 +214,8 @@ private class LocalComicWindow(
     private val jump = JSpinner(SpinnerNumberModel(pageIndex + 1, 1, pages.size, 1))
     private val previous = JButton("Previous")
     private val next = JButton("Next")
+    private val previousChapter = JButton("Previous chapter")
+    private val nextChapter = JButton("Next chapter")
     private var generation = 0
     private var updatingJump = false
 
@@ -223,6 +227,9 @@ private class LocalComicWindow(
         add(scroller, BorderLayout.CENTER)
         val controls = JPanel().apply {
             add(previous); add(next)
+            if (chapterSequence != null) {
+                add(previousChapter); add(nextChapter)
+            }
             add(rtl); add(twoPage); add(firstAlone)
             add(sizing); add(JLabel("Zoom")); add(zoom)
             add(JLabel("Go to page")); add(jump)
@@ -231,6 +238,10 @@ private class LocalComicWindow(
         add(status, BorderLayout.SOUTH)
         previous.addActionListener { move(-1) }
         next.addActionListener { move(1) }
+        previousChapter.isEnabled = chapterSequence?.adjacent(-1) != null
+        nextChapter.isEnabled = chapterSequence?.adjacent(1) != null
+        previousChapter.addActionListener { switchChapter(-1) }
+        nextChapter.addActionListener { switchChapter(1) }
         rtl.addActionListener {
             bookmarks.putBoolean("layout-rtl", rtl.isSelected)
             repaintPage()
@@ -268,6 +279,10 @@ private class LocalComicWindow(
         bindKey("SPACE", "reader-space") { move(1) }
         bindKey("HOME", "reader-first") { jumpTo(0) }
         bindKey("END", "reader-last") { jumpTo(pages.lastIndex) }
+        if (chapterSequence != null) {
+            bindKey("ctrl PAGE_UP", "reader-previous-chapter") { switchChapter(-1) }
+            bindKey("ctrl PAGE_DOWN", "reader-next-chapter") { switchChapter(1) }
+        }
         showPage()
     }
 
@@ -277,6 +292,16 @@ private class LocalComicWindow(
         rootPane.actionMap.put(name, object : AbstractAction() {
             override fun actionPerformed(e: java.awt.event.ActionEvent?) = action()
         })
+    }
+
+    private fun switchChapter(direction: Int) {
+        val target = chapterSequence?.adjacent(direction) ?: return
+        if (LocalComicReader.open(target.current.file, this, target)) {
+            // New chapter gets its own saved page position. The current
+            // chapter's position remains intact for later continuation.
+            runCatching { LocalLibraryStore().markOpened(target.current.file) }
+            dispose()
+        }
     }
 
     private fun jumpTo(target: Int) {
