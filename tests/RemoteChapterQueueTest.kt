@@ -105,8 +105,8 @@ fun main() {
         val fourth = queue.add(endpoint, 7, listOf(104)).single()
         val index = root.resolve("remote-chapter-queue-v1.tsv")
         val original = Files.readString(index)
-        val oldText = "${fourth.id}\\t${server.address.port}\\t7\\t104\\tPENDING\\t0\\t"
-        val newText = "${fourth.id}\\t${server.address.port}\\t7\\t104\\tWAITING\\t0\\t"
+        val oldText = "${fourth.id}\t${server.address.port}\t7\t104\tPENDING\t0\t"
+        val newText = "${fourth.id}\t${server.address.port}\t7\t104\tWAITING\t0\t"
         check(original.contains(oldText))
         Files.writeString(index, original.replace(oldText, newText))
         check(RemoteChapterQueue(root).list().last().state == RemoteChapterState.INTERRUPTED)
@@ -124,9 +124,9 @@ fun main() {
         check(runCatching { queue.add(endpoint, 7, listOf(101, 101)) }.isFailure)
         check(runCatching { queue.add(endpoint, 7, (1..21).toList()) }.isFailure)
 
-        Files.writeString(index, "UNKNOWN\\n")
+        Files.writeString(index, "UNKNOWN\n")
         check(runCatching { queue.list() }.isFailure)
-        check(Files.readString(index) == "UNKNOWN\\n") { "Damaged index must not be overwritten" }
+        check(Files.readString(index) == "UNKNOWN\n") { "Damaged index must not be overwritten" }
         println("Windows remote chapter queue passed: opt-in submit, no duplicates, status-only monitoring and interrupted recovery")
     } finally {
         server.stop(0)
