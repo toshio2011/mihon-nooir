@@ -19,9 +19,9 @@ import java.util.UUID
  */
 internal class OfflineChapterSaver(
     private val library: LocalLibraryStore = LocalLibraryStore(),
-    private val catalog: OfflineSeriesCatalog = OfflineSeriesCatalog(),
     private val downloads: Path = Path.of(System.getProperty("user.home"),
         ".mihonnooir", "downloaded-chapters"),
+    private val catalog: OfflineSeriesCatalog = OfflineSeriesCatalog(),
 ) {
     companion object {
         const val MAX_BATCH = 20
