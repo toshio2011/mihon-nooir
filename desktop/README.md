@@ -7,6 +7,8 @@ On the development branch, the Windows app opens **offline by default**. **Local
 
 **Read local comic** opens a folder/CBZ directly, and **Convert local folder / CBZ** exports to EPUB2, EPUB3, XTC, XTCH or CBZ using the same tested Kotlin conversion engine and panel settings as Android. These workflows do not need a running Suwayomi backend.
 
+From **Local library → Downloaded series**, readers can now browse saved chapters grouped under their original Suwayomi manga title and chapter order, open the selected chapter offline, and remove a series-index entry without deleting the original CBZ. The chapter grouping index is stored separately in `~/.mihonnooir/offline-series-v1.tsv`. CBZs saved by older previews still appear in the normal local library; grouping metadata is created when a chapter is imported or re-imported using this branch.
+
 When connected to a user-configured localhost Suwayomi server, select chapters that Suwayomi already downloaded and press **Save downloaded chapters offline**. Up to 20 chapters per action are copied as validated CBZ archives into `~/.mihonnooir/downloaded-chapters/` and added to the local library. This never installs sources, enqueues missing remote downloads or overwrites archives. Real released Suwayomi integration, per-chapter progress/cancellation and the managed-backend packaging still need verification and implementation.
 
 ### Managed Suwayomi process — opt-in development integration
