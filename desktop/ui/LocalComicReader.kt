@@ -86,6 +86,12 @@ internal object LocalComicPages {
             require(page.isFile && page.length() in 1..maxBytes.toLong()) { "Invalid page image size" }
             page.inputStream().use { boundedRead(it) }
         } else ZipFile(source).use { zip ->
+            require(relativePath.isNotBlank() && !relativePath.startsWith("/") &&
+                !relativePath.contains("\\") &&
+                relativePath.split('/').none { it == ".." } &&
+                relativePath.substringAfterLast('.').lowercase() in extensions) {
+                "Invalid archive page path"
+            }
             val entry = zip.getEntry(relativePath) ?: error("Comic page is missing")
             require(!entry.isDirectory && entry.size <= maxBytes) { "Invalid archive image size" }
             zip.getInputStream(entry).use { boundedRead(it) }
@@ -99,15 +105,16 @@ internal object LocalComicPages {
 }
 
 internal object LocalComicReader {
-    fun open(source: File, parent: Component?) {
+    fun open(source: File, parent: Component?): Boolean =
         try {
             val pages = LocalComicPages.names(source)
             LocalComicWindow(source, pages).isVisible = true
+            true
         } catch (e: Exception) {
             JOptionPane.showMessageDialog(parent, e.message ?: "Cannot open comic",
                 "MihonNooir Reader", JOptionPane.WARNING_MESSAGE)
+            false
         }
-    }
 }
 
 private class LocalComicWindow(
