@@ -51,9 +51,11 @@ internal class OfflineChapterSaver(
         for (chapter in selected) {
             val target = downloads.resolve(name(manga.id, chapter))
             if (Files.exists(target)) {
+                require(Files.isRegularFile(target)) { "Offline chapter path is not a regular file" }
                 // Never overwrite a downloaded file (or treat corruption as a
                 // successful transfer). User can repair it explicitly.
-                LocalComicPages.names(target.toFile())
+                val existingPages = LocalComicPages.names(target.toFile())
+                LocalComicPages.read(target.toFile(), existingPages.first())
                 library.add(target.toFile())
                 results.add(target.toFile())
                 continue
@@ -61,7 +63,8 @@ internal class OfflineChapterSaver(
             val temporary = downloads.resolve(".chapter-${UUID.randomUUID()}.cbz")
             try {
                 client.downloadCbz(chapter.id, temporary.toFile())
-                LocalComicPages.names(temporary.toFile())
+                val pages = LocalComicPages.names(temporary.toFile())
+                LocalComicPages.read(temporary.toFile(), pages.first())
                 try {
                     Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE)
                 } catch (_: AtomicMoveNotSupportedException) {
