@@ -139,8 +139,7 @@ internal class RemoteChapterQueue(
             for (id in chapterIds) {
                 val existing = jobs.firstOrNull {
                     it.port == port && it.mangaId == mangaId && it.chapterId == id &&
-                        it.state !in setOf(RemoteChapterState.FAILED,
-                            RemoteChapterState.CANCELED)
+                        it.state != RemoteChapterState.CANCELED
                 }
                 if (existing != null) selected += existing else {
                     require(jobs.size < MAX_JOBS) { "Remote queue has reached 500 entries" }
