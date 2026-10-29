@@ -111,6 +111,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val searchButton = JButton("Search")
     private val refresh = JButton("Refresh chapters")
     private val export = JButton("Export selected chapters")
+    private val saveOffline = JButton("Save downloaded chapters offline")
     private val details = JLabel("Select a manga to view its chapters")
     private val pageInfo = JLabel("Page 1")
     private val controls = mutableListOf<JButton>()
@@ -181,7 +182,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 add(JLabel("Device:")); add(device); add(conversionSettings)
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply { add(downloadMissing) })
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply { add(refresh); add(export) })
+            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(refresh); add(export); add(saveOffline)
+            })
         }
         val chapterPanel = JPanel(BorderLayout(4, 4)).apply {
             border = BorderFactory.createTitledBorder("Chapters — Ctrl/Shift to select")
@@ -206,7 +209,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
-            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings, localImport, localReader, localLibrary)
+            next, previous, selected, onlyDownloaded, clear, refresh, export,
+            saveOffline, conversionSettings, localImport, localReader, localLibrary)
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
         }
@@ -231,6 +235,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 ?: showError("Select a manga first")
         }
         export.addActionListener { exportSelected() }
+        saveOffline.addActionListener { saveSelectedOffline() }
         localImport.addActionListener { exportLocal() }
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
@@ -415,6 +420,38 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             JOptionPane.showMessageDialog(this,
                 "Conversion complete:\\n${file.absolutePath}",
                 "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
+        })
+    }
+
+    private fun saveSelectedOffline() {
+        val selected = currentManga ?: run {
+            showError("Choose a manga before saving offline chapters")
+            return
+        }
+        val chapters = chapterList.selectedValuesList
+        if (chapters.isEmpty() || chapters.size > OfflineChapterSaver.MAX_BATCH) {
+            showError("Choose 1 to ${OfflineChapterSaver.MAX_BATCH} chapters for this offline batch")
+            return
+        }
+        if (chapters.any { !it.downloaded }) {
+            showError("Select downloaded chapters only. Missing chapters must first be downloaded in Suwayomi.")
+            return
+        }
+        val confirm = JOptionPane.showConfirmDialog(this,
+            "Save ${chapters.size} downloaded chapters as local CBZ files?\\n" +
+                "This copies pages to your private MihonNooir library, using disk space.\\n" +
+                "No source downloads will be started.",
+            "Save offline manga", JOptionPane.YES_NO_OPTION)
+        if (confirm != JOptionPane.YES_OPTION) return
+        val selectedIds = chapters.map { it.id }
+        val baseUrl = endpoint.text.trim()
+        runTask("Saving ${chapters.size} offline chapters", {
+            OfflineChapterSaver().save(client(baseUrl), selected.id, selectedIds)
+        }, { files ->
+            JOptionPane.showMessageDialog(this,
+                "Saved ${files.size} offline chapter(s). They are available in Local library.",
+                "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
+            LocalLibraryScreen.open()
         })
     }
 
