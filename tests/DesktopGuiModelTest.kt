@@ -3,6 +3,8 @@ import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
 import dev.nooir.desktop.ui.LocalComicPages
 import dev.nooir.desktop.ui.DesktopReadingLayout
+import dev.nooir.desktop.ui.ReaderChapter
+import dev.nooir.desktop.ui.ReaderChapterSequence
 import dev.nooir.desktop.ui.LocalLibraryStore
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -116,6 +118,22 @@ fun main() {
         }
         check(LocalComicPages.names(zip) == listOf("page 2.png", "page 10.png"))
         check(LocalComicPages.read(zip, "page 10.png").height == 48)
+        val sequence = ReaderChapterSequence("Fixture Manga", listOf(
+            ReaderChapter(1, "Chapter 1", zip),
+            ReaderChapter(2, "Missing chapter", File(folder, "missing.cbz")),
+            ReaderChapter(3, "Chapter 3", zip),
+        ), 0)
+        check(sequence.adjacent(-1) == null)
+        val chapter3 = sequence.adjacent(1)
+        check(chapter3?.current?.id == 3) { "Chapter navigation should skip missing archives" }
+        check(chapter3.adjacent(-1)?.current?.id == 1)
+        check(chapter3.adjacent(1) == null)
+        check(runCatching { sequence.adjacent(0) }.isFailure)
+        check(runCatching {
+            ReaderChapterSequence("Duplicate", listOf(
+                ReaderChapter(1, "One", zip), ReaderChapter(1, "Two", zip)
+            ), 0)
+        }.isFailure)
         check(runCatching { LocalComicPages.read(zip, "../secret.png") }.isFailure) {
             "Direct ZIP image reads must refuse path traversal"
         }
@@ -144,5 +162,5 @@ fun main() {
     }
     // In headless CI we compile/load the real Swing GUI, but do not instantiate a JFrame.
     check(Class.forName("dev.nooir.desktop.ui.MangaNooirDesktop") != null)
-    println("Desktop GUI model tests passed: chapter selection, two-page and RTL paging, formats, offline files and headless GUI")
+    println("Desktop GUI model tests passed: chapter selection, two-page RTL paging, across-chapter offline navigation, formats and headless GUI")
 }
