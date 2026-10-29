@@ -5,6 +5,7 @@ import dev.nooir.desktop.ui.LocalComicPages
 import dev.nooir.desktop.ui.DesktopReadingLayout
 import dev.nooir.desktop.ui.ReaderChapter
 import dev.nooir.desktop.ui.ReaderChapterSequence
+import dev.nooir.desktop.ui.WebtoonWindow
 import dev.nooir.desktop.ui.LocalLibraryStore
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -74,6 +75,36 @@ fun main() {
     check(layout.move(6, 0, -1, true) == 0)
     check(layout.visualIndices(listOf(1, 2), true) == listOf(2, 1))
     check(layout.visualIndices(listOf(1, 2), false) == listOf(1, 2))
+    // Webtoon must keep a bounded rolling window, never decode a whole manga.
+    check(WebtoonWindow.MAX_DECODED_PAGES == 3)
+    check(WebtoonWindow.indices(1, 0) == listOf(0))
+    check(WebtoonWindow.indices(7, 0) == listOf(0, 1, 2))
+    check(WebtoonWindow.indices(7, 5) == listOf(5, 6))
+    check(WebtoonWindow.indices(7, 6) == listOf(6))
+    check(WebtoonWindow.nextStart(7, 0, 3) == 1)
+    check(WebtoonWindow.nextStart(7, 4, 3) == null)
+    check(WebtoonWindow.previousStart(0) == null)
+    check(WebtoonWindow.previousStart(4) == 3)
+    check(WebtoonWindow.atOffset(2, listOf(100, 200, 100), 0) == 2)
+    check(WebtoonWindow.atOffset(2, listOf(100, 200, 100), 100) == 3)
+    check(WebtoonWindow.atOffset(2, listOf(100, 200, 100), 399) == 4)
+    check(WebtoonWindow.atOffset(2, listOf(100, 200, 100), 4000) == 4)
+    check(runCatching { WebtoonWindow.indices(5001, 0) }.isFailure)
+    check(runCatching { WebtoonWindow.indices(3, 3) }.isFailure)
+    // A rolling three-page window must always reach the final image.
+    for (count in 1..40) {
+        var start = 0
+        val exposed = mutableSetOf<Int>()
+        while (true) {
+            val pages = WebtoonWindow.indices(count, start)
+            check(pages.size <= WebtoonWindow.MAX_DECODED_PAGES)
+            exposed.addAll(pages)
+            start = WebtoonWindow.nextStart(count, start, pages.size) ?: break
+        }
+        check(exposed == (0 until count).toSet()) {
+            "Webtoon rolling window skipped page(s) in $count-page manga"
+        }
+    }
     check(runCatching { layout.visibleIndices(0, 0, true) }.isFailure)
     check(runCatching { layout.visibleIndices(2, 2, true) }.isFailure)
     // Across book lengths, forward navigation must cover each page exactly
