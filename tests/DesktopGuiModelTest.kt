@@ -2,6 +2,7 @@ import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
 import dev.nooir.desktop.ui.LocalComicPages
+import dev.nooir.desktop.ui.LocalLibraryStore
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -78,6 +79,29 @@ fun main() {
         }
         check(LocalComicPages.names(zip) == listOf("page 2.png", "page 10.png"))
         check(LocalComicPages.read(zip, "page 10.png").height == 48)
+        check(runCatching { LocalComicPages.read(zip, "../secret.png") }.isFailure) {
+            "Direct ZIP image reads must refuse path traversal"
+        }
+        val library = LocalLibraryStore(File(folder, "user-library-index").toPath())
+        library.add(folder)
+        library.add(zip)
+        library.add(zip) // idempotent, no duplicate items
+        check(library.books().size == 2)
+        check(library.books().all { it.available })
+        library.markOpened(zip, 12345L)
+        check(library.books().first().file.canonicalFile == zip.canonicalFile)
+        check(library.books().first().lastOpenedAt == 12345L)
+        val reloaded = LocalLibraryStore(File(folder, "user-library-index").toPath())
+        check(reloaded.books().size == 2) { "Library must survive application restart" }
+        val renamedZip = File(folder, "renamed.cbz")
+        check(zip.renameTo(renamedZip))
+        check(reloaded.books().any { !it.available && it.file.name == "sample.cbz" }) {
+            "Missing books must remain visible for manual recovery/removal"
+        }
+        reloaded.remove(zip)
+        check(renamedZip.exists()) { "Removing library entry must never delete original comic" }
+        check(reloaded.books().size == 1)
+
     } finally {
         folder.deleteRecursively()
     }
