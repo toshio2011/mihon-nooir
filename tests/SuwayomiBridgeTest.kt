@@ -4,6 +4,7 @@ import dev.nooir.desktop.suwayomi.SuwayomiClient
 import dev.nooir.desktop.suwayomi.SuwayomiToNooir
 import dev.nooir.desktop.ui.OfflineChapterSaver
 import dev.nooir.desktop.ui.LocalLibraryStore
+import dev.nooir.desktop.ui.OfflineSeriesCatalog
 import dev.nooir.desktop.ui.LocalComicPages
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -133,17 +134,37 @@ fun main() {
         // are explicit and never trigger source enqueue without user action.
         val offlineIndex = File(root, "offline-library-index").toPath()
         val offlineLibrary = LocalLibraryStore(offlineIndex)
-        val offlineSaver = OfflineChapterSaver(offlineLibrary, File(root, "offline-books").toPath())
+        val groupedCatalog = OfflineSeriesCatalog(File(root, "offline-series-index").toPath())
+        val offlineSaver = OfflineChapterSaver(offlineLibrary, File(root, "offline-books").toPath(), groupedCatalog)
         check(runCatching { offlineSaver.save(client, 1, listOf(11, 11)) }.isFailure)
         check(runCatching { offlineSaver.save(client, 1, listOf(999)) }.isFailure)
         val savedChapters = offlineSaver.save(client, 1, listOf(11, 12))
         check(savedChapters.size == 2 && savedChapters.all { it.isFile })
         check(offlineLibrary.books().size == 2)
+        val series = groupedCatalog.series()
+        check(series.size == 1 && series.first().mangaId == 1 && series.first().title == "Mock Manga")
+        check(series.first().chapters.map { it.chapterId } == listOf(11, 12)) {
+            "Saved chapter numbers must appear in reading order"
+        }
+        check(series.first().chapters.map { it.chapterTitle } == listOf("Chapter 2", "Chapter 10"))
+        check(series.first().chapters.all { it.available })
+        val restartedCatalog = OfflineSeriesCatalog(File(root, "offline-series-index").toPath())
+        check(restartedCatalog.series().first().chapters.size == 2) {
+            "Series grouping and chapter metadata must persist across Windows restarts"
+        }
         check(LocalComicPages.names(savedChapters.first()) == listOf("page2.png", "page10.png"))
         val fetchCount = fetched.get()
         check(offlineSaver.save(client, 1, listOf(11, 12)).size == 2)
         check(fetched.get() == fetchCount) { "Existing offline CBZ must be reused without network download" }
+        check(groupedCatalog.series().first().chapters.size == 2) {
+            "Repeated chapter imports must not create duplicate series entries"
+        }
         check(queued.get() == 1) { "Offline book save must never enqueue source downloads" }
+        restartedCatalog.forget(1, 11)
+        check(restartedCatalog.series().first().chapters.map { it.chapterId } == listOf(12)) {
+            "Removing a grouped chapter must not remove unrelated chapters"
+        }
+        check(savedChapters.first().exists()) { "Removing grouped metadata must not delete CBZ" }
         check(LocalLibraryStore(offlineIndex).books().size == 2) {
             "Imported chapters must remain in local library after Windows restart"
         }
