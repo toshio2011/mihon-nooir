@@ -12,6 +12,7 @@ import javax.swing.BorderFactory
 import javax.swing.DefaultListCellRenderer
 import javax.swing.DefaultListModel
 import javax.swing.JButton
+import javax.swing.JCheckBox
 import javax.swing.JFrame
 import javax.swing.JLabel
 import javax.swing.JList
@@ -45,6 +46,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
     private val refresh = JButton("Refresh")
     private val localJobs = JButton("Offline CBZ copy jobs")
     private val queueCompleted = JButton("Queue selected as offline CBZ")
+    private val stageAfterDownload = JCheckBox("Also prepare offline CBZ jobs after verified downloads (no copying)")
     private val status = JLabel("No source download requests run without your approval")
     private val stopRequested = AtomicBoolean(false)
     private var active = false
@@ -77,14 +79,17 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
                 return label
             }
         }
-        add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-            add(this@RemoteChapterQueueWindow.submit)
-            add(this@RemoteChapterQueueWindow.stop)
-            add(this@RemoteChapterQueueWindow.recheck)
-            add(this@RemoteChapterQueueWindow.cancel)
-            add(this@RemoteChapterQueueWindow.refresh)
-            add(this@RemoteChapterQueueWindow.localJobs)
-            add(this@RemoteChapterQueueWindow.queueCompleted)
+        add(JPanel(BorderLayout()).apply {
+            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(this@RemoteChapterQueueWindow.submit)
+                add(this@RemoteChapterQueueWindow.stop)
+                add(this@RemoteChapterQueueWindow.recheck)
+                add(this@RemoteChapterQueueWindow.cancel)
+                add(this@RemoteChapterQueueWindow.refresh)
+                add(this@RemoteChapterQueueWindow.localJobs)
+                add(this@RemoteChapterQueueWindow.queueCompleted)
+            }, BorderLayout.NORTH)
+            add(stageAfterDownload, BorderLayout.SOUTH)
         }, BorderLayout.NORTH)
         add(JScrollPane(list), BorderLayout.CENTER)
         add(status.apply {
@@ -120,6 +125,7 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
             RemoteChapterState.INTERRUPTED, RemoteChapterState.FAILED)
         cancel.isEnabled = !active && selected?.state == RemoteChapterState.PENDING
         refresh.isEnabled = !active
+        stageAfterDownload.isEnabled = !active
     }
 
     private fun reload() {
@@ -167,34 +173,57 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
         }
     }
 
+    private fun prepareAfterVerifiedDownload(job: RemoteChapterJob): Boolean =
+        try {
+            RemoteChapterOfflineHandoff(queue, OfflineSaveQueue())
+                .queueDownloaded(endpoint, listOf(job.id))
+            true
+        } catch (e: Exception) {
+            publishStatus("Chapter ${job.chapterId} downloaded, but offline CBZ job could not be saved: " +
+                (e.message ?: "unknown error"))
+            false
+        }
+
     private fun client(): SuwayomiClient = SuwayomiClient(
         endpoint, System.getenv("NOOIR_SUWAYOMI_AUTHORIZATION"))
 
     private fun submitPending() {
         if (active) return
-        val count = queue.list().count {
+        val total = queue.list().count {
             it.port == port && it.state == RemoteChapterState.PENDING
         }
-        if (count == 0) return
+        if (total == 0) return
+        val count = minOf(20, total)
+        val saveJobsAfter = stageAfterDownload.isSelected
         val approved = JOptionPane.showConfirmDialog(this,
-            "Submit up to $count explicitly selected chapter download(s) to Suwayomi?\n" +
+            "Submit the next $count of $total pending chapter request(s) to Suwayomi?\n" +
                 "Suwayomi may contact your configured manga sources and use disk space.\n" +
-                "Stop monitoring does NOT cancel downloads already accepted by Suwayomi.\n" +
-                "Interrupted jobs never automatically re-submit after restart.",
+                (if (saveJobsAfter)
+                    "Completed chapters will prepare offline CBZ jobs, but no CBZ copies start.\n"
+                 else "Offline CBZ jobs will NOT be prepared automatically.\n") +
+                "Stop monitoring does NOT cancel accepted downloads.\n" +
+                "Interrupted submissions are checked, never blindly re-submitted.",
             "Approve Suwayomi source downloads", JOptionPane.YES_NO_OPTION)
         if (approved != JOptionPane.YES_OPTION) return
         runTasks {
             val client = client()
             val runner = RemoteChapterRunner(queue, client)
             var completed = 0
-            while (!stopRequested.get()) {
+            var prepared = 0
+            var checked = 0
+            while (!stopRequested.get() && checked < count) {
                 val job = queue.claim(endpoint) ?: break
+                checked++
                 val ok = runner.runClaimed(job, { stopRequested.get() }) {
                     progress -> publishStatus(progress)
                 }
-                if (ok) completed++
+                if (ok) {
+                    completed++
+                    if (saveJobsAfter && prepareAfterVerifiedDownload(job)) prepared++
+                }
             }
-            "Download checks ended. $completed completed in Suwayomi."
+            "Checked $checked request(s); $completed verified downloaded in Suwayomi; " +
+                "$prepared offline CBZ jobs prepared. No CBZ files were copied."
         }
     }
 
@@ -209,14 +238,18 @@ private class RemoteChapterQueueWindow(private val endpoint: String) :
                 "If the original download was never accepted, this may time out.",
             "Resume status checking only", JOptionPane.YES_NO_OPTION)
         if (consent != JOptionPane.YES_OPTION) return
+        val saveJobsAfter = stageAfterDownload.isSelected
         try {
             queue.resumeMonitoring(job.id)
             val resumed = checkNotNull(queue.list().firstOrNull { it.id == job.id })
             runTasks {
                 val done = RemoteChapterRunner(queue, client()).resumeMonitoring(
                     resumed, { stopRequested.get() }) { progress -> publishStatus(progress) }
-                if (done) "Chapter ${job.chapterId} downloaded in Suwayomi."
-                else "Monitoring ended. Check the request state before retrying."
+                if (done) {
+                    val prepared = saveJobsAfter && prepareAfterVerifiedDownload(job)
+                    "Chapter ${job.chapterId} downloaded in Suwayomi." +
+                        if (prepared) " Offline CBZ job prepared (not copied)." else ""
+                } else "Monitoring ended. Check the request state before retrying."
             }
         } catch (e: Exception) {
             warn(e.message ?: "Cannot recheck this request")

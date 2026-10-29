@@ -128,13 +128,29 @@ internal class RemoteChapterQueue(
 
     /** User-selection only; no source contact. */
     fun add(endpoint: String, mangaId: Int, chapterIds: List<Int>): List<RemoteChapterJob> =
-        synchronized(lock) {
+        enqueue(endpoint, mangaId, chapterIds, 20)
+
+    /** Store all loaded missing chapters as a single atomic, bounded decision. */
+    fun addAllMissing(endpoint: String, mangaId: Int, chapterIds: List<Int>): List<RemoteChapterJob> =
+        enqueue(endpoint, mangaId, chapterIds, MAX_JOBS)
+
+    private fun enqueue(endpoint: String, mangaId: Int, chapterIds: List<Int>,
+        batchLimit: Int): List<RemoteChapterJob> = synchronized(lock) {
             val port = portOf(endpoint)
-            require(mangaId > 0 && chapterIds.size in 1..20 &&
+            require(mangaId > 0 && chapterIds.size in 1..batchLimit &&
                 chapterIds.all { it > 0 } && chapterIds.distinct().size == chapterIds.size) {
                 "Choose 1 to 20 distinct chapters"
             }
             val jobs = load()
+            // Capacity is checked before changes are persisted. An oversized
+            // Download All never leaves only a partial chapter selection.
+            val newCount = chapterIds.count { id -> jobs.none {
+                it.port == port && it.mangaId == mangaId &&
+                    it.chapterId == id && it.state != RemoteChapterState.CANCELED
+            } }
+            require(jobs.size + newCount <= MAX_JOBS) {
+                "Remote queue holds at most $MAX_JOBS requests. Use existing jobs or clear the queue before adding more."
+            }
             val selected = mutableListOf<RemoteChapterJob>()
             for (id in chapterIds) {
                 val existing = jobs.firstOrNull {

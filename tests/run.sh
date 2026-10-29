@@ -151,3 +151,9 @@ kotlinc desktop/ui/{RemoteChapterQueue.kt,OfflineSaveQueue.kt,RemoteChapterOffli
   tests/RemoteChapterOfflineHandoffTest.kt \
   -include-runtime -d "$tmp/windows-remote-offline-handoff-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-remote-offline-handoff-tests.jar" RemoteChapterOfflineHandoffTestKt
+
+# Windows-only bounded Download All queue: atomic capacity checks, dedupe and
+# no source requests until a separate UI confirmation.
+kotlinc desktop/ui/RemoteChapterQueue.kt tests/RemoteChapterBatchTest.kt \
+  -include-runtime -d "$tmp/windows-remote-batch-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-remote-batch-tests.jar" RemoteChapterBatchTestKt

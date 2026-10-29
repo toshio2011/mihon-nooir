@@ -123,6 +123,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val queueOffline = JButton("Queue downloaded chapters")
     private val offlineJobs = JButton("Offline jobs")
     private val queueRemote = JButton("Queue missing chapter downloads")
+    private val queueAllRemote = JButton("Queue all missing (max 500)")
     private val remoteJobs = JButton("Download requests")
     private val details = JLabel("Select a manga to view its chapters")
     private val pageInfo = JLabel("Page 1")
@@ -203,7 +204,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(refresh); add(export); add(saveOffline)
                 add(queueOffline); add(offlineJobs)
-                add(queueRemote); add(remoteJobs)
+                add(queueRemote); add(queueAllRemote); add(remoteJobs)
             })
         }
         val chapterPanel = JPanel(BorderLayout(4, 4)).apply {
@@ -230,7 +231,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
-            saveOffline, queueOffline, offlineJobs, queueRemote, remoteJobs,
+            saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
             conversionSettings, localImport, localReader, localLibrary,
             startServer, stopServer, getServer)
         conversionSettings.addActionListener {
@@ -270,6 +271,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         queueOffline.addActionListener { queueSelectedOffline() }
         offlineJobs.addActionListener { openOfflineJobs() }
         queueRemote.addActionListener { queueSelectedRemoteDownloads() }
+        queueAllRemote.addActionListener { queueAllMissingDownloads() }
         remoteJobs.addActionListener { openRemoteDownloads() }
         localImport.addActionListener { exportLocal() }
         localReader.addActionListener { openLocalReader() }
@@ -324,10 +326,10 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
         val confirmation = JOptionPane.showConfirmDialog(this,
             "Download the official Suwayomi ${SuwayomiProcessManager.PINNED_VERSION} " +
-                "JAR (about 183 MB) from GitHub?\\n\\n" +
+                "JAR (about 183 MB) from GitHub?\n\n" +
                 "MihonNooir will validate the published SHA-256 digest before " +
-                "starting the server on localhost only.\\n" +
-                "No manga, extensions or third-party sources are downloaded automatically.\\n" +
+                "starting the server on localhost only.\n" +
+                "No manga, extensions or third-party sources are downloaded automatically.\n" +
                 "You can continue using local comics without this download.",
             "Allow official Suwayomi download and local startup?",
             JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
@@ -369,7 +371,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             return
         }
         val consent = JOptionPane.showConfirmDialog(this,
-            "Start this local Java server?\\n\\n${serverJar.path}\\n\\n" +
+            "Start this local Java server?\n\n${serverJar.path}\n\n" +
                 "Only select a trusted jar from Suwayomi's official release. " +
                 "The process uses localhost and a separate MihonNooir data folder. " +
                 "We never download, install extensions, or connect remotely automatically.",
@@ -538,7 +540,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             target
         }, { file ->
             JOptionPane.showMessageDialog(this,
-                "Conversion complete:\\n${file.absolutePath}",
+                "Conversion complete:\n${file.absolutePath}",
                 "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
         })
     }
@@ -561,8 +563,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         val base = endpoint.text.trim()
         try {
             val confirmed = JOptionPane.showConfirmDialog(this,
-                "Save ${missing.size} missing chapter(s) as pending requests?\\n" +
-                    "Nothing will download until you press Submit pending in Download requests.\\n" +
+                "Save ${missing.size} missing chapter(s) as pending requests?\n" +
+                    "Nothing will download until you press Submit pending in Download requests.\n" +
                     "Suwayomi will use the sources/extensions you configured yourself.",
                 "Add remote download requests", JOptionPane.YES_NO_OPTION)
             if (confirmed != JOptionPane.YES_OPTION) return
@@ -572,6 +574,44 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             RemoteChapterQueueScreen.open(base)
         } catch (e: Exception) {
             showError(e.message ?: "Cannot queue download requests")
+        }
+    }
+
+    /**
+     * Plans all currently loaded missing chapters, without contacting any
+     * manga source. Suwayomi request submission stays a separate approval.
+     */
+    private fun queueAllMissingDownloads() {
+        val selectedManga = currentManga ?: run {
+            showError("Select and load a manga first")
+            return
+        }
+        val missing = (0 until chapters.size()).map { chapters[it] }
+            .filterNot { it.downloaded }
+        if (missing.isEmpty()) {
+            showError("All currently loaded chapters are already downloaded")
+            return
+        }
+        if (missing.size > RemoteChapterQueue.MAX_JOBS) {
+            showError("This series has ${missing.size} missing chapters. " +
+                "The Windows preview can queue at most 500 at once; select a smaller range.")
+            return
+        }
+        val base = endpoint.text.trim()
+        try {
+            val answer = JOptionPane.showConfirmDialog(this,
+                "Queue ${missing.size} currently loaded missing chapters for ${selectedManga.title.take(90)}?\n" +
+                    "This saves requests locally only. No downloads start now.\n" +
+                    "The Download requests window submits at most 20 chapters per explicit approval.\n" +
+                    "Existing pending/completed requests are reused; queue capacity is 500 total.",
+                "Queue all loaded missing chapters", JOptionPane.YES_NO_OPTION)
+            if (answer != JOptionPane.YES_OPTION) return
+            val jobs = RemoteChapterQueue().addAllMissing(
+                base, selectedManga.id, missing.map { it.id })
+            status.text = "${jobs.size} chapter requests recorded, not submitted to Suwayomi."
+            RemoteChapterQueueScreen.open(base)
+        } catch (e: Exception) {
+            showError(e.message ?: "Could not queue missing chapters")
         }
     }
 
@@ -612,7 +652,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         val baseUrl = endpoint.text.trim()
         try {
             val confirmation = JOptionPane.showConfirmDialog(this,
-                "Add ${chosen.size} already-downloaded chapter(s) to the persistent offline queue?\\n" +
+                "Add ${chosen.size} already-downloaded chapter(s) to the persistent offline queue?\n" +
                     "No network request starts until you choose Run pending in Offline jobs.",
                 "Queue offline chapters", JOptionPane.YES_NO_OPTION)
             if (confirmation != JOptionPane.YES_OPTION) return
@@ -640,8 +680,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             return
         }
         val confirm = JOptionPane.showConfirmDialog(this,
-            "Save ${chapters.size} downloaded chapters as local CBZ files?\\n" +
-                "This copies pages to your private MihonNooir library, using disk space.\\n" +
+            "Save ${chapters.size} downloaded chapters as local CBZ files?\n" +
+                "This copies pages to your private MihonNooir library, using disk space.\n" +
                 "No source downloads will be started.",
             "Save offline manga", JOptionPane.YES_NO_OPTION)
         if (confirm != JOptionPane.YES_OPTION) return
