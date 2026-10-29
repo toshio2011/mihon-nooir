@@ -1,0 +1,232 @@
+package dev.nooir.desktop.ui
+
+import dev.nooir.desktop.suwayomi.SuwayomiClient
+import java.awt.BorderLayout
+import java.awt.Dimension
+import java.awt.FlowLayout
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.swing.BorderFactory
+import javax.swing.DefaultListCellRenderer
+import javax.swing.DefaultListModel
+import javax.swing.JButton
+import javax.swing.JFrame
+import javax.swing.JLabel
+import javax.swing.JList
+import javax.swing.JOptionPane
+import javax.swing.JPanel
+import javax.swing.JScrollPane
+import javax.swing.ListSelectionModel
+import javax.swing.SwingWorker
+
+/**
+ * Remote Suwayomi download requests: explicit submission, honest completion
+ * polling, manual restart of *monitoring* after interruption.
+ * No remote cancel API is assumed, and no work auto-starts on app startup.
+ */
+internal object RemoteChapterQueueScreen {
+    fun open(endpoint: String) {
+        RemoteChapterQueueWindow(endpoint).isVisible = true
+    }
+}
+
+private class RemoteChapterQueueWindow(private val endpoint: String) :
+    JFrame("MihonNooir — Suwayomi download requests") {
+    private val port = RemoteChapterQueue.portOf(endpoint)
+    private val queue = RemoteChapterQueue()
+    private val entries = DefaultListModel<RemoteChapterJob>()
+    private val list = JList(entries)
+    private val submit = JButton("Submit pending")
+    private val stop = JButton("Stop monitoring")
+    private val recheck = JButton("Recheck selected")
+    private val cancel = JButton("Cancel pending request")
+    private val refresh = JButton("Refresh")
+    private val localJobs = JButton("Offline CBZ copy jobs")
+    private val status = JLabel("No source download requests run without your approval")
+    private val stopRequested = AtomicBoolean(false)
+    private var active = false
+
+    init {
+        defaultCloseOperation = DISPOSE_ON_CLOSE
+        minimumSize = Dimension(720, 400)
+        setSize(1050, 590)
+        setLocationRelativeTo(null)
+        addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent?) {
+                stopRequested.set(true)
+            }
+        })
+        list.selectionMode = ListSelectionModel.SINGLE_SELECTION
+        list.cellRenderer = object : DefaultListCellRenderer() {
+            override fun getListCellRendererComponent(
+                l: JList<*>?, value: Any?, index: Int, selected: Boolean,
+                focus: Boolean,
+            ): java.awt.Component {
+                val label = super.getListCellRendererComponent(
+                    l, value, index, selected, focus) as JLabel
+                if (value is RemoteChapterJob) {
+                    label.text = "Manga ${value.mangaId} / chapter ${value.chapterId}" +
+                        " — ${value.state} (requests: ${value.attempts})" +
+                        if (value.error.isBlank()) "" else " — ${value.error.take(75)}"
+                    label.toolTipText = value.id
+                    label.border = BorderFactory.createEmptyBorder(9, 12, 9, 12)
+                }
+                return label
+            }
+        }
+        add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+            add(this@RemoteChapterQueueWindow.submit)
+            add(this@RemoteChapterQueueWindow.stop)
+            add(this@RemoteChapterQueueWindow.recheck)
+            add(this@RemoteChapterQueueWindow.cancel)
+            add(this@RemoteChapterQueueWindow.refresh)
+            add(this@RemoteChapterQueueWindow.localJobs)
+        }, BorderLayout.NORTH)
+        add(JScrollPane(list), BorderLayout.CENTER)
+        add(status.apply {
+            border = BorderFactory.createEmptyBorder(10, 14, 10, 14)
+        }, BorderLayout.SOUTH)
+        list.addListSelectionListener { if (!it.valueIsAdjusting) updateControls() }
+        submit.addActionListener { submitPending() }
+        stop.addActionListener { stopRequested.set(true); updateControls() }
+        recheck.addActionListener { recheckSelected() }
+        cancel.addActionListener {
+            val job = list.selectedValue ?: return@addActionListener
+            try {
+                queue.cancelPending(job.id)
+                reload()
+            } catch (e: Exception) { warn(e.message ?: "Cannot cancel pending request") }
+        }
+        refresh.addActionListener { reload() }
+        localJobs.addActionListener { OfflineSaveQueueScreen.open(endpoint) }
+        reload()
+    }
+
+    private fun updateControls() {
+        val selected = list.selectedValue
+        submit.isEnabled = !active && entries.elements().asSequence().any {
+            it.state == RemoteChapterState.PENDING
+        }
+        stop.isEnabled = active && !stopRequested.get()
+        recheck.isEnabled = !active && selected?.state in setOf(
+            RemoteChapterState.INTERRUPTED, RemoteChapterState.FAILED)
+        cancel.isEnabled = !active && selected?.state == RemoteChapterState.PENDING
+        refresh.isEnabled = !active
+    }
+
+    private fun reload() {
+        try {
+            val selectedId = list.selectedValue?.id
+            val jobs = queue.list().filter { it.port == port }
+            entries.clear()
+            jobs.forEach(entries::addElement)
+            val index = jobs.indexOfFirst { it.id == selectedId }
+            if (index >= 0) list.selectedIndex = index
+            if (!active) status.text = "${jobs.count {
+                it.state == RemoteChapterState.PENDING
+            }} pending. DOWNLOADED means stored in Suwayomi; use Offline jobs to copy CBZ."
+        } catch (e: Exception) {
+            warn(e.message ?: "Cannot load download queue")
+        }
+        updateControls()
+    }
+
+    private fun client(): SuwayomiClient = SuwayomiClient(
+        endpoint, System.getenv("NOOIR_SUWAYOMI_AUTHORIZATION"))
+
+    private fun submitPending() {
+        if (active) return
+        val count = queue.list().count {
+            it.port == port && it.state == RemoteChapterState.PENDING
+        }
+        if (count == 0) return
+        val approved = JOptionPane.showConfirmDialog(this,
+            "Submit up to $count explicitly selected chapter download(s) to Suwayomi?\n" +
+                "Suwayomi may contact your configured manga sources and use disk space.\n" +
+                "Stop monitoring does NOT cancel downloads already accepted by Suwayomi.\n" +
+                "Interrupted jobs never automatically re-submit after restart.",
+            "Approve Suwayomi source downloads", JOptionPane.YES_NO_OPTION)
+        if (approved != JOptionPane.YES_OPTION) return
+        runTasks {
+            val client = client()
+            val runner = RemoteChapterRunner(queue, client)
+            var completed = 0
+            while (!stopRequested.get()) {
+                val job = queue.claim(endpoint) ?: break
+                val ok = runner.runClaimed(job, { stopRequested.get() }) {
+                    progress -> publishStatus(progress)
+                }
+                if (ok) completed++
+            }
+            "Download checks ended. $completed completed in Suwayomi."
+        }
+    }
+
+    private fun recheckSelected() {
+        if (active) return
+        val job = list.selectedValue ?: return
+        if (job.state !in setOf(RemoteChapterState.INTERRUPTED,
+                RemoteChapterState.FAILED)) return
+        val consent = JOptionPane.showConfirmDialog(this,
+            "Check Suwayomi again for chapter ${job.chapterId}?\n" +
+                "This will NOT submit another source download.\n" +
+                "If the original download was never accepted, this may time out.",
+            "Resume status checking only", JOptionPane.YES_NO_OPTION)
+        if (consent != JOptionPane.YES_OPTION) return
+        try {
+            queue.resumeMonitoring(job.id)
+            val resumed = checkNotNull(queue.list().firstOrNull { it.id == job.id })
+            runTasks {
+                val done = RemoteChapterRunner(queue, client()).resumeMonitoring(
+                    resumed, { stopRequested.get() }) { progress -> publishStatus(progress) }
+                if (done) "Chapter ${job.chapterId} downloaded in Suwayomi."
+                else "Monitoring ended. Check the request state before retrying."
+            }
+        } catch (e: Exception) {
+            warn(e.message ?: "Cannot recheck this request")
+        }
+    }
+
+    private var publishStatus: (String) -> Unit = {}
+
+    private fun runTasks(work: () -> String) {
+        active = true
+        stopRequested.set(false)
+        updateControls()
+        object : SwingWorker<String, String>() {
+            override fun doInBackground(): String {
+                publishStatus = { text -> publish(text) }
+                return work()
+            }
+
+            override fun process(chunks: MutableList<String>) {
+                if (!isDisplayable) return
+                status.text = chunks.lastOrNull() ?: "Checking downloads..."
+                reload()
+            }
+
+            override fun done() {
+                active = false
+                stopRequested.set(false)
+                publishStatus = {}
+                try {
+                    val result = get()
+                    reload()
+                    status.text = result
+                } catch (e: Exception) {
+                    val cause = if (e is ExecutionException) e.cause ?: e else e
+                    reload()
+                    warn(cause.message ?: "Download request failed")
+                }
+                updateControls()
+            }
+        }.execute()
+    }
+
+    private fun warn(message: String) {
+        if (isDisplayable) JOptionPane.showMessageDialog(this, message,
+            "MihonNooir downloads", JOptionPane.WARNING_MESSAGE)
+    }
+}
