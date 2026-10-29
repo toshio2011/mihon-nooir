@@ -39,7 +39,9 @@ internal class RemoteChapterRunner(
                 return true
             }
             if (stop()) {
-                queue.interrupted(job.id)
+                // No enqueue mutation has been attempted: it is safe to
+                // return to PENDING. A subsequent submit still needs consent.
+                queue.stoppedBeforeSubmission(job.id)
                 return false
             }
             update("Submitting chapter ${job.chapterId} to local Suwayomi")
