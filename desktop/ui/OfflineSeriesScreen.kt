@@ -36,6 +36,11 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
     private val seriesList = JList(seriesModel)
     private val chapterList = JList(chapterModel)
     private val read = JButton("Read chapter")
+    private val continueSelected = JButton("Start / Continue selected series")
+    private val continueLatest = JButton("Continue last read")
+    private var librarySnapshot: List<LocalLibraryBook> = emptyList()
+    private var resumeTargets: Map<Int, OfflineResumeTarget> = emptyMap()
+    private var recentTarget: OfflineResumeTarget? = null
     private val forget = JButton("Remove from series")
     private val refresh = JButton("Refresh")
     private val status = JLabel("Saved chapters appear here after you import them from Suwayomi")
@@ -56,7 +61,10 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
                     list, value, index, selected, focus) as JLabel
                 if (value is OfflineSeries) {
                     val available = value.chapters.count { it.available }
-                    label.text = "${value.title}  ($available / ${value.chapters.size} chapters)"
+                    val resume = resumeTargets[value.mangaId]
+                    val progress = if (resume?.previouslyRead == true)
+                        "  · Continue: ${resume.chapter.chapterTitle.take(46)}" else ""
+                    label.text = "${value.title}  ($available / ${value.chapters.size} chapters)$progress"
                     label.toolTipText = "Series ID: ${value.mangaId}"
                     label.border = BorderFactory.createEmptyBorder(8, 10, 8, 10)
                 }
@@ -87,6 +95,8 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
         add(split, BorderLayout.CENTER)
         add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             add(this@OfflineSeriesWindow.read)
+            add(this@OfflineSeriesWindow.continueSelected)
+            add(this@OfflineSeriesWindow.continueLatest)
             add(this@OfflineSeriesWindow.forget)
             add(this@OfflineSeriesWindow.refresh)
         }, BorderLayout.NORTH)
@@ -106,6 +116,8 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
             }
         })
         read.addActionListener { readSelected() }
+        continueSelected.addActionListener { continueSelectedSeries() }
+        continueLatest.addActionListener { continueRecentSeries() }
         forget.addActionListener { forgetSelected() }
         refresh.addActionListener { reload() }
         reload()
@@ -113,6 +125,10 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
 
     private fun setActions() {
         read.isEnabled = chapterList.selectedValue?.available == true
+        continueSelected.isEnabled = seriesList.selectedValue?.let {
+            resumeTargets[it.mangaId] != null
+        } == true
+        continueLatest.isEnabled = recentTarget != null
         forget.isEnabled = chapterList.selectedValue != null
     }
 
@@ -134,6 +150,13 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
         val selectedChapterId = chapterList.selectedValue?.chapterId
         try {
             val series = catalog.series()
+            librarySnapshot = library.books()
+            resumeTargets = series.mapNotNull {
+                OfflineReadingResume.forSeries(it, librarySnapshot)?.let { target ->
+                    it.mangaId to target
+                }
+            }.toMap()
+            recentTarget = OfflineReadingResume.mostRecent(series, librarySnapshot)
             seriesModel.clear()
             series.forEach(seriesModel::addElement)
             val index = (0 until seriesModel.size()).firstOrNull {
@@ -152,9 +175,36 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
         setActions()
     }
 
+    private fun continueSelectedSeries() {
+        val manga = seriesList.selectedValue ?: return
+        try {
+            // Refresh history on click: a separate reader might have advanced
+            // to another chapter since this list was last painted.
+            val target = OfflineReadingResume.forSeries(manga, library.books())
+                ?: return error("No readable downloaded chapters in this series")
+            openChapter(target.series, target.chapter)
+        } catch (e: Exception) {
+            error(e.message ?: "Cannot resume this series")
+        }
+    }
+
+    private fun continueRecentSeries() {
+        try {
+            val target = OfflineReadingResume.mostRecent(catalog.series(), library.books())
+                ?: return error("No previously read downloaded chapter is currently available")
+            openChapter(target.series, target.chapter)
+        } catch (e: Exception) {
+            error(e.message ?: "Cannot resume the last read series")
+        }
+    }
+
     private fun readSelected() {
         val chapter = chapterList.selectedValue ?: return
         val manga = seriesList.selectedValue ?: return
+        openChapter(manga, chapter)
+    }
+
+    private fun openChapter(manga: OfflineSeries, chapter: OfflineSeriesChapter) {
         if (!chapter.available) return
         val chapters = manga.chapters.map { ReaderChapter(it.chapterId, it.chapterTitle, it.file) }
         val index = chapters.indexOfFirst { it.id == chapter.chapterId }
@@ -163,6 +213,7 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
         if (LocalComicReader.open(chapter.file, this, readerSequence)) {
             try {
                 library.markOpened(chapter.file)
+                reload()
             } catch (e: Exception) {
                 error("Reader opened but could not update recent history: ${e.message}")
             }
