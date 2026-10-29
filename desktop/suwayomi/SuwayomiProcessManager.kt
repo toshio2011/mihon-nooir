@@ -6,6 +6,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
@@ -23,10 +24,31 @@ class SuwayomiProcessManager(
     private val javaExecutable: Path = Path.of(System.getProperty("java.home"),
         "bin", if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java"),
     private val port: Int = 4567,
+    // Test fixtures use a different digest explicitly; app callers use the
+    // official release fingerprint below and cannot set it from the GUI.
+    private val expectedJarSha256: String = OFFICIAL_JAR_SHA256,
 ) : Closeable {
     companion object {
         const val PINNED_VERSION = "v2.4.2366"
         const val PINNED_JAR = "Suwayomi-Server-v2.4.2366.jar"
+        // The SHA-256 digest published with the official GitHub v2.4.2366
+        // release asset. Never accept a same-name unverified binary.
+        const val OFFICIAL_JAR_SHA256 = "af9feb20af9d7ebe9e30769e6c6ebc7fc7ab1c447388d42e0280b1da5fe07bfd"
+
+        fun sha256(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().buffered().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    digest.update(buffer, 0, n)
+                }
+            }
+            return digest.digest().joinToString("") {
+                (it.toInt() and 255).toString(16).padStart(2, '0')
+            }
+        }
         const val DEFAULT_PORT = 4567
 
         /** Pure command construction, independently testable without spawning a JVM. */
@@ -75,6 +97,11 @@ class SuwayomiProcessManager(
         }
         require(Files.isRegularFile(javaExecutable)) {
             "Java launcher not found in the bundled runtime; managed backend needs a Java-capable runtime"
+        }
+        require(expectedJarSha256.matches(Regex("[0-9a-f]{64}"))) { "Invalid pinned server digest" }
+        require(sha256(jar).equals(expectedJarSha256, ignoreCase = true)) {
+            "Server JAR SHA-256 does not match the trusted Suwayomi v2.4.2366 release. " +
+                "Download the official jar again and verify its checksum."
         }
         ZipFile(jar).use { zip ->
             require(zip.getEntry("META-INF/MANIFEST.MF") != null) {
