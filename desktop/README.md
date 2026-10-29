@@ -1,6 +1,14 @@
 > **Windows full-product work (29 October 2026):** Development is active on [`feature/windows-full-v1.0.16`](https://github.com/toshio2011/mihon-nooir/tree/feature/windows-full-v1.0.16). It restores the GUI prototype onto the tested Android v1.0.16 conversion engine, exposes **Panel by Panel, Row by Row, Auto Fit, full-page overview and first-chapter-page preservation**, and adds **local image-folder/CBZ conversion and a basic offline comic reader** (natural page ordering, fit/zoom, arrow keys, and saved position) that do not need Suwayomi. The Windows app is **not yet fully released**: the managed backend, real source test, reader, queues, Wi-Fi transfer and installer are development milestones. See [the full Windows implementation plan](../docs/WINDOWS_FULL_IMPLEMENTATION_PLAN.md). Preserve Android source and safety gates.
 
 
+## Suwayomi remote chapter requests (experimental Windows-only)
+
+For chapters **not yet downloaded in Suwayomi**, select up to 20 chapters and choose **Queue missing chapter downloads**. This creates local requests only; it does **not** contact a manga source. Open **Download requests**, then explicitly approve **Submit pending** to ask your own localhost Suwayomi server to download them. MihonNooir checks each chapter's `isDownloaded` status to distinguish *waiting* from *fully downloaded*, and avoids enqueuing a chapter that is already complete.
+
+These requests are stored under `~/.mihonnooir/remote-chapter-queue-v1.tsv` with atomic writes and no credentials. After a crash, in-flight requests are marked **INTERRUPTED**; **Recheck selected** checks only the server's status and never silently submits the same chapter again. **Cancel pending request** only removes an unsent request. **Stop monitoring does not cancel Suwayomi's source download**, which may keep running independently. There is no invented percent-progress or remote cancellation support.
+
+When Suwayomi has finished a chapter, use **Queue downloaded chapters** / **Offline jobs** to save it as a local CBZ for completely offline reading. This is a first implementation with mock GraphQL contract tests, **not yet real Suwayomi Windows-tested** or a Download All manager with server-wide progress and cancellation.
+
 ## Persistent offline chapter-copy queue (development preview)
 
 The Windows desktop now provides **Queue downloaded chapters** and **Offline jobs** alongside the existing immediate save action. The queue accepts only chapters already marked downloaded by a user-configured *localhost* Suwayomi server. Adding jobs does not contact the server. Select **Run pending** to explicitly start one CBZ copy at a time; **Pause after current chapter** stops between items, **Retry selected** retries a failed/interrupted item, and **Cancel selected** discards a pending job record without deleting any downloaded comic.
