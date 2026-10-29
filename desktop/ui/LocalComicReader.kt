@@ -117,7 +117,7 @@ private class LocalComicWindow(
     private val bookmarks = Preferences.userRoot().node("dev/nooir/mihonnooir/reader")
     private val bookmarkId = MessageDigest.getInstance("SHA-256")
         .digest(source.canonicalPath.toByteArray(Charsets.UTF_8))
-        .take(24).joinToString("") { "%02x".format(it) }
+        .take(24).joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
     private var pageIndex = bookmarks.getInt(bookmarkId, 0).coerceIn(0, pages.lastIndex)
     private var currentImage: BufferedImage? = null
     private val pageLabel = JLabel("Loading...", JLabel.CENTER)
@@ -185,7 +185,7 @@ private class LocalComicWindow(
         object : SwingWorker<BufferedImage, Unit>() {
             override fun doInBackground(): BufferedImage = LocalComicPages.read(source, selected)
             override fun done() {
-                if (!isDisplayable || request != generation) return
+                if (!this@LocalComicWindow.isDisplayable || request != generation) return
                 try {
                     currentImage = get()
                     repaintPage()
