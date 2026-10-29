@@ -2,6 +2,7 @@ package dev.nooir.desktop.ui
 
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.bridge.NooirDeviceProfiles
+import dev.nooir.desktop.NooirDesktopCli
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.suwayomi.SuwayomiBrowseMode
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
@@ -82,7 +83,7 @@ internal object DesktopUiModel {
     }
 }
 
-private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
+private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val endpoint = JTextField("http://127.0.0.1:4567", 22)
     private val status = JLabel("Connect to your locally running Suwayomi server")
     private val busy = AtomicBoolean(false)
@@ -98,6 +99,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
     private val device = JComboBox(NooirDeviceProfiles.builtins.map { it.id }.toTypedArray())
     private val downloadMissing = JCheckBox("Download missing chapters (explicit opt-in)")
     private val conversionSettings = JButton("Conversion settings")
+    private val localImport = JButton("Convert local folder / CBZ")
     private var options = MangaConversionOptions.preset("Manga")
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
@@ -124,7 +126,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
 
         val connect = JButton("Connect / reload sources")
         val header = JPanel(FlowLayout(FlowLayout.LEFT, 10, 8)).apply {
-            add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library)
+            add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library); add(localImport)
         }
         add(header, BorderLayout.NORTH)
 
@@ -202,7 +204,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
-            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings)
+            next, previous, selected, onlyDownloaded, clear, refresh, export, conversionSettings, localImport)
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
         }
@@ -227,6 +229,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
                 ?: showError("Select a manga first")
         }
         export.addActionListener { exportSelected() }
+        localImport.addActionListener { exportLocal() }
         setPaging()
         loadSources()
     }
@@ -344,6 +347,61 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
         })
     }
 
+    /** Local conversion must work independently of Suwayomi or a network connection. */
+    private fun exportLocal() {
+        if (busy.get()) return
+        val sourcePicker = JFileChooser().apply {
+            dialogTitle = "Choose an image folder or CBZ / ZIP archive"
+            fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
+        }
+        if (sourcePicker.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return
+        val input = sourcePicker.selectedFile.canonicalFile
+        if (!input.isDirectory &&
+            !(input.isFile && input.extension.lowercase() in setOf("cbz", "zip"))) {
+            showError("Choose an image folder or a CBZ / ZIP comic archive.")
+            return
+        }
+        val outputFormat = ExportFormat.valueOf(format.selectedItem as String)
+        val deviceId = device.selectedItem as String
+        if (!NooirDeviceProfiles.forId(deviceId).accepts(outputFormat)) {
+            showError("This device preset does not support ${outputFormat.name}.")
+            return
+        }
+        val targetPicker = JFileChooser().apply {
+            dialogTitle = "Save converted manga"
+            selectedFile = File(DesktopUiModel.suggestedFile(input.nameWithoutExtension, outputFormat))
+        }
+        if (targetPicker.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return
+        val target = targetPicker.selectedFile.absoluteFile
+        if (!target.extension.equals(outputFormat.extension, ignoreCase = true)) {
+            showError("File must end with .${outputFormat.extension}")
+            return
+        }
+        if (target.exists()) {
+            showError("Output already exists; choose another filename to prevent overwriting.")
+            return
+        }
+        val token = options.copy(panelDiagnostics = false).token()
+        runTask("Converting local comic", {
+            NooirDesktopCli.main(arrayOf(
+                "--input", input.absolutePath,
+                "--output", target.absolutePath,
+                "--format", outputFormat.name,
+                "--device", deviceId,
+                "--title", input.nameWithoutExtension.take(120).ifBlank { "Manga" },
+                "--options-token", token,
+            ))
+            check(target.isFile && target.length() > 0L) {
+                "Local conversion did not produce a readable output file"
+            }
+            target
+        }, { file ->
+            JOptionPane.showMessageDialog(this,
+                "Conversion complete:\\n${file.absolutePath}",
+                "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
+        })
+    }
+
     private fun exportSelected() {
         val chosen = chapterList.selectedValuesList
         val ids = try { DesktopUiModel.selectedChapterIds(chosen) }
@@ -367,7 +425,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
             return
         }
         val chooser = JFileChooser().apply {
-            dialogTitle = "Export MangaNooir book"
+            dialogTitle = "Export MihonNooir book"
             selectedFile = File(DesktopUiModel.suggestedFile(selected.title, outputFormat))
         }
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return
@@ -392,7 +450,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
             target
         }, { file ->
             JOptionPane.showMessageDialog(this,
-                "Export complete:\n${file.absolutePath}", "MangaNooir", JOptionPane.INFORMATION_MESSAGE)
+                "Export complete:\n${file.absolutePath}", "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
             SwingUtilities.invokeLater { loadChapters(selected.id, false) }
         })
     }
@@ -404,7 +462,7 @@ private class DesktopWindow : JFrame("MangaNooir — Windows prototype") {
     }
 
     private fun showError(message: String) {
-        JOptionPane.showMessageDialog(this, message, "MangaNooir", JOptionPane.WARNING_MESSAGE)
+        JOptionPane.showMessageDialog(this, message, "MihonNooir", JOptionPane.WARNING_MESSAGE)
     }
 
     private fun <T> itemRenderer(label: (T) -> String) = object : DefaultListCellRenderer() {
