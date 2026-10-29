@@ -1,5 +1,16 @@
 > **Windows full-product work (29 October 2026):** Development is active on [`feature/windows-full-v1.0.16`](https://github.com/toshio2011/mihon-nooir/tree/feature/windows-full-v1.0.16). It restores the GUI prototype onto the tested Android v1.0.16 conversion engine, exposes **Panel by Panel, Row by Row, Auto Fit, full-page overview and first-chapter-page preservation**, and adds **local image-folder/CBZ conversion and a basic offline comic reader** (natural page ordering, fit/zoom, arrow keys, and saved position) that do not need Suwayomi. The Windows app is **not yet fully released**: the managed backend, real source test, reader, queues, Wi-Fi transfer and installer are development milestones. See [the full Windows implementation plan](../docs/WINDOWS_FULL_IMPLEMENTATION_PLAN.md). Preserve Android source and safety gates.
 
+
+## Current Windows full-app development preview: local reading and library
+
+On the development branch, the Windows app opens **offline by default**. **Local library** opens a persistent user-curated bookshelf. Add an image folder or CBZ archive, open a book for single-page reading with fit/zoom and RTL-aware arrow keys, and resume its last position after restarting the app. Removing a library entry does **not** delete the original comic. The index is stored in the user's home directory (`~/.mihonnooir/local-library-v1.txt`); comic pages stay where the user chose them.
+
+**Read local comic** opens a folder/CBZ directly, and **Convert local folder / CBZ** exports to EPUB2, EPUB3, XTC, XTCH or CBZ using the same tested Kotlin conversion engine and panel settings as Android. These workflows do not need a running Suwayomi backend.
+
+When connected to a user-configured localhost Suwayomi server, select chapters that Suwayomi already downloaded and press **Save downloaded chapters offline**. Up to 20 chapters per action are copied as validated CBZ archives into `~/.mihonnooir/downloaded-chapters/` and added to the local library. This never installs sources, enqueues missing remote downloads or overwrites archives. Real released Suwayomi integration, per-chapter progress/cancellation and the managed-backend packaging still need verification and implementation.
+
+**Status:** Windows portable preview is unsigned and under development; it is not yet the full stable Windows app or installer. The original Android release, signing keys, APK source and Folio Nooir firmware are unchanged.
+
 # MangaNooir Windows — D1 shared conversion spike (developer-only)
 
 This is the **first implementation increment**, not the Windows desktop app or a Windows installer. It proves that the same Kotlin/JVM conversion codecs and MangaNooir settings can run on desktop without Android APIs. It now also includes a **D0 developer-only Suwayomi localhost integration** for listing chapters and exporting selected downloaded chapters. It does **not** include a managed Suwayomi backend, source browsing UI, Mihon backup restore, a GUI, PDF or web conversion.
