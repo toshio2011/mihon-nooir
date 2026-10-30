@@ -1,6 +1,6 @@
 # MihonNooir — branding and legacy identifier guide
 
-**Current product name: MihonNooir** (one word, both N letters capitalized). The GitHub repository remains [`toshio2011/mihon-nooir`](https://github.com/toshio2011/mihon-nooir), and the Android package ID remains `dev.nooir.mihon.foss`.
+**Current product name: MihonNooir** (one word, capital M and N). The GitHub repository remains [`toshio2011/mihon-nooir`](https://github.com/toshio2011/mihon-nooir), and the Android package ID remains `dev.nooir.mihon.foss`.
 
 ## Names to use in new user-facing writing
 
