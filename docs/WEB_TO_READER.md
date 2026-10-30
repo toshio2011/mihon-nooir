@@ -1,12 +1,12 @@
 # Web link → EPUB (experimental v1.0.11)
 
-> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
-> **Preview only:** The v1.0.11 [published experimental Android prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks. This workflow is **not in the older v1.0.1 APK** (it is now in v1.0.12 `main` source), and phone/XTEink testing is still pending. Conversion runs on the Android phone; no AI/OCR API.
+> **Historical preview note:** These workflows began in earlier v1.0.11/v1.0.12 builds. Use official v1.0.16 for the current Android release; physical compatibility still varies.
 
 ## Convert a website link to EPUB
 
-1. Open **MangaNooir → More → Nooir Tools → Web link → EPUB**.
+1. Open **MihonNooir → More → Nooir Tools → Web link → EPUB**.
 2. Paste a **public HTTPS** web article URL in **Article URL**.
 3. Tap **Save article EPUB to phone**. Pick the file location in Android's save dialog.
 4. Wait for the background notification/phase to say **Article EPUB saved successfully**.

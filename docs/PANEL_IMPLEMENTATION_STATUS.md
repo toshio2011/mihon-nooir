@@ -68,7 +68,7 @@
 
 **Upstream reference:** [mihonapp/mihon PR #4045 — Add panel-by-panel zoom navigation to paged reader](https://github.com/mihonapp/mihon/pull/4045), still **open/unmerged** when reviewed. This is not part of stable Mihon v0.21.2. Reviewed actual files: `core/common/.../panel/ContourPanelDetector.kt`, `PanelOrder.kt`, `PanelModel.kt`, the unit tests and the PR description. Mihon upstream is Apache-2.0; **no upstream code was copied into Phase A**.
 
-| Upstream component | What it does | MangaNooir decision |
+| Upstream component | What it does | MihonNooir decision |
 |---|---|---|
 | `GrayImage` / `PanelDetector` interface | Pure Kotlin grayscale input and normalized panel rectangles | Useful shape for a future detector adapter, but keep our current `PanelPlan` fallback semantics and bounded thumbnails |
 | `ContourPanelDetector` | Iterative connected components, ink masks, gutter splitting, loose-art/lettering handling, borderless regions, slanted-frame corners | **Evaluate in Phase D**, especially for artwork crossing gutters; first validate memory/time and no-content-loss before enabling for exports |
@@ -76,7 +76,7 @@
 | Android `PagerPageHolder`, `PagerViewer`, `PanelMaskView` | Reader-only zoom navigation, optional mask, configurable animation | **Do not port into conversion**; export must produce standalone X3/X4-sized image pages, with no new firmware processing |
 | Upstream tests | Synthetic gutter, borderless, spill and ordering cases | Add independently authored equivalent test *scenarios* to our regression suite; do not blindly copy source/tests |
 
-**Key distinction:** upstream PR #4045 detects panels for **interactive Android reader zoom**. MangaNooir requires **offline preprocessing and physical per-panel page export** for XTC/XTCH/EPUB2/EPUB3/CBZ. Upstream returns bounded rectangles around ink; our export's no-artwork-loss guarantee needs full-image coverage or deliberate overlap/whole-page fallback. A detector that omits whitespace/loose artwork cannot be plugged straight into `MihonNooirExporter` without additional coverage checks.
+**Key distinction:** upstream PR #4045 detects panels for **interactive Android reader zoom**. MihonNooir requires **offline preprocessing and physical per-panel page export** for XTC/XTCH/EPUB2/EPUB3/CBZ. Upstream returns bounded rectangles around ink; our export's no-artwork-loss guarantee needs full-image coverage or deliberate overlap/whole-page fallback. A detector that omits whitespace/loose artwork cannot be plugged straight into `MihonNooirExporter` without additional coverage checks.
 
 **Near-term order:**
 
@@ -85,7 +85,7 @@
 3. Improve geometry only where validated against real permitted pages and preserved coverage; no OCR, paid AI, mandatory preview or device-side panel analysis.
 4. After five-format Android export smoke tests and format/page-count preflight, validate actual X3/X4 readability. Preserve original conversion behavior when Panel Mode is off.
 
-**Upstream pin audit:** `config/mihon-upstream.sha` currently pins `deeb9b2584b6e246135cbd31da49a39e6b6e1e52` (17 October 2026). At review, Mihon upstream `main` was **15 commits ahead** of that pin, affecting 65 files; notably logging header redaction, WebGPU viewer dependency, library update ordering and a Compose download queue migration. Do not confuse this with the unmerged panel PR #4045; it is not in those 15 commits. Review individual upstream changes and Android overlay compatibility before updating the pin.\n\n**Other upstream changes worth tracking separately:** stable Mihon v0.21.2 (13 October 2026) contains bug fixes around migration/database updates and extension installation; do not rebase MangaNooir blindly because the fork overlays Android-specific export code. Review targeted fixes against existing fork behavior first. Open upstream PRs for download queue Compose migration, extension image decoding and reader settings are *not* merged features and should be tracked separately.
+**Upstream pin audit:** `config/mihon-upstream.sha` currently pins `deeb9b2584b6e246135cbd31da49a39e6b6e1e52` (17 October 2026). At review, Mihon upstream `main` was **15 commits ahead** of that pin, affecting 65 files; notably logging header redaction, WebGPU viewer dependency, library update ordering and a Compose download queue migration. Do not confuse this with the unmerged panel PR #4045; it is not in those 15 commits. Review individual upstream changes and Android overlay compatibility before updating the pin.\n\n**Other upstream changes worth tracking separately:** stable Mihon v0.21.2 (13 October 2026) contains bug fixes around migration/database updates and extension installation; do not rebase MihonNooir blindly because the fork overlays Android-specific export code. Review targeted fixes against existing fork behavior first. Open upstream PRs for download queue Compose migration, extension image decoding and reader settings are *not* merged features and should be tracked separately.
 
 ## Phase B branch — exact scope and safety notes
 

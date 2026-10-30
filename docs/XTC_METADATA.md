@@ -1,8 +1,8 @@
 # XTC and XTCH — format metadata, covers, and synopsis
 
-> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
-> **v1.0.12 merged source, not yet released** · [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21)
+> **Included in [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16)** · [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Historical PR #21](https://github.com/toshio2011/mihon-nooir/pull/21)
 
 ## Native data Folio Nooir actually reads
 
@@ -15,13 +15,13 @@ The XTC/XTCH header contains title/author metadata and optional chapters. Folio 
 
 ## Choose whether to insert a dedicated cover
 
-**More conversion settings → Include separate series cover** defaults to on. MangaNooir takes genuine Mihon series artwork and adds it before the selected manga pages. The first selected chapter then starts at page index 1 (on-disk start number 2). No reading pages are discarded. When the option is off, the first selected manga page is page 0. If the cover was requested but no source artwork can be obtained, XTC/XTCH report a clear error rather than inventing artwork.
+**More conversion settings → Include separate series cover** defaults to on. MihonNooir takes genuine Mihon series artwork and adds it before the selected manga pages. The first selected chapter then starts at page index 1 (on-disk start number 2). No reading pages are discarded. When the option is off, the first selected manga page is page 0. If the cover was requested but no source artwork can be obtained, XTC/XTCH report a clear error rather than inventing artwork.
 
-MangaNooir XTCH output has been reported to display correctly on a repaired Folio Nooir X4; other firmware implementations need independent testing. Refresh thumbnails using the reader's **Refresh Book Cache** feature when appropriate.
+MihonNooir XTCH output has been reported to display correctly on a repaired Folio Nooir X4; other firmware implementations need independent testing. Refresh thumbnails using the reader's **Refresh Book Cache** feature when appropriate.
 
 ## Synopsis is not standard XTC/XTCH metadata
 
-Folio Nooir's binary parser does not consume a standard synopsis field from XTC/XTCH. The earlier `NOOIRMD1` JSON trailer was private to MangaNooir and is **removed from normal v1.0.12 XTC/XTCH export** to keep books portable. The app still retains the source synopsis internally during conversion.
+Folio Nooir's binary parser does not consume a standard synopsis field from XTC/XTCH. The earlier `NOOIRMD1` JSON trailer was private to MihonNooir and is **removed from normal v1.0.12 XTC/XTCH export** to keep books portable. The app still retains the source synopsis internally during conversion.
 
 For compatible Folio Nooir versions, **direct Wi-Fi transfer** can independently call the reader's `POST /api/book` endpoint to store title, author and synopsis as a reader-side metadata override. That is **not embedded synopsis support**, and SD/USB copies cannot depend on it.
 

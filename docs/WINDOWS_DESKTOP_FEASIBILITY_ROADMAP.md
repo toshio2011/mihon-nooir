@@ -1,4 +1,6 @@
-# MangaNooir Windows Desktop — Full Reader Feasibility & Implementation Roadmap
+# MihonNooir Windows Desktop — Full Reader Feasibility & Implementation Roadmap
+
+> **Historical feasibility snapshot (22 October 2026):** Windows implementation has since progressed to [draft PR #53](https://github.com/toshio2011/mihon-nooir/pull/53), which includes an offline library and reading prototype, shared converter, and Suwayomi integration work. The D0/D1 status and future-tense statements below describe the earlier feasibility phase, **not** the current release state. No finished Windows release exists yet.
 
 **Research date:** 22 October 2026  
 **Status:** D1 shared conversion JVM CLI merged (PR #23); D0 localhost Suwayomi download-to-conversion **mock contract integration in progress**. No Windows GUI, installer, bundled backend or real-server end-to-end validation yet.  
@@ -6,7 +8,7 @@
 
 ## 1. Product scope
 
-**Full MangaNooir for Windows**, not only a converter. The desktop user can:
+**Full MihonNooir for Windows**, not only a converter. The desktop user can:
 
 1. Discover/configure *user-chosen* manga source/extension repositories (none bundled), browse popular/latest titles, search and filter.
 2. View manga details, chapters, artwork and metadata; add manga to a categorized local library.
@@ -21,9 +23,9 @@
 
 ## 1A. Non-negotiable Android ↔ Windows conversion parity
 
-**Product requirement (22 October 2026): Windows must expose the same MangaNooir conversion workflow and conversion settings as Android, not a cut-down converter.** Build one platform-neutral conversion core, with Android and Windows input/output adapters. Keep Android regression tests green and compare generated output with identical fixtures.
+**Product requirement (22 October 2026): Windows must expose the same MihonNooir conversion workflow and conversion settings as Android, not a cut-down converter.** Build one platform-neutral conversion core, with Android and Windows input/output adapters. Keep Android regression tests green and compare generated output with identical fixtures.
 
-| Android MangaNooir capability | Required Windows equivalent |
+| Android MihonNooir capability | Required Windows equivalent |
 |---|---|
 | EPUB 2.0.1 Classic / EPUB 3 | Same packaging, metadata, cover, navigation and compatibility rules |
 | XTC 1-bit Fast / XTCH 2-bit HQ | Same native codec, grayscale, plane layout, orientation and reader constraints |
@@ -40,7 +42,7 @@
 
 **Parity is a requirement, not a current implementation claim.** Some Android features are experimental or incomplete; audit their real behavior and tests before marking a Windows row done. Platform-specific controls (Android SAF picker versus Windows folder picker, WorkManager versus desktop job service) may differ visually, but user-facing behavior and conversion output should match.
 
-**Desktop additions**: drag-and-drop files/folders, batch input selection, preview and compare, native Save As/choose-folder, large-screen chapter table, keyboard shortcuts, and optionally reusable preset import/export. These add to parity; they must not replace or simplify existing MangaNooir workflows.
+**Desktop additions**: drag-and-drop files/folders, batch input selection, preview and compare, native Save As/choose-folder, large-screen chapter table, keyboard shortcuts, and optionally reusable preset import/export. These add to parity; they must not replace or simplify existing MihonNooir workflows.
 
 **Parity gates and tests:**
 - [ ] Inventory actual Android conversion settings and default values directly from source/UI; make a single cross-platform settings schema with migration/versioning.
@@ -53,7 +55,7 @@
 
 ## 2. Source-verified feasibility findings
 
-### Existing MangaNooir code
+### Existing MihonNooir code
 
 Current repo [`toshio2011/mihon-nooir`](https://github.com/toshio2011/mihon-nooir) overlays Mihon Android source at build time. It is **not currently a desktop Gradle application**. The following files in `overlay/app/src/main/java/dev/nooir/bridge/` use Kotlin/JVM types without Android imports and are promising for a shared module:
 
@@ -94,7 +96,7 @@ Suwayomi README describes Windows packages and a Java 21+ server runtime; its [e
 **Preferred design: one desktop app, managed local Suwayomi backend, shared Nooir conversion core.**
 
 ```text
-MangaNooir Windows GUI (Kotlin Compose Desktop candidate)
+MihonNooir Windows GUI (Kotlin Compose Desktop candidate)
   |-- Library / Sources / Search / Manga Details / Chapter Selection
   |-- Reader (paged / double / webtoon / keyboard / progress)
   |-- Downloads (source jobs) / Export Activity (conversion jobs)
@@ -203,24 +205,24 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 | XTEink upload | Conflict handling, no silent overwrite, receiver ACK, physical X4 opens output |
 | Installer | Fresh install, update, uninstall/reinstall preserve data; backend stops cleanly |
 | Security | Loopback-only by default; no bundled unauthorized sources or content |
-| Android regression | No broken MangaNooir Android export/build due to shared-core extraction |
+| Android regression | No broken MihonNooir Android export/build due to shared-core extraction |
 
 ## 7. Risks and decisions to validate
 
 1. **Backend distribution/version compatibility:** Suwayomi and its Android-compatibility shim are nontrivial; pin a release and test its extension runtime rather than fork it casually.
 2. **Extension trust and availability:** repositories and sources are external, user-managed, may fail, require login or block automated access. No promises of universal compatibility, no DRM/paywall bypass.
 3. **API and page access:** chapter image retrieval/download path and library operations need schema verification against a pinned Suwayomi version before binding to our converter.
-4. **Two queues and storage:** backend owns manga downloads; MangaNooir owns export/transfer jobs. Don't corrupt backend storage or double-download pages.
+4. **Two queues and storage:** backend owns manga downloads; MihonNooir owns export/transfer jobs. Don't corrupt backend storage or double-download pages.
 5. **App footprint:** bundled backend + Java runtime + UI may be sizable; measure startup, idle memory, disk and packaging before locking GUI technology.
 6. **License/attribution:** Suwayomi MPL-2.0, included Apache-2.0 components, Mihon and third-party dependencies require review for binary redistribution and modifications.
 7. **Source terms/copyright:** user-supplied extensions only; no bundled copyrighted content or unapproved provider catalog.
-8. **Cross-device synchronization:** don't assume a desktop Suwayomi library is the same database as MangaNooir Android; use explicit export/import or future sync protocol.
+8. **Cross-device synchronization:** don't assume a desktop Suwayomi library is the same database as MihonNooir Android; use explicit export/import or future sync protocol.
 9. **Release sequencing:** official Android v1.0.12 exists but hardware validation/stable signing remain incomplete. Desktop implementation should not delay that work.
 
 ## 8. Reference sources inspected
 
-- [MangaNooir bridge source](../overlay/app/src/main/java/dev/nooir/bridge/) and [Android adapters](../overlay/app/src/main/java/dev/nooir/mangabridge/)
-- [MangaNooir main roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+- [MihonNooir bridge source](../overlay/app/src/main/java/dev/nooir/bridge/) and [Android adapters](../overlay/app/src/main/java/dev/nooir/mangabridge/)
+- [MihonNooir main roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
 - [Mihon Android extension loader](https://github.com/mihonapp/mihon/blob/main/app/src/main/java/eu/kanade/tachiyomi/extension/util/ExtensionLoader.kt)
 - [Mihon Android chapter downloader](https://github.com/mihonapp/mihon/blob/main/app/src/main/java/eu/kanade/tachiyomi/data/download/Downloader.kt)
 - [Suwayomi-Server README](https://github.com/Suwayomi/Suwayomi-Server)
@@ -230,7 +232,7 @@ Suggested left navigation: **Home · Library · Browse · Downloads · Reader (c
 - [Suwayomi-WebUI features](https://github.com/Suwayomi/Suwayomi-WebUI)
 - [Suwayomi MPL-2.0 license](https://github.com/Suwayomi/Suwayomi-Server/blob/master/LICENSE)
 
-**Bottom line:** Full Windows MangaNooir is achievable without porting Android itself: integrate a pinned desktop-compatible manga backend, reuse Nooir's JVM conversion core, and build a real desktop interface. The critical unknown is the **verified end-to-end backend download → export bridge**; do that spike before committing to the full UI.
+**Bottom line:** Full Windows MihonNooir is achievable without porting Android itself: integrate a pinned desktop-compatible manga backend, reuse Nooir's JVM conversion core, and build a real desktop interface. The critical unknown is the **verified end-to-end backend download → export bridge**; do that spike before committing to the full UI.
 
 ## 22 October 2026 — D0 Suwayomi localhost bridge implementation slice
 

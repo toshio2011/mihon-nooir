@@ -1,18 +1,18 @@
 # Landscape, portrait and overlapping page cuts — experimental preview
 
-> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
-> **Preview only:** Included in the [v1.0.11 draft build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), which passed Android CI but needs real device testing. Older v1.0.1 APKs do not expose these settings; merged `main` source now supports them.
+> **Historical preview note:** These workflows began in earlier v1.0.11/v1.0.12 builds. Use official v1.0.16 for the current Android release; physical compatibility still varies.
 
 ## Why this exists
 
 Traditional portrait manga pages are too small if you simply rotate and fit the entire page on a landscape-held XTEink X3/X4. A better approach divides the tall page into smaller **overlapping top-to-bottom sections**, making dialogue easier to read.
 
-Inspired by the setting ideas from [MangaPoint](https://github.com/W1seGit/MangaPoint) and [xtcjs](https://github.com/varo6/xtcjs). The geometry and rendering code is implemented in Kotlin for MangaNooir, not a line-for-line port. Both upstream projects are MIT licensed.
+Inspired by the setting ideas from [MangaPoint](https://github.com/W1seGit/MangaPoint) and [xtcjs](https://github.com/varo6/xtcjs). The geometry and rendering code is implemented in Kotlin for MihonNooir, not a line-for-line port. Both upstream projects are MIT licensed.
 
 ## Choose the settings
 
-1. In MangaNooir, open a manga, **long-press** a chapter, and select the chapters you want.
+1. In MihonNooir, open a manga, **long-press** a chapter, and select the chapters you want.
 2. Tap **Export** in the manga toolbar (or open **More → Nooir Tools → Send & Convert files** for local CBZ/images).
 3. Expand **More conversion settings**.
 4. Choose **Include separate series cover** if you want the actual cover ahead of the first selected manga page; disable it to read directly from the chapter.
@@ -34,7 +34,7 @@ The settings are saved for your next export, including a legacy migration path f
 | Landscape + Webtoon | Slice long scroll images into shorter overlapping sections suitable for sideways reading |
 | Landscape + double-page spread splitting | Split right/left (or left/right) first, then slice tall halves when useful |
 | Landscape + spread splitting OFF | Keep a panoramic image whole instead of forcing it into multiple panels |
-| Export from MangaNooir with real series cover | Keep the actual cover upright and unsplit even when chapter pages use landscape |
+| Export from MihonNooir with real series cover | Keep the actual cover upright and unsplit even when chapter pages use landscape |
 
 **XTC/XTCH:** Pages still have the reader's normal physical resolution (X4 480×800 or X3 528×792). The actual artwork is rotated within that frame so the user turns the physical reader sideways. This avoids pretending the installed firmware supports a new page resolution.
 

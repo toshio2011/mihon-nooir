@@ -1,14 +1,14 @@
 # PDF → EPUB with real text and illustrations (experimental)
 
-> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
 This feature targets the **mixed-content novel** use case: extract **real, selectable/resizable text** from a PDF, while preserving diagrams, floor plans and pictures near their original paragraphs where possible. Think of a mystery novel with text above and below floor-plan drawings, rather than turning the entire book into page screenshots.
 
-> **Preview only:** [v1.0.11 Android CI passed](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but mixed-content PDF fidelity and physical XTEink EPUB reading still need real testing. This converter is **not in older v1.0.1 APKs**; the merged main source now includes it.
+> **Historical preview note:** These workflows began in earlier v1.0.11/v1.0.12 builds. Use official v1.0.16 for the current Android release; physical compatibility still varies.
 
 ## Steps
 
-1. Open **MangaNooir → More → Nooir Tools → PDF → EPUB · Text + illustrations** (experimental v1.0.11).
+1. Open **MihonNooir → More → Nooir Tools → PDF → EPUB · Text + illustrations** (experimental v1.0.11).
 2. Choose a PDF from your phone's file picker, then optionally edit the resulting **book title, author and EPUB filename**.
 3. Select **Reflowable text + illustrations** (the intended default) or **Keep original pages as images**.
 4. Tap **Convert PDF & save EPUB to phone**, select a destination, then check the progress notification.
@@ -36,7 +36,7 @@ You can have a **single EPUB** containing genuinely reflowable text chapters **a
 - **Scanned-only PDFs remain image-based where no text layer exists.** No native OCR or AI service is included.
 - Some embedded image formats, unsupported fonts or PDF encryption may fail. The initial converter rejects encrypted PDF files and uses a conservative **100 MiB/600-page** guard.
 - Layout inspection/preview, manual paragraph/image-position adjustments, headings/TOC detection, and reliably processing forms/math/tables are **future enhancements**.
-- This is a separate feature from **PDF → XTC/XTCH/CBZ (entire pages rendered as images)**, which can reuse MangaNooir's existing manga renderer later.
+- This is a separate feature from **PDF → XTC/XTCH/CBZ (entire pages rendered as images)**, which can reuse MihonNooir's existing manga renderer later.
 - Original PDF stays untouched; the converted EPUB is saved as a new file.
 
 ## Test before release

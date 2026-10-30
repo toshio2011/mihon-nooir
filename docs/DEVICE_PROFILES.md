@@ -1,8 +1,8 @@
 # E-reader device profiles — experimental v1.0.12
 
-> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
-MangaNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.
+MihonNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.
 
 ## Choose a reader
 
@@ -42,4 +42,4 @@ XTCH custom dimensions require a **height divisible by 8 pixels** (for example 8
 
 The larger non-XTEink EPUB/CBZ pages consume more Android memory during conversion. Try a short volume first. Device dimensions and basic format guidance were crosschecked with [MangaPoint's public device profiles](https://github.com/W1seGit/MangaPoint/blob/main/crates/device-profiles/src/lib.rs), but this UI is independently implemented and real-device validation is still required.
 
-**Status:** merged v1.0.12 code on `main`, but not released. Published v1.0.11 APK lacks the additional device profiles.
+**Status:** these device profiles were introduced during v1.0.12 development and are included in the official **[v1.0.16 Android release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16)**. The older v1.0.11 APK lacks the additional profiles.

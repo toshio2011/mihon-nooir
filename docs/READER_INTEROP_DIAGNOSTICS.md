@@ -1,10 +1,12 @@
 # Reader interoperability debugging — readable test books (21 October 2026)
 
+> **Naming note:** Existing CI diagnostic fixture filenames beginning with `MangaNooir_` and the `manganooir-readable-reader-interop-fixtures` artifact name are historical test identifiers. Keep those exact names when following existing commands; the current app is **MihonNooir**.
+
 ## What went wrong with the old CI samples?
 
 The earlier EPUB 2 fixture drew a gradient cover and used white image pages. The old XTC and XTCH fixtures were synthetic bit patterns and blank white pages. They were useful for validating binary structure, NOT for testing readability or real-device memory. A green Android build or EPUBCheck result never established that a user could read those samples on X3/X4.
 
-The revised CI fixture bundle is `manganooir-readable-reader-interop-fixtures`. It is generated from **the real MangaNooir EPUB 2, EPUB 3, XTC and XTCH writers**, using three original, visibly illustrated pages: a cover, a short story page and a four-gray-level demonstration page. No real copyrighted manga, AI/OCR or third-party fonts are included. The test decodes EPUB image payloads, reads native page-table offsets and unpacks XTG/XTH pixel data independently, comparing sampled pixels to the original pages.
+The revised CI fixture bundle is `manganooir-readable-reader-interop-fixtures`. It is generated from **the real MihonNooir EPUB 2, EPUB 3, XTC and XTCH writers**, using three original, visibly illustrated pages: a cover, a short story page and a four-gray-level demonstration page. No real copyrighted manga, AI/OCR or third-party fonts are included. The test decodes EPUB image payloads, reads native page-table offsets and unpacks XTG/XTH pixel data independently, comparing sampled pixels to the original pages.
 
 | File | Purpose |
 | --- | --- |
@@ -22,7 +24,7 @@ These are **diagnostic samples**, not benchmarks or proof of compatibility. The 
 
 The Folio Nooir `XtcReaderActivity::renderPage` implementation has a full-buffer path that calls `malloc(bitmapBytes)`. A 480×800 XTC page requires 48,000 bytes of **contiguous available heap** and a 480×800 XTCH page requires 96,000 bytes. The reader shows *Memory Error* if allocation fails. Available contiguous memory depends on active reader mode, prior allocations, firmware version and other features. File byte size on the SD card or page count does not reduce the per-page bitmap allocation.
 
-Current Folio Nooir has a streaming XTCH rendering path in normal (non-dark) mode; other reader versions and modes may still allocate the full 96 KB. Its thumbnail generation also allocates buffers and can fail separately. MangaNooir cannot solve a failing firmware `malloc` merely by adjusting metadata, recompressing a page, or changing the exported extension; XTC/XTCH page data are normally uncompressed.
+Current Folio Nooir has a streaming XTCH rendering path in normal (non-dark) mode; other reader versions and modes may still allocate the full 96 KB. Its thumbnail generation also allocates buffers and can fail separately. MihonNooir cannot solve a failing firmware `malloc` merely by adjusting metadata, recompressing a page, or changing the exported extension; XTC/XTCH page data are normally uncompressed.
 
 ### Test steps
 
@@ -32,17 +34,17 @@ Current Folio Nooir has a streaming XTCH rendering path in normal (non-dark) mod
 4. Repeat using the matching 240×400 low-memory diagnostic file. A reduced-file success alongside full-size failure strongly suggests a peak buffer/heap limitation, **not proven malformed XTC metadata**.
 5. Repeat once with dark mode off (if applicable), and record whether each format worked. Dark-mode XTCH may use a different memory path.
 6. If **even the 240×400 files fail**, report the exact on-screen message, device, firmware version, reader mode and whether real XTC/XTCH files from another converter work on the same firmware.
-7. If another converter's 480×800 XTC/XTCH file works while the matching MangaNooir one fails, supply **only a copyright-safe diagnostic sample** so headers, metadata, chapter tables and page bytes can be compared directly.
+7. If another converter's 480×800 XTC/XTCH file works while the matching MihonNooir one fails, supply **only a copyright-safe diagnostic sample** so headers, metadata, chapter tables and page bytes can be compared directly.
 
 Do not assume an X4 Pro, stock XTEink firmware, CrossInk, CrossPoint or Matcha Reader behaves identically. Do not claim physical-device acceptance based on JVM tests or an emulator alone.
 
 ## What the converters actually do
 
-- **MangaPoint** works from manga/image pages: it plans orientation/crops/splits, scales to device dimensions, quantizes/dithers each grayscale page, then packs 1-bit XTG (XTC) or 2-bit XTH (XTCH), with index, metadata and optional chapters. The MangaNooir codec uses the same documented little-endian layout and disk spooling approach.
+- **MangaPoint** works from manga/image pages: it plans orientation/crops/splits, scales to device dimensions, quantizes/dithers each grayscale page, then packs 1-bit XTG (XTC) or 2-bit XTH (XTCH), with index, metadata and optional chapters. The MihonNooir codec uses the same documented little-endian layout and disk spooling approach.
 - **X4Converter** first renders **text EPUB** pages using a CREngine WebAssembly renderer, then makes bitmaps and encodes XTC/XTCH. It is *not* a reflowable EPUB writer; it rasterizes the rendered novel pages for the target display.
 - **Matcha Reader Tools** uses a browser image/manga pipeline, writes EPUB 3 with image XHTML and cover/navigation, and has a separate native XTC/XTCH encoder that follows the firmware's binary contract. Its XTCH path similarly requires page height divisible by eight.
-- **MangaNooir** keeps all original Mihon features, exports selected downloaded/online manga chapters or imported local images/CBZ as image-page EPUB 2/3, XTC/XTCH, or CBZ. Its *separate* PDF/web novel tools aim for **reflowable EPUB 3 containing real extractable text and pictures**, not EPUB 2 manga pages or an EPUB-to-XTC text renderer. Those are different pipelines; do not mistake the manga image EPUB for reflowable prose.
+- **MihonNooir** keeps all original Mihon features, exports selected downloaded/online manga chapters or imported local images/CBZ as image-page EPUB 2/3, XTC/XTCH, or CBZ. Its *separate* PDF/web novel tools aim for **reflowable EPUB 3 containing real extractable text and pictures**, not EPUB 2 manga pages or an EPUB-to-XTC text renderer. Those are different pipelines; do not mistake the manga image EPUB for reflowable prose.
 
 ## Limits still requiring an actual phone and reader
 
-Full-size X4 XTC/XTCH may still hit a firmware memory limit, even with perfect output. Need physical tests with the reader's exact current firmware, original book files, real chapter navigation, refresh/cache, grayscale orientation, and long-job performance. No Folio Nooir code has been modified. The user's experimental APK installability and signing-key continuity also need verification. A new MangaNooir public release remains blocked on explicit authorization.
+Full-size X4 XTC/XTCH may still hit a firmware memory limit, even with perfect output. Need physical tests with the reader's exact current firmware, original book files, real chapter navigation, refresh/cache, grayscale orientation, and long-job performance. No Folio Nooir code has been modified. The user's experimental APK installability and signing-key continuity also need verification. A new MihonNooir public release remains blocked on explicit authorization.
