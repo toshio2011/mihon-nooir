@@ -15,7 +15,7 @@ import javax.imageio.ImageIO
 
 /**
  * JVM/Windows feasibility CLI. Compiles against the EXACT Kotlin codec, page planner,
- * grayscale PNG writer, presets and options model used by MangaNooir Android.
+ * grayscale PNG writer, presets and options model used by MihonNooir Android.
  * Not yet a desktop GUI or a Suwayomi downloader.
  */
 object NooirDesktopCli {
@@ -142,7 +142,7 @@ object NooirDesktopCli {
                 tmp.delete()
             }
         } catch (error: Exception) {
-            System.err.println("MangaNooir desktop conversion failed: ${error.message}")
+            System.err.println("MihonNooir desktop conversion failed: ${error.message}")
             throw error
         }
     }

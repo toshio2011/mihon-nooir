@@ -71,9 +71,11 @@ The launcher uses the Java runtime from the Windows app and passes Suwayomi syst
 
 **Status:** Windows portable preview is unsigned and under development; it is not yet the full stable Windows app or installer. The original Android release, signing keys, APK source and Folio Nooir firmware are unchanged.
 
-# MangaNooir Windows — D1 shared conversion spike (developer-only)
+# MihonNooir Windows — D1 shared conversion spike (developer-only)
 
-This is the **first implementation increment**, not the Windows desktop app or a Windows installer. It proves that the same Kotlin/JVM conversion codecs and MangaNooir settings can run on desktop without Android APIs. It now also includes a **D0 developer-only Suwayomi localhost integration** for listing chapters and exporting selected downloaded chapters. It does **not** include a managed Suwayomi backend, source browsing UI, Mihon backup restore, a GUI, PDF or web conversion.
+> **Legacy command names:** The example developer JARs below retain `manganooir-cli.jar` and `manganooir-suwayomi.jar` as existing local command/output filenames. These are **not** the current product name; the app is **MihonNooir**. Keep the filenames unchanged if following the commands exactly.
+
+This is the **first implementation increment**, not the Windows desktop app or a Windows installer. It proves that the same Kotlin/JVM conversion codecs and MihonNooir settings can run on desktop without Android APIs. It now also includes a **D0 developer-only Suwayomi localhost integration** for listing chapters and exporting selected downloaded chapters. It does **not** include a managed Suwayomi backend, source browsing UI, Mihon backup restore, a GUI, PDF or web conversion.
 
 ## Shared source — no duplicate codecs
 
@@ -110,7 +112,7 @@ On Windows PowerShell, compile the same source files by listing paths explicitly
 java -Djava.awt.headless=true -cp build/desktop/manganooir-cli.jar dev.nooir.desktop.NooirDesktopCli --input "C:\\Manga\\Chapter" --output "C:\\Exports\\Chapter.epub" --format EPUB2 --device X4
 ```
 
-Formats: `AUTO`, `XTC`, `XTCH`, `EPUB` (EPUB 3), `EPUB2` and `CBZ`. Input: a folder of image files (chapter subfolders are grouped as chapters) or a CBZ/ZIP of image files. Optional `--options-token` accepts the **same token** emitted by MangaNooir Android's `MangaConversionOptions.token()` (including older job-token versions). A root-level `cover.png` is treated as a separate cover. Existing output files are rejected; files are written to a temporary sibling and moved only after a successful conversion.
+Formats: `AUTO`, `XTC`, `XTCH`, `EPUB` (EPUB 3), `EPUB2` and `CBZ`. Input: a folder of image files (chapter subfolders are grouped as chapters) or a CBZ/ZIP of image files. Optional `--options-token` accepts the **same token** emitted by MihonNooir Android's `MangaConversionOptions.token()` (including older job-token versions). A root-level `cover.png` is treated as a separate cover. Existing output files are rejected; files are written to a temporary sibling and moved only after a successful conversion.
 
 Run automated checks:
 
@@ -181,7 +183,7 @@ Run the full mock contract and conversion tests with `bash tests/run.sh`.
 
 The developer-only `SuwayomiBrowseCli` uses Suwayomi-Server **v2.4.2366** `sources(first, offset)`, `mangas(condition: {inLibrary: true})`, `fetchSourceManga` (POPULAR/LATEST/SEARCH) and optional `fetchMangaAndChapters` GraphQL operations. Source IDs are **signed 64-bit values** (some are negative); manga IDs and chapter IDs are separate positive integers.
 
-Build the same Kotlin JVM source set used by the D0 bridge, including `desktop/suwayomi/SuwayomiBrowseCli.kt` (or compile `desktop/suwayomi/*.kt`). Use an already-running localhost Suwayomi instance with your own configured extensions. MangaNooir does not bundle sources or copyrighted content.
+Build the same Kotlin JVM source set used by the D0 bridge, including `desktop/suwayomi/SuwayomiBrowseCli.kt` (or compile `desktop/suwayomi/*.kt`). Use an already-running localhost Suwayomi instance with your own configured extensions. MihonNooir does not bundle sources or copyrighted content.
 
 ```bash
 # List installed sources; use --offset to page beyond the first 100.

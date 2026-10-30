@@ -47,7 +47,7 @@ import javax.swing.UIManager
 
 /**
  * D2 desktop interaction prototype. Uses the already-tested Suwayomi API and
- * shared MangaNooir conversion engine; no Android code or duplicate codec.
+ * shared MihonNooir conversion engine; no Android code or duplicate codec.
  * Requires the user's separately running, configured localhost Suwayomi.
  */
 object MangaNooirDesktop {
@@ -79,7 +79,7 @@ internal object DesktopUiModel {
 
     fun suggestedFile(title: String, format: ExportFormat): String {
         val normalized = title.replace(Regex("[^\\p{L}\\p{N} ._()-]"), "_")
-            .trim().take(80).trimEnd(' ', '.').ifBlank { "MangaNooir" }
+            .trim().take(80).trimEnd(' ', '.').ifBlank { "MihonNooir" }
         // Windows also reserves these names with an extension (for example CON.epub).
         val reserved = Regex("(?i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$")
         val safe = if (reserved.matches(normalized)) "_$normalized" else normalized
