@@ -2,7 +2,7 @@
 
 > **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
-> **v1.0.12 merged source, not yet released** · [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21)
+> **Included in [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16)** · [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Historical PR #21](https://github.com/toshio2011/mihon-nooir/pull/21)
 
 ## Native data Folio Nooir actually reads
 

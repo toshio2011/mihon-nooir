@@ -1,5 +1,7 @@
 # MihonNooir Windows Desktop — Full Reader Feasibility & Implementation Roadmap
 
+> **Historical feasibility snapshot (22 October 2026):** Windows implementation has since progressed to [draft PR #53](https://github.com/toshio2011/mihon-nooir/pull/53), which includes an offline library and reading prototype, shared converter, and Suwayomi integration work. The D0/D1 status and future-tense statements below describe the earlier feasibility phase, **not** the current release state. No finished Windows release exists yet.
+
 **Research date:** 22 October 2026  
 **Status:** D1 shared conversion JVM CLI merged (PR #23); D0 localhost Suwayomi download-to-conversion **mock contract integration in progress**. No Windows GUI, installer, bundled backend or real-server end-to-end validation yet.  
 **Product priority:** Android v1.0.12 stabilization and repeatable signing/updates remain the release gate before full desktop implementation. Planning and isolated proof-of-concept work may be prepared without modifying Folio Nooir.
@@ -94,7 +96,7 @@ Suwayomi README describes Windows packages and a Java 21+ server runtime; its [e
 **Preferred design: one desktop app, managed local Suwayomi backend, shared Nooir conversion core.**
 
 ```text
-MangaNooir Windows GUI (Kotlin Compose Desktop candidate)
+MihonNooir Windows GUI (Kotlin Compose Desktop candidate)
   |-- Library / Sources / Search / Manga Details / Chapter Selection
   |-- Reader (paged / double / webtoon / keyboard / progress)
   |-- Downloads (source jobs) / Export Activity (conversion jobs)

@@ -1,4 +1,6 @@
-# MangaNooir — project handover and continuation guide
+# MihonNooir — historical project handover and continuation guide
+
+> **Current status (30 October 2026):** The project is now named **MihonNooir**. [Android v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official published release; [draft Windows PR #53](https://github.com/toshio2011/mihon-nooir/pull/53) remains experimental. This file retains older **MangaNooir** terminology and dated snapshots for development history; do not treat the 20–28 October PR/CI/release statements below as live status. Never infer that an old "do not release" or "latest" note describes today's published assets.
 
 > [!IMPORTANT]
 > **LATEST HANDOVER — 28 OCTOBER 2026:** Start with **[docs/HANDOVER_2026-10-28.md](HANDOVER_2026-10-28.md)**. It is the authoritative dated snapshot for Conan Panel by Panel QA, merged PRs #47–#50, and unfinished **draft PR #51 (private Panel Diagnostic ZIP)**. The older October 20–21 status, public v1.0.11, main v1.0.1, and draft PR #21 claims **below** are archived historical facts and are **NOT CURRENT**. As of October 28, main source version is **1.0.16**, while the most recent published release is **v1.0.12**; the diagnostic feature is **not yet merged or released**. Always recheck GitHub head and CI.

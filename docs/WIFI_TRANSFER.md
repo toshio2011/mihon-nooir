@@ -17,7 +17,7 @@ MihonNooir can send converted manga to XTEink readers with a **compatible HTTP/W
 4. The reader displays a direct address such as `http://192.168.1.102/` and may show `http://crosspoint.local/`. Your actual IP will differ.
 5. On the phone, open **Chrome** and enter the exact URL shown on the XTEink. You should see the reader's web interface and File Manager.
 
-**If this browser test fails, fix the network before trying MangaNooir.** Common causes are wrong Wi-Fi, guest/client isolation, VPN, phone switching networks or an incorrect hostname. Try the displayed **IP address** instead of `crosspoint.local`.
+**If this browser test fails, fix the network before trying MihonNooir.** Common causes are wrong Wi-Fi, guest/client isolation, VPN, phone switching networks or an incorrect hostname. Try the displayed **IP address** instead of `crosspoint.local`.
 
 ## Option B — Use the XTEink hotspot
 
@@ -83,7 +83,7 @@ For initial testing, send a **5–20 MB** file, confirm it appears in the reader
 | It stops after switching apps | Check Android background/battery restrictions and the last WorkManager job result; force-stop cancels/interferes with background tasks |
 | `/Books` isn't found | Use `/`, or create the folder first through the XTEink web File Manager |
 
-The reader's browser File Manager can also **upload a file manually** if you're troubleshooting MangaNooir.
+The reader's browser File Manager can also **upload a file manually** if you're troubleshooting MihonNooir.
 
 Related implementation details: [Folio Nooir web server](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md) · [HTTP API](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver-endpoints.md).
 

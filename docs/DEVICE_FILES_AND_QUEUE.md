@@ -64,7 +64,7 @@ Folio Nooir generates XTC/XTCH cover thumbnails from **the first page of the boo
 
 1. Confirm that the manga's actual cover is visible in Mihon. A new preview export should report an error if it can't obtain/decode the cover, instead of silently putting the first chapter on the cover.
 2. Export to a **new filename**, open the book, and check whether its **first displayed page** is the cover.
-3. If page one is correct but a reader's **library shelf** lacks a thumbnail, refresh its thumbnail cache (on Folio Nooir: **Retrieve All Book Details**). MangaNooir-generated XTCH covers have been reported working on Folio Nooir.
+3. If page one is correct but a reader's **library shelf** lacks a thumbnail, refresh its thumbnail cache (on Folio Nooir: **Retrieve All Book Details**). MihonNooir-generated XTCH covers have been reported working on Folio Nooir.
 4. If the first book page is incorrect, please report the source, format (XTC or XTCH), phone build and Folio Nooir firmware version. Refreshing thumbnails won't fix a wrongly exported first page.
 
 A MihonNooir XTCH shelf cover is now reported visible on Folio Nooir. Continue testing different firmware versions and actual reading/navigation; automated XTC/XTCH tests only check the byte format and first-page/chapter indexing.

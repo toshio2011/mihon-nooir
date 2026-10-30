@@ -42,4 +42,4 @@ XTCH custom dimensions require a **height divisible by 8 pixels** (for example 8
 
 The larger non-XTEink EPUB/CBZ pages consume more Android memory during conversion. Try a short volume first. Device dimensions and basic format guidance were crosschecked with [MangaPoint's public device profiles](https://github.com/W1seGit/MangaPoint/blob/main/crates/device-profiles/src/lib.rs), but this UI is independently implemented and real-device validation is still required.
 
-**Status:** merged v1.0.12 code on `main`, but not released. Published v1.0.11 APK lacks the additional device profiles.
+**Status:** these device profiles were introduced during v1.0.12 development and are included in the official **[v1.0.16 Android release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16)**. The older v1.0.11 APK lacks the additional profiles.

@@ -6,7 +6,7 @@
 
 MihonNooir exports manga into e-reader-oriented formats while keeping the source chapters and library information in Mihon.
 
-> **Version note:** Older v1.0.1 builds support basic downloaded-manga export; **Quick Export, local files, advanced settings, shared queue, web and PDF tools** were added in the published experimental v1.0.11 preview and are retained in the v1.0.12 main source (not yet released). [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
+> **Version note:** Older v1.0.1 builds support basic downloaded-manga export; **Quick Export, local files, advanced settings, shared queue, web and PDF tools** were added in the published experimental v1.0.11 preview and are included in the current official v1.0.16 release. [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
 
 ## Pick an output
 
@@ -22,7 +22,7 @@ Older v1.0.1 builds, the [published experimental v1.0.11 preview](https://github
 
 ## Convert from downloaded manga
 
-1. Open manga details in MangaNooir.
+1. Open manga details in MihonNooir.
 2. **Long-press** a chapter, then tap other chapters to select them. In **Normal Export**, selected chapters must be downloaded. If nothing is selected, all downloaded chapters of the manga are included. [Step-by-step chapter-selection guide →](CHAPTER_SELECTION.md)
 3. Tap **Export** next to Download.
 4. Choose device, format, and **Save file** or **Send to XTEink**.

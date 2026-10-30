@@ -101,7 +101,7 @@ These features began in experimental previews; the current official release stil
 
 This repository contains an **integration overlay**, not an independent rewrite of Mihon. Its [GitHub Actions workflow](.github/workflows/build-apk.yml) checks out the pinned Mihon revision from `config/mihon-upstream.sha`, applies `tools/apply_overlay.py`, runs smoke tests, and assembles a FOSS Android APK. Automated CI is not the same as on-device testing.
 
-- [**Merged PR #22**](https://github.com/toshio2011/mihon-nooir/pull/22) — latest source on `main`; [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) published; real-device testing pending.
+- **[Official Android v1.0.16 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16)** — latest published APKs; [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) documents earlier v1.0.12 compatibility work. Real-device results depend on firmware and input.
 - [**Roadmap / feature requests**](https://github.com/toshio2011/mihon-nooir/issues/8) — improvements and known work.
 - [**Project handover**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/PROJECT_HANDOVER.md) — contributor context and technical status.
 
