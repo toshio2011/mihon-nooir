@@ -1,8 +1,8 @@
 # E-reader device profiles — experimental v1.0.12
 
-> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
-MangaNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.
+MihonNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.
 
 ## Choose a reader
 

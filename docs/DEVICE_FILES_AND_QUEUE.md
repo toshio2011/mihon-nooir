@@ -1,27 +1,27 @@
 # Browse XTEink files, Activity Queue and filename conflicts
 
-> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. References to v1.0.11/v1.0.12 below are historical; the Windows app is still in development.
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 > [!IMPORTANT]
-> The built-in **Nooir Tools** screen and shared **Activity Queue** are features of the **experimental v1.0.11 APK**, not older v1.0.1 APKs; the `main` source is now v1.0.12. The [build passed Android CI](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but on-reader verification is pending.
+> The built-in **Nooir Tools** screen and **Activity Queue** are present in the current v1.0.16 Android release. They were originally introduced in v1.0.11, and are absent from much older v1.0.1 APKs.
 
 ## The built-in reader file browser
 
 1. On the XTEink, start **File Transfer → Join Network** or **Create Hotspot**.
 2. Connect your Android phone so it can reach the reader. Confirm the browser opens the IP shown on XTEink.
-3. In MangaNooir choose **More → Nooir Tools → Browse XTEink files**.
+3. In MihonNooir choose **More → Nooir Tools → Browse XTEink files**.
 4. Enter the device **IP/hostname only**, not `http://`. Tap **Connect & browse**, enter folders, use **Up folder**, or **Refresh**.
 5. The in-app view is **read-only** by design. To rename, move, create folders, download or delete files, choose **Open full file manager in browser**.
 
-**Without MangaNooir:** Folio Nooir already has a full web file manager at `http://READER-IP/files` when File Transfer is enabled. You can use that directly from your phone browser. It does not need this experimental APK.
+**Without MihonNooir:** Folio Nooir already has a full web file manager at `http://READER-IP/files` when File Transfer is enabled. You can use that directly from your phone browser. It does not need this experimental APK.
 
 **Delete** removes actual SD-card contents. Double-check filenames and stop transfers before changing existing files. Nooir uses local HTTP without a password, so use a trusted network and close File Transfer afterward.
 
 ## Track conversions and transfers in Activity Queue
 
-Open **MangaNooir → More → Nooir Tools → Activity Queue · All current jobs**.
+Open **MihonNooir → More → Nooir Tools → Activity Queue · All current jobs**.
 
 - **Current** shows the running job and waiting jobs.
 - **History** shows completed, failed or cancelled jobs.
@@ -37,7 +37,7 @@ Background work may still be interrupted by power/battery restrictions, revoked 
 
 In the draft build, **Activity Queue** shows a separate expandable card per job, with the manga title, format, device profile, chapter count, a preview of selected chapter names, progress, destination and error details. Use **Expand all** or **Collapse all**. Older jobs may lack the new chapter-preview fields.
 
-Before writing converted book bytes, MangaNooir now checks the requested cover and selected chapters:
+Before writing converted book bytes, MihonNooir now checks the requested cover and selected chapters:
 
 - **Missing cover:** first use a valid custom/cached image, then try the saved thumbnail URL. If that fails, automatically request refreshed manga details from the source (without refreshing chapters or changing the library entry), and retry the new thumbnail URL. If no usable cover is available, the job finishes in **Needs your decision** state. Choose **Continue without cover** to enqueue that one manga again without a separate cover, or **Cancel this book**. It never silently substitutes the first chapter as a cover.
 - **Unavailable chapters:** verify downloaded chapter files or, in Quick Export, the chapter page list and first remote image. If some chapters are locked, missing or unavailable, choose **Skip unavailable** to explicitly omit them, or cancel that manga. If every chapter is unavailable, no book is written.
@@ -67,7 +67,7 @@ Folio Nooir generates XTC/XTCH cover thumbnails from **the first page of the boo
 3. If page one is correct but a reader's **library shelf** lacks a thumbnail, refresh its thumbnail cache (on Folio Nooir: **Retrieve All Book Details**). MangaNooir-generated XTCH covers have been reported working on Folio Nooir.
 4. If the first book page is incorrect, please report the source, format (XTC or XTCH), phone build and Folio Nooir firmware version. Refreshing thumbnails won't fix a wrongly exported first page.
 
-A MangaNooir XTCH shelf cover is now reported visible on Folio Nooir. Continue testing different firmware versions and actual reading/navigation; automated XTC/XTCH tests only check the byte format and first-page/chapter indexing.
+A MihonNooir XTCH shelf cover is now reported visible on Folio Nooir. Continue testing different firmware versions and actual reading/navigation; automated XTC/XTCH tests only check the byte format and first-page/chapter indexing.
 
 [More XTC metadata detail](XTC_METADATA.md)
 

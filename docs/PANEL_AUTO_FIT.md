@@ -1,4 +1,4 @@
-# MangaNooir — Panel Auto Fit (Phase C, opt-in)
+# MihonNooir — Panel Auto Fit (Phase C, opt-in)
 
 ## User-facing behavior
 
