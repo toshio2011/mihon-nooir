@@ -60,7 +60,7 @@ Compatible firmware builds a shelf thumbnail from the **first page of an XTC/XTC
 
 ### Do I need Bluetooth, USB or an online server for e-reader transfers?
 
-No. Use Folio Nooir **File Transfer** on the same reachable local Wi-Fi, or its temporary hotspot. The phone can test the on-screen reader IP in Chrome first. Type just the **IP/hostname**, not `http://`, into MangaNooir. [Wi-Fi guide](WIFI_TRANSFER.md)
+No. Use Folio Nooir **File Transfer** on the same reachable local Wi-Fi, or its temporary hotspot. The phone can test the on-screen reader IP in Chrome first. Type just the **IP/hostname**, not `http://`, into MihonNooir. [Wi-Fi guide](WIFI_TRANSFER.md)
 
 ### Can I leave MihonNooir during conversion?
 
