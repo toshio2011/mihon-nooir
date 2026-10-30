@@ -1,10 +1,10 @@
-# MangaNooir FAQ
+# MihonNooir FAQ
 
-> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. Older v1.0.11/v1.0.12 notes below describe historical previews; the full Windows app is still in development.
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)
 
-> **Version:** Main-branch source is **v1.0.12** (unreleased); older builds may be v1.0.1. The newer [published experimental v1.0.11 APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed CI, but **broader phone/XTEink compatibility testing is still pending**. Features under **Nooir Tools** require the experimental build.
+> **Version:** Official v1.0.16 is current; v1.0.11 and v1.0.12 descriptions are historical, and physical compatibility still varies.
 
 ### Where is the chapter picker?
 
@@ -16,7 +16,7 @@ In the preview, yes: select chapters first and turn on **Quick Export · fetch m
 
 ### I can't find “Nooir Tools” under More.
 
-You're likely running an older **v1.0.1 APK**. The newer Tools hub exists in **experimental v1.0.11**, whose code is now included in [merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21). It is [published as an experimental prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), not a stable version. [Installation](GETTING_STARTED.md)
+You may be using an older v1.0.1 APK or ordinary Mihon. **Nooir Tools** is included in the official [MihonNooir v1.0.16 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16). [Installation](GETTING_STARTED.md)
 
 ### Can I send CBZ, PDF, EPUB, FB2 or other files from my phone?
 
@@ -46,13 +46,13 @@ That's the main target. The converter attempts to interleave text and figures at
 
 The **v1.0.11 experimental** WorkManager queue records per-book failure and allows later queued books to continue; a bad file inside a local batch also shouldn't block subsequent files. Open **More → Nooir Tools → Activity Queue → History** to inspect failures. **Cancel entire queue** is intentionally different; it stops waiting jobs too. [Queue guide](DEVICE_FILES_AND_QUEUE.md)
 
-### Does MangaNooir overwrite a book with the same name?
+### Does MihonNooir overwrite a book with the same name?
 
 The current preview checks output filenames **before converting** and again before upload, and rejects existing destination names instead of intentionally overwriting them. Choose another name or folder. The preflight check alone isn't an atomic guarantee against simultaneous uploads; the reader must also protect the file. [Queue / names guide](DEVICE_FILES_AND_QUEUE.md)
 
 ### Why does XTC/XTCH show the wrong cover or no cover?
 
-Compatible firmware builds a shelf thumbnail from the **first page of an XTC/XTCH book**. MangaNooir v1.0.11 exports the series cover first, and its XTCH cover has been reported working on Folio Nooir. If a shelf thumbnail is missing, check the actual first page and refresh the reader's cache (Folio Nooir: **Retrieve All Book Details**). Reader synopsis support varies by firmware. [Covers and metadata](XTC_METADATA.md)
+Compatible firmware builds a shelf thumbnail from the **first page of an XTC/XTCH book**. MihonNooir v1.0.11 exports the series cover first, and its XTCH cover has been reported working on Folio Nooir. If a shelf thumbnail is missing, check the actual first page and refresh the reader's cache (Folio Nooir: **Retrieve All Book Details**). Reader synopsis support varies by firmware. [Covers and metadata](XTC_METADATA.md)
 
 ### What output format should I choose?
 
@@ -62,15 +62,15 @@ Compatible firmware builds a shelf thumbnail from the **first page of an XTC/XTC
 
 No. Use Folio Nooir **File Transfer** on the same reachable local Wi-Fi, or its temporary hotspot. The phone can test the on-screen reader IP in Chrome first. Type just the **IP/hostname**, not `http://`, into MangaNooir. [Wi-Fi guide](WIFI_TRANSFER.md)
 
-### Can I leave MangaNooir during conversion?
+### Can I leave MihonNooir during conversion?
 
 The experimental tools use background WorkManager jobs, and you can navigate away. Android battery rules, forced stop, Wi-Fi loss and storage failures can interrupt them. Wait for **XTEink receiver confirmation** rather than assuming 100% upload means success. [Queue](DEVICE_FILES_AND_QUEUE.md)
 
 ### Where can I get the app? Can it replace regular Mihon?
 
-There is **no stable release yet**, but [v1.0.11 is published as an experimental GitHub prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Download the APK from **Assets**. MangaNooir has a separate package identity and can coexist with normal Mihon. Back up MangaNooir before changing debug builds, because signing keys may differ. [Install guide](GETTING_STARTED.md)
+The [official MihonNooir v1.0.16 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) offers signed APKs under **Assets**. MihonNooir is separate from ordinary Mihon. Back up your MihonNooir data before replacing older versions because signing keys may differ. [Install guide](GETTING_STARTED.md)
 
-### Is MangaNooir official, and does it include free manga?
+### Is MihonNooir official, and does it include free manga?
 
 No. This is an independent project based on Mihon, inspired by MangaPoint and built alongside Folio Nooir. It **does not bundle manga, content-source extensions or a catalog**. Use sources and documents you are entitled to access.
 

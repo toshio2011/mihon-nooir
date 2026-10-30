@@ -1,15 +1,15 @@
-# MangaNooir — user guides
+# MihonNooir — user guides
 
 **Developer handover (28 October 2026):** [Latest MihonNooir panel QA, merged fixes, draft diagnostics and next steps](HANDOVER_2026-10-28.md). This is a development snapshot; the currently published app version and available UI features can differ from test branches.
 
 [← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **Choose the guide for your installed version.** The latest [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) publishes the APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) with [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) merged. Physical-device testing is still needed. Nooir Tools is absent from older v1.0.1 APKs.
+> **Choose the guide for your installed version.** **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. Older v1.0.11/v1.0.12 notes below describe historical previews; the full Windows app is still in development. Nooir Tools is absent from older v1.0.1 APKs.
 
 ## If this is your first time
 
-1. [**Install MangaNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.
+1. [**Install MihonNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.
 2. [**Nooir Tools: six features explained**](NOOIR_TOOLS_QUICK_START.md) — short v1.0.11 user walkthrough.
 3. [**Connect your phone and XTEink over Wi-Fi**](WIFI_TRANSFER.md) — trusted LAN/hotspot and recipient confirmation.
 4. [**FAQ and troubleshooting**](FAQ.md) — solve common mistakes without digging through code.
@@ -36,7 +36,7 @@
 | [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
 | [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
 | [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
-| [v1.0.12 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) · [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) | Official release APKs, compatibility changes and tests |
+| [v1.0.16 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) · [historical PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) | Official release APKs, compatibility changes and tests |
 | [Automatic Panel-by-Panel implementation status](PANEL_IMPLEMENTATION_STATUS.md) | Experimental implementation integrated on main; real-panel and X4 acceptance still required before public release |
 | [Panel EPUB comparison QA](PANEL_EXPORT_QA.md) | Offline frame-by-frame content matching for old versus new exports, without uploading manga artwork |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |

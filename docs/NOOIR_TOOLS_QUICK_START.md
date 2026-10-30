@@ -1,17 +1,17 @@
 # Nooir Tools — quick start (experimental v1.0.11)
 
-> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. Older v1.0.11/v1.0.12 notes below describe historical previews; the full Windows app is still in development.
 
-[← MangaNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
+[← MihonNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
 
 > [!IMPORTANT]
-> These steps describe the **v1.0.11 experimental Android preview**, not the **older v1.0.1 APK** (`main` now has v1.0.12 source, not yet released). The [published v1.0.11 experimental APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks, **not physical phone/XTEink testing**. The experimental v1.0.11 prerelease is available; it is not a stable build.
+> **Version note:** These workflows originated in v1.0.11. For current Android APKs use the official v1.0.16 release; v1.0.1 predates the Tools hub.
 
-**Already using normal Mihon?** MangaNooir is a separate test app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
+**Already using normal Mihon?** MihonNooir is a separate test app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
 
 ## Where are the new tools?
 
-Open **MangaNooir → More → Nooir Tools**. Inside the hub:
+Open **MihonNooir → More → Nooir Tools**. Inside the hub:
 
 | Choose | Use it for |
 |---|---|
@@ -80,7 +80,7 @@ You can edit the resulting **book title, author and EPUB filename**. Save locall
 
 1. On Folio Nooir, enter **Home → File Transfer → Join Network** or **Create Hotspot**.
 2. Connect the phone so it can reach the reader. Open the **reader's displayed address** in your phone browser first and verify the file manager responds.
-3. In MangaNooir, type **only the IP/hostname** (no `http://`) and an **existing** folder such as `/Books` or `/`.
+3. In MihonNooir, type **only the IP/hostname** (no `http://`) and an **existing** folder such as `/Books` or `/`.
 4. Wait for **XTEink confirmation**, not merely 100% of bytes sent. The experimental upload guard is **180 MiB per file**.
 
 Folio Nooir's local HTTP transfer server is not password protected. Use only a trusted LAN or short-lived device hotspot and close File Transfer when finished.

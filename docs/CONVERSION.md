@@ -1,10 +1,10 @@
 # Formats, image conversion and metadata
 
-> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. Older v1.0.11/v1.0.12 notes below describe historical previews; the full Windows app is still in development.
 
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [Getting started](GETTING_STARTED.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
-MangaNooir exports manga into e-reader-oriented formats while keeping the source chapters and library information in Mihon.
+MihonNooir exports manga into e-reader-oriented formats while keeping the source chapters and library information in Mihon.
 
 > **Version note:** Older v1.0.1 builds support basic downloaded-manga export; **Quick Export, local files, advanced settings, shared queue, web and PDF tools** were added in the published experimental v1.0.11 preview and are retained in the v1.0.12 main source (not yet released). [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
 
@@ -65,7 +65,7 @@ These are **not full MangaPoint parity**. The **v1.0.11 preview adds portrait/la
 
 ## What happens to metadata?
 
-MangaNooir uses only the metadata available from Mihon or the imported comic file:
+MihonNooir uses only the metadata available from Mihon or the imported comic file:
 
 - **EPUB:** title, author, description, cover, language, publisher, identifiers, genres/subjects and navigation through the standard OPF/navigation files; optional extra JSON for Nooir-specific information.
 - **CBZ:** image sequence, `ComicInfo.xml` (series/title/writer/artist/summary/genre and related fields when available), and optional supplementary metadata JSON.

@@ -1,36 +1,36 @@
-# Getting started with MangaNooir
+# Getting started with MihonNooir
 
-> **Release status (22 October 2026):** [MangaNooir v1.0.12](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) is the **official public GitHub release**. The exact APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) were published without rebuilding. Real Android/XTEink device validation remains incomplete; these are not persistent-key-signed builds.
+> **Current release (29 October 2026):** [MihonNooir v1.0.16](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is the official Android release with persistent-key-signed APKs. Older v1.0.11/v1.0.12 notes below describe historical previews; the full Windows app is still in development.
 
 [← Homepage](../README.md) · [All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi guide](WIFI_TRANSFER.md)
 
-MangaNooir is an **experimental Android app based on the full Mihon reader**. Browse, organize and read manga as usual; MangaNooir adds ways to prepare and send books to e-ink readers.
+MihonNooir is an **experimental Android app based on the full Mihon reader**. Browse, organize and read manga as usual; MihonNooir adds ways to prepare and send books to e-ink readers.
 
 ## Step 1 — Choose the correct APK
 
 | Build | Features you can expect | Status |
 |---|---|---|
-| **Official v1.0.12 release** | Full Mihon overlay, Nooir Tools, EPUB 2/3, XTC/XTCH, multiprovider profiles, latest cover refresh and conversion workflows | [**Download official APKs**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12); physical checks pending |
+| **Official v1.0.16 release** | Full Mihon overlay, Nooir Tools, EPUB 2/3, XTC/XTCH, multiprovider profiles, latest cover refresh and conversion workflows | [**Download official APKs**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16); compatibility varies |
 | **Older v1.0.11 prerelease** (historical) | Adds **Nooir Tools** hub: phone files, queue, PDF, web links, multiple links into one EPUB, public web novels, advanced manga settings and device browser | [**Download prerelease APKs**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); broader reader validation pending |
 
-**v1.0.12 is officially published**, but real-device validation and stable signing remain pending. CI success does not prove every website, PDF or e-reader behaves correctly.
+**v1.0.16 is officially published with a persistent signing key.** In-place upgrades from earlier test-signed APKs may be rejected; reader and website behavior still varies. CI success does not prove every website, PDF or e-reader behaves correctly.
 
-### Install the official v1.0.12 APK
+### Install the official v1.0.16 APK
 
-1. Open the [v1.0.12 GitHub release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) and expand **Assets**.
-2. Download [`app-arm64-v8a-foss.apk`](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.12/app-arm64-v8a-foss.apk) for most phones or `app-universal-foss.apk`.
+1. Open the [v1.0.16 GitHub release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) and expand **Assets**.
+2. Download [`app-arm64-v8a-foss.apk`](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.16/app-arm64-v8a-foss.apk) for most phones or `app-universal-foss.apk`.
 3. Install the APK directly from Android's file manager. **You do not need to unzip a GitHub Actions artifact.**
 4. Let Android grant temporary **Install unknown apps** permission to your chosen file manager when prompted.
-5. Launch **MangaNooir**. It's separate from the original Mihon package and intended to coexist with it.
+5. Launch **MihonNooir**. It's separate from the original Mihon package and intended to coexist with it.
 
 > [!WARNING]
-> Before changing older **MangaNooir** test APKs, **back up your MangaNooir data**. CI-generated APKs may have different signing keys and fail to update one another. Don't uninstall ordinary Mihon just to try this app. No manga sources or source extensions are bundled.
+> Before changing older **MihonNooir** test APKs, **back up your MihonNooir data**. Older test-signed APKs may have a different signing certificate and fail to update in place over the persistent-key v1.0.16 release. Don't uninstall ordinary Mihon just to try this app. No manga sources or source extensions are bundled.
 
 [Build/update details](UPDATES.md)
 
 ## Step 2 — Locate the features
 
-In v1.0.12 open **More → Nooir Tools**:
+In v1.0.16 open **More → Nooir Tools**:
 
 | Tool | What it does |
 |---|---|
@@ -64,7 +64,7 @@ See [chapter selection examples](CHAPTER_SELECTION.md), [formats](CONVERSION.md)
 1. On Folio Nooir open **Home → File Transfer → Join Network** (home Wi-Fi) or **Create Hotspot**.
 2. Connect your phone to the same reachable network. With the hotspot, Android may say **no internet**; stay connected for local transfer.
 3. Open the reader's on-screen HTTP URL in your phone browser. You should see its file manager.
-4. In the MangaNooir transfer dialog type **only the reader's IP/hostname** (e.g. `192.168.1.102`, *not* `http://192.168.1.102/`) and an existing folder such as `/Books` or `/`.
+4. In the MihonNooir transfer dialog type **only the reader's IP/hostname** (e.g. `192.168.1.102`, *not* `http://192.168.1.102/`) and an existing folder such as `/Books` or `/`.
 5. Start **Send to XTEink**; wait for **reader acknowledgement** after the upload reaches 100%.
 
 The XTEink local server does **not** have authentication. Use trusted networks, turn off File Transfer when done, and don't start repeated uploads while one may still be processing.
@@ -87,7 +87,7 @@ The XTEink local server does **not** have authentication. Use trusted networks, 
 
 ## Step 6 — Read progress and handle errors
 
-The v1.0.12 release uses a **shared sequential WorkManager queue** for manga, file, web and PDF conversion/sending. Open **Nooir Tools → Activity Queue**; choose **History** to see finished or failed tasks. An ordinary failed book should not block the next queued job.
+The current Android release uses a **shared sequential WorkManager queue** for manga, file, web and PDF conversion/sending. Open **Nooir Tools → Activity Queue**; choose **History** to see finished or failed tasks. An ordinary failed book should not block the next queued job.
 
 **Destination filename already exists?** Enter a different name before starting; the preview checks names before expensive processing and again at upload. It should not silently overwrite a book.
 

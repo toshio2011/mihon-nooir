@@ -2,13 +2,13 @@
 
 [← Documentation](README.md) · [Main README](../README.md) · [Getting started](GETTING_STARTED.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
-**The most important step:** choose chapters **on the manga details screen before opening Export**. The Export dialog chooses the device, format and destination; it does **not** contain a separate chapter picker. In this context, “import chapters” usually means **export chapters out of MangaNooir** for your e-reader.
+**The most important step:** choose chapters **on the manga details screen before opening Export**. The Export dialog chooses the device, format and destination; it does **not** contain a separate chapter picker. In this context, “import chapters” usually means **export chapters out of MihonNooir** for your e-reader.
 
 > **Version note:** This chapter-selection flow exists in the baseline app, but **Quick Export, Nooir Tools and its Activity Queue** require experimental v1.0.11; [download/installation guide](GETTING_STARTED.md).
 
 ## Select exactly the chapters you want
 
-1. Open **MangaNooir → Library** (or browse a source) and open the manga's **details page**, where its chapter list appears.
+1. Open **MihonNooir → Library** (or browse a source) and open the manga's **details page**, where its chapter list appears.
 2. **Long-press** the first chapter you want. This enters Mihon's chapter-selection mode; the chapter becomes selected.
 3. **Tap** additional chapters to include them. Tap a selected chapter again to deselect it.
 4. For consecutive chapters, you can **long-press a later chapter** and Mihon's range-selection behavior may select the chapters in between. Check the highlighted chapters and selected count before exporting.
@@ -16,11 +16,11 @@
 6. When the correct chapters are highlighted, tap the **Save/Export icon** in the top toolbar (the selected-chapters mode shows “Export selected chapters”; the normal toolbar shows “Export to XTEink”).
 7. In **Export to e-reader**, choose the **X4 / X3 preset**, **Auto / XTC / XTCH / EPUB / CBZ**, and optionally **More conversion settings** in the experimental preview. Then choose **Save file** or **Send to XTEink**.
 
-MangaNooir exports the chosen chapters into **one output book** with chapter navigation, rather than producing one file per selected chapter. The exporter orders chapters by chapter number; this may differ from the order currently shown on screen if you've changed Mihon's sorting.
+MihonNooir exports the chosen chapters into **one output book** with chapter navigation, rather than producing one file per selected chapter. The exporter orders chapters by chapter number; this may differ from the order currently shown on screen if you've changed Mihon's sorting.
 
 ## Important: Normal Export vs Quick Export
 
-| Your choice | What MangaNooir exports |
+| Your choice | What MihonNooir exports |
 |---|---|
 | **Normal Export**, some chapters selected | **Only selected chapters that are already downloaded** in Mihon. Selected chapters that aren't downloaded are skipped. |
 | **Normal Export**, **nothing selected** | **All downloaded chapters** of that manga. This can be a lot more than you intended. |
@@ -29,7 +29,7 @@ MangaNooir exports the chosen chapters into **one output book** with chapter nav
 
 **Quick Export isn't a separate “import chapters” screen.** Choose the chapter selection first, then turn on **Quick Export · fetch missing pages** in the Export dialog. That checkbox only works for an **online source**; it is disabled for a local/non-online source.
 
-For non-downloaded online chapters, MangaNooir uses the installed source extension and its page/image requests. It processes one chapter at a time and cleans temporary fetched page files afterward, without marking the chapter permanently downloaded in Mihon. There is no fixed five-chapter limit, but a long series still needs time and output storage. Sending a single output to XTEink in the current experimental sender is capped at **180 MiB** for reliability; split your selection into smaller batches until automatic volume splitting is implemented.
+For non-downloaded online chapters, MihonNooir uses the installed source extension and its page/image requests. It processes one chapter at a time and cleans temporary fetched page files afterward, without marking the chapter permanently downloaded in Mihon. There is no fixed five-chapter limit, but a long series still needs time and output storage. Sending a single output to XTEink in the current experimental sender is capped at **180 MiB** for reliability; split your selection into smaller batches until automatic volume splitting is implemented.
 
 ## Examples
 
@@ -50,11 +50,11 @@ The **More → Nooir Tools → Send & Convert files** picker is *different* from
 ## If you can't find the chapter selection
 
 - **Tapping a chapter opens the reader instead of selecting:** First **long-press** a chapter to enter selection mode, then tap other chapters.
-- **No Export icon:** Check that you're in **MangaNooir**, not the original Mihon, and look in the toolbar actions/overflow menu if your screen is narrow.
+- **No Export icon:** Check that you're in **MihonNooir**, not the original Mihon, and look in the toolbar actions/overflow menu if your screen is narrow.
 - **Quick Export is disabled:** The manga isn't from a compatible online source.
 - **Quick Export's Save/Send is disabled:** Select at least one chapter **before opening Export**, then reopen the dialog.
 - **Normal Export ignores some selected chapters:** They must be permanently downloaded, or use Quick Export in the experimental preview.
 - **No downloaded chapters and no selection:** Normal Export cannot produce a book; download chapters first or explicitly select chapters for Quick Export.
 - **I want one file per chapter instead of one combined book:** The current manga details export creates a single combined file. Automatic split-by-chapter/volume is tracked on the [roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
 
-The chapter-selection behavior above is based on the **pinned Mihon UI and MangaNooir exporter code**. Exact icon placement can vary slightly by device size and build. [Report problems or request refinements](https://github.com/toshio2011/mihon-nooir/issues).
+The chapter-selection behavior above is based on the **pinned Mihon UI and MihonNooir exporter code**. Exact icon placement can vary slightly by device size and build. [Report problems or request refinements](https://github.com/toshio2011/mihon-nooir/issues).

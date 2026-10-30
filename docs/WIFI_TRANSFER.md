@@ -2,7 +2,7 @@
 
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [First-time setup](GETTING_STARTED.md) · [Folio Nooir web-server docs](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
 
-MangaNooir can send converted manga to XTEink readers with a **compatible HTTP/WebSocket File Transfer API**. The documented integration uses Folio Nooir's server; other firmware may have different endpoints. The experimental v1.0.11 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
+MihonNooir can send converted manga to XTEink readers with a **compatible HTTP/WebSocket File Transfer API**. The documented integration uses Folio Nooir's server; other firmware may have different endpoints. The experimental v1.0.11 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
 
 > [!WARNING]
 > Folio Nooir's web server has **no authentication** and serves local HTTP. Use a trusted private network or the reader's short-lived hotspot. Turn off File Transfer when finished.
@@ -29,7 +29,7 @@ No router nearby? You can connect your phone directly to the reader.
 4. Use the address shown on the reader. It is often `http://192.168.4.1/` in the browser, but always prefer the actual on-screen IP.
 5. Turn off the hotspot after transferring. It is open and not encrypted.
 
-## Send from MangaNooir
+## Send from MihonNooir
 
 ### From a manga details screen (main 1.0.1 and experimental preview)
 
@@ -76,7 +76,7 @@ For initial testing, send a **5–20 MB** file, confirm it appears in the reader
 |---|---|
 | Chrome cannot open XTEink URL | Confirm File Transfer mode, same LAN/hotspot, correct IP, no guest isolation/VPN |
 | `crosspoint.local` won't resolve | Enter the XTEink's displayed IP address |
-| MangaNooir says cannot connect | Open the same address in Chrome; use **IP only**, no `http://` or slash in the app field |
+| MihonNooir says cannot connect | Open the same address in Chrome; use **IP only**, no `http://` or slash in the app field |
 | Transfer progress doesn't move | Stay close to router, check XTEink power/SD space, inspect status notification; don't turn off File Transfer |
 | XTEink says file failed or SD full | Free SD space; check for an incomplete file; try a much smaller file |
 | Transfer completes but book won't open | File transfer ≠ file format support. Check the firmware's EPUB/CBZ/XTC/XTCH support |

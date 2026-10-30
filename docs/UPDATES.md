@@ -2,14 +2,14 @@
 
 ## Keeping the app up to date
 
-The [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) is publicly available. It publishes the exact APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) at merged source commit `5563d133` (no rebuild or re-sign). **Official release status does not mean persistent-key signing or completed hardware validation.** Android experimental signing keys may differ, so back up MangaNooir before replacing older test builds. Physical-device validation is still pending.
+The current [MihonNooir v1.0.16 official Android release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) is published with persistent-key-signed APKs and SHA256 checksums. The earlier v1.0.12 APKs used an experimental signing certificate, so Android may reject in-place upgrades. **Back up your existing MihonNooir data before changing installations.** A CI success is not a guarantee of compatibility with every phone or e-reader.
 
 
 The fork will reuse Mihon's existing in-app update checker and installer, but its APK releases must come from **toshio2011/mihon-nooir**, not upstream Mihon. The fork's package ID is `dev.nooir.mihon.foss`. Android always requires matching signing certificates to install an update over an earlier APK.
 
 The integrated build must redirect `AppUpdateChecker.GITHUB_REPO` to this fork, enable updater through `-Pdist=foss`, and use numeric three-part independent versions from `config/version.txt`. Its GitHub releases must publish `vX.Y.Z` with a `-foss.apk` asset so the existing Mihon release parser can discover the download.
 
-A *stable* release will need these repository secrets configured in **Settings → Secrets and variables → Actions**: `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Do not commit them. Debug CI APKs signed with different ephemeral keys cannot replace earlier installs.
+Signed release workflows require these private repository secrets configured in **Settings → Secrets and variables → Actions**: `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Do not commit them. Debug CI APKs signed with different ephemeral keys cannot replace earlier installs.
 
 No stable release workflow should silently auto-publish when upstream Mihon changes, and app updates should require user approval on Android.
 
