@@ -34,6 +34,7 @@
 | Document | Purpose |
 |---|---|
 | [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
+| [Branding and legacy identifiers](BRANDING.md) | Current product name, old fixture names and safe migration policy |
 | [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
 | [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
 | [v1.0.16 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) · [historical PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) | Official release APKs, compatibility changes and tests |

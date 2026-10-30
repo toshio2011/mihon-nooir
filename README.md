@@ -94,6 +94,7 @@ These features began in experimental previews; the current official release stil
 | [Activity Queue and XTEink files](https://github.com/toshio2011/mihon-nooir/blob/main/docs/DEVICE_FILES_AND_QUEUE.md) | Failures, duplicate names, cover cache and device browser |
 | [XTC cover/synopsis](https://github.com/toshio2011/mihon-nooir/blob/main/docs/XTC_METADATA.md) · [FAQ](https://github.com/toshio2011/mihon-nooir/blob/main/docs/FAQ.md) | Metadata compatibility and frequent questions |
 | [Build/update policy](https://github.com/toshio2011/mihon-nooir/blob/main/docs/UPDATES.md) · [Developer handover](https://github.com/toshio2011/mihon-nooir/blob/main/docs/PROJECT_HANDOVER.md) | Signing, pinned Mihon, current development branches |
+| [Branding and legacy names](docs/BRANDING.md) | Why the app is MihonNooir but some historical files/classes still say MangaNooir |
 
 [**Browse the full guide index →**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/README.md)
 
