@@ -149,7 +149,9 @@ internal class OfflineSaveQueue(
                 if (existing != null) {
                     submitted += existing
                 } else {
-                    require(jobs.size < MAX_JOBS) { "Offline job queue is full" }
+                    require(jobs.size < MAX_JOBS) {
+                        "Offline job queue is full (500 records). Use Clear finished/canceled records to reclaim capacity."
+                    }
                     val new = OfflineSaveJob(UUID.randomUUID().toString(),
                         port, mangaId, chapterId, OfflineJobState.PENDING, 0)
                     jobs += new
@@ -159,6 +161,26 @@ internal class OfflineSaveQueue(
             write(jobs)
             submitted
         }
+
+    /**
+     * Reclaims bounded local queue capacity after an explicit user decision.
+     * Only completely finished and canceled records for the chosen localhost
+     * port can be forgotten. Files, offline series, Suwayomi downloads and
+     * uncertain / running / retryable operations remain untouched.
+     */
+    fun forgetFinished(endpoint: String): Int = synchronized(gate) {
+        val port = portOf(endpoint)
+        val jobs = read()
+        val removable = jobs.filter {
+            it.port == port && it.state in setOf(
+                OfflineJobState.COMPLETED, OfflineJobState.CANCELED)
+        }
+        if (removable.isNotEmpty()) {
+            write(jobs.filterNot { it.id in removable.map { item -> item.id }.toSet() })
+            removable.forEach { ownedRunningIds.remove(it.id) }
+        }
+        removable.size
+    }
 
     /** Claims one pending job only after an explicit Run click. */
     fun claimNext(endpoint: String): OfflineSaveJob? = synchronized(gate) {

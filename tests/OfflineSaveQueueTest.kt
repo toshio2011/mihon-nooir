@@ -73,6 +73,48 @@ fun main() {
         check(runCatching { queue.enqueue(endpoint, 9, emptyList()) }.isFailure)
         check(runCatching { queue.enqueue(endpoint, 9, (1..21).toList()) }.isFailure)
 
+        // A full 500-slot queue is recoverable without deleting chapter CBZs
+        // or erasing failed, interrupted or in-flight copy attempts.
+        val large = Files.createTempDirectory("mihonnooir-offline-capacity-")
+        try {
+            val bounded = OfflineSaveQueue(large)
+            val marker = large.resolve("keep-existing-chapter.cbz")
+            Files.writeString(marker, "Unrelated saved comic must survive cleanup")
+            for (start in 1..500 step 20) {
+                bounded.enqueue(endpoint, 23, (start..start + 19).toList())
+            }
+            check(bounded.list().size == OfflineSaveQueue.MAX_JOBS)
+            check(runCatching { bounded.enqueue(endpoint, 23, listOf(501)) }.isFailure)
+            val completed = checkNotNull(bounded.claimNext(endpoint))
+            bounded.complete(completed.id)
+            val failed = checkNotNull(bounded.claimNext(endpoint))
+            bounded.fail(failed.id, "Simulated local save failure")
+            val running = checkNotNull(bounded.claimNext(endpoint))
+            val canceledJob = bounded.list().single { it.chapterId == 500 }
+            bounded.cancel(canceledJob.id)
+            check(bounded.forgetFinished("http://localhost:8001") == 0) {
+                "Cleanup must never touch a different Suwayomi port"
+            }
+            val deleted = bounded.forgetFinished(endpoint)
+            check(deleted == 2) { "Only completed/canceled records may be cleared" }
+            val kept = OfflineSaveQueue(large).list()
+            check(kept.size == 498)
+            check(kept.any { it.id == failed.id && it.state == OfflineJobState.FAILED })
+            check(kept.any { it.id == running.id && it.state == OfflineJobState.RUNNING })
+            check(kept.none { it.id == completed.id || it.id == canceledJob.id })
+            check(bounded.forgetFinished(endpoint) == 0) { "Cleanup must be idempotent" }
+            check(Files.readString(marker) == "Unrelated saved comic must survive cleanup")
+            bounded.enqueue(endpoint, 23, listOf(501, 502))
+            check(OfflineSaveQueue(large).list().size == 500) {
+                "New jobs can use freed slots across a restart"
+            }
+            check(runCatching { bounded.enqueue(endpoint, 23, listOf(503)) }.isFailure)
+            check(OfflineSaveQueue(large).list().size == 500)
+            bounded.fail(running.id, "Stopped test operation")
+        } finally {
+            large.toFile().deleteRecursively()
+        }
+
         // Invalid files fail closed rather than being reset or overwritten.
         Files.writeString(saved, "UNKNOWN_VERSION\n", StandardCharsets.UTF_8)
         check(runCatching { queue.list() }.isFailure)

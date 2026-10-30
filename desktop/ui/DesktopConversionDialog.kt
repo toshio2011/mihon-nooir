@@ -85,7 +85,7 @@ internal object DesktopConversionDialog {
             add(showOverview); add(keepChapterFirstWhole)
             add(extended); add(JLabel("XTC/XTCH always grayscale"))
         }
-        if (JOptionPane.showConfirmDialog(parent, panel, "MangaNooir conversion settings",
+        if (JOptionPane.showConfirmDialog(parent, panel, "MihonNooir conversion settings",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
             return null
         }

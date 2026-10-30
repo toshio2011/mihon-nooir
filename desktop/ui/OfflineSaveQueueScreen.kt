@@ -43,6 +43,7 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
     private val retry = JButton("Retry selected")
     private val cancel = JButton("Cancel selected")
     private val refresh = JButton("Refresh")
+    private val clearFinished = JButton("Clear finished/canceled records")
     private val openLibrary = JButton("Downloaded series")
     private val message = JLabel()
     private val stopAfterCurrent = AtomicBoolean(false)
@@ -83,6 +84,7 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
             add(this@OfflineSaveQueueWindow.retry)
             add(this@OfflineSaveQueueWindow.cancel)
             add(this@OfflineSaveQueueWindow.refresh)
+            add(this@OfflineSaveQueueWindow.clearFinished)
             add(this@OfflineSaveQueueWindow.openLibrary)
         }, BorderLayout.NORTH)
         add(JScrollPane(jobs), BorderLayout.CENTER)
@@ -94,6 +96,7 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
         retry.addActionListener { changeSelected { queue.retry(it.id) } }
         cancel.addActionListener { changeSelected { queue.cancel(it.id) } }
         refresh.addActionListener { reload() }
+        clearFinished.addActionListener { forgetFinished() }
         openLibrary.addActionListener { OfflineSeriesScreen.open() }
         reload()
     }
@@ -109,6 +112,10 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
         cancel.isEnabled = !active && selected?.state in setOf(
             OfflineJobState.PENDING, OfflineJobState.FAILED, OfflineJobState.INTERRUPTED)
         refresh.isEnabled = !active
+        clearFinished.isEnabled = !active && model.elements().asSequence().any {
+            it.port == currentPort && it.state in setOf(
+                OfflineJobState.COMPLETED, OfflineJobState.CANCELED)
+        }
     }
 
     private fun reload() {
@@ -138,6 +145,29 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
             reload()
         } catch (e: Exception) {
             warn(e.message ?: "Cannot update offline job")
+        }
+    }
+
+    private fun forgetFinished() {
+        if (active) return
+        try {
+            val count = queue.list().count {
+                it.port == currentPort && it.state in setOf(
+                    OfflineJobState.COMPLETED, OfflineJobState.CANCELED)
+            }
+            if (count == 0) return
+            val answer = JOptionPane.showConfirmDialog(this,
+                "Forget $count completed or canceled LOCAL copy-queue record(s)?\n" +
+                    "This does NOT delete saved CBZ files or downloaded manga.\n" +
+                    "Pending, running, failed and interrupted jobs stay in the queue.\n" +
+                    "Only records for this Suwayomi localhost port are affected.",
+                "Clear finished offline copy jobs", JOptionPane.YES_NO_OPTION)
+            if (answer != JOptionPane.YES_OPTION) return
+            val cleared = queue.forgetFinished(endpoint)
+            reload()
+            message.text = "Cleared $cleared finished/canceled job record(s); comic files untouched."
+        } catch (e: Exception) {
+            warn(e.message ?: "Could not clear completed jobs")
         }
     }
 
