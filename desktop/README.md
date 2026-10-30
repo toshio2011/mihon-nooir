@@ -1,3 +1,7 @@
+## Synthetic cross-workflow acceptance (Windows preview)
+
+A headless localhost-only acceptance test now exercises the joined path: completed Suwayomi request records → explicit offline-copy handoff → persistent CBZ job completion → reload grouped library after restart → Continue Reading → EPUB 2 export **from the local CBZ**. It rejects duplicate source submissions and asserts that reopening and converting offline cause no new manga-source or CBZ requests. This is synthetic contract coverage, **not** proof against a real released Suwayomi server or an actual Windows display.
+
 ## Continue Reading for downloaded series (Windows preview)
 
 From **Local library**, click **Continue last downloaded manga** to reopen the most recently read available CBZ chapter in one step. Alternatively, open **Downloaded series**. The new **Start / Continue selected series** button opens the last-read available chapter for that series, falling back to its first available downloaded chapter if it has not been read yet. **Continue last read** opens the most recently read available chapter across all downloaded series. The series list shows which chapter is currently resumable.

@@ -6,6 +6,15 @@ import dev.nooir.desktop.ui.OfflineChapterSaver
 import dev.nooir.desktop.ui.LocalLibraryStore
 import dev.nooir.desktop.ui.OfflineSeriesCatalog
 import dev.nooir.desktop.ui.LocalComicPages
+import dev.nooir.desktop.ui.OfflineJobState
+import dev.nooir.desktop.ui.OfflineReadingResume
+import dev.nooir.desktop.ui.OfflineSaveQueue
+import dev.nooir.desktop.ui.RemoteChapterQueue
+import dev.nooir.desktop.ui.RemoteChapterOfflineHandoff
+import dev.nooir.desktop.ui.RemoteChapterRunner
+import dev.nooir.desktop.ui.RemoteChapterState
+import dev.nooir.desktop.ui.ReaderChapter
+import dev.nooir.desktop.ui.ReaderChapterSequence
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -160,6 +169,84 @@ fun main() {
             "Repeated chapter imports must not create duplicate series entries"
         }
         check(queued.get() == 1) { "Offline book save must never enqueue source downloads" }
+        // Cross-component mock acceptance: user queues completed Suwayomi
+        // chapters, chooses offline CBZ copy jobs, can reopen them after a
+        // simulated process restart and convert a saved chapter without any
+        // further source download. Never silently start queue operations.
+        val remoteFolder = File(root, "remote-jobs").toPath()
+        val offlineQueueFolder = File(root, "offline-copy-jobs").toPath()
+        val remoteQueue = RemoteChapterQueue(remoteFolder)
+        val persistedRequests = remoteQueue.add(base, 1, listOf(11, 12))
+        check(remoteQueue.list().all { it.state == RemoteChapterState.PENDING })
+        val beforeApproval = queued.get()
+        check(RemoteChapterQueue(remoteFolder).list().size == 2) {
+            "Requests survive restart without implicit source downloads"
+        }
+        val remoteRunner = RemoteChapterRunner(remoteQueue, client, 0, 1)
+        for (request in persistedRequests) {
+            val claimed = checkNotNull(remoteQueue.claim(base))
+            check(claimed.id == request.id)
+            check(remoteRunner.runClaimed(claimed, { false })) {
+                "Previously downloaded chapter must be recognized without a new enqueue"
+            }
+        }
+        check(remoteQueue.list().all { it.state == RemoteChapterState.DOWNLOADED })
+        check(queued.get() == beforeApproval) {
+            "Verified downloads must not be submitted to Suwayomi a second time"
+        }
+
+        val offlineJobs = OfflineSaveQueue(offlineQueueFolder)
+        val handoff = RemoteChapterOfflineHandoff(remoteQueue, offlineJobs)
+        val copyJobs = handoff.queueDownloaded(base, persistedRequests.map { it.id })
+        check(copyJobs.size == 2 && copyJobs.all { it.state == OfflineJobState.PENDING })
+        check(handoff.queueDownloaded(base, persistedRequests.map { it.id })
+            .map { it.id } == copyJobs.map { it.id }) {
+            "Offline CBZ handoff must be idempotent"
+        }
+        check(OfflineSaveQueue(offlineQueueFolder).list().size == 2)
+        val beforeCopies = fetched.get()
+        for (expected in copyJobs) {
+            val claimed = checkNotNull(offlineJobs.claimNext(base))
+            check(claimed.id == expected.id)
+            check(offlineSaver.save(client, 1, listOf(claimed.chapterId)).size == 1)
+            offlineJobs.complete(claimed.id)
+        }
+        check(OfflineSaveQueue(offlineQueueFolder).list().all {
+            it.state == OfflineJobState.COMPLETED
+        })
+        check(fetched.get() == beforeCopies) {
+            "Already saved CBZ chapters must be reused, not downloaded again"
+        }
+        check(queued.get() == beforeApproval)
+        // Chapter/page history remains local, not tied to the Suwayomi server.
+        offlineLibrary.markOpened(savedChapters[1], 12_345L)
+        val reopenedSeries = OfflineSeriesCatalog(File(root, "offline-series-index").toPath()).series()
+        val reopenedLibrary = LocalLibraryStore(offlineIndex).books()
+        val resume = checkNotNull(OfflineReadingResume.mostRecent(reopenedSeries, reopenedLibrary))
+        check(resume.series.mangaId == 1 && resume.chapter.chapterId == 12)
+        check(resume.lastOpenedAt == 12_345L)
+        val sequence = ReaderChapterSequence(resume.series.title,
+            resume.series.chapters.map {
+                ReaderChapter(it.chapterId, it.chapterTitle, it.file)
+            }, resume.series.chapters.indexOfFirst { it.chapterId == resume.chapter.chapterId })
+        check(sequence.current.file.canonicalFile == savedChapters[1].canonicalFile)
+        check(sequence.adjacent(-1)?.current?.id == 11)
+        val offlineEpub = File(root, "offline-resumed.epub")
+        dev.nooir.desktop.NooirDesktopCli.main(arrayOf(
+            "--input", resume.chapter.file.absolutePath,
+            "--output", offlineEpub.absolutePath,
+            "--format", "EPUB2", "--device", "X4",
+            "--title", "Offline resumed chapter",
+        ))
+        check(offlineEpub.length() > 100)
+        ZipFile(offlineEpub).use { z ->
+            check(z.getEntry("OEBPS/package.opf") != null)
+            check(z.getEntry("OEBPS/toc.ncx") != null)
+        }
+        check(queued.get() == beforeApproval && fetched.get() == beforeCopies) {
+            "Converting the local CBZ after restart must be completely offline"
+        }
+
         restartedCatalog.forget(1, 11)
         check(restartedCatalog.series().first().chapters.map { it.chapterId } == listOf(12)) {
             "Removing a grouped chapter must not remove unrelated chapters"
