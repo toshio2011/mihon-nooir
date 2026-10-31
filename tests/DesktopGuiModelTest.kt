@@ -7,6 +7,7 @@ import dev.nooir.desktop.ui.ReaderChapter
 import dev.nooir.desktop.ui.ReaderChapterSequence
 import dev.nooir.desktop.ui.WebtoonWindow
 import dev.nooir.desktop.ui.LocalLibraryStore
+import dev.nooir.desktop.ui.LocalLibraryPresentation
 import dev.nooir.desktop.ui.OfflineReadingResume
 import dev.nooir.desktop.ui.OfflineSeries
 import dev.nooir.desktop.ui.OfflineSeriesChapter
@@ -152,6 +153,33 @@ fun main() {
         }
         check(LocalComicPages.names(zip) == listOf("page 2.png", "page 10.png"))
         check(LocalComicPages.read(zip, "page 10.png").height == 48)
+        // Cover preview uses the secure comic reader, prioritizes an actual
+        // named cover even when natural-order page one sorts before it.
+        val coverImage = BufferedImage(32, 48, BufferedImage.TYPE_INT_RGB)
+        val coverGraphics = coverImage.createGraphics()
+        coverGraphics.color = Color(190, 38, 20)
+        coverGraphics.fillRect(0, 0, 32, 48)
+        coverGraphics.dispose()
+        check(ImageIO.write(coverImage, "png", File(folder, "cover.png")))
+        val thumb = LocalLibraryPresentation.cover(folder, 96, 144)
+        check(thumb.width == 96 && thumb.height == 144)
+        check(thumb.getRGB(48, 72) == Color(190, 38, 20).rgb) {
+            "Named cover must win over natural page order, without downloading artwork"
+        }
+        thumb.flush()
+        val cbzThumb = LocalLibraryPresentation.cover(zip, 90, 120)
+        check(cbzThumb.width == 90 && cbzThumb.height == 120)
+        cbzThumb.flush()
+        check(runCatching { LocalLibraryPresentation.cover(folder, 5, 144) }.isFailure)
+        check(runCatching { LocalLibraryPresentation.cover(
+            File(folder, "missing.cbz")) }.isFailure)
+        val bookChoices = listOf(
+            dev.nooir.desktop.ui.LocalLibraryBook(zip, "Detective Conan", 4L, true),
+            dev.nooir.desktop.ui.LocalLibraryBook(folder, "Strange House", 0L, true))
+        check(LocalLibraryPresentation.filter(bookChoices, "").size == 2)
+        check(LocalLibraryPresentation.filter(bookChoices, "  CONAN  ").single().file == zip)
+        check(LocalLibraryPresentation.filter(bookChoices, "sTRaNGE").single().file == folder)
+        check(LocalLibraryPresentation.filter(bookChoices, "not a title").isEmpty())
         // Continue reading uses already-persisted local timestamps and keeps
         // the reader's existing per-file page position independent.
         val secondZip = File(folder, "chapter-three.cbz")

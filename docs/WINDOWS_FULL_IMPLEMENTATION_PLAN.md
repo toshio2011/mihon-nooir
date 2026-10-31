@@ -65,7 +65,8 @@ No DRM bypass, bundled copyrighted manga, unapproved sources, hidden extension i
 
 ### W3 — Full manga library and reader
 
-- [ ] Native cover grid, series detail, chapter view, downloaded marker, filters/categories/search/history.
+- [x] Add first **offline local bookshelf title search and on-demand cover preview** for CBZ/image folders, using bounded local-page decoding and asynchronous Swing update with selection invalidation; test cover priority and filtering headlessly.
+- [ ] Native multi-column cover grid, series detail, chapter view, downloaded marker, richer filters/categories/search/history.
 - [x] Extend the local CBZ/image-folder reader with **two-page spreads**, first-page-alone handling, correct RTL physical placement, direct page jump, zoom/fit, keyboard shortcuts, and saved per-book page position. Add **previous/next offline chapter** buttons in the grouped-series reader; preserve progress separately for each chapter. Synthetic page-count and skip-missing-chapter tests cover navigation; this remains an offline preview, not a full online reader.
 - [x] Add first **continuous vertical webtoon preview** with a rolling three-page decoding buffer (36 million source pixels max), scroll-position tracking, asynchronous page loading, saved progress and explicit jump handling; test window coverage and capacity bounds.
 - [x] Add **Start / Continue selected series** and **Continue last read** to the downloaded-series bookshelf, using existing local-library last-opened timestamps and per-book page-resume state. Missing CBZs are skipped and never downloaded. Synthetic restart/missing-file tests; real Windows clicks remain to be verified.
