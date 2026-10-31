@@ -4,12 +4,16 @@ import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.image.BufferedImage
+import java.io.File
+import java.util.concurrent.ExecutionException
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
 import javax.swing.DefaultListCellRenderer
 import javax.swing.DefaultListModel
 import javax.swing.JButton
+import javax.swing.ImageIcon
 import javax.swing.JFrame
 import javax.swing.JLabel
 import javax.swing.JList
@@ -18,6 +22,13 @@ import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.JSplitPane
 import javax.swing.ListSelectionModel
+import javax.swing.SwingWorker
+
+/** Pick a local saved chapter for an offline-only series preview. */
+internal object OfflineSeriesCoverSource {
+    fun choose(series: OfflineSeries): File? =
+        series.chapters.firstOrNull { it.available }?.file
+}
 
 /**
  * Group downloaded CBZ chapters by their actual Suwayomi manga ID and title.
@@ -67,6 +78,10 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
     private val chapterModel = DefaultListModel<OfflineSeriesChapter>()
     private val seriesList = JList(seriesModel)
     private val chapterList = JList(chapterModel)
+    private val preview = JLabel("Select a downloaded series", JLabel.CENTER)
+    private val previewStatus = JLabel("Saved local chapters only")
+    private var previewVersion = 0L
+    private var previewWorker: SwingWorker<BufferedImage, Unit>? = null
     private val read = JButton("Read chapter")
     private val continueSelected = JButton("Start / Continue selected series")
     private val continueLatest = JButton("Continue last read")
@@ -124,7 +139,16 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
             resizeWeight = 0.43
             dividerLocation = 380
         }
-        add(split, BorderLayout.CENTER)
+        val previewPanel = JPanel(BorderLayout()).apply {
+            preferredSize = Dimension(245, 360)
+            border = BorderFactory.createEmptyBorder(12, 12, 12, 12)
+            add(preview, BorderLayout.CENTER)
+            add(previewStatus, BorderLayout.SOUTH)
+        }
+        add(JSplitPane(JSplitPane.HORIZONTAL_SPLIT, split, previewPanel).apply {
+            resizeWeight = 0.78
+            dividerLocation = 775
+        }, BorderLayout.CENTER)
         add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             add(this@OfflineSeriesWindow.read)
             add(this@OfflineSeriesWindow.continueSelected)
@@ -137,8 +161,17 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
         }, BorderLayout.SOUTH)
 
         seriesList.addListSelectionListener {
-            if (!it.valueIsAdjusting) loadChapters()
+            if (!it.valueIsAdjusting) {
+                loadChapters()
+                loadSeriesPreview()
+            }
         }
+        addWindowListener(object : java.awt.event.WindowAdapter() {
+            override fun windowClosed(e: java.awt.event.WindowEvent?) {
+                previewVersion++
+                previewWorker?.cancel(true)
+            }
+        })
         chapterList.addListSelectionListener {
             if (!it.valueIsAdjusting) setActions()
         }
@@ -153,6 +186,47 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
         forget.addActionListener { forgetSelected() }
         refresh.addActionListener { reload() }
         reload()
+    }
+
+    private fun loadSeriesPreview() {
+        previewVersion++
+        val request = previewVersion
+        previewWorker?.cancel(true)
+        previewWorker = null
+        preview.icon = null
+        val selected = seriesList.selectedValue
+        if (selected == null) {
+            preview.text = "Select a downloaded series"
+            previewStatus.text = "Local CBZ preview only"
+            return
+        }
+        val firstSaved = OfflineSeriesCoverSource.choose(selected)
+        if (firstSaved == null) {
+            preview.text = "No available chapter"
+            previewStatus.text = "Restore or download saved CBZ chapters"
+            return
+        }
+        preview.text = "Loading local cover..."
+        previewStatus.text = "Preview from first available saved chapter"
+        previewWorker = object : SwingWorker<BufferedImage, Unit>() {
+            override fun doInBackground(): BufferedImage =
+                LocalLibraryPresentation.cover(firstSaved, 170, 235)
+
+            override fun done() {
+                if (request != previewVersion || isCancelled) return
+                try {
+                    preview.icon = ImageIcon(get())
+                    preview.text = ""
+                    previewStatus.text = "From saved CBZ · no Suwayomi connection"
+                } catch (e: Exception) {
+                    val cause = if (e is ExecutionException) e.cause ?: e else e
+                    preview.icon = null
+                    preview.text = "Cover unavailable"
+                    previewStatus.text = cause.message?.take(75)
+                        ?: "Saved comic image could not be decoded"
+                }
+            }
+        }.also { it.execute() }
     }
 
     private fun setActions() {
@@ -205,6 +279,7 @@ private class OfflineSeriesWindow : JFrame("MihonNooir — Downloaded manga") {
             error(e.message ?: "Cannot read the offline manga index")
         }
         setActions()
+        loadSeriesPreview()
     }
 
     private fun continueSelectedSeries() {

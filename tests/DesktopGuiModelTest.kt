@@ -11,6 +11,7 @@ import dev.nooir.desktop.ui.LocalLibraryPresentation
 import dev.nooir.desktop.ui.OfflineReadingResume
 import dev.nooir.desktop.ui.OfflineSeries
 import dev.nooir.desktop.ui.OfflineSeriesChapter
+import dev.nooir.desktop.ui.OfflineSeriesCoverSource
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -221,6 +222,9 @@ fun main() {
             OfflineSeriesChapter(77, "Saved Series", 2, "Chapter Missing", 2.0, 2, missing),
             OfflineSeriesChapter(77, "Saved Series", 3, "Chapter Three", 3.0, 1, secondZip),
         ))
+        check(OfflineSeriesCoverSource.choose(firstSeries) == zip) {
+            "Preview must skip missing chapters and never contact Suwayomi"
+        }
         val otherSeries = OfflineSeries(88, "Other Series", listOf(
             OfflineSeriesChapter(88, "Other Series", 8, "Other Chapter", 1.0, 1, otherZip),
         ))
@@ -233,6 +237,7 @@ fun main() {
         val noHistory = resumeStore.books()
         check(OfflineReadingResume.forSeries(firstSeries, noHistory)?.chapter?.chapterId == 1)
         check(OfflineReadingResume.forSeries(missingSeries, noHistory) == null)
+        check(OfflineSeriesCoverSource.choose(missingSeries) == null)
         check(OfflineReadingResume.mostRecent(listOf(firstSeries, otherSeries), noHistory) == null)
         resumeStore.markOpened(zip, 1000L)
         resumeStore.markOpened(otherZip, 2000L)

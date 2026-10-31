@@ -6,6 +6,10 @@ A headless localhost-only acceptance test now exercises the joined path: complet
 
 In **Local library**, select any available local CBZ, ZIP or image folder and choose **Convert selected**. Pick EPUB 2, EPUB 3, XTC, XTCH or CBZ, then choose the target e-reader profile and the **same conversion settings** used elsewhere in Windows. Output is written in the background using the existing Android-shared Kotlin conversion engine; the app rejects existing filenames instead of silently replacing them. This feature needs **no Suwayomi process, remote source, or internet**. The Windows adapter intentionally keeps the unsupported diagnostic ZIP option off, and real hardware/pixel parity testing remains open.
 
+## Downloaded-series cover previews (Windows preview)
+
+**Downloaded series** now previews the first available saved chapter as a small cover image next to the series and chapter lists. Preview decoding runs on a worker thread, uses the same bounded and path-safe reader as the local bookshelf, and never contacts Suwayomi or downloads missing chapters. A missing or unreadable local CBZ displays a clear placeholder; selecting another series cancels/invalidates the older preview. A real Windows UI smoke test is still required.
+
 ## Offline bookshelf search and cover preview (Windows preview)
 
 **Local library** now has a **Find manga** field filtering the user's saved local entries (case-insensitive), and an on-demand **cover preview** of the selected CBZ or image folder. A named `cover.jpg` / `cover.png` wins over the natural first page; otherwise the first readable page is used. The image is decoded off the Swing UI thread, scaled to a small bounded thumbnail, and invalidated if the user selects a different book. No background downloads, cloud artwork, automatic library scans, persistent thumbnail copies, or deletions. Missing files display an explanation rather than making network requests. JVM tests cover local filtering, cover precedence and bounded preview dimensions; actual Windows visual quality still needs on-device validation.
