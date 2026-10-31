@@ -15,7 +15,7 @@ import javax.imageio.ImageIO
 
 /**
  * JVM/Windows feasibility CLI. Compiles against the EXACT Kotlin codec, page planner,
- * grayscale PNG writer, presets and options model used by MangaNooir Android.
+ * grayscale PNG writer, presets and options model used by MihonNooir Android.
  * Not yet a desktop GUI or a Suwayomi downloader.
  */
 object NooirDesktopCli {
@@ -64,16 +64,36 @@ object NooirDesktopCli {
                     val h = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
                     val depth = if (format == ExportFormat.XTC) 1 else 2
                     val pages = sequence {
+                        var previousChapter: String? = null
                         for (entry in sources) {
                             val img = decode(entry.open)
-                            val coverOpts = options.copy(
+                            val firstInChapter = !entry.cover && entry.chapter != previousChapter
+                            if (!entry.cover) previousChapter = entry.chapter
+                            // Mirror Android: an optional intact first page keeps
+                            // chapter title/cover art readable even in panel mode.
+                            val preserveWhole = firstInChapter &&
+                                options.keepChapterFirstPageWhole && options.panelMode != "OFF"
+                            val wholeOptions = options.copy(
                                 layout = "PAGED", cropWhiteMargins = false,
                                 splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
-                                panelMode = "OFF",
+                                panelMode = "OFF", showFullPageBeforeSplits = false,
                             )
-                            val opts = if (entry.cover) coverOpts else options
-                            for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
-                                yield(Rendered(entry.chapter, entry.cover, frame))
+                            val opts = if (entry.cover || preserveWhole) wholeOptions else options
+                            val frames = render(img, w, h, depth, opts, fixedFramebuffer = !archive).iterator()
+                            if (frames.hasNext()) {
+                                val first = frames.next()
+                                // The overview is deliberate: only pages with
+                                // at least two real detailed screens get one.
+                                if (!entry.cover && options.showFullPageBeforeSplits &&
+                                    opts.panelMode != "OFF" && frames.hasNext()) {
+                                    val overview = render(img, w, h, depth, wholeOptions,
+                                        fixedFramebuffer = !archive).first()
+                                    yield(Rendered(entry.chapter, false, overview))
+                                }
+                                yield(Rendered(entry.chapter, entry.cover, first))
+                                while (frames.hasNext()) {
+                                    yield(Rendered(entry.chapter, entry.cover, frames.next()))
+                                }
                             }
                         }
                     }
@@ -122,7 +142,7 @@ object NooirDesktopCli {
                 tmp.delete()
             }
         } catch (error: Exception) {
-            System.err.println("MangaNooir desktop conversion failed: ${error.message}")
+            System.err.println("MihonNooir desktop conversion failed: ${error.message}")
             throw error
         }
     }

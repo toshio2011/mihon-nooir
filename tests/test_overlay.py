@@ -7,7 +7,8 @@ class TestOverlay(unittest.TestCase):
     def test_integration_anchors(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp); app=root/'app'; app.mkdir()
-            (app/'build.gradle.kts').write_text('applicationId = "app.mihon"\nversionCode = 39\nversionName = "0.21.3"\ndependencies {\n}\n')
+            (app/'build.gradle.kts').write_text('    namespace = "eu.kanade.tachiyomi"\napplicationId = "app.mihon"\nversionCode = 39\nversionName = "0.21.3"\ndependencies {\n    testImplementation(libs.bundles.test)\n}\n')
+            (app/'proguard-rules.pro').write_text('# existing Mihon R8 rules\n')
             manga=root/'app/src/main/java/eu/kanade/tachiyomi/ui/manga'
             manga.mkdir(parents=True)
             (manga/'MangaViewModel.kt').write_text('import android.content.Context\nimport eu.kanade.tachiyomi.data.download.DownloadManager\n    private val downloadManager: DownloadManager,\n    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n')
@@ -56,6 +57,18 @@ class TestOverlay(unittest.TestCase):
             updater.mkdir(parents=True)
             (updater/'AppUpdateChecker.kt').write_text('"mihonapp/mihon-preview"\n"mihonapp/mihon"\n')
             subprocess.run(['python3',str(ROOT/'tools/apply_overlay.py'),str(root)],check=True,text=True)
+            gradle_text = (app/'build.gradle.kts').read_text()
+            self.assertIn('testBuildType = "foss"', gradle_text)
+            self.assertIn('androidTestImplementation(libs.androidx.test.junit)', gradle_text)
+            self.assertIn('-keep class androidx.tracing.Trace { *; }',
+                          (app/'proguard-rules.pro').read_text())
+            rules = (app/'proguard-rules.pro').read_text()
+            for java_class in ('MangaConversionOptions', 'AndroidPageSource',
+                               'PanelDiagnosticArchive'):
+                self.assertIn('-keep class dev.nooir.mangabridge.' + java_class +
+                              ' { *; }', rules)
+            self.assertIn('-keep class dev.nooir.bridge.QuantizedPage { *; }', rules)
+            self.assertTrue((root/'app/src/androidTest/java/dev/nooir/mangabridge/PanelDiagnosticArchiveInstrumentedTest.kt').exists())
             self.assertIn('NooirExportDialog',(manga/'MangaScreen.kt').read_text())
             self.assertIn('nooirSaveQuick', (manga/'MangaScreen.kt').read_text())
             self.assertIn('quickExport', (manga/'MangaViewModel.kt').read_text())
@@ -76,6 +89,27 @@ class TestOverlay(unittest.TestCase):
             self.assertIn('PanelWhitespaceCrop.trim(region)', desktop_cli)
             self.assertIn('detectedPanels.map { trimDetectedPanel(src, it) }', desktop_cli)
             self.assertTrue((root/'app/src/main/java/dev/nooir/bridge/PanelSafeSlicePlanner.kt').exists())
+            # Diagnostics must be explicitly opted into, kept outside the
+            # book/archive output and available through a user-chosen SAF URI.
+            debug_src = (root/'app/src/main/java/dev/nooir/mangabridge/PanelDiagnosticArchive.kt').read_text()
+            opts_src = (root/'app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt').read_text()
+            dialog_src = (root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').read_text()
+            exporter_src = (root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').read_text()
+            self.assertIn('val panelDiagnostics: Boolean = false', opts_src)
+            self.assertIn('PanelDiagnosticArchive(tempFolder)', exporter_src)
+            self.assertIn('diagnostics?.publish(context)', exporter_src)
+            self.assertIn('ZipOutputStream(', debug_src)
+            self.assertIn('sourceRegionsWithPadding', debug_src)
+            self.assertIn('detectorThumbnail', debug_src)
+            self.assertIn('outputFrameStartOneBased', debug_src)
+            self.assertIn('MAX_ORIGINAL_TOTAL', debug_src)
+            self.assertIn('CreateDocument("application/zip")', dialog_src)
+            self.assertIn('Save latest panel diagnostics ZIP', dialog_src)
+            queue_src = (root/'app/src/main/java/dev/nooir/mangabridge/NooirActivityQueueDialog.kt').read_text()
+            self.assertIn('NooirMangaExportWorker.KEY_PANEL_DIAGNOSTICS', queue_src)
+            self.assertIn('Panel diagnostics: ', queue_src)
+            self.assertIn('options.panelDiagnostics && options.panelMode == "PANEL_BY_PANEL"', exporter_src)
+
             self.assertIn('PanelSafeSlicePlanner.plan(', panel_src)
             self.assertIn('PanelSafeSlicePlanner.plan(', desktop_cli)
             # Keep the same split/no-cut decision in both platform adapters.

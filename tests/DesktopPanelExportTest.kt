@@ -64,6 +64,8 @@ fun main() {
         val panelOptions = MangaConversionOptions(
             panelMode = "PANEL_BY_PANEL", includeCover = false,
             cropWhiteMargins = true, layout = "PAGED", dither = false,
+            // These synthetic pages represent actual art, not chapter openers.
+            keepChapterFirstPageWhole = false,
         )
         // The Windows converter must honor the same independent row mode
         // as Android. Internal white columns must NOT split a horizontal row.
@@ -116,6 +118,30 @@ fun main() {
                 val imageCount = names.count { it.endsWith(".png") }
                 check(imageCount == 6) { "$format should contain six panel images, got $imageCount" }
             }
+        }
+        // Full-page overview is deliberate and must be added only when a page
+        // produces multiple detail frames. It must preserve all six panel images.
+        val withOverview = File(root, "panel-overview.epub")
+        NooirDesktopCli.main(arrayOf(
+            "--input", input.absolutePath, "--output", withOverview.absolutePath,
+            "--format", "EPUB2", "--device", "X4",
+            "--options-token", panelOptions.copy(showFullPageBeforeSplits = true).token(),
+        ))
+        ZipFile(withOverview).use { zip ->
+            check(zip.entries().asSequence().count { it.name.endsWith(".png") } == 7) {
+                "Full Page Before Splits should emit one overview and all six detail frames"
+            }
+        }
+        // Conversely, when users preserve each chapter's first source page,
+        // segmentation must not turn a chapter opener into panel fragments.
+        val keepFirst = File(root, "keep-chapter-first.xtch")
+        NooirDesktopCli.main(arrayOf(
+            "--input", input.absolutePath, "--output", keepFirst.absolutePath,
+            "--format", "XTCH", "--device", "X4",
+            "--options-token", panelOptions.copy(keepChapterFirstPageWhole = true).token(),
+        ))
+        check(u16(keepFirst.readBytes(), 6) == 1) {
+            "Keep chapter first page whole must preserve the original opener"
         }
         // Auto Fit is a new opt-in orientation on top of detected panel mode.
         // It must preserve all six panels and native XTC/XTCH framebuffer sizes.
@@ -196,6 +222,6 @@ fun main() {
             "--format", "XTC", "--device", "X4", "--options-token", panelOptions.token(),
         ))
         check(u16(safe.readBytes(), 6) == 1) { "Splash pages must remain intact" }
-        println("Desktop panel exports passed: XTC, XTCH, EPUB2, EPUB3, CBZ, six screens, all-format Auto Fit, legacy OFF, splash fallback")
+        println("Desktop panel exports passed: five formats, guarded panels/rows, Full Page overview, first-page preservation, Auto Fit, legacy OFF and splash fallback")
     } finally { root.deleteRecursively() }
 }

@@ -16,24 +16,36 @@ data class PanelPlan(
     val reason: String,
 )
 
+/** Optional, bounded diagnostic event. No image data or titles are carried here. */
+data class PanelDebugEvent(
+    val stage: String,
+    val region: PageRegion,
+    val decision: String,
+    val detail: String,
+)
+
 object PanelDetectionCore {
     private const val MAX_THUMB_PIXELS = 1_048_576
     private const val MAX_PANELS = 32
     private const val WHITE = 247
     private const val INK = 220
 
-    fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean): PanelPlan {
+    fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
             "Panel detection needs a bounded, nonempty thumbnail"
         }
         require(grayscale.size == width * height) { "Grayscale thumbnail dimensions do not match" }
         val whole = PageRegion(0, 0, width, height)
-        fun fallback(why: String) = PanelPlan(listOf(whole), true, why)
+        fun fallback(why: String): PanelPlan {
+            trace?.invoke(PanelDebugEvent("page", whole, "fallback", why))
+            return PanelPlan(listOf(whole), true, why)
+        }
         // No OCR means we cannot prove that a low-ink region has no lettering.
         // Only trust clear rectangular gutters; uncertain pages stay intact.
         if (height.toLong() > width.toLong() * 3L) return fallback("long strip: preserve existing webtoon slicing")
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
-        val detector = Detector(width, height, grayscale)
+        val detector = Detector(width, height, grayscale, trace)
         // Row detection is authoritative. Each row is independently eligible
         // for finer panel partitioning; a rejected panel split keeps that row.
         // If no row seam exists, try panel detection on the whole page.
@@ -45,10 +57,45 @@ object PanelDetectionCore {
             // Extra panel candidates must never force a page-wide fallback.
             val available = MAX_PANELS - output.size - (rows.size - index - 1)
             if (available < 2) {
+                trace?.invoke(PanelDebugEvent("tier", row, "keep", "panel limit"))
                 output.add(row)
                 continue
             }
-            val rowDetector = Detector(width, height, grayscale)
+            val rowDetector = Detector(width, height, grayscale, trace)
+            // Conan source 21: a shallow, almost uninked FINAL tier may be
+            // merely the foot of the illustrated row above it. Do not promote
+            // its vertical rule fragments into independent rotated pages.
+            // When the previous tier is a full-width partition of stable
+            // side-by-side columns, extend those columns through the footer.
+            // This conserves EVERY source pixel; otherwise keep the tier whole.
+            if (index == rows.lastIndex && index > 0 &&
+                row.bottom == height && rowDetector.isShallowUnframedTier(row) &&
+                rowDetector.isLowInkFooter(row)) {
+                val previousRow = rows[index - 1]
+                val adjacent = output.indices.filter { ix ->
+                    val r = output[ix]
+                    r.top == previousRow.top && r.bottom == row.top
+                }.sortedBy { output[it].left }
+                val joinsSafely = adjacent.size in 1..3 &&
+                    output[adjacent.first()].left == 0 &&
+                    output[adjacent.last()].right == width &&
+                    adjacent.zipWithNext().all { (a, b) ->
+                        output[a].right == output[b].left
+                    }
+                if (joinsSafely) {
+                    for (ix in adjacent) output[ix] = output[ix].copy(bottom = row.bottom)
+                    trace?.invoke(PanelDebugEvent("tier", row, "absorb",
+                        "terminal ruled footer retained inside preceding illustrated tier"))
+                } else {
+                    output.add(row)
+                    trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                        "terminal ruled footer has no safe adjacent full-width partition"))
+                }
+                continue
+            }
+            // Sparse terminal footers should be considered for safe absorption
+            // BEFORE this generic no-split rule. Otherwise a nearly blank
+            // footer is preserved as its own unnecessary reading frame.
             // A whole detected horizontal tier can consist of just a page
             // frame, a few decorative rules, or sparse lettering. Recursively
             // splitting that tier turns thin strokes into standalone viewports
@@ -56,11 +103,24 @@ object PanelDetectionCore {
             // screens. Preserve the entire tier, including all its pixels;
             // this guard belongs ONLY to Panel by Panel, not detectRows().
             if (rowDetector.isSparseRow(row)) {
+                trace?.invoke(PanelDebugEvent("tier", row, "keep", "sparse thumbnail tier"))
                 output.add(row)
                 continue
             }
             val node = rowDetector.partition(row, 0)
             val candidates = node?.let { PanelReadingOrder.flatten(it, rightToLeft) }
+            // Conan source 66: the multi-word title row generated five tiny
+            // "panels". A shallow, UNFRAMED top-band with 3+ recursive pieces
+            // has insufficient visual evidence to classify word groups as
+            // illustrated panels. Keep the band intact; retain real art below.
+            if (row.bottom.toLong() * 4 <= height.toLong() &&
+                rowDetector.isShallowUnframedTier(row) &&
+                candidates != null && candidates.size >= 3) {
+                output.add(row)
+                trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                    "shallow unframed headline candidate fragments"))
+                continue
+            }
             val valid = candidates != null && candidates.size in 2..available &&
                 candidates.all { it.width > 0 && it.height > 0 &&
                     rowDetector.hasContent(it) && !rowDetector.isLikelyBorderFragment(it) } &&
@@ -76,8 +136,27 @@ object PanelDetectionCore {
                 } >= 4) &&
                 coversRegion(candidates, row)
             if (valid) {
+                trace?.invoke(PanelDebugEvent("tier", row, "accept",
+                    "validated ${candidates!!.size} panel candidates"))
                 output.addAll(candidates!!)
             } else {
+                // Don't spend time inspecting rejected candidates when the
+                // user has not explicitly enabled diagnostics.
+                if (trace != null) {
+                    val rejected = when {
+                        candidates == null -> "recursive partition unavailable"
+                        candidates.size !in 2..available -> "candidate count outside permitted range"
+                        candidates.any { !rowDetector.hasContent(it) } -> "candidate has insufficient ink"
+                        candidates.any { rowDetector.isLikelyBorderFragment(it) } -> "candidate resembles border or text stroke"
+                        candidates.any { it.width.toLong() * it.height * 100 <
+                            row.width.toLong() * row.height * 2 } -> "candidate below minimum area"
+                        candidates.any { it.width.toLong() * 100 < row.width.toLong() * 8 ||
+                            it.height.toLong() * 100 < row.height.toLong() * 8 } -> "candidate too narrow or short"
+                        candidates.size > 12 -> "excessive small candidate fragments"
+                        else -> "candidate coverage invalid"
+                    }
+                    trace.invoke(PanelDebugEvent("tier", row, "reject", rejected))
+                    }
                 // The normal recursive candidate tree may over-split one small
                 // region and be rejected as a whole. Only *after* that rejection,
                 // retry independent vertical seams inside this exact row. A
@@ -86,9 +165,15 @@ object PanelDetectionCore {
                     row, available, rightToLeft,
                 )
                 if (recovered != null) {
+                    trace?.invoke(PanelDebugEvent("tier", row, "recover",
+                        "accepted ${recovered.size} substantial columns in reading order"))
                     output.addAll(recovered)
                     recoveredRows++
-                } else output.add(row)
+                } else {
+                    trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                        "no safe alternative column split"))
+                    output.add(row)
+                }
             }
         }
         if (output.size !in 2..MAX_PANELS || !coversEntirePage(output, width, height)) {
@@ -97,6 +182,7 @@ object PanelDetectionCore {
         val reason = if (recoveredRows > 0)
             "row-first partition with rejected-row column recovery"
         else "row-first partition with per-row panel fallback"
+        trace?.invoke(PanelDebugEvent("page", whole, "accept", reason))
         return PanelPlan(output, false, reason)
     }
 
@@ -105,16 +191,21 @@ object PanelDetectionCore {
      * separate rows. Vertical panel boundaries are intentionally ignored.
      * Uncertain pages remain whole rather than becoming arbitrary strips.
      */
-    fun detectRows(width: Int, height: Int, grayscale: ByteArray): PanelPlan {
+    fun detectRows(width: Int, height: Int, grayscale: ByteArray,
+        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS)
         require(grayscale.size == width * height)
         val whole = PageRegion(0, 0, width, height)
-        fun fallback(reason: String) = PanelPlan(listOf(whole), true, reason)
-        val detector = Detector(width, height, grayscale)
+        fun fallback(reason: String): PanelPlan {
+            trace?.invoke(PanelDebugEvent("page", whole, "fallback", reason))
+            return PanelPlan(listOf(whole), true, reason)
+        }
+        val detector = Detector(width, height, grayscale, trace)
         val rows = detector.partitionRows(whole)
         if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
         if (rows.any { !detector.hasContent(it) }) return fallback("empty row")
         if (!coversEntirePage(rows, width, height)) return fallback("unsafe row coverage")
+        trace?.invoke(PanelDebugEvent("page", whole, "accept", "validated horizontal white-strip rows"))
         return PanelPlan(rows, false, "validated horizontal white-strip rows")
     }
 
@@ -170,7 +261,8 @@ object PanelDetectionCore {
             } }
     }
 
-    private class Detector(private val width: Int, private val height: Int, private val gray: ByteArray) {
+    private class Detector(private val width: Int, private val height: Int, private val gray: ByteArray,
+        private val trace: ((PanelDebugEvent) -> Unit)? = null) {
         private var leaves = 0
         private var invalid = false
 
@@ -202,6 +294,39 @@ object PanelDetectionCore {
                 }
             }
             return samples > 0 && ink.toLong() * 100 < samples.toLong() * 3
+        }
+
+        /** Only a short unframed tier can be treated as a suspect header/footer.
+         * A genuine short comic strip with top/bottom frame rails remains
+         * eligible for independent panel splitting. This does not delete ink.
+         */
+        fun isShallowUnframedTier(row: PageRegion): Boolean {
+            if (row.height.toLong() * 100 > height.toLong() * 9 ||
+                row.height.toLong() * 100 > row.width.toLong() * 14) return false
+            val edge = maxOf(2, minOf(8, row.height / 8))
+            fun hasFrameRail(start: Int, end: Int): Boolean {
+                for (y in start until end) {
+                    var dark = 0
+                    for (x in row.left until row.right)
+                        if ((gray[y * width + x].toInt() and 255) < INK) dark++
+                    if (dark.toLong() * 100 >= row.width.toLong() * 65) return true
+                }
+                return false
+            }
+            val topRail = hasFrameRail(row.top, minOf(row.bottom, row.top + edge))
+            val bottomRail = hasFrameRail(maxOf(row.top, row.bottom - edge), row.bottom)
+            return !(topRail && bottomRail)
+        }
+
+        /** The footer merger requires little actual artwork as well as short
+         * dimensions. An ink-heavy or framed short story panel stays separate.
+         */
+        fun isLowInkFooter(row: PageRegion): Boolean {
+            var ink = 0
+            for (y in row.top until row.bottom)
+                for (x in row.left until row.right)
+                    if ((gray[y * width + x].toInt() and 255) < INK) ink++
+            return ink.toLong() * 100 < row.width.toLong() * row.height * 12
         }
 
         fun hasCleanFullHeightColumn(region: PageRegion): Boolean {
@@ -342,10 +467,20 @@ object PanelDetectionCore {
                     fun value(x: Int) = gray[y * width + x].toInt() and 255
                     val center = value(axis)
                     if (center < 235) inkOnAxis++
-                    // Retain the strict veto everywhere except an actual
-                    // near-edge, full-width frame rule. Isolated dark specks,
-                    // captions and thin balloon tails still veto the split.
-                    val allowedFrame = center < 220 && fullWidthFrameRule(y)
+                    // Shared panel frame lines have antialiased fringes:
+                    // Conan source 26 had a fully framed horizontal border at
+                    // y=452..454, followed by one dim line at y=455. Treat a
+                    // 1-2px fringe next to a genuine near-edge, full-width
+                    // frame as part of that frame, not a balloon crossing.
+                    // All interior strokes still veto the cut. The separate
+                    // 2%-of-height ink budget remains unchanged.
+                    val nearEdge = y - r.top < edgeBand ||
+                        r.bottom - 1 - y < edgeBand
+                    val allowedFrame = center < 220 && nearEdge &&
+                        (-2..2).any { delta ->
+                            val neighbor = y + delta
+                            neighbor in r.top until r.bottom && fullWidthFrameRule(neighbor)
+                        }
                     if (center < 220 && !allowedFrame) return false
                     if (!allowedFrame && value(axis - 1) < 180 &&
                         center < 180 && value(axis + 1) < 180) return false
@@ -384,24 +519,46 @@ object PanelDetectionCore {
                     // search runs ONLY after the normal panel plan was rejected.
                     val radius = minOf(8, maxOf(2, current.width / 75))
                     var axis: Int? = null
+                    var attempted = 0
+                    var unsafeSeam = 0
+                    var leftNotIllustrated = 0
+                    var rightNotIllustrated = 0
                     for (proposal in options) {
                         for (distance in 0..radius) {
                             val neighbours = if (distance == 0) listOf(proposal)
                                 else listOf(proposal - distance, proposal + distance)
                             for (cut in neighbours) {
                                 if (cut <= current.left + 2 || cut >= current.right - 2) continue
-                                if (safeVerticalSeam(current, cut) &&
-                                    likelyIllustratedColumn(current.copy(right = cut)) &&
-                                    likelyIllustratedColumn(current.copy(left = cut))) {
-                                    axis = cut
-                                    break
+                                attempted++
+                                if (!safeVerticalSeam(current, cut)) {
+                                    unsafeSeam++
+                                    continue
                                 }
+                                if (!likelyIllustratedColumn(current.copy(right = cut))) {
+                                    leftNotIllustrated++
+                                    continue
+                                }
+                                if (!likelyIllustratedColumn(current.copy(left = cut))) {
+                                    rightNotIllustrated++
+                                    continue
+                                }
+                                axis = cut
+                                break
                             }
                             if (axis != null) break
                         }
                         if (axis != null) break
                     }
-                    val cut = axis ?: continue
+                    if (axis == null) {
+                        trace?.invoke(PanelDebugEvent("column-retry", current, "reject",
+                            "attempted=$attempted unsafeSeam=$unsafeSeam " +
+                            "leftNotIllustrated=$leftNotIllustrated " +
+                            "rightNotIllustrated=$rightNotIllustrated"))
+                        continue
+                    }
+                    val cut = requireNotNull(axis)
+                    trace?.invoke(PanelDebugEvent("column-retry", current, "split",
+                        "safe vertical seam x=$cut after $attempted attempts"))
                     columns.removeAt(i)
                     columns.add(i, current.copy(right = cut))
                     columns.add(i + 1, current.copy(left = cut))
@@ -436,9 +593,13 @@ object PanelDetectionCore {
                     ?: valid(thinLineGutter(region, horizontal = true))
                     ?: valid(adaptiveGutter(region, horizontal = true))
                 if (axis == null) {
+                    trace?.invoke(PanelDebugEvent("row-search", region, "keep",
+                        "no full-width horizontal gutter with content on both sides"))
                     rows += region
                     return
                 }
+                trace?.invoke(PanelDebugEvent("row-search", region, "split",
+                    "validated horizontal seam at y=$axis"))
                 val upper = region.copy(bottom = axis)
                 val lower = region.copy(top = axis)
                 visit(upper, depth + 1)
@@ -491,14 +652,20 @@ object PanelDetectionCore {
                     else -> true to adaptiveHorizontal.first
                 }
             if (split == null) {
+                trace?.invoke(PanelDebugEvent("recursive", region, "keep",
+                    "no validated clean, thin or adaptive gutter"))
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
                 return PanelReadingOrder.Node.Leaf(region)
             }
             val (isHorizontal, mid) = split
+            trace?.invoke(PanelDebugEvent("recursive", region, "split",
+                if (isHorizontal) "horizontal candidate y=$mid" else "vertical candidate x=$mid"))
             val first = if (isHorizontal) region.copy(bottom = mid) else region.copy(right = mid)
             val second = if (isHorizontal) region.copy(top = mid) else region.copy(left = mid)
             if (!hasContent(first) || !hasContent(second)) {
+                trace?.invoke(PanelDebugEvent("recursive", region, "reject",
+                    "candidate would leave an ink-poor child"))
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
                 return PanelReadingOrder.Node.Leaf(region)
