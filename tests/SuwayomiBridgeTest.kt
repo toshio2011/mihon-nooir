@@ -104,6 +104,41 @@ fun main() {
     try {
         val base = "http://127.0.0.1:${server.address.port}"
         val client = SuwayomiClient(base, "Bearer test")
+        // CBZ streaming must not overwrite files, misreport source progress or
+        // retain partial archives after low-disk/size/callback failures.
+        val copyProgress = mutableListOf<Pair<Long, Long?>>()
+        val transfer = File(root, "local-copy-success.cbz")
+        client.downloadCbz(11, transfer,
+            onProgress = { copied, total -> copyProgress += copied to total })
+        check(transfer.readBytes().contentEquals(cbz))
+        check(copyProgress.isNotEmpty() &&
+            copyProgress.last() == cbz.size.toLong() to cbz.size.toLong()) {
+            "Local CBZ progress must end at real transferred bytes"
+        }
+        check(copyProgress.zipWithNext().all { it.first.first <= it.second.first })
+        check(runCatching { client.downloadCbz(11, transfer) }.isFailure) {
+            "Existing CBZ must not be overwritten"
+        }
+        check(transfer.readBytes().contentEquals(cbz))
+        val tooLarge = File(root, "local-copy-over-limit.cbz")
+        check(runCatching {
+            client.downloadCbz(11, tooLarge, maxBytes = cbz.size.toLong() - 1)
+        }.isFailure && !tooLarge.exists()) {
+            "Oversized Content-Length must fail before creating an archive"
+        }
+        val lowDisk = File(root, "local-copy-low-disk.cbz")
+        check(runCatching {
+            client.downloadCbz(11, lowDisk, availableDiskBytes = { 1L })
+        }.isFailure && !lowDisk.exists()) {
+            "Low disk preflight must preserve the destination"
+        }
+        val callbackError = File(root, "local-copy-callback-error.cbz")
+        check(runCatching {
+            client.downloadCbz(11, callbackError,
+                onProgress = { _, _ -> error("Simulated local transfer interruption") })
+        }.isFailure && !callbackError.exists()) {
+            "Interrupted local copy must delete only its partial destination"
+        }
         val manga = client.manga(1)
         check(manga.title == "Mock Manga" && manga.chapters.size == 2)
         SuwayomiToNooir.main(arrayOf("--base-url", base, "--manga-id", "1", "--mode", "list"))
@@ -147,7 +182,13 @@ fun main() {
         val offlineSaver = OfflineChapterSaver(offlineLibrary, File(root, "offline-books").toPath(), groupedCatalog)
         check(runCatching { offlineSaver.save(client, 1, listOf(11, 11)) }.isFailure)
         check(runCatching { offlineSaver.save(client, 1, listOf(999)) }.isFailure)
-        val savedChapters = offlineSaver.save(client, 1, listOf(11, 12))
+        val savedProgress = mutableListOf<Pair<Long, Long?>>()
+        val savedChapters = offlineSaver.save(client, 1, listOf(11, 12)) { _, copied, total ->
+            savedProgress += copied to total
+        }
+        check(savedProgress.size >= 2 && savedProgress.all { it.first > 0L }) {
+            "Offline queue saver must surface real local CBZ copy progress"
+        }
         check(savedChapters.size == 2 && savedChapters.all { it.isFile })
         check(offlineLibrary.books().size == 2)
         val series = groupedCatalog.series()

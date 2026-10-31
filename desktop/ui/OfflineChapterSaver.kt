@@ -33,7 +33,8 @@ internal class OfflineChapterSaver(
         return "manga-$mangaId-chapter-${chapter.id}-$title.cbz"
     }
 
-    fun save(client: SuwayomiClient, mangaId: Int, chapterIds: List<Int>): List<File> {
+    fun save(client: SuwayomiClient, mangaId: Int, chapterIds: List<Int>,
+        onProgress: (SuwayomiChapter, Long, Long?) -> Unit = { _, _, _ -> }): List<File> {
         require(mangaId > 0 && chapterIds.size in 1..MAX_BATCH &&
             chapterIds.all { it > 0 } && chapterIds.distinct().size == chapterIds.size) {
             "Select 1 to $MAX_BATCH different chapters for the offline library"
@@ -64,7 +65,8 @@ internal class OfflineChapterSaver(
             }
             val temporary = downloads.resolve(".chapter-${UUID.randomUUID()}.cbz")
             try {
-                client.downloadCbz(chapter.id, temporary.toFile())
+                client.downloadCbz(chapter.id, temporary.toFile(),
+                    onProgress = { copied, total -> onProgress(chapter, copied, total) })
                 val pages = LocalComicPages.names(temporary.toFile())
                 LocalComicPages.read(temporary.toFile(), pages.first())
                 try {

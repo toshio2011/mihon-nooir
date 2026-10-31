@@ -5,6 +5,8 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.file.Files
+import java.nio.file.StandardOpenOption
 import java.time.Duration
 
 /** v2.4.2366 Suwayomi GraphQL/CBZ REST bridge; no server internals or extension code copied. */
@@ -298,29 +300,74 @@ class SuwayomiClient(
         }
     }
 
-    /** Returns downloaded CBZ bytes without changing the chapter's read status. */
-    fun downloadCbz(chapterId: Int, target: File, maxBytes: Long = 400L * 1024 * 1024) {
+    /**
+     * Stream an ALREADY downloaded CBZ from localhost Suwayomi into an exclusive
+     * new file. The callback measures only this local CBZ copy, never Suwayomi
+     * source-download progress. Fail closed on oversized/truncated responses
+     * and low disk space. A failed copy never leaves a partial destination.
+     */
+    fun downloadCbz(
+        chapterId: Int,
+        target: File,
+        maxBytes: Long = 400L * 1024 * 1024,
+        onProgress: (Long, Long?) -> Unit = { _, _ -> },
+        minFreeDiskBytes: Long = 32L * 1024 * 1024,
+        availableDiskBytes: () -> Long = {
+            Files.getFileStore(target.canonicalFile.parentFile.toPath()).usableSpace
+        },
+    ) {
         require(chapterId > 0 && !target.exists()) { "Invalid chapter or existing destination" }
+        require(maxBytes >= 22L && minFreeDiskBytes >= 0L) { "Invalid CBZ copy limits" }
+        val path = target.toPath()
         val response = http.send(
             request("/api/v1/chapter/$chapterId/download?markAsRead=false").build(),
             HttpResponse.BodyHandlers.ofInputStream(),
         )
-        response.body().use { input ->
-            require(response.statusCode() == 200) {
-                "Suwayomi chapter $chapterId CBZ returned HTTP ${response.statusCode()}"
-            }
-            var total = 0L
-            target.outputStream().use { output ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    total += count
-                    require(total <= maxBytes) { "Suwayomi chapter archive exceeds size limit" }
-                    output.write(buffer, 0, count)
+        var created = false
+        try {
+            response.body().use { input ->
+                require(response.statusCode() == 200) {
+                    "Suwayomi chapter $chapterId CBZ returned HTTP ${response.statusCode()}"
+                }
+                // Null means chunked/no trustworthy size: never invent a percent.
+                val expected = response.headers().firstValue("Content-Length")
+                    .orElse(null)?.toLongOrNull()?.takeIf { it >= 0L }
+                require(expected == null || expected in 22L..maxBytes) {
+                    "CBZ Content-Length exceeds the copy limit or is invalid"
+                }
+                val free = availableDiskBytes()
+                require(free >= minFreeDiskBytes &&
+                    (expected == null || expected <= free - minFreeDiskBytes)) {
+                    "Not enough disk space for the local CBZ copy (keep ${minFreeDiskBytes / 1048576} MiB free)"
+                }
+                Files.newOutputStream(path, StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE).use { output ->
+                    created = true
+                    var total = 0L
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (count == 0) continue
+                        require(total <= maxBytes - count) {
+                            "Local CBZ copy exceeds the 400 MiB default limit"
+                        }
+                        require(availableDiskBytes() >= minFreeDiskBytes + count) {
+                            "Disk space became too low during CBZ copy"
+                        }
+                        output.write(buffer, 0, count)
+                        total += count
+                        onProgress(total, expected)
+                    }
+                    require(total >= 22L) { "Empty or invalid chapter archive" }
+                    require(expected == null || total == expected) {
+                        "Incomplete local CBZ copy: received $total of $expected bytes"
+                    }
                 }
             }
-            require(total >= 22) { "Empty or invalid chapter archive" }
+        } catch (error: Exception) {
+            if (created) runCatching { Files.deleteIfExists(path) }
+            throw error
         }
     }
 
