@@ -688,7 +688,12 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         val selectedIds = chapters.map { it.id }
         val baseUrl = endpoint.text.trim()
         runTask("Saving ${chapters.size} offline chapters", {
-            OfflineChapterSaver().save(client(baseUrl), selected.id, selectedIds)
+            OfflineChapterSaver().save(client(baseUrl), selected.id, selectedIds) { chapter, copied, total ->
+                val label = LocalCbzCopyProgress.label(chapter.id, copied, total)
+                SwingUtilities.invokeLater {
+                    if (isDisplayable) status.text = label
+                }
+            }
         }, { files ->
             JOptionPane.showMessageDialog(this,
                 "Saved ${files.size} offline chapter(s). They are available in Local library.",

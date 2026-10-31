@@ -355,6 +355,9 @@ class SuwayomiClient(
                         require(availableDiskBytes() >= minFreeDiskBytes + count) {
                             "Disk space became too low during CBZ copy"
                         }
+                        require(expected == null || total + count <= expected) {
+                            "CBZ received more bytes than the server Content-Length"
+                        }
                         output.write(buffer, 0, count)
                         total += count
                         onProgress(total, expected)

@@ -200,13 +200,7 @@ private class OfflineSaveQueueWindow(private val endpoint: String) :
                     publish("Saving manga ${job.mangaId}, chapter ${job.chapterId}...")
                     try {
                         saver.save(suwayomi, job.mangaId, listOf(job.chapterId)) { chapter, copied, total ->
-                            val copiedMiB = "%.1f".format(java.util.Locale.ROOT,
-                                copied.toDouble() / 1048576.0)
-                            val progress = if (total != null && total > 0L) {
-                                val percent = (copied * 100L / total).coerceIn(0, 100)
-                                "$percent% of local CBZ"
-                            } else "local CBZ size unknown"
-                            publish("Copying chapter ${chapter.id}: $copiedMiB MiB ($progress)")
+                            publish(LocalCbzCopyProgress.label(chapter.id, copied, total))
                         }
                         queue.complete(job.id)
                         completed++

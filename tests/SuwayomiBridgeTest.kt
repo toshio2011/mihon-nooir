@@ -290,6 +290,12 @@ fun main() {
             "Local CBZ progress must end at real transferred bytes"
         }
         check(copyProgress.zipWithNext().all { it.first.first <= it.second.first })
+        check(dev.nooir.desktop.ui.LocalCbzCopyProgress.label(11, 1_048_576, 2_097_152)
+            .contains("50% of local CBZ"))
+        check(dev.nooir.desktop.ui.LocalCbzCopyProgress.label(11, 1_048_576, null)
+            .contains("total size unknown")) {
+            "Unknown transfer length must not produce a fabricated percent"
+        }
         check(runCatching { client.downloadCbz(11, transfer) }.isFailure) {
             "Existing CBZ must not be overwritten"
         }

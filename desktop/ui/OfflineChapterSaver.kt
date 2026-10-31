@@ -17,6 +17,21 @@ import java.util.UUID
  * reading state or overwrites prior archives. A failed transfer leaves no
  * partially published .cbz file.
  */
+/** Byte display for the *local* CBZ copy, not remote manga-source progress. */
+internal object LocalCbzCopyProgress {
+    fun label(chapterId: Int, copied: Long, total: Long?): String {
+        require(chapterId > 0 && copied >= 0L && (total == null || total > 0L))
+        val amount = String.format(java.util.Locale.ROOT,
+            "%.1f", copied.toDouble() / 1048576.0)
+        val measure = if (total == null) {
+            "total size unknown"
+        } else {
+            "${(copied * 100 / total).coerceIn(0L, 100L)}% of local CBZ"
+        }
+        return "Copying chapter $chapterId: $amount MiB ($measure)"
+    }
+}
+
 internal class OfflineChapterSaver(
     private val library: LocalLibraryStore = LocalLibraryStore(),
     private val downloads: Path = Path.of(System.getProperty("user.home"),
