@@ -3,20 +3,10 @@ package dev.nooir.desktop.ui
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 import dev.nooir.desktop.suwayomi.SuwayomiClient
 import java.io.File
-import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.util.UUID
 
-/**
- * Explicit download-to-offline-library bridge.
- *
- * The Suwayomi source must ALREADY have downloaded each selected chapter.
- * This never installs extensions, queues remote chapter downloads, changes
- * reading state or overwrites prior archives. A failed transfer leaves no
- * partially published .cbz file.
- */
 /** Byte display for the *local* CBZ copy, not remote manga-source progress. */
 internal object LocalCbzCopyProgress {
     fun label(chapterId: Int, copied: Long, total: Long?): String {
@@ -32,6 +22,14 @@ internal object LocalCbzCopyProgress {
     }
 }
 
+/**
+ * Explicit download-to-offline-library bridge.
+ *
+ * The Suwayomi source must ALREADY have downloaded each selected chapter.
+ * This never installs extensions, queues remote chapter downloads, changes
+ * reading state or overwrites prior archives. A failed transfer leaves no
+ * partially published .cbz file.
+ */
 internal class OfflineChapterSaver(
     private val library: LocalLibraryStore = LocalLibraryStore(),
     private val downloads: Path = Path.of(System.getProperty("user.home"),
@@ -84,11 +82,10 @@ internal class OfflineChapterSaver(
                     onProgress = { copied, total -> onProgress(chapter, copied, total) })
                 val pages = LocalComicPages.names(temporary.toFile())
                 LocalComicPages.read(temporary.toFile(), pages.first())
-                try {
-                    Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE)
-                } catch (_: AtomicMoveNotSupportedException) {
-                    Files.move(temporary, target)
-                }
+                // No REPLACE_EXISTING or ATOMIC_MOVE: the latter's behavior
+                // when a competing destination appears is provider-defined.
+                // Same-directory move preserves the original on collision.
+                Files.move(temporary, target)
                 library.add(target.toFile())
                 catalog.remember(manga.id, manga.title, chapter, target.toFile())
                 results.add(target.toFile())

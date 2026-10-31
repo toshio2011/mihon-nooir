@@ -320,6 +320,30 @@ fun main() {
             "Interrupted local copy must delete only its partial destination"
         }
 
+        // A competing process may create the target AFTER the initial
+        // existence check, while the chapter is streaming to its temp file.
+        // In this case never replace another user's CBZ, even on a same-folder
+        // publish. Both the original and catalog remain unchanged.
+        val raceRoot = File(root, "offline-collision").apply { mkdirs() }
+        val raceTarget = File(raceRoot, "manga-1-chapter-11-Chapter 2.cbz")
+        val preserved = "Existing user's comic bytes".toByteArray()
+        val raceSaver = OfflineChapterSaver(
+            LocalLibraryStore(File(root, "offline-collision-library").toPath()),
+            raceRoot.toPath(),
+            OfflineSeriesCatalog(File(root, "offline-collision-series").toPath()),
+        )
+        check(runCatching {
+            raceSaver.save(client, 1, listOf(11)) { _, _, _ ->
+                raceTarget.writeBytes(preserved)
+            }
+        }.isFailure) { "Competing target must fail rather than overwrite" }
+        check(raceTarget.readBytes().contentEquals(preserved)) {
+            "Existing destination was overwritten by offline CBZ copy"
+        }
+        check(raceRoot.listFiles().orEmpty().none { it.name.startsWith(".chapter-") }) {
+            "Competing publish must clean temporary archive"
+        }
+
         println("Suwayomi D0 mock contract passed: GraphQL, explicit download, CBZ, cover, EPUB2/3, XTC/XTCH, CBZ output, ordering, safe ZIP, no-overwrite")
     } finally {
         server.stop(0)
