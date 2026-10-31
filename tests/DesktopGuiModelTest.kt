@@ -180,6 +180,35 @@ fun main() {
         check(LocalLibraryPresentation.filter(bookChoices, "  CONAN  ").single().file == zip)
         check(LocalLibraryPresentation.filter(bookChoices, "sTRaNGE").single().file == folder)
         check(LocalLibraryPresentation.filter(bookChoices, "not a title").isEmpty())
+        // Direct bookshelf export must forward the same Android conversion
+        // options token to the existing Windows CLI (not a second encoder).
+        val selectedOptions = MangaConversionOptions(
+            panelMode = "ROW_BY_ROW", orientation = "AUTO_FIT",
+            showFullPageBeforeSplits = true, panelDiagnostics = true)
+        val exportTarget = File(folder, "bookshelf.xtch")
+        val exportArgs = LocalLibraryPresentation.exportArgs(
+            zip, exportTarget, ExportFormat.XTCH, "X4", selectedOptions)
+        val exportFlags = exportArgs.toList().chunked(2).associate { it[0] to it[1] }
+        check(exportFlags["--input"] == zip.canonicalPath)
+        check(exportFlags["--output"] == exportTarget.canonicalPath)
+        check(exportFlags["--device"] == "X4")
+        check(exportFlags["--format"] == "XTCH")
+        val roundTrip = MangaConversionOptions.fromToken(exportFlags["--options-token"])
+        check(roundTrip.panelMode == "ROW_BY_ROW")
+        check(roundTrip.orientation == "AUTO_FIT")
+        check(roundTrip.showFullPageBeforeSplits)
+        check(!roundTrip.panelDiagnostics) {
+            "Unsupported Windows diagnostic ZIP must never be advertised or exported"
+        }
+        check(runCatching { LocalLibraryPresentation.exportArgs(
+            zip, File(folder, "wrong.epub"), ExportFormat.XTCH, "X4", selectedOptions)
+        }.isFailure)
+        check(runCatching { LocalLibraryPresentation.exportArgs(
+            zip, zip, ExportFormat.CBZ, "X4", selectedOptions)
+        }.isFailure)
+        check(runCatching { LocalLibraryPresentation.exportArgs(
+            File(folder, "missing.cbz"), exportTarget, ExportFormat.XTCH, "X4", selectedOptions)
+        }.isFailure)
         // Continue reading uses already-persisted local timestamps and keeps
         // the reader's existing per-file page position independent.
         val secondZip = File(folder, "chapter-three.cbz")

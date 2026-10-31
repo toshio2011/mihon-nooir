@@ -1,8 +1,13 @@
 package dev.nooir.desktop.ui
 
+import dev.nooir.bridge.ExportFormat
+import dev.nooir.bridge.NooirDeviceProfiles
+import dev.nooir.desktop.NooirDesktopCli
+import dev.nooir.mangabridge.MangaConversionOptions
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.GridLayout
 import java.awt.Font
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -22,6 +27,7 @@ import javax.swing.BorderFactory
 import javax.swing.DefaultListCellRenderer
 import javax.swing.DefaultListModel
 import javax.swing.JButton
+import javax.swing.JComboBox
 import javax.swing.JFileChooser
 import javax.swing.JFrame
 import javax.swing.JLabel
@@ -44,6 +50,33 @@ internal object LocalLibraryPresentation {
             it.title.contains(needle, ignoreCase = true) ||
                 it.file.name.contains(needle, ignoreCase = true)
         }
+    }
+
+    /** Construct the standard Windows CLI contract; never fork shared codecs. */
+    fun exportArgs(input: File, output: File, format: ExportFormat, device: String,
+        options: MangaConversionOptions): Array<String> {
+        require(input.isDirectory || input.isFile &&
+            input.extension.lowercase() in setOf("cbz", "zip")) {
+            "Select an existing comic CBZ/ZIP or image directory"
+        }
+        require(!output.exists() && output.parentFile.isDirectory) {
+            "Select a new output filename inside an existing folder (no overwrites)"
+        }
+        require(output.extension.equals(format.extension, ignoreCase = true)) {
+            "Expected a .${format.extension} output filename"
+        }
+        require(NooirDeviceProfiles.forId(device).accepts(format)) {
+            "The selected e-reader profile does not accept ${format.name}"
+        }
+        val title = input.nameWithoutExtension.take(120).ifBlank { "MihonNooir" }
+        return arrayOf(
+            "--input", input.canonicalPath,
+            "--output", output.canonicalPath,
+            "--format", format.name,
+            "--device", device,
+            "--title", title,
+            "--options-token", options.copy(panelDiagnostics = false).token(),
+        )
     }
 
     fun cover(file: File, width: Int = 190, height: Int = 260): BufferedImage {
@@ -95,6 +128,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
     private var previewWorker: SwingWorker<BufferedImage, Unit>? = null
     private val add = JButton("Add comic")
     private val read = JButton("Read selected")
+    private val convert = JButton("Convert selected")
     private val remove = JButton("Remove from library")
     private val reload = JButton("Refresh")
     private val series = JButton("Downloaded series")
@@ -130,6 +164,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
         val buttons = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             add(this@LocalLibraryWindow.add)
             add(this@LocalLibraryWindow.read)
+            add(this@LocalLibraryWindow.convert)
             add(this@LocalLibraryWindow.remove)
             add(this@LocalLibraryWindow.reload)
             add(this@LocalLibraryWindow.series)
@@ -175,6 +210,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
         })
         add.addActionListener { addComic() }
         read.addActionListener { readComic() }
+        convert.addActionListener { convertComic() }
         remove.addActionListener { removeComic() }
         reload.addActionListener { refresh() }
         series.addActionListener { OfflineSeriesScreen.open() }
@@ -190,6 +226,8 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
         resumeDownloaded.isEnabled = !busy
         val selected = list.selectedValue
         read.isEnabled = !busy && selected?.available == true
+        convert.isEnabled = !busy && selected?.available == true
+        search.isEnabled = !busy
         remove.isEnabled = !busy && selected != null
     }
 
@@ -299,6 +337,72 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
                 showError("Comic opened, but progress index could not be updated: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Convert straight from the bookshelf. Reuses the exact same desktop
+     * CLI, shared Android converter, settings token and device profiles as
+     * the main window. No Suwayomi server or online manga source is needed.
+     */
+    private fun convertComic() {
+        if (busy) return
+        val book = list.selectedValue?.takeIf { it.available } ?: return
+        val format = JComboBox(arrayOf("EPUB2", "EPUB", "XTC", "XTCH", "CBZ"))
+        val device = JComboBox(NooirDeviceProfiles.builtins.map { it.id }.toTypedArray())
+        val pick = JPanel(GridLayout(0, 2, 10, 8)).apply {
+            add(JLabel("Export format")); add(format)
+            add(JLabel("E-reader profile")); add(device)
+        }
+        if (JOptionPane.showConfirmDialog(this, pick, "Convert saved comic",
+                JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return
+        val selectedFormat = ExportFormat.valueOf(format.selectedItem as String)
+        val selectedDevice = device.selectedItem as String
+        if (!NooirDeviceProfiles.forId(selectedDevice).accepts(selectedFormat)) {
+            showError("This device does not support the chosen export format")
+            return
+        }
+        val options = DesktopConversionDialog.show(this, MangaConversionOptions()) ?: return
+        val chooser = JFileChooser().apply {
+            dialogTitle = "Save converted local comic"
+            selectedFile = File(DesktopUiModel.suggestedFile(book.title, selectedFormat))
+        }
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return
+        val args = try {
+            LocalLibraryPresentation.exportArgs(
+                book.file, chooser.selectedFile.absoluteFile, selectedFormat, selectedDevice, options)
+        } catch (e: Exception) {
+            showError(e.message ?: "Invalid conversion destination")
+            return
+        }
+        busy = true
+        information.text = "Converting saved comic without a network connection..."
+        updateControls()
+        object : SwingWorker<File, Unit>() {
+            override fun doInBackground(): File {
+                NooirDesktopCli.main(args)
+                val output = File(args[3])
+                check(output.isFile && output.length() > 0) {
+                    "Conversion did not produce a valid output file"
+                }
+                return output
+            }
+
+            override fun done() {
+                busy = false
+                try {
+                    val output = get()
+                    JOptionPane.showMessageDialog(this@LocalLibraryWindow,
+                        "Converted ${output.name}\n${output.absolutePath}",
+                        "MihonNooir local export", JOptionPane.INFORMATION_MESSAGE)
+                    refresh()
+                } catch (e: Exception) {
+                    val cause = if (e is ExecutionException) e.cause ?: e else e
+                    showError(cause.message ?: "Local comic conversion failed")
+                } finally {
+                    updateControls()
+                }
+            }
+        }.execute()
     }
 
     private fun removeComic() {
