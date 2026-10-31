@@ -344,6 +344,7 @@ class SuwayomiClient(
                     StandardOpenOption.WRITE).use { output ->
                     created = true
                     var total = 0L
+                    var lastProgress = 0L
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         val count = input.read(buffer)
@@ -360,12 +361,17 @@ class SuwayomiClient(
                         }
                         output.write(buffer, 0, count)
                         total += count
-                        onProgress(total, expected)
+                        // Bound Swing UI updates on large manga archives.
+                        if (total - lastProgress >= 1024L * 1024L) {
+                            onProgress(total, expected)
+                            lastProgress = total
+                        }
                     }
                     require(total >= 22L) { "Empty or invalid chapter archive" }
                     require(expected == null || total == expected) {
                         "Incomplete local CBZ copy: received $total of $expected bytes"
                     }
+                    if (total != lastProgress) onProgress(total, expected)
                 }
             }
         } catch (error: Exception) {
