@@ -191,7 +191,11 @@ object NooirDesktopCli {
 
     private fun <T> withInput(input: File, use: (List<SourcePage>) -> T): T {
         if (input.isDirectory) {
-            val files = input.walkTopDown().filter { it.isFile && it.extension.lowercase() in imageExt }.toList()
+            val canonicalRoot = input.canonicalFile.toPath()
+            val files = input.walkTopDown().filter {
+                it.isFile && it.extension.lowercase() in imageExt &&
+                    it.canonicalFile.toPath().startsWith(canonicalRoot)
+            }.take(MAX_PAGES + 1).toList()
             require(files.size <= MAX_PAGES) { "Too many source files" }
             val sorted = files.sortedWith { a, b ->
                 val aRel = a.relativeTo(input).invariantSeparatorsPath
@@ -209,8 +213,8 @@ object NooirDesktopCli {
         ZipFile(input).use { zip ->
             val entries = zip.entries().asSequence()
                 .filter { !it.isDirectory && it.name.substringAfterLast('.', "").lowercase() in imageExt }
-                .sortedWith { a, b -> NaturalPageOrder.compare(a.name, b.name) }
                 .take(MAX_PAGES + 1).toList()
+                .sortedWith { a, b -> NaturalPageOrder.compare(a.name, b.name) }
             require(entries.size <= MAX_PAGES) { "Too many archive images" }
             val sources = entries.map { entry ->
                 require(entry.size <= MAX_IMAGE_BYTES || entry.size == -1L) { "Image entry too large" }

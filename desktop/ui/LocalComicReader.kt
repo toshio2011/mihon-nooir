@@ -60,6 +60,7 @@ internal object LocalComicPages {
             val root = source.canonicalFile
             root.walkTopDown().filter { it.isFile && it.extension.lowercase() in extensions &&
                 it.canonicalFile.toPath().startsWith(root.toPath()) }
+                .take(maxPages + 1)
                 .map { it.relativeTo(root).invariantSeparatorsPath }.toList()
         } else {
             ZipFile(source).use { zip ->
@@ -67,6 +68,7 @@ internal object LocalComicPages {
                     !it.name.startsWith("/") && !it.name.contains("\\") &&
                     it.name.split('/').none { part -> part == ".." } &&
                     it.name.substringAfterLast('.').lowercase() in extensions }
+                    .take(maxPages + 1)
                     .map { it.name }.toList()
             }
         }

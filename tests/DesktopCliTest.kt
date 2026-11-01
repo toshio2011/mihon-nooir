@@ -98,6 +98,26 @@ fun main() {
             "Failed oversized export must clean up temporary files"
         }
 
+        // Large untrusted CBZs must be refused before full-entry sorting or
+        // page decoding, rather than accepting the first arbitrary 5000 pages.
+        val massive = File(root, "too-many-pages.cbz")
+        ZipOutputStream(massive.outputStream()).use { zip ->
+            for (i in 1..5001) {
+                zip.putNextEntry(ZipEntry("page-${i.toString().padStart(5, '0')}.png"))
+                zip.closeEntry()
+            }
+        }
+        val bigOutput = File(root, "too-many-pages.xtch")
+        val bigError = runCatching {
+            NooirDesktopCli.main(arrayOf("--input", massive.absolutePath,
+                "--output", bigOutput.absolutePath, "--format", "XTCH", "--device", "X4"))
+        }.exceptionOrNull()
+        check(bigError is IllegalArgumentException &&
+            bigError.message?.contains("Too many archive images") == true) {
+            "More than 5000 CBZ images must fail before sorting/decoding: $bigError"
+        }
+        check(!bigOutput.exists())
+
         val cbz = File(root, "archive.cbz")
         ZipOutputStream(cbz.outputStream()).use { zip ->
             for (page in listOf("10.png" to image(10), "2.png" to image(2))) {

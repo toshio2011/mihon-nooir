@@ -173,6 +173,19 @@ fun main() {
             hugeFailure.message?.contains("dimensions exceed safe desktop pixel limit") == true) {
             "Local image folder must reject oversized headers before image allocation"
         }
+        // A 5001-entry image archive must fail during enumeration, not after
+        // collecting/sorting the entire untrusted archive.
+        val tooManyArchive = File(folder, "too-many-pages.cbz")
+        ZipOutputStream(tooManyArchive.outputStream()).use { z ->
+            for (i in 1..5001) {
+                z.putNextEntry(ZipEntry("page-${i.toString().padStart(5, '0')}.png"))
+                z.closeEntry()
+            }
+        }
+        check(runCatching { LocalComicPages.names(tooManyArchive) }
+            .exceptionOrNull()?.message?.contains("Too many pages") == true)
+        check(tooManyArchive.delete())
+
         val oversizedArchive = File(folder, "oversized.cbz")
         ZipOutputStream(oversizedArchive.outputStream()).use { z ->
             z.putNextEntry(ZipEntry("page1.png"))
