@@ -6,6 +6,10 @@ Both **Offline CBZ copy jobs** and the immediate **Save offline manga** action n
 
 Local CBZ/ZIP and folder discovery now **stops collecting image paths at 5,001 entries** and rejects anything beyond the 5,000-page safety cap, before sorting the names. The converter additionally checks that directory images resolve inside the chosen canonical root (so linked files outside the selected folder are not silently read). Synthetic archives containing 5,001 image names exercise the fail-closed path. This keeps worst-case filename-list allocation bounded without truncating a large manga and claiming a successful export.
 
+## Fast page turns without parallel decode pile-ups (Windows preview)
+
+The offline single-page and two-page spread reader now allows **only one heavy decode worker at a time**. Pressing Next repeatedly or jumping while a page is loading replaces one pending destination rather than starting more simultaneous image decoders. Outdated decoded pages are discarded, and the active worker finishes before the latest requested page begins. Switching to webtoon mode drops pending single-page loads; closing the reader prevents a new load from starting. Failed or stale partial bitmaps are released, and the persisted page position still follows the user's latest navigation. Headless queue tests cover rapid turns, coalescing, mode changes and closing; real Windows high-resolution stress testing remains required.
+
 ## Windows image preflight against oversized comic pages
 
 Both the offline CBZ/image-folder reader **and** Windows converter now inspect image dimensions **before allocating decoded pixels**, using the same metadata-aware Java ImageIO helper. The existing 25-million-pixel and 25 MiB compressed-input limits remain; unsupported codecs fail cleanly. A tiny PNG with a forged 50,000 × 50,000 metadata header is rejected rather than decoded, including inside CBZ files. Tests also ensure failed conversions leave no output or temporary export files. This hardens Windows/webtoon/preview input handling; it does not alter Android or claim that Java2D output has Android pixel parity.

@@ -194,6 +194,53 @@ private class ReaderCanvas : JComponent() {
     }
 }
 
+/**
+ * Event-thread-owned latest-only decode gate for single/spread page turns.
+ * One worker owns the active slot; rapid page turns replace ONE pending job.
+ * No background decoding is launched by this model itself.
+ */
+internal class LatestPageLoadGate<T : Any> {
+    private var active = false
+    private var closed = false
+    private var pending: T? = null
+
+    fun submit(request: T): T? {
+        if (closed) return null
+        if (active) {
+            pending = request
+            return null
+        }
+        active = true
+        return request
+    }
+
+    /** Discard stale queued pages on webtoon mode switch, not the active worker. */
+    fun discardPending() {
+        pending = null
+    }
+
+    /** Called exactly once when the active worker has actually finished decoding. */
+    fun completed(): T? {
+        if (closed) {
+            active = false
+            pending = null
+            return null
+        }
+        check(active) { "Page decode gate has no active request" }
+        val next = pending
+        pending = null
+        active = next != null
+        return next
+    }
+
+    fun close() {
+        closed = true
+        pending = null
+    }
+}
+
+private data class ReaderPageLoad(val generation: Int, val indices: List<Int>)
+
 private class LocalComicWindow(
     private val source: File,
     private val pages: List<String>,
@@ -234,6 +281,7 @@ private class LocalComicWindow(
     private var preFullscreenBounds: Rectangle? = null
     private var preFullscreenState = JFrame.NORMAL
     private var generation = 0
+    private val pageLoadGate = LatestPageLoadGate<ReaderPageLoad>()
     private var updatingJump = false
 
     init {
@@ -272,11 +320,14 @@ private class LocalComicWindow(
         addWindowListener(object : WindowAdapter() {
             override fun windowClosed(e: WindowEvent?) {
                 webtoonView?.close()
+                pageLoadGate.close()
+                generation++
                 fullscreenDevice?.let { device ->
                     if (device.fullScreenWindow === this@LocalComicWindow)
                         device.fullScreenWindow = null
                 }
                 fullscreenDevice = null
+                currentImages.forEach { it.flush() }
                 currentImages = emptyList()
             }
         })
@@ -343,11 +394,14 @@ private class LocalComicWindow(
         // Invalidate any in-flight single/spread worker before switching
         // reader mode and release its decoded images from memory.
         generation++
+        pageLoadGate.discardPending()
+        val previousImages = currentImages
         currentImages = emptyList()
         webtoonView?.close()
         webtoonView = null
         canvas.configure(emptyList(), rtl.isSelected,
             sizing.selectedItem as String, zoom.value, scroller.viewport.extentSize)
+        previousImages.forEach { it.flush() }
         readerArea.removeAll()
         val continuous = webtoon.isSelected
         twoPage.isEnabled = !continuous
@@ -524,9 +578,11 @@ private class LocalComicWindow(
         pageIndex = indices.first()
         updateBookmarkButton()
         bookmarks.putInt(bookmarkId, pageIndex)
-        val request = ++generation
+        val request = ReaderPageLoad(++generation, indices)
+        val previousImages = currentImages
         currentImages = emptyList()
         repaintPage()
+        previousImages.forEach { it.flush() }
         val first = indices.first() + 1
         val last = indices.last() + 1
         status.text = "Loading ${if (first == last) "page $first" else "pages $first–$last"} / ${pages.size}..."
@@ -535,22 +591,56 @@ private class LocalComicWindow(
         updatingJump = true
         jump.value = pageIndex + 1
         updatingJump = false
+        pageLoadGate.submit(request)?.let { startPageLoad(it) }
+    }
+
+    private fun startPageLoad(request: ReaderPageLoad) {
+        val indices = request.indices
+        val first = indices.first() + 1
+        val last = indices.last() + 1
         object : SwingWorker<List<BufferedImage>, Unit>() {
-            override fun doInBackground(): List<BufferedImage> =
-                indices.map { index -> LocalComicPages.read(source, pages[index]) }
-            override fun done() {
-                if (!this@LocalComicWindow.isDisplayable || request != generation) return
+            override fun doInBackground(): List<BufferedImage> {
+                val decoded = ArrayList<BufferedImage>(indices.size)
                 try {
-                    currentImages = get()
-                    repaintPage()
-                    status.text = "Page ${if (first == last) "$first" else "$first–$last"} / ${pages.size}" +
-                        " — ${pages[indices.first()].take(90)}"
-                    scroller.viewport.viewPosition = Point(0, 0)
+                    for (index in indices) decoded.add(LocalComicPages.read(source, pages[index]))
+                    return decoded
+                } catch (error: Exception) {
+                    decoded.forEach { it.flush() }
+                    throw error
+                }
+            }
+
+            override fun done() {
+                val current = isDisplayable && !webtoon.isSelected &&
+                    request.generation == generation
+                try {
+                    val images = get()
+                    if (current) {
+                        val prior = currentImages
+                        currentImages = images
+                        repaintPage()
+                        prior.forEach { it.flush() }
+                        status.text = "Page ${if (first == last) "$first" else "$first–$last"} / ${pages.size}" +
+                            " — ${pages[indices.first()].take(90)}"
+                        scroller.viewport.viewPosition = Point(0, 0)
+                    } else {
+                        // Discard stale decoded bitmaps promptly; rapid page
+                        // turns cannot retain an old two-page spread.
+                        images.forEach { it.flush() }
+                    }
                 } catch (e: Exception) {
-                    status.text = "Cannot read this page. Use Next or Previous."
-                    JOptionPane.showMessageDialog(this@LocalComicWindow,
-                        e.cause?.message ?: e.message ?: "Page load failed",
-                        "MihonNooir Reader", JOptionPane.WARNING_MESSAGE)
+                    if (current) {
+                        status.text = "Cannot read this page. Use Next or Previous."
+                        JOptionPane.showMessageDialog(this@LocalComicWindow,
+                            e.cause?.message ?: e.message ?: "Page load failed",
+                            "MihonNooir Reader", JOptionPane.WARNING_MESSAGE)
+                    }
+                } finally {
+                    // Only when this worker is REALLY finished can the newest
+                    // pending page start. Never overlap heavy page decoders.
+                    pageLoadGate.completed()?.let { next ->
+                        if (isDisplayable && !webtoon.isSelected) startPageLoad(next)
+                    }
                 }
             }
         }.execute()

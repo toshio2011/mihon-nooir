@@ -2,6 +2,7 @@ import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
 import dev.nooir.desktop.ui.LocalComicPages
+import dev.nooir.desktop.ui.LatestPageLoadGate
 import dev.nooir.desktop.ui.DesktopReadingLayout
 import dev.nooir.desktop.ui.ReaderChapter
 import dev.nooir.desktop.ui.ReaderChapterSequence
@@ -24,6 +25,26 @@ import javax.imageio.ImageIO
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 
 fun main() {
+    // Fast page turns must decode only one page/spread at a time. The newest
+    // page replaces any pending request without piling up huge bitmaps.
+    val decodeGate = LatestPageLoadGate<Int>()
+    check(decodeGate.submit(0) == 0)
+    check(decodeGate.submit(1) == null)
+    check(decodeGate.submit(2) == null)
+    check(decodeGate.submit(3) == null)
+    check(decodeGate.completed() == 3) { "Only the last page turn may be queued" }
+    check(decodeGate.submit(4) == null)
+    check(decodeGate.completed() == 4)
+    check(decodeGate.completed() == null)
+    check(decodeGate.submit(5) == 5)
+    check(decodeGate.submit(6) == null)
+    decodeGate.discardPending()
+    check(decodeGate.completed() == null) { "Webtoon switch must drop stale pending pages" }
+    check(decodeGate.submit(7) == 7)
+    decodeGate.close()
+    check(decodeGate.submit(8) == null)
+    check(decodeGate.completed() == null) { "Closed reader must not restart decoding" }
+
     val chapters = listOf(
         SuwayomiChapter(40, "Chapter 10", 10.0, 1, true),
         SuwayomiChapter(12, "Chapter 2", 2.0, 3, false),
