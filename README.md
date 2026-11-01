@@ -21,6 +21,8 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 
 - **Panel by Panel and Row by Row** manga export, with RTL manga reading order and **Auto Fit**.
 
+> **Unreleased conservative slanted-panel recovery:** For a single-page fallback with two substantial illustrated regions and a clear, continuous *angled pale gutter*, Panel by Panel can now retain both sides as **overlapping rectangular bounding views**. This avoids cutting away angled edges or dialogue near them. A dark divider, crossing balloon, borderless artwork or ambiguous layout still falls back to grouped artwork; there is no general polygon segmentation or AI/OCR. Synthetic RTL/LTR, artwork-crossing, dark-separator and Row-by-Row isolation tests are included; real irregular-panel samples still need validation.
+
 > **Unreleased refinement in draft:** Panel by Panel + Auto Fit **retains conservative panel detection and safe white-corridor splitting**, then chooses portrait or landscape separately for each *final section* to make it as large as possible. A shorter last split can rotate independently. Artwork padding, RTL order, Row by Row, manual modes and official Android **v1.0.16** remain unchanged. CI and real-device validation are required before another release.
 - **Full Page Before Splits** as an optional overview, plus conservative handling of panel borders and title strips.
 - **Opt-in private panel diagnostics ZIP** for investigating export problems (off by default; never uploaded automatically).
