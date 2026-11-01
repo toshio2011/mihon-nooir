@@ -275,16 +275,29 @@ object NooirDesktopCli {
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
                 panels.map { PanelFitSlice(it, manualRotate) }
-            panels != null && auto -> PanelAutoFit.plan(
-                panels, minOf(width, height), maxOf(width, height),
-                options.rightToLeft, options.overlapPercent,
-                preserveWholePanels = true,
-            ).flatMap { fit ->
-                val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
-                val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
-                safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
-                    options.overlapPercent).map { PanelFitSlice(it, fit.landscape) }
+            // Row-by-Row never falls through to a non-row viewport slicer
+            // if its horizontal detector cannot prove any valid boundaries.
+            options.panelMode == "ROW_BY_ROW" && panels == null -> {
+                val whole = PageRegion(0, 0, src.width, src.height)
+                listOf(PanelFitSlice(whole,
+                    if (auto) PanelAutoFit.landscapeFor(whole,
+                        minOf(width, height), maxOf(width, height))
+                    else manualRotate))
             }
+            // Preserve existing safe-corridor splitting, then independently
+            // maximize the displayed area of each resulting fragment.
+            panels != null && options.panelMode == "PANEL_BY_PANEL" && auto ->
+                PanelAutoFit.plan(
+                    panels, minOf(width, height), maxOf(width, height),
+                    options.rightToLeft, options.overlapPercent,
+                    preserveWholePanels = true,
+                ).flatMap { fit ->
+                    val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
+                    val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
+                    val parts = safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
+                        options.overlapPercent)
+                    PanelAutoFit.refitFinalSlices(parts, minOf(width, height), maxOf(width, height))
+                }
             panels != null -> panels.flatMap { panel ->
                 safePanelSlices(src, panel, manualViewWidth, manualViewHeight,
                     options.rightToLeft, options.overlapPercent)

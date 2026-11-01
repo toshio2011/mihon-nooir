@@ -14,6 +14,10 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 
 </div>
 
+> **Unreleased Row-by-Row safety refinement:** When normal horizontal row detection fails, Row by Row alone can try a thoroughly validated continuous pale-gray horizontal gap with substantial artwork on both sides. This never attempts vertical/panel cuts, and a failed row search keeps the complete page instead of falling into general spread/webtoon slicing. Speech balloons crossing the divider and unsupported dark/ambiguous separators remain grouped; protective row overlap is retained.
+
+> **Unreleased v1.0.17 development (draft PR #55):** This working branch is based on the exact signed **[v1.0.16 source release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16)**, not the older `main` history. **Panel by Panel + Auto Fit** preserves safe splitting and chooses the larger portrait/landscape view for each final fragment. A strictly guarded recovery recognizes a single continuous slanted white/pale-gray gutter, returning overlapping rectangular views that preserve all source pixels. Dark, crossing or ambiguous borders remain grouped. These are **unreleased experimental changes** pending real-device validation. The older v1.0.12 installation text below is historical and should not be mistaken for the current latest release.
+
 > [!IMPORTANT]
 > **MangaNooir is experimental and unofficial.** [v1.0.12 is now published as an official GitHub release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12). It publishes the exact APKs from [successful Android CI build #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368), including the merged [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) improvements. Physical Android/XTEink tests remain incomplete. **These CI-built APKs may have different signing certificates from previous previews; back up app data before replacing an older installation.**
 
