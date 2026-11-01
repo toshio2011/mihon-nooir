@@ -82,8 +82,8 @@ kotlinc \
   -include-runtime -d "$tmp/desktop-panel-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/desktop-panel-tests.jar" DesktopPanelExportTestKt
 
-# Panel Phase C: deterministic per-panel Auto Fit without OCR or cropping.
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelAutoFit.kt} \
+# Panel Phase C: safe slices followed by maximum-fill orientation.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelSafeSlicePlanner.kt,PanelAutoFit.kt} \
   tests/PanelAutoFitTest.kt -include-runtime -d "$tmp/panel-auto-fit.jar"
 java -jar "$tmp/panel-auto-fit.jar"
 

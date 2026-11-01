@@ -1,5 +1,6 @@
 import dev.nooir.bridge.PageRegion
 import dev.nooir.bridge.PanelAutoFit
+import dev.nooir.bridge.PanelSafeSlicePlanner
 
 fun main() {
     val portrait = PageRegion(0, 0, 250, 600)
@@ -40,22 +41,39 @@ fun main() {
     check(landscapeFraction > portraitFraction)
     check(landscapeFraction < portraitFraction * 1.25)
 
-    // One detected panel = exactly one screen, even if an old viewport
-    // planner or safe-corridor slicer would have cut this elongated panel.
-    val veryWide = PageRegion(15, 30, 3515, 260)
-    val veryTall = PageRegion(17, 27, 230, 3627)
-    val planLargest = PanelAutoFit.planWholePanelsForMaximumFill(
-        listOf(portrait, mildlyWide, veryWide, veryTall, square), 480, 800,
-    )
-    check(planLargest.size == 5)
-    check(planLargest.map { it.region } ==
-        listOf(portrait, mildlyWide, veryWide, veryTall, square)) {
-        "A detected panel must not be cropped, merged, reordered or re-sliced"
+    // A tall panel is safely cut at real white corridors, producing a
+    // short final section. Refit AFTER cutting so that final section can
+    // become landscape even though the original panel was portrait.
+    val veryTall = PageRegion(0, 0, 500, 2000)
+    val originalFit = PanelAutoFit.plan(listOf(veryTall), 480, 800,
+        rightToLeft = true, overlapPercent = 0, preserveWholePanels = true).single()
+    check(!originalFit.landscape)
+    val pieces = PanelSafeSlicePlanner.plan(
+        veryTall, 480, 800, rightToLeft = true, overlapPercent = 0,
+    ) { _, y -> y !in 830..836 && y !in 1663..1669 }
+    check(pieces.size == 3) { "Two clean seams should produce three pieces: $pieces" }
+    check(pieces.first().top == 0 && pieces.last().bottom == veryTall.bottom)
+    check(pieces.zipWithNext().all { (a, b) -> a.bottom == b.top }) {
+        "Safe source pixels must remain in order with no lost artwork"
     }
-    check(planLargest.map { it.landscape } == listOf(false, true, true, false, false))
+    val refitted = PanelAutoFit.refitFinalSlices(pieces, 480, 800)
+    check(refitted.map { it.region } == pieces) {
+        "Auto Fit cannot change safe cuts, their RTL order or overlap"
+    }
+    check(refitted.map { it.landscape } == listOf(false, false, true)) {
+        "A short final slice must be allowed to turn landscape: $refitted"
+    }
+    check(PanelAutoFit.occupiedFraction(pieces.last(), 800, 480) >
+        PanelAutoFit.occupiedFraction(pieces.last(), 480, 800))
+    val mildRefit = PanelAutoFit.refitFinalSlices(
+        listOf(portrait, mildlyWide, square), 480, 800)
+    check(mildRefit.map { it.landscape } == listOf(false, true, false))
     check(!PanelAutoFit.landscapeForMaximumFill(square, 480, 800))
     check(runCatching {
-        PanelAutoFit.planWholePanelsForMaximumFill(List(33) { portrait }, 480, 800)
+        PanelAutoFit.refitFinalSlices(List(33) { portrait }, 480, 800)
+    }.isFailure)
+    check(runCatching {
+        PanelAutoFit.refitFinalSlices(emptyList(), 480, 800)
     }.isFailure)
     check(runCatching {
         PanelAutoFit.landscapeForMaximumFill(PageRegion(0, 0, 0, 3), 480, 800)
@@ -63,5 +81,5 @@ fun main() {
 
     check(runCatching { PanelAutoFit.plan(List(33) { portrait }, 480, 800, true, 8) }.isFailure)
     check(runCatching { PanelAutoFit.landscapeFor(PageRegion(0, 0, 0, 3), 480, 800) }.isFailure)
-    println("Panel Auto Fit passed: maximum whole-panel screen fill, legacy behavior, portrait tie, no-crop bounds and limits")
+    println("Panel Auto Fit passed: safe splitting followed by independent maximum-fill orientation, legacy row threshold and portrait ties")
 }

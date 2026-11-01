@@ -36,12 +36,10 @@ object PanelAutoFit {
     }
 
     /**
-     * Largest-whole-panel mode for Panel by Panel + Auto Fit.
-     *
-     * Both orientations have the same pixel area; the greater occupied
-     * fraction therefore also means the larger, aspect-ratio-preserving image.
-     * Unlike legacy orientation selection, no 25% improvement is required.
-     * An exact/rounding tie keeps portrait to avoid pointless rotation.
+     * Choose maximum-fit orientation for each FINAL panel or safe split.
+     * The greater occupied screen fraction means a larger undistorted image.
+     * The legacy Row-by-Row 25% improvement threshold is left unchanged.
+     * Exact ties prefer portrait to avoid a pointless rotation.
      */
     fun landscapeForMaximumFill(
         region: PageRegion, portraitWidth: Int, portraitHeight: Int,
@@ -52,16 +50,16 @@ object PanelAutoFit {
     }
 
     /**
-     * One complete detected panel per output screen. The detector's reading
-     * order and safety-padded source region are preserved exactly. Do not
-     * invoke the viewport / clean-corridor slicers in this mode.
+     * Assign portrait/landscape AFTER the unchanged safe white-corridor
+     * splitter has selected the final pixels. Never move split coordinates,
+     * drop safety overlap, or reorder RTL slices. Each piece is independent.
      */
-    fun planWholePanelsForMaximumFill(
-        panels: List<PageRegion>, portraitWidth: Int, portraitHeight: Int,
+    fun refitFinalSlices(
+        slices: List<PageRegion>, portraitWidth: Int, portraitHeight: Int,
     ): List<PanelFitSlice> {
-        require(panels.size <= 32) { "Too many detected panels" }
-        return panels.map {
-            PanelFitSlice(it, landscapeForMaximumFill(it, portraitWidth, portraitHeight))
+        require(slices.isNotEmpty() && slices.size <= 32) { "Invalid final slice count" }
+        return slices.map { region ->
+            PanelFitSlice(region, landscapeForMaximumFill(region, portraitWidth, portraitHeight))
         }
     }
 
