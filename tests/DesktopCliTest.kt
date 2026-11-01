@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.util.zip.ZipFile
+import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import javax.imageio.ImageIO
@@ -18,6 +19,24 @@ private fun image(seed: Int): ByteArray {
         img.setRGB(x, y, (c shl 16) or (c shl 8) or c)
     }
     return ByteArrayOutputStream().also { check(ImageIO.write(img, "png", it)) }.toByteArray()
+}
+/**
+ * Forge a valid PNG IHDR claiming a giant image while leaving a tiny IDAT.
+ * No giant raster is allocated; metadata must be rejected BEFORE read().
+ */
+private fun inflatedPngHeader(input: ByteArray): ByteArray {
+    val bytes = input.copyOf()
+    require(String(bytes.copyOfRange(12, 16), Charsets.US_ASCII) == "IHDR")
+    for (offset in listOf(16, 20)) {
+        val number = 50_000
+        for (i in 0..3) bytes[offset + i] =
+            (number ushr (24 - i * 8)).toByte()
+    }
+    val crc = CRC32()
+    crc.update(bytes, 12, 17)
+    for (i in 0..3) bytes[29 + i] =
+        (crc.value ushr (24 - i * 8)).toByte()
+    return bytes
 }
 private fun le16(b: ByteArray, i: Int) = (b[i].toInt() and 255) or ((b[i+1].toInt() and 255) shl 8)
 private fun zipEntries(file: File): List<String> = ZipFile(file).use { z -> z.entries().asSequence().map { it.name }.toList() }
@@ -61,6 +80,44 @@ fun main() {
             }
             check(runCatching { NooirDesktopCli.main(args) }.isFailure) { "Existing export must not be overwritten" }
         }
+        // Oversized image *metadata* must be rejected before allocating any
+        // 50,000 x 50,000 pixel buffer, and must not publish a partial export.
+        val malicious = File(root, "oversized-input").apply { mkdirs() }
+        File(malicious, "page.png").writeBytes(inflatedPngHeader(image(1)))
+        val refused = File(root, "oversized-output.epub")
+        val rejection = runCatching {
+            NooirDesktopCli.main(arrayOf("--input", malicious.absolutePath,
+                "--output", refused.absolutePath, "--format", "EPUB2", "--device", "X4"))
+        }.exceptionOrNull()
+        check(rejection is IllegalArgumentException &&
+            rejection.message?.contains("dimensions exceed safe desktop pixel limit") == true) {
+            "CLI must reject dangerous image dimensions before decoding: $rejection"
+        }
+        check(!refused.exists()) { "Oversized image must not publish partial export" }
+        check(root.listFiles().orEmpty().none { it.name.startsWith(".nooir-export-") }) {
+            "Failed oversized export must clean up temporary files"
+        }
+
+        // Large untrusted CBZs must be refused before full-entry sorting or
+        // page decoding, rather than accepting the first arbitrary 5000 pages.
+        val massive = File(root, "too-many-pages.cbz")
+        ZipOutputStream(massive.outputStream()).use { zip ->
+            for (i in 1..5001) {
+                zip.putNextEntry(ZipEntry("page-${i.toString().padStart(5, '0')}.png"))
+                zip.closeEntry()
+            }
+        }
+        val bigOutput = File(root, "too-many-pages.xtch")
+        val bigError = runCatching {
+            NooirDesktopCli.main(arrayOf("--input", massive.absolutePath,
+                "--output", bigOutput.absolutePath, "--format", "XTCH", "--device", "X4"))
+        }.exceptionOrNull()
+        check(bigError is IllegalArgumentException &&
+            bigError.message?.contains("Too many archive images") == true) {
+            "More than 5000 CBZ images must fail before sorting/decoding: $bigError"
+        }
+        check(!bigOutput.exists())
+
         val cbz = File(root, "archive.cbz")
         ZipOutputStream(cbz.outputStream()).use { zip ->
             for (page in listOf("10.png" to image(10), "2.png" to image(2))) {

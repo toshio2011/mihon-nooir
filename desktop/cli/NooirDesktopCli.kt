@@ -14,8 +14,50 @@ import java.util.zip.ZipFile
 import javax.imageio.ImageIO
 
 /**
+ * Decode only after inspecting image dimensions with ImageIO's metadata reader.
+ *
+ * Calling ImageIO.read() and checking dimensions afterwards can allocate huge
+ * pixel buffers for a tiny, malicious PNG/JPEG/WebP/CBZ entry. Both Windows
+ * conversion and reading share this bounded decoding path; Android's source
+ * and converter algorithms are not changed.
+ */
+internal object DesktopImageDecoder {
+    fun decode(bytes: ByteArray, maxPixels: Long = 25_000_000L): BufferedImage {
+        require(bytes.isNotEmpty() && maxPixels in 1L..25_000_000L) {
+            "Invalid image data or desktop pixel budget"
+        }
+        val imageInput = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
+            ?: error("Cannot inspect the page image")
+        imageInput.use { stream ->
+            val readers = ImageIO.getImageReaders(stream)
+            require(readers.hasNext()) { "Unsupported image codec" }
+            val decoder = readers.next()
+            try {
+                decoder.setInput(stream, false, true)
+                val width = decoder.getWidth(0)
+                val height = decoder.getHeight(0)
+                require(width > 0 && height > 0 &&
+                    width.toLong() * height.toLong() <= maxPixels) {
+                    "Image dimensions exceed safe desktop pixel limit"
+                }
+                val image = decoder.read(0)
+                    ?: error("Cannot decode the requested image")
+                require(image.width > 0 && image.height > 0 &&
+                    image.width.toLong() * image.height.toLong() <= maxPixels) {
+                    image.flush()
+                    "Decoded image exceeds safe desktop pixel limit"
+                }
+                return image
+            } finally {
+                decoder.dispose()
+            }
+        }
+    }
+}
+
+/**
  * JVM/Windows feasibility CLI. Compiles against the EXACT Kotlin codec, page planner,
- * grayscale PNG writer, presets and options model used by MangaNooir Android.
+ * grayscale PNG writer, presets and options model used by MihonNooir Android.
  * Not yet a desktop GUI or a Suwayomi downloader.
  */
 object NooirDesktopCli {
@@ -64,16 +106,36 @@ object NooirDesktopCli {
                     val h = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
                     val depth = if (format == ExportFormat.XTC) 1 else 2
                     val pages = sequence {
+                        var previousChapter: String? = null
                         for (entry in sources) {
                             val img = decode(entry.open)
-                            val coverOpts = options.copy(
+                            val firstInChapter = !entry.cover && entry.chapter != previousChapter
+                            if (!entry.cover) previousChapter = entry.chapter
+                            // Mirror Android: an optional intact first page keeps
+                            // chapter title/cover art readable even in panel mode.
+                            val preserveWhole = firstInChapter &&
+                                options.keepChapterFirstPageWhole && options.panelMode != "OFF"
+                            val wholeOptions = options.copy(
                                 layout = "PAGED", cropWhiteMargins = false,
                                 splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
-                                panelMode = "OFF",
+                                panelMode = "OFF", showFullPageBeforeSplits = false,
                             )
-                            val opts = if (entry.cover) coverOpts else options
-                            for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
-                                yield(Rendered(entry.chapter, entry.cover, frame))
+                            val opts = if (entry.cover || preserveWhole) wholeOptions else options
+                            val frames = render(img, w, h, depth, opts, fixedFramebuffer = !archive).iterator()
+                            if (frames.hasNext()) {
+                                val first = frames.next()
+                                // The overview is deliberate: only pages with
+                                // at least two real detailed screens get one.
+                                if (!entry.cover && options.showFullPageBeforeSplits &&
+                                    opts.panelMode != "OFF" && frames.hasNext()) {
+                                    val overview = render(img, w, h, depth, wholeOptions,
+                                        fixedFramebuffer = !archive).first()
+                                    yield(Rendered(entry.chapter, false, overview))
+                                }
+                                yield(Rendered(entry.chapter, entry.cover, first))
+                                while (frames.hasNext()) {
+                                    yield(Rendered(entry.chapter, entry.cover, frames.next()))
+                                }
                             }
                         }
                     }
@@ -122,14 +184,18 @@ object NooirDesktopCli {
                 tmp.delete()
             }
         } catch (error: Exception) {
-            System.err.println("MangaNooir desktop conversion failed: ${error.message}")
+            System.err.println("MihonNooir desktop conversion failed: ${error.message}")
             throw error
         }
     }
 
     private fun <T> withInput(input: File, use: (List<SourcePage>) -> T): T {
         if (input.isDirectory) {
-            val files = input.walkTopDown().filter { it.isFile && it.extension.lowercase() in imageExt }.toList()
+            val canonicalRoot = input.canonicalFile.toPath()
+            val files = input.walkTopDown().filter {
+                it.isFile && it.extension.lowercase() in imageExt &&
+                    it.canonicalFile.toPath().startsWith(canonicalRoot)
+            }.take(MAX_PAGES + 1).toList()
             require(files.size <= MAX_PAGES) { "Too many source files" }
             val sorted = files.sortedWith { a, b ->
                 val aRel = a.relativeTo(input).invariantSeparatorsPath
@@ -147,8 +213,8 @@ object NooirDesktopCli {
         ZipFile(input).use { zip ->
             val entries = zip.entries().asSequence()
                 .filter { !it.isDirectory && it.name.substringAfterLast('.', "").lowercase() in imageExt }
-                .sortedWith { a, b -> NaturalPageOrder.compare(a.name, b.name) }
                 .take(MAX_PAGES + 1).toList()
+                .sortedWith { a, b -> NaturalPageOrder.compare(a.name, b.name) }
             require(entries.size <= MAX_PAGES) { "Too many archive images" }
             val sources = entries.map { entry ->
                 require(entry.size <= MAX_IMAGE_BYTES || entry.size == -1L) { "Image entry too large" }
@@ -164,11 +230,7 @@ object NooirDesktopCli {
     private fun decode(open: () -> InputStream): BufferedImage {
         val bytes = open().use { input -> input.readNBytes(MAX_IMAGE_BYTES + 1) }
         require(bytes.isNotEmpty() && bytes.size <= MAX_IMAGE_BYTES) { "Invalid or oversized image" }
-        val img = ImageIO.read(ByteArrayInputStream(bytes)) ?: error("Unsupported image codec")
-        require(img.width > 0 && img.height > 0 && img.width.toLong() * img.height <= MAX_IMAGE_PIXELS) {
-            "Image dimensions exceed safe desktop preview limit"
-        }
-        return img
+        return DesktopImageDecoder.decode(bytes, MAX_IMAGE_PIXELS)
     }
 
     private fun trimWhite(src: BufferedImage, region: PageRegion): PageRegion {

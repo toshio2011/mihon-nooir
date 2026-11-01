@@ -2,6 +2,19 @@ import com.sun.net.httpserver.HttpServer
 import dev.nooir.desktop.suwayomi.MiniJson
 import dev.nooir.desktop.suwayomi.SuwayomiClient
 import dev.nooir.desktop.suwayomi.SuwayomiToNooir
+import dev.nooir.desktop.ui.OfflineChapterSaver
+import dev.nooir.desktop.ui.LocalLibraryStore
+import dev.nooir.desktop.ui.OfflineSeriesCatalog
+import dev.nooir.desktop.ui.LocalComicPages
+import dev.nooir.desktop.ui.OfflineJobState
+import dev.nooir.desktop.ui.OfflineReadingResume
+import dev.nooir.desktop.ui.OfflineSaveQueue
+import dev.nooir.desktop.ui.RemoteChapterQueue
+import dev.nooir.desktop.ui.RemoteChapterOfflineHandoff
+import dev.nooir.desktop.ui.RemoteChapterRunner
+import dev.nooir.desktop.ui.RemoteChapterState
+import dev.nooir.desktop.ui.ReaderChapter
+import dev.nooir.desktop.ui.ReaderChapterSequence
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -125,6 +138,133 @@ fun main() {
             }
         }
         check(queued.get() == 1) { "Already-downloaded chapters should not be queued again" }
+
+        // Real locally served CBZ bytes -> Windows offline bookshelf. Downloads
+        // are explicit and never trigger source enqueue without user action.
+        val offlineIndex = File(root, "offline-library-index").toPath()
+        val offlineLibrary = LocalLibraryStore(offlineIndex)
+        val groupedCatalog = OfflineSeriesCatalog(File(root, "offline-series-index").toPath())
+        val offlineSaver = OfflineChapterSaver(offlineLibrary, File(root, "offline-books").toPath(), groupedCatalog)
+        check(runCatching { offlineSaver.save(client, 1, listOf(11, 11)) }.isFailure)
+        check(runCatching { offlineSaver.save(client, 1, listOf(999)) }.isFailure)
+        val savedProgress = mutableListOf<Pair<Long, Long?>>()
+        val savedChapters = offlineSaver.save(client, 1, listOf(11, 12)) { _, copied, total ->
+            savedProgress += copied to total
+        }
+        check(savedProgress.size >= 2 && savedProgress.all { it.first > 0L }) {
+            "Offline queue saver must surface real local CBZ copy progress"
+        }
+        check(savedChapters.size == 2 && savedChapters.all { it.isFile })
+        check(offlineLibrary.books().size == 2)
+        val series = groupedCatalog.series()
+        check(series.size == 1 && series.first().mangaId == 1 && series.first().title == "Mock Manga")
+        check(series.first().chapters.map { it.chapterId } == listOf(11, 12)) {
+            "Saved chapter numbers must appear in reading order"
+        }
+        check(series.first().chapters.map { it.chapterTitle } == listOf("Chapter 2", "Chapter 10"))
+        check(series.first().chapters.all { it.available })
+        val restartedCatalog = OfflineSeriesCatalog(File(root, "offline-series-index").toPath())
+        check(restartedCatalog.series().first().chapters.size == 2) {
+            "Series grouping and chapter metadata must persist across Windows restarts"
+        }
+        check(LocalComicPages.names(savedChapters.first()) == listOf("page2.png", "page10.png"))
+        val fetchCount = fetched.get()
+        check(offlineSaver.save(client, 1, listOf(11, 12)).size == 2)
+        check(fetched.get() == fetchCount) { "Existing offline CBZ must be reused without network download" }
+        check(groupedCatalog.series().first().chapters.size == 2) {
+            "Repeated chapter imports must not create duplicate series entries"
+        }
+        check(queued.get() == 1) { "Offline book save must never enqueue source downloads" }
+        // Cross-component mock acceptance: user queues completed Suwayomi
+        // chapters, chooses offline CBZ copy jobs, can reopen them after a
+        // simulated process restart and convert a saved chapter without any
+        // further source download. Never silently start queue operations.
+        val remoteFolder = File(root, "remote-jobs").toPath()
+        val offlineQueueFolder = File(root, "offline-copy-jobs").toPath()
+        val remoteQueue = RemoteChapterQueue(remoteFolder)
+        val persistedRequests = remoteQueue.add(base, 1, listOf(11, 12))
+        check(remoteQueue.list().all { it.state == RemoteChapterState.PENDING })
+        val beforeApproval = queued.get()
+        check(RemoteChapterQueue(remoteFolder).list().size == 2) {
+            "Requests survive restart without implicit source downloads"
+        }
+        val remoteRunner = RemoteChapterRunner(remoteQueue, client, 0, 1)
+        for (request in persistedRequests) {
+            val claimed = checkNotNull(remoteQueue.claim(base))
+            check(claimed.id == request.id)
+            check(remoteRunner.runClaimed(claimed, { false })) {
+                "Previously downloaded chapter must be recognized without a new enqueue"
+            }
+        }
+        check(remoteQueue.list().all { it.state == RemoteChapterState.DOWNLOADED })
+        check(queued.get() == beforeApproval) {
+            "Verified downloads must not be submitted to Suwayomi a second time"
+        }
+
+        val offlineJobs = OfflineSaveQueue(offlineQueueFolder)
+        val handoff = RemoteChapterOfflineHandoff(remoteQueue, offlineJobs)
+        val copyJobs = handoff.queueDownloaded(base, persistedRequests.map { it.id })
+        check(copyJobs.size == 2 && copyJobs.all { it.state == OfflineJobState.PENDING })
+        check(handoff.queueDownloaded(base, persistedRequests.map { it.id })
+            .map { it.id } == copyJobs.map { it.id }) {
+            "Offline CBZ handoff must be idempotent"
+        }
+        check(OfflineSaveQueue(offlineQueueFolder).list().size == 2)
+        val beforeCopies = fetched.get()
+        for (expected in copyJobs) {
+            val claimed = checkNotNull(offlineJobs.claimNext(base))
+            check(claimed.id == expected.id)
+            check(offlineSaver.save(client, 1, listOf(claimed.chapterId)).size == 1)
+            offlineJobs.complete(claimed.id)
+        }
+        check(OfflineSaveQueue(offlineQueueFolder).list().all {
+            it.state == OfflineJobState.COMPLETED
+        })
+        check(fetched.get() == beforeCopies) {
+            "Already saved CBZ chapters must be reused, not downloaded again"
+        }
+        check(queued.get() == beforeApproval)
+        // Chapter/page history remains local, not tied to the Suwayomi server.
+        offlineLibrary.markOpened(savedChapters[1], 12_345L)
+        val reopenedSeries = OfflineSeriesCatalog(File(root, "offline-series-index").toPath()).series()
+        val reopenedLibrary = LocalLibraryStore(offlineIndex).books()
+        val resume = checkNotNull(OfflineReadingResume.mostRecent(reopenedSeries, reopenedLibrary))
+        check(resume.series.mangaId == 1 && resume.chapter.chapterId == 12)
+        check(resume.lastOpenedAt == 12_345L)
+        val sequence = ReaderChapterSequence(resume.series.title,
+            resume.series.chapters.map {
+                ReaderChapter(it.chapterId, it.chapterTitle, it.file)
+            }, resume.series.chapters.indexOfFirst { it.chapterId == resume.chapter.chapterId })
+        check(sequence.current.file.canonicalFile == savedChapters[1].canonicalFile)
+        check(sequence.adjacent(-1)?.current?.id == 11)
+        val offlineEpub = File(root, "offline-resumed.epub")
+        dev.nooir.desktop.NooirDesktopCli.main(arrayOf(
+            "--input", resume.chapter.file.absolutePath,
+            "--output", offlineEpub.absolutePath,
+            "--format", "EPUB2", "--device", "X4",
+            "--title", "Offline resumed chapter",
+        ))
+        check(offlineEpub.length() > 100)
+        ZipFile(offlineEpub).use { z ->
+            check(z.getEntry("OEBPS/package.opf") != null)
+            check(z.getEntry("OEBPS/toc.ncx") != null)
+        }
+        check(queued.get() == beforeApproval && fetched.get() == beforeCopies) {
+            "Converting the local CBZ after restart must be completely offline"
+        }
+
+        restartedCatalog.forget(1, 11)
+        check(restartedCatalog.series().first().chapters.map { it.chapterId } == listOf(12)) {
+            "Removing a grouped chapter must not remove unrelated chapters"
+        }
+        check(savedChapters.first().exists()) { "Removing grouped metadata must not delete CBZ" }
+        check(LocalLibraryStore(offlineIndex).books().size == 2) {
+            "Imported chapters must remain in local library after Windows restart"
+        }
+        check(File(root, "offline-books").listFiles().orEmpty().none {
+            it.name.startsWith(".chapter-")
+        }) { "Offline save must not leave partial chapter download files" }
+
         check(runCatching { SuwayomiToNooir.main(flags) }.isFailure) { "Output collision must fail" }
         val bad = File(root, "unsafe.cbz")
         ZipOutputStream(bad.outputStream()).use { zip ->
@@ -138,6 +278,72 @@ fun main() {
         check(root.listFiles().orEmpty().none { it.name.startsWith(".nooir-suwayomi-") }) {
             "Temporary downloaded archives should be removed"
         }
+        // CBZ streaming must not overwrite files, misreport source progress or
+        // retain partial archives after low-disk/size/callback failures.
+        val copyProgress = mutableListOf<Pair<Long, Long?>>()
+        val transfer = File(root, "local-copy-success.cbz")
+        client.downloadCbz(11, transfer,
+            onProgress = { copied, total -> copyProgress += copied to total })
+        check(transfer.readBytes().contentEquals(cbz))
+        check(copyProgress.isNotEmpty() &&
+            copyProgress.last() == (cbz.size.toLong() to cbz.size.toLong())) {
+            "Local CBZ progress must end at real transferred bytes"
+        }
+        check(copyProgress.zipWithNext().all { it.first.first <= it.second.first })
+        check(dev.nooir.desktop.ui.LocalCbzCopyProgress.label(11, 1_048_576, 2_097_152)
+            .contains("50% of local CBZ"))
+        check(dev.nooir.desktop.ui.LocalCbzCopyProgress.label(11, 1_048_576, null)
+            .contains("total size unknown")) {
+            "Unknown transfer length must not produce a fabricated percent"
+        }
+        check(runCatching { client.downloadCbz(11, transfer) }.isFailure) {
+            "Existing CBZ must not be overwritten"
+        }
+        check(transfer.readBytes().contentEquals(cbz))
+        val tooLarge = File(root, "local-copy-over-limit.cbz")
+        check(runCatching {
+            client.downloadCbz(11, tooLarge, maxBytes = cbz.size.toLong() - 1)
+        }.isFailure && !tooLarge.exists()) {
+            "Oversized Content-Length must fail before creating an archive"
+        }
+        val lowDisk = File(root, "local-copy-low-disk.cbz")
+        check(runCatching {
+            client.downloadCbz(11, lowDisk, availableDiskBytes = { 1L })
+        }.isFailure && !lowDisk.exists()) {
+            "Low disk preflight must preserve the destination"
+        }
+        val callbackError = File(root, "local-copy-callback-error.cbz")
+        check(runCatching {
+            client.downloadCbz(11, callbackError,
+                onProgress = { _, _ -> error("Simulated local transfer interruption") })
+        }.isFailure && !callbackError.exists()) {
+            "Interrupted local copy must delete only its partial destination"
+        }
+
+        // A competing process may create the target AFTER the initial
+        // existence check, while the chapter is streaming to its temp file.
+        // In this case never replace another user's CBZ, even on a same-folder
+        // publish. Both the original and catalog remain unchanged.
+        val raceRoot = File(root, "offline-collision").apply { mkdirs() }
+        val raceTarget = File(raceRoot, "manga-1-chapter-11-Chapter 2.cbz")
+        val preserved = "Existing user's comic bytes".toByteArray()
+        val raceSaver = OfflineChapterSaver(
+            LocalLibraryStore(File(root, "offline-collision-library").toPath()),
+            raceRoot.toPath(),
+            OfflineSeriesCatalog(File(root, "offline-collision-series").toPath()),
+        )
+        check(runCatching {
+            raceSaver.save(client, 1, listOf(11)) { _, _, _ ->
+                raceTarget.writeBytes(preserved)
+            }
+        }.isFailure) { "Competing target must fail rather than overwrite" }
+        check(raceTarget.readBytes().contentEquals(preserved)) {
+            "Existing destination was overwritten by offline CBZ copy"
+        }
+        check(raceRoot.listFiles().orEmpty().none { it.name.startsWith(".chapter-") }) {
+            "Competing publish must clean temporary archive"
+        }
+
         println("Suwayomi D0 mock contract passed: GraphQL, explicit download, CBZ, cover, EPUB2/3, XTC/XTCH, CBZ output, ordering, safe ZIP, no-overwrite")
     } finally {
         server.stop(0)

@@ -1,0 +1,102 @@
+name: Build MihonNooir Windows desktop preview
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'overlay/app/src/main/java/dev/nooir/bridge/**'
+      - 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt'
+      - 'tests/DesktopGuiModelTest.kt'
+      - 'tests/run.sh'
+      - '.github/workflows/desktop-preview.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'overlay/app/src/main/java/dev/nooir/bridge/**'
+      - 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt'
+      - 'tests/DesktopGuiModelTest.kt'
+      - 'tests/run.sh'
+      - '.github/workflows/desktop-preview.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-jvm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile portable desktop UI and shared Android conversion core
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v kotlinc
+          mkdir -p build/desktop
+          kotlinc \
+            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+            overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+            desktop/cli/NooirDesktopCli.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
+            -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
+      - name: Verify headless UI model and Suwayomi mock integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/run.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-desktop-preview-jvm
+          path: build/desktop/mihonnooir-desktop-preview.jar
+          if-no-files-found: error
+          retention-days: 14
+  windows-app-image:
+    needs: build-jvm
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-desktop-preview-jvm
+          path: package/input
+      - name: Create bundled-runtime Windows application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # jpackage's default jlink image intentionally strips native
+          # commands (including java.exe). The managed Suwayomi backend needs
+          # an actual Java launcher from the SAME runtime as the desktop app.
+          # Keep all JDK modules until a real Suwayomi integration smoke test
+          # proves a smaller compatible module set.
+          & "$env:JAVA_HOME/bin/jlink.exe" --add-modules ALL-MODULE-PATH --output package/full-runtime --strip-debug --no-man-pages --no-header-files
+          if ($LASTEXITCODE -ne 0) { throw "jlink failed: $LASTEXITCODE" }
+          if (!(Test-Path 'package/full-runtime/bin/java.exe')) { throw 'Explicit runtime is missing java.exe' }
+          jpackage --type app-image --name MihonNooir-Preview --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --runtime-image package/full-runtime --dest package/output --java-options '-Dfile.encoding=UTF-8'
+          if ($LASTEXITCODE -ne 0) { throw "jpackage failed: $LASTEXITCODE" }
+          $app = 'package/output/MihonNooir-Preview'
+          if (!(Test-Path "$app/MihonNooir-Preview.exe")) { throw 'Windows launcher missing from app image' }
+          if (!(Test-Path "$app/app")) { throw 'Packaged application files missing' }
+          if (!(Test-Path "$app/runtime")) { throw 'Bundled Java runtime missing' }
+          if (!(Test-Path "$app/runtime/bin/java.exe")) { throw 'Bundled Java launcher missing for managed Suwayomi backend' }
+          Compress-Archive -Path $app -DestinationPath package/MihonNooir-Windows-Preview.zip -CompressionLevel Optimal
+          if (!(Test-Path package/MihonNooir-Windows-Preview.zip)) { throw 'Windows archive missing' }
+          $hash = (Get-FileHash -Algorithm SHA256 'package/MihonNooir-Windows-Preview.zip').Hash.ToLowerInvariant()
+          Set-Content -Path 'package/MihonNooir-Windows-Preview.zip.sha256' -Encoding ascii -NoNewline -Value "$hash  MihonNooir-Windows-Preview.zip"
+          Write-Host "Portable Windows ZIP SHA256: $hash"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-windows-preview-unsigned
+          path: |
+            package/MihonNooir-Windows-Preview.zip
+            package/MihonNooir-Windows-Preview.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

@@ -53,6 +53,7 @@ kotlinc \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt \
   desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiToNooir.kt} \
+  desktop/ui/{DesktopReadingLayout.kt,ReaderChapterSequence.kt,WebtoonWindow.kt,WebtoonStripView.kt,LocalComicReader.kt,ReaderBookmarkStore.kt,LocalLibraryStore.kt,OfflineSeriesCatalog.kt,OfflineChapterSaver.kt,OfflineSaveQueue.kt,RemoteChapterQueue.kt,RemoteChapterRunner.kt,RemoteChapterOfflineHandoff.kt,OfflineReadingResume.kt} \
   tests/SuwayomiBridgeTest.kt \
   -include-runtime -d "$tmp/suwayomi-bridge-tests.jar"
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/suwayomi-bridge-tests.jar" SuwayomiBridgeTestKt
@@ -68,6 +69,13 @@ java --add-modules jdk.httpserver -cp "$tmp/suwayomi-browse-tests.jar" SuwayomiB
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
   tests/PanelDetectionCoreTest.kt -include-runtime -d "$tmp/panel-phase-a.jar"
 java -jar "$tmp/panel-phase-a.jar"
+
+# Private Conan diagnostic cases reproduced as independently authored geometry:
+# terminal footer merging, dark framed corridor, shallow header protection.
+# All cover the complete source page and preserve independent Row by Row.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/ConanPanelRegressionTest.kt -include-runtime -d "$tmp/panel-conan-regressions.jar"
+java -jar "$tmp/panel-conan-regressions.jar"
 
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
@@ -96,3 +104,62 @@ java -jar "$tmp/panel-crop.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelSafeSlicePlanner.kt} \
   tests/PanelSafeSlicePlannerTest.kt -include-runtime -d "$tmp/panel-safe-corridors.jar"
 java -jar "$tmp/panel-safe-corridors.jar"
+
+# Windows full-app project: headless GUI model tests against exactly the
+# Android 1.0.16 shared panel renderer and conversion settings.
+kotlinc \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  desktop/cli/NooirDesktopCli.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
+  tests/DesktopGuiModelTest.kt \
+  -include-runtime -d "$tmp/windows-full-gui-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+
+# Windows-only lifecycle: launch arguments, pinned JAR, loopback binding and
+# refusal to claim an external server. No Suwayomi jar is executed in CI.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiProcessManager.kt} \
+  tests/WindowsSuwayomiProcessManagerTest.kt \
+  -include-runtime -d "$tmp/windows-suwayomi-manager-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-suwayomi-manager-tests.jar" WindowsSuwayomiProcessManagerTestKt
+
+# Windows-only optional first-run server installer: verifies the official
+# download path via localhost fixtures and never executes a downloaded JAR.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiProcessManager.kt,OfficialSuwayomiCache.kt} \
+  tests/VerifiedSuwayomiCacheTest.kt \
+  -include-runtime -d "$tmp/windows-verified-server-cache-tests.jar"
+java --add-modules jdk.httpserver -Djava.awt.headless=true \
+  -cp "$tmp/windows-verified-server-cache-tests.jar" VerifiedSuwayomiCacheTestKt
+
+# Persistent Windows-only queue for explicit offline CBZ copies. No server,
+# Android app source or network connection is needed for these tests.
+kotlinc desktop/ui/OfflineSaveQueue.kt tests/OfflineSaveQueueTest.kt \
+  -include-runtime -d "$tmp/windows-offline-save-queue-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-offline-save-queue-tests.jar" OfflineSaveQueueTestKt
+
+# True Suwayomi remote download requests: synthetic localhost GraphQL only.
+# No third-party manga, extension installation or Android build edits.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt} \
+  desktop/ui/{RemoteChapterQueue.kt,RemoteChapterRunner.kt} \
+  tests/RemoteChapterQueueTest.kt \
+  -include-runtime -d "$tmp/windows-remote-chapter-queue-tests.jar"
+java --add-modules jdk.httpserver -Djava.awt.headless=true \
+  -cp "$tmp/windows-remote-chapter-queue-tests.jar" RemoteChapterQueueTestKt
+
+# User-selected completed remote downloads become explicit offline CBZ jobs.
+# Neither a source request nor a CBZ copy runs during this handoff.
+kotlinc desktop/ui/{RemoteChapterQueue.kt,OfflineSaveQueue.kt,RemoteChapterOfflineHandoff.kt} \
+  tests/RemoteChapterOfflineHandoffTest.kt \
+  -include-runtime -d "$tmp/windows-remote-offline-handoff-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-remote-offline-handoff-tests.jar" RemoteChapterOfflineHandoffTestKt
+
+# Windows-only bounded Download All queue: atomic capacity checks, dedupe and
+# no source requests until a separate UI confirmation.
+kotlinc desktop/ui/RemoteChapterQueue.kt tests/RemoteChapterBatchTest.kt \
+  -include-runtime -d "$tmp/windows-remote-batch-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-remote-batch-tests.jar" RemoteChapterBatchTestKt
+
+# Windows-only multiple explicit page bookmarks, independently persisted
+# from resume position; no Android app or server-side changes.
+kotlinc desktop/ui/ReaderBookmarkStore.kt tests/ReaderBookmarkStoreTest.kt \
+  -include-runtime -d "$tmp/windows-reader-bookmarks-tests.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-reader-bookmarks-tests.jar" ReaderBookmarkStoreTestKt

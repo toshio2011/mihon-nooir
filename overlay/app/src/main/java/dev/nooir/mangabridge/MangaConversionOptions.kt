@@ -110,6 +110,18 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
         } else if (options.panelMode == "PANEL_BY_PANEL") {
             Text("Detect individual manga panels. Uncertain boundaries preserve the page rather than guess.")
         }
+        if (options.panelMode == "PANEL_BY_PANEL") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Switch(checked = options.panelDiagnostics, onCheckedChange = {
+                    onChange(options.copy(preset = "Custom", panelDiagnostics = it))
+                })
+                Text("Save panel diagnostics after this export")
+            }
+            Text("Experimental. Creates a private ZIP with detector thumbnails, original artwork samples, " +
+                "split reasons and output-frame mapping. Does not change the book. " +
+                "Images may be copyrighted; review before sharing. The switch resets after this job. After export, open this dialog " +
+                "again and choose Save latest diagnostics ZIP.")
+        }
         Text("Book packaging")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = options.includeCover, onCheckedChange = {
