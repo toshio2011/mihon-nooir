@@ -745,6 +745,12 @@ object PanelDetectionCore {
             // spaces inside a single panel. Its midpoint is safe by construction.
             for ((begin, end) in gaps.sortedByDescending { it.second - it.first }.take(12)) {
                 val mid = (begin + end) / 2
+                // Require a generous uninterrupted gray corridor around the
+                // chosen axis. A short balloon/stroke through the *middle*
+                // of an otherwise pale gap can leave two thin pale strips;
+                // neither strip alone proves the artwork is safely separated.
+                val protect = maxOf(6, region.height / 25)
+                if (mid - protect < begin || mid + protect >= end) continue
                 val upper = region.copy(bottom = mid)
                 val lower = region.copy(top = mid)
                 if (illustratedAcross(upper) && illustratedAcross(lower)) return mid
