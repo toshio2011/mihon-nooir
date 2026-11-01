@@ -144,7 +144,8 @@ object PanelDetectionCore {
         var best: Candidate? = null
         val requiredRows = (height + yStep - 1) / yStep
         // A scanline is eligible only if a *five-pixel-wide* band stays
-        // consistently pale, with dark illustrated borders on BOTH sides.
+        // consistently pale (even slightly off-white scan gutters), with
+        // dark illustrated borders on BOTH sides.
         // Just a white line inside a dark splash page is insufficient without
         // sustained parallel edges, and a single dark speech-balloon crossing
         // vetoes the candidate completely.
@@ -161,7 +162,7 @@ object PanelDetectionCore {
                 for (y in 0 until height step yStep) {
                     val x = top + (travel.toLong() * y / (height - 1)).toInt()
                     if (x - edgeOffset < margin || x + edgeOffset >= width - margin ||
-                        (x - 2..x + 2).any { brightness(it, y) < 247 }) {
+                        (x - 2..x + 2).any { brightness(it, y) < 240 }) {
                         safe = false
                         break
                     }

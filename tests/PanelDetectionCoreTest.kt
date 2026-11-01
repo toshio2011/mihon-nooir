@@ -528,6 +528,22 @@ fun main() {
         "Independent Row by Row must not treat diagonal gutters as horizontal tiers"
     }
 
+    // Scanned pale-gray (not pure white) gutters can be considered when
+    // the full slanted corridor stays bright and both illustrated edges
+    // independently meet the strict long-border checks.
+    val paleGray = angled.copyOf()
+    for (y in 0 until angledH) {
+        val divider = 126 + (48L * y / (angledH - 1)).toInt()
+        for (at in divider - 6..divider + 6)
+            paleGray[y * angledW + at] = 241.toByte()
+    }
+    val graySlanted = PanelDetectionCore.detect(angledW, angledH, paleGray, true)
+    check(!graySlanted.usedFullPageFallback &&
+        graySlanted.regions.size == 2 &&
+        graySlanted.regions[0].left < graySlanted.regions[1].right) {
+        "A truly continuous PALE GRAY angled divider should remain eligible: $graySlanted"
+    }
+
     // If a speech balloon / character crosses the supposed separator,
     // never cut there even if the rest of the slanted gap looks clean.
     val crossed = angled.copyOf()
