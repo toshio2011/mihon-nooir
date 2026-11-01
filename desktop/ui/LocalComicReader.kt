@@ -1,6 +1,7 @@
 package dev.nooir.desktop.ui
 
 import dev.nooir.bridge.NaturalPageOrder
+import dev.nooir.desktop.DesktopImageDecoder
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
@@ -106,11 +107,7 @@ internal object LocalComicPages {
             require(!entry.isDirectory && entry.size <= maxBytes) { "Invalid archive image size" }
             zip.getInputStream(entry).use { boundedRead(it) }
         }
-        val decoded = ImageIO.read(ByteArrayInputStream(bytes))
-            ?: error("This page image format is not supported by the installed Java image codecs")
-        require(decoded.width > 0 && decoded.height > 0 &&
-            decoded.width.toLong() * decoded.height <= maxPixels) { "Page resolution is too large" }
-        return decoded
+        return DesktopImageDecoder.decode(bytes, maxPixels)
     }
 }
 

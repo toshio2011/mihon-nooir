@@ -17,6 +17,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
+import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import javax.imageio.ImageIO
@@ -154,6 +155,37 @@ fun main() {
         }
         check(LocalComicPages.names(zip) == listOf("page 2.png", "page 10.png"))
         check(LocalComicPages.read(zip, "page 10.png").height == 48)
+        // A tiny PNG whose metadata claims a multi-gigabyte raster must be
+        // stopped before ImageIO allocates pixels (both CBZ and folder paths).
+        val claimedHuge = raw.copyOf()
+        for (offset in listOf(16, 20)) for (i in 0..3) {
+            claimedHuge[offset + i] = (50_000 ushr (24 - i * 8)).toByte()
+        }
+        val headerCrc = CRC32().apply { update(claimedHuge, 12, 17) }.value
+        for (i in 0..3) claimedHuge[29 + i] =
+            (headerCrc ushr (24 - i * 8)).toByte()
+        val oversizedDir = File(folder, "oversized").apply { mkdirs() }
+        File(oversizedDir, "oversized.png").writeBytes(claimedHuge)
+        val hugeFailure = runCatching {
+            LocalComicPages.read(oversizedDir, "oversized.png")
+        }.exceptionOrNull()
+        check(hugeFailure is IllegalArgumentException &&
+            hugeFailure.message?.contains("dimensions exceed safe desktop pixel limit") == true) {
+            "Local image folder must reject oversized headers before image allocation"
+        }
+        val oversizedArchive = File(folder, "oversized.cbz")
+        ZipOutputStream(oversizedArchive.outputStream()).use { z ->
+            z.putNextEntry(ZipEntry("page1.png"))
+            z.write(claimedHuge)
+            z.closeEntry()
+        }
+        check(runCatching {
+            LocalComicPages.read(oversizedArchive, "page1.png")
+        }.exceptionOrNull()?.message?.contains("dimensions exceed safe desktop pixel limit") == true) {
+            "CBZ page reader must reject giant declared image dimensions"
+        }
+        oversizedDir.deleteRecursively()
+        check(oversizedArchive.delete())
         // Cover preview uses the secure comic reader, prioritizes an actual
         // named cover even when natural-order page one sorts before it.
         val coverImage = BufferedImage(32, 48, BufferedImage.TYPE_INT_RGB)
