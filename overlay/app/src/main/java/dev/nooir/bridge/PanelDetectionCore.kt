@@ -132,7 +132,10 @@ object PanelDetectionCore {
         val maxTravel = width / 5
         if (minTravel > maxTravel) return null
         val margin = maxOf(6, width / 25)
-        val edgeOffset = maxOf(7, width / 45)
+        // Sample well OUTSIDE the pale corridor (not inside its white rim).
+        // A 12–16 px illustrated gutter needs an adjacent edge probe that
+        // reaches both actual panel borders before crediting the candidate.
+        val edgeOffset = maxOf(10, width / 25)
         val centerStep = maxOf(2, width / 90)
         val travelStep = maxOf(2, width / 90)
         val yStep = maxOf(1, height / 260)
