@@ -590,5 +590,53 @@ fun main() {
         "Dark or touching diagonal dividers remain grouped until independently verified"
     }
 
+    // New Row-by-Row second chance: a uniformly PALE-GRAY full-width
+    // gap separates two illustrated horizontal tiers. The old normal
+    // light-seam detectors deliberately reject this 230-gray gutter.
+    val grayW = 300
+    val grayH = 420
+    val grayRows = ByteArray(grayW * grayH) { 230.toByte() }
+    for (y in 12 until 190) for (x in 12 until 288)
+        grayRows[y * grayW + x] = 75.toByte()
+    for (y in 229 until 409) for (x in 12 until 288)
+        grayRows[y * grayW + x] = 90.toByte()
+    val recoveredRows = PanelDetectionCore.detectRows(grayW, grayH, grayRows)
+    check(!recoveredRows.usedFullPageFallback && recoveredRows.regions.size == 2) {
+        "Only Row by Row should recover a genuinely empty pale-gray tier gap: $recoveredRows"
+    }
+    check(recoveredRows.regions[0].top == 0 &&
+        recoveredRows.regions[0].bottom == recoveredRows.regions[1].top &&
+        recoveredRows.regions[1].bottom == grayH &&
+        recoveredRows.regions.all { it.left == 0 && it.right == grayW }) {
+        "Recovered row bounds must retain full width, top-to-bottom ordering and every source pixel"
+    }
+    val paddedGray = PanelDetectionCore.sourceRegions(
+        recoveredRows, grayW, grayH, 1200, 1680)
+    check(paddedGray.size == 2 && paddedGray[0].bottom >= paddedGray[1].top &&
+        paddedGray[0].top == 0 && paddedGray[1].bottom == 1680) {
+        "Padding must preserve shared artwork around a recovered row seam"
+    }
+    // A speech bubble crossing the seam must defeat row recovery rather
+    // than causing the renderer to split through text.
+    val crossedGray = grayRows.copyOf()
+    for (x in 90 until 211) for (y in 207 until 214)
+        crossedGray[y * grayW + x] = 65.toByte()
+    check(PanelDetectionCore.detectRows(grayW, grayH, crossedGray).usedFullPageFallback) {
+        "Ink crossing a pale-gray row gap must veto the speculative cut"
+    }
+    // A full-width DARK line is not a safe divider by itself.
+    val darkGray = grayRows.copyOf()
+    for (x in 0 until grayW) for (y in 207 until 215)
+        darkGray[y * grayW + x] = 50.toByte()
+    check(PanelDetectionCore.detectRows(grayW, grayH, darkGray).usedFullPageFallback) {
+        "Do not infer a row boundary from a dark line without pale-gutter evidence"
+    }
+    // Single-page illustration, lettering and uncertain gaps stay whole.
+    val unsplitGray = ByteArray(grayW * grayH) { 230.toByte() }
+    for (y in 10 until 410) for (x in 10 until 290)
+        unsplitGray[y * grayW + x] = 85.toByte()
+    check(PanelDetectionCore.detectRows(grayW, grayH, unsplitGray).usedFullPageFallback) {
+        "A solid illustrated page is not a row grid"
+    }
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }

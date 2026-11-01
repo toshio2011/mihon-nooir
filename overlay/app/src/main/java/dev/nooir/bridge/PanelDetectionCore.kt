@@ -310,12 +310,17 @@ object PanelDetectionCore {
             return PanelPlan(listOf(whole), true, reason)
         }
         val detector = Detector(width, height, grayscale, trace)
-        val rows = detector.partitionRows(whole)
+        // The row-only mode gets a *second chance* for nonwhite but very
+        // pale, consistently empty horizontal bands. Panel-by-Panel keeps
+        // its established row-first detector unchanged.
+        val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true)
         if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
         if (rows.any { !detector.hasContent(it) }) return fallback("empty row")
         if (!coversEntirePage(rows, width, height)) return fallback("unsafe row coverage")
-        trace?.invoke(PanelDebugEvent("page", whole, "accept", "validated horizontal white-strip rows"))
-        return PanelPlan(rows, false, "validated horizontal white-strip rows")
+        trace?.invoke(PanelDebugEvent("page", whole, "accept",
+            "validated horizontal rows (including conservative pale-gray recovery)"))
+        return PanelPlan(rows, false,
+            "validated horizontal rows (including conservative pale-gray recovery)")
     }
 
     /**
@@ -683,7 +688,71 @@ object PanelDetectionCore {
             }
         }
 
-        fun partitionRows(whole: PageRegion): List<PageRegion> {
+        /**
+         * Strict Row-by-Row recovery. Only after all existing straight white,
+         * thin and adaptive seams fail, look for a broad continuous, very
+         * pale-gray band (>=225) with substantial illustration on BOTH sides.
+         *
+         * No dark-border guessing, text/balloon cutting, vertical partition or
+         * new source crop is allowed. A failed recovery returns null, so the
+         * caller retains the entire unsplittable tier.
+         */
+        private fun paleGrayRowSeam(region: PageRegion): Int? {
+            if (region.width < 80 || region.height < 84) return null
+            val minChild = maxOf(20, region.height / 5)
+            val first = region.top + minChild
+            val last = region.bottom - minChild
+            if (last - first < 8) return null
+            val gaps = mutableListOf<Pair<Int, Int>>()
+            var start = -1
+            // Scan the bounded thumbnail once for continuous pale rows.
+            // A dark stroke anywhere across the band vetoes the boundary.
+            for (y in first until last) {
+                var pale = true
+                val base = y * width
+                for (x in region.left until region.right) {
+                    if ((gray[base + x].toInt() and 255) < 225) {
+                        pale = false
+                        break
+                    }
+                }
+                if (pale && start < 0) start = y
+                if ((!pale || y == last - 1) && start >= 0) {
+                    val end = if (pale) y + 1 else y
+                    if (end - start >= maxOf(6, region.height / 70))
+                        gaps += start to end
+                    start = -1
+                }
+            }
+            fun illustratedAcross(r: PageRegion): Boolean {
+                if (r.height < 24 || isSparseRow(r) || !hasContent(r)) return false
+                val rows = listOf(r.top + r.height / 3, r.top + r.height / 2,
+                    r.bottom - r.height / 3)
+                val step = maxOf(1, r.width / 200)
+                var richRows = 0
+                for (y in rows) {
+                    var ink = 0
+                    var samples = 0
+                    for (x in r.left until r.right step step) {
+                        samples++
+                        if ((gray[y * width + x].toInt() and 255) < 205) ink++
+                    }
+                    if (ink.toLong() * 100 >= samples.toLong() * 30) richRows++
+                }
+                return richRows >= 2
+            }
+            // Prefer the longest trustworthy empty band over incidental white
+            // spaces inside a single panel. Its midpoint is safe by construction.
+            for ((begin, end) in gaps.sortedByDescending { it.second - it.first }.take(12)) {
+                val mid = (begin + end) / 2
+                val upper = region.copy(bottom = mid)
+                val lower = region.copy(top = mid)
+                if (illustratedAcross(upper) && illustratedAcross(lower)) return mid
+            }
+            return null
+        }
+
+        fun partitionRows(whole: PageRegion, allowPaleGrayRecovery: Boolean = false): List<PageRegion> {
             val rows = mutableListOf<PageRegion>()
             fun visit(region: PageRegion, depth: Int) {
                 if (depth >= 10 || rows.size >= MAX_PANELS) {
@@ -698,9 +767,11 @@ object PanelDetectionCore {
                     val lower = region.copy(top = axis)
                     return axis.takeIf { hasContent(upper) && hasContent(lower) }
                 }
-                val axis = valid(bestGutter(region, horizontal = true))
+                val regular = valid(bestGutter(region, horizontal = true))
                     ?: valid(thinLineGutter(region, horizontal = true))
                     ?: valid(adaptiveGutter(region, horizontal = true))
+                val axis = regular
+                    ?: if (allowPaleGrayRecovery) valid(paleGrayRowSeam(region)) else null
                 if (axis == null) {
                     trace?.invoke(PanelDebugEvent("row-search", region, "keep",
                         "no full-width horizontal gutter with content on both sides"))
@@ -708,7 +779,8 @@ object PanelDetectionCore {
                     return
                 }
                 trace?.invoke(PanelDebugEvent("row-search", region, "split",
-                    "validated horizontal seam at y=$axis"))
+                    if (regular == null) "recovered pale-gray horizontal seam at y=$axis"
+                    else "validated horizontal seam at y=$axis"))
                 val upper = region.copy(bottom = axis)
                 val lower = region.copy(top = axis)
                 visit(upper, depth + 1)

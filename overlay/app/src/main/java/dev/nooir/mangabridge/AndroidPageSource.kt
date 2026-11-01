@@ -320,6 +320,14 @@ class AndroidPageSource(private val context: Context) {
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
                 panels.map { PanelFitSlice(it.region, manualRotate) }
+            // Strict row-only mode: if no horizontal tier can be verified,
+            // do NOT pass the page to the general spread/webtoon slicer, which
+            // can introduce unintended non-row cuts. Keep the original artwork.
+            options.panelMode == "ROW_BY_ROW" && panels == null ->
+                listOf(PanelFitSlice(sourceWhole,
+                    if (auto) PanelAutoFit.landscapeFor(sourceWhole,
+                        minOf(width, height), maxOf(width, height))
+                    else manualRotate))
             panels != null && options.panelMode == "PANEL_BY_PANEL" && auto ->
                 PanelAutoFit.plan(
                     panels.map { it.region }, minOf(width, height), maxOf(width, height),

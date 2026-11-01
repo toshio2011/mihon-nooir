@@ -146,6 +146,53 @@ fun main() {
             "Row by Row must not adopt diagonal panel-only recovery"
         }
 
+        // Strict ROW_BY_ROW must recover pale-gray full-width seams without
+        // switching to individual panel detection. Actual XTC output is checked.
+        val grayRowsInput = File(root, "pale-gray-rows").apply { mkdirs() }
+        val grayPage = BufferedImage(300, 420, BufferedImage.TYPE_INT_RGB)
+        val ggray = grayPage.createGraphics()
+        try {
+            ggray.color = java.awt.Color(230, 230, 230)
+            ggray.fillRect(0, 0, 300, 420)
+            ggray.color = java.awt.Color(75, 75, 75)
+            ggray.fillRect(12, 12, 276, 178)
+            ggray.color = java.awt.Color(90, 90, 90)
+            ggray.fillRect(12, 229, 276, 180)
+        } finally { ggray.dispose() }
+        check(ImageIO.write(grayPage, "png", File(grayRowsInput, "01.png")))
+        val grayRowOutput = File(root, "pale-gray-row.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", grayRowsInput.absolutePath, "--output", grayRowOutput.absolutePath,
+            "--format", "XTC", "--device", "X4",
+            "--options-token", rowOptions.copy(layout = "AUTO").token(),
+        ))
+        check(u16(grayRowOutput.readBytes(), 6) == 2) {
+            "Row by Row must recover two safely separated gray-gap rows"
+        }
+
+        // If row detection fails, even AUTO/WEBTOON and spread settings
+        // may not invent a new viewport cut in strict Row by Row mode.
+        val unsplitInput = File(root, "unsplittable-row").apply { mkdirs() }
+        val solidPage = BufferedImage(900, 240, BufferedImage.TYPE_INT_RGB)
+        val gsolid = solidPage.createGraphics()
+        try {
+            gsolid.color = java.awt.Color(90, 90, 90)
+            gsolid.fillRect(0, 0, 900, 240)
+        } finally { gsolid.dispose() }
+        check(ImageIO.write(solidPage, "png", File(unsplitInput, "01.png")))
+        for (layout in listOf("AUTO", "WEBTOON", "PAGED")) {
+            val untouched = File(root, "unsplittable-row-$layout.xtc")
+            NooirDesktopCli.main(arrayOf(
+                "--input", unsplitInput.absolutePath, "--output", untouched.absolutePath,
+                "--format", "XTC", "--device", "X4",
+                "--options-token", rowOptions.copy(layout = layout,
+                    splitSpreads = true, orientation = "AUTO_FIT").token(),
+            ))
+            check(u16(untouched.readBytes(), 6) == 1) {
+                "Unsplit Row by Row must retain one full page even in $layout"
+            }
+        }
+
         // Both platforms must recognize clear panel gutters in wide strips.
         val wideInput = File(root, "wide").apply { mkdirs() }
         check(ImageIO.write(widePanelStrip(), "png", File(wideInput, "wide.png")))

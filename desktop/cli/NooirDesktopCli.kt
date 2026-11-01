@@ -275,6 +275,15 @@ object NooirDesktopCli {
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
                 panels.map { PanelFitSlice(it, manualRotate) }
+            // Row-by-Row never falls through to a non-row viewport slicer
+            // if its horizontal detector cannot prove any valid boundaries.
+            options.panelMode == "ROW_BY_ROW" && panels == null -> {
+                val whole = PageRegion(0, 0, src.width, src.height)
+                listOf(PanelFitSlice(whole,
+                    if (auto) PanelAutoFit.landscapeFor(whole,
+                        minOf(width, height), maxOf(width, height))
+                    else manualRotate))
+            }
             // Preserve existing safe-corridor splitting, then independently
             // maximize the displayed area of each resulting fragment.
             panels != null && options.panelMode == "PANEL_BY_PANEL" && auto ->
