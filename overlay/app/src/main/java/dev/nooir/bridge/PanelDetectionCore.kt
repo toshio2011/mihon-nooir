@@ -177,6 +177,16 @@ object PanelDetectionCore {
             }
         }
         if (output.size !in 2..MAX_PANELS || !coversEntirePage(output, width, height)) {
+            // Preserve all v1.0.16 row-first, subtitle, title and recovery
+            // guards. Only a fully unsplit non-sparse page gets the new path.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val recovered = recoverSlantedPaleGutter(width, height, grayscale, rightToLeft)
+                if (recovered != null) {
+                    val why = "two safe overlapping rectangular views along a slanted pale gutter"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(recovered, false, why)
+                }
+            }
             return fallback("no validated rows or panels")
         }
         val reason = if (recoveredRows > 0)
@@ -184,6 +194,105 @@ object PanelDetectionCore {
         else "row-first partition with per-row panel fallback"
         trace?.invoke(PanelDebugEvent("page", whole, "accept", reason))
         return PanelPlan(output, false, reason)
+    }
+
+    /**
+     * Limited recovery for TWO strong illustrated regions separated by a
+     * *continuous and slanted* light corridor. This is deliberately NOT a
+     * general polygon detector, and does not split black/gray/touching borders.
+     *
+     * The output rectangles overlap by the full horizontal travel of the
+     * slanted gap, plus a safety margin. Their union covers the entire page;
+     * no diagonal crop, alpha mask, balloon or original pixel is ever erased.
+     *
+     * Called ONLY after the strict row-first panel detector has returned one
+     * undivided, non-sparse page. Work is bounded to a 1 MP grayscale thumb.
+     */
+    private fun recoverSlantedPaleGutter(
+        width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 120..1024 ||
+            height.toLong() > width.toLong() * 3) return null
+        val minTravel = maxOf(14, width / 12)
+        val maxTravel = width / 5
+        if (minTravel > maxTravel) return null
+        val margin = maxOf(6, width / 25)
+        // Sample well OUTSIDE the pale corridor (not inside its white rim).
+        // A 12–16 px illustrated gutter needs an adjacent edge probe that
+        // reaches both actual panel borders before crediting the candidate.
+        val edgeOffset = maxOf(10, width / 25)
+        val centerStep = maxOf(2, width / 90)
+        val travelStep = maxOf(2, width / 90)
+        val yStep = maxOf(1, height / 260)
+        fun brightness(x: Int, y: Int): Int = grayscale[y * width + x].toInt() and 255
+        data class Candidate(val top: Int, val bottom: Int, val adjacentRows: Int)
+        var best: Candidate? = null
+        val requiredRows = (height + yStep - 1) / yStep
+        // A scanline is eligible only if a *five-pixel-wide* band stays
+        // consistently pale (even slightly off-white scan gutters), with
+        // dark illustrated borders on BOTH sides.
+        // Just a white line inside a dark splash page is insufficient without
+        // sustained parallel edges, and a single dark speech-balloon crossing
+        // vetoes the candidate completely.
+        for (travel in -maxTravel..maxTravel step travelStep) {
+            if (kotlin.math.abs(travel) < minTravel) continue
+            for (center in width * 30 / 100..width * 70 / 100 step centerStep) {
+                val top = center - travel / 2
+                val bottom = top + travel
+                if (minOf(top, bottom) < width / 5 ||
+                    maxOf(top, bottom) > width * 4 / 5) continue
+                var adjacent = 0
+                var checked = 0
+                var safe = true
+                for (y in 0 until height step yStep) {
+                    val x = top + (travel.toLong() * y / (height - 1)).toInt()
+                    if (x - edgeOffset < margin || x + edgeOffset >= width - margin ||
+                        (x - 2..x + 2).any { brightness(it, y) < 240 }) {
+                        safe = false
+                        break
+                    }
+                    val left = brightness(x - edgeOffset, y) < 215
+                    val right = brightness(x + edgeOffset, y) < 215
+                    if (left && right) adjacent++
+                    checked++
+                }
+                if (!safe || checked != requiredRows ||
+                    adjacent * 100 < checked * 80) continue
+                // Distinguish a genuine pair of illustrated panels from
+                // empty margins, isolated borders or sparse title lettering.
+                // Test ink distribution through the middle of each side.
+                var leftArtRows = 0
+                var rightArtRows = 0
+                for (y in 0 until height step yStep) {
+                    val x = top + (travel.toLong() * y / (height - 1)).toInt()
+                    var leftInk = 0
+                    var rightInk = 0
+                    for (col in margin until x - edgeOffset step maxOf(1, width / 90))
+                        if (brightness(col, y) < 200) leftInk++
+                    for (col in x + edgeOffset + 1 until width - margin step maxOf(1, width / 90))
+                        if (brightness(col, y) < 200) rightInk++
+                    if (leftInk >= 4) leftArtRows++
+                    if (rightInk >= 4) rightArtRows++
+                }
+                if (leftArtRows * 100 < requiredRows * 65 ||
+                    rightArtRows * 100 < requiredRows * 65) continue
+                if (best == null || adjacent > best.adjacentRows)
+                    best = Candidate(top, bottom, adjacent)
+            }
+        }
+        val chosen = best ?: return null
+        val padding = maxOf(4, width / 60)
+        val leftEnd = (maxOf(chosen.top, chosen.bottom) + edgeOffset + padding)
+            .coerceAtMost(width)
+        val rightStart = (minOf(chosen.top, chosen.bottom) - edgeOffset - padding)
+            .coerceAtLeast(0)
+        // Require useful standalone views, but retain overlap to guarantee
+        // every source coordinate survives the slanted boundary.
+        if (leftEnd < width / 3 || rightStart > width * 2 / 3 ||
+            rightStart >= leftEnd) return null
+        val left = PageRegion(0, 0, leftEnd, height)
+        val right = PageRegion(rightStart, 0, width, height)
+        return if (rightToLeft) listOf(right, left) else listOf(left, right)
     }
 
     /**
