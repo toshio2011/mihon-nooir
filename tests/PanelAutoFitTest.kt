@@ -25,7 +25,43 @@ fun main() {
     val intact = PanelAutoFit.plan(elongated, 480, 800, true, 8, preserveWholePanels = true)
     check(intact.map { it.region } == elongated)
     check(intact.first().landscape && !intact.last().landscape)
+    // Old Auto Fit selected portrait for mildly wide panels even when a full
+    // landscape panel visibly occupied MORE of the screen (but under 25%).
+    // Only Panel-by-Panel + AUTO_FIT now opts into the maximum-fill algorithm.
+    val mildlyWide = PageRegion(0, 0, 500, 480)
+    check(!PanelAutoFit.landscapeFor(mildlyWide, 480, 800)) {
+        "Legacy conservative orientation should remain unchanged for Row by Row"
+    }
+    check(PanelAutoFit.landscapeForMaximumFill(mildlyWide, 480, 800)) {
+        "Maximum fill should use landscape even with less than 25% gain"
+    }
+    val portraitFraction = PanelAutoFit.occupiedFraction(mildlyWide, 480, 800)
+    val landscapeFraction = PanelAutoFit.occupiedFraction(mildlyWide, 800, 480)
+    check(landscapeFraction > portraitFraction)
+    check(landscapeFraction < portraitFraction * 1.25)
+
+    // One detected panel = exactly one screen, even if an old viewport
+    // planner or safe-corridor slicer would have cut this elongated panel.
+    val veryWide = PageRegion(15, 30, 3515, 260)
+    val veryTall = PageRegion(17, 27, 230, 3627)
+    val planLargest = PanelAutoFit.planWholePanelsForMaximumFill(
+        listOf(portrait, mildlyWide, veryWide, veryTall, square), 480, 800,
+    )
+    check(planLargest.size == 5)
+    check(planLargest.map { it.region } ==
+        listOf(portrait, mildlyWide, veryWide, veryTall, square)) {
+        "A detected panel must not be cropped, merged, reordered or re-sliced"
+    }
+    check(planLargest.map { it.landscape } == listOf(false, true, true, false, false))
+    check(!PanelAutoFit.landscapeForMaximumFill(square, 480, 800))
+    check(runCatching {
+        PanelAutoFit.planWholePanelsForMaximumFill(List(33) { portrait }, 480, 800)
+    }.isFailure)
+    check(runCatching {
+        PanelAutoFit.landscapeForMaximumFill(PageRegion(0, 0, 0, 3), 480, 800)
+    }.isFailure)
+
     check(runCatching { PanelAutoFit.plan(List(33) { portrait }, 480, 800, true, 8) }.isFailure)
     check(runCatching { PanelAutoFit.landscapeFor(PageRegion(0, 0, 0, 3), 480, 800) }.isFailure)
-    println("Panel Auto Fit passed: per-panel portrait/landscape selection, no-crop bounds, conservative tie and limits")
+    println("Panel Auto Fit passed: maximum whole-panel screen fill, legacy behavior, portrait tie, no-crop bounds and limits")
 }

@@ -36,6 +36,36 @@ object PanelAutoFit {
     }
 
     /**
+     * Largest-whole-panel mode for Panel by Panel + Auto Fit.
+     *
+     * Both orientations have the same pixel area; the greater occupied
+     * fraction therefore also means the larger, aspect-ratio-preserving image.
+     * Unlike legacy orientation selection, no 25% improvement is required.
+     * An exact/rounding tie keeps portrait to avoid pointless rotation.
+     */
+    fun landscapeForMaximumFill(
+        region: PageRegion, portraitWidth: Int, portraitHeight: Int,
+    ): Boolean {
+        val portrait = occupiedFraction(region, portraitWidth, portraitHeight)
+        val landscape = occupiedFraction(region, portraitHeight, portraitWidth)
+        return landscape > portrait + 1e-9
+    }
+
+    /**
+     * One complete detected panel per output screen. The detector's reading
+     * order and safety-padded source region are preserved exactly. Do not
+     * invoke the viewport / clean-corridor slicers in this mode.
+     */
+    fun planWholePanelsForMaximumFill(
+        panels: List<PageRegion>, portraitWidth: Int, portraitHeight: Int,
+    ): List<PanelFitSlice> {
+        require(panels.size <= 32) { "Too many detected panels" }
+        return panels.map {
+            PanelFitSlice(it, landscapeForMaximumFill(it, portraitWidth, portraitHeight))
+        }
+    }
+
+    /**
      * Each confidently detected panel chooses its own viewport before
      * PanelViewportPlanner decides whether a very long panel needs slices.
      * Panels are never merged, reordered or silently cropped.

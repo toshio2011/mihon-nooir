@@ -288,7 +288,7 @@ class AndroidPageSource(private val context: Context) {
         val slices: List<PanelFitSlice> = when {
             sparseWhole != null -> listOf(PanelFitSlice(
                 sparseWhole,
-                if (auto) PanelAutoFit.landscapeFor(
+                if (auto) PanelAutoFit.landscapeForMaximumFill(
                     sparseWhole, minOf(width, height), maxOf(width, height),
                 ) else manualRotate,
             ))
@@ -302,18 +302,13 @@ class AndroidPageSource(private val context: Context) {
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
                 panels.map { PanelFitSlice(it.region, manualRotate) }
-            panels != null && auto -> PanelAutoFit.plan(
-                panels.map { it.region }, minOf(width, height), maxOf(width, height),
-                options.rightToLeft, options.overlapPercent,
-                preserveWholePanels = true,
-            ).flatMapIndexed { index, fit ->
-                val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
-                val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
-                val parts = if (panels[index].preserveWhole) listOf(fit.region)
-                else safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
-                    options.overlapPercent)
-                parts.map { PanelFitSlice(it, fit.landscape) }
-            }
+            // Panel by Panel + Auto Fit prioritizes one whole, largest-possible
+            // detected panel per screen. No second slicing pass may split it.
+            // ROW_BY_ROW and manually selected orientations stay unchanged.
+            panels != null && options.panelMode == "PANEL_BY_PANEL" && auto ->
+                PanelAutoFit.planWholePanelsForMaximumFill(
+                    panels.map { it.region }, minOf(width, height), maxOf(width, height),
+                )
             panels != null -> panels.flatMap { panel ->
                 val parts = if (panel.preserveWhole) listOf(panel.region)
                 else safePanelSlices(src, panel.region, manualViewWidth, manualViewHeight,

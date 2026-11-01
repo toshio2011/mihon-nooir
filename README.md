@@ -20,6 +20,8 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 ## What's new in official Android v1.0.16
 
 - **Panel by Panel and Row by Row** manga export, with RTL manga reading order and **Auto Fit**.
+
+> **Unreleased improvement in draft:** Panel by Panel + Auto Fit is being refined to choose the orientation that displays each *complete detected panel* largest, without a second long-panel slicing pass. Row by Row, manual orientation and released Android **v1.0.16** are unchanged. This feature requires CI and device testing before another Android release.
 - **Full Page Before Splits** as an optional overview, plus conservative handling of panel borders and title strips.
 - **Opt-in private panel diagnostics ZIP** for investigating export problems (off by default; never uploaded automatically).
 - EPUB 2, EPUB 3, XTC, XTCH and CBZ exports remain available. **Windows is not yet released**.

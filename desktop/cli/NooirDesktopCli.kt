@@ -275,16 +275,12 @@ object NooirDesktopCli {
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
                 panels.map { PanelFitSlice(it, manualRotate) }
-            panels != null && auto -> PanelAutoFit.plan(
-                panels, minOf(width, height), maxOf(width, height),
-                options.rightToLeft, options.overlapPercent,
-                preserveWholePanels = true,
-            ).flatMap { fit ->
-                val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
-                val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
-                safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
-                    options.overlapPercent).map { PanelFitSlice(it, fit.landscape) }
-            }
+            // Keep each detected panel intact and maximize its displayed area.
+            // ROW_BY_ROW and manual modes retain their existing behavior.
+            panels != null && options.panelMode == "PANEL_BY_PANEL" && auto ->
+                PanelAutoFit.planWholePanelsForMaximumFill(
+                    panels, minOf(width, height), maxOf(width, height),
+                )
             panels != null -> panels.flatMap { panel ->
                 safePanelSlices(src, panel, manualViewWidth, manualViewHeight,
                     options.rightToLeft, options.overlapPercent)
