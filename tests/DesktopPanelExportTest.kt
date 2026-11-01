@@ -53,6 +53,27 @@ private fun widePanelStrip(): BufferedImage {
     return image
 }
 
+private fun slantedPanelFixture(): BufferedImage {
+    // Two substantial illustrated trapezoids with one continuous bright
+    // diagonal gutter. Every output should keep rectangular safety overlap.
+    val image = BufferedImage(300, 420, BufferedImage.TYPE_INT_RGB)
+    val white = java.awt.Color.WHITE.rgb
+    val left = java.awt.Color(70, 70, 70).rgb
+    val right = java.awt.Color(100, 100, 100).rgb
+    for (y in 0 until 420) {
+        val divider = 126 + (48L * y / 419).toInt()
+        for (x in 0 until 300) {
+            image.setRGB(x, y, when {
+                y !in 8..411 -> white
+                x in 8 until divider - 8 -> left
+                x in divider + 8 until 292 -> right
+                else -> white
+            })
+        }
+    }
+    return image
+}
+
 private fun u16(bytes: ByteArray, at: Int) =
     (bytes[at].toInt() and 255) or ((bytes[at + 1].toInt() and 255) shl 8)
 
@@ -86,6 +107,43 @@ fun main() {
             check(zip.entries().asSequence().count { it.name.endsWith(".png") } == 3) {
                 "Auto Fit must not split horizontal rows back into vertical panels"
             }
+        }
+
+        // End-to-end export regression: irregular-but-confident diagonal
+        // geometry must reach the actual on-device XTC renderer and EPUB2
+        // images without being rejected for overlapping source bounding boxes.
+        val angledInput = File(root, "slanted-panels").apply { mkdirs() }
+        check(ImageIO.write(slantedPanelFixture(), "png",
+            File(angledInput, "01.png")))
+        val angledOptions = panelOptions.copy(orientation = "AUTO_FIT")
+        val angledXtc = File(root, "slanted.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", angledInput.absolutePath, "--output", angledXtc.absolutePath,
+            "--format", "XTC", "--device", "X4",
+            "--options-token", angledOptions.token(),
+        ))
+        check(u16(angledXtc.readBytes(), 6) == 2) {
+            "A safe diagonal separator should yield two complete XTC pages"
+        }
+        val angledEpub = File(root, "slanted.epub")
+        NooirDesktopCli.main(arrayOf(
+            "--input", angledInput.absolutePath, "--output", angledEpub.absolutePath,
+            "--format", "EPUB2", "--device", "X4",
+            "--options-token", angledOptions.token(),
+        ))
+        ZipFile(angledEpub).use { zip ->
+            check(zip.entries().asSequence().count { it.name.endsWith(".png") } == 2) {
+                "Irregular panel bounds must survive EPUB2 conversion"
+            }
+        }
+        val angledRow = File(root, "slanted-row.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", angledInput.absolutePath, "--output", angledRow.absolutePath,
+            "--format", "XTC", "--device", "X4",
+            "--options-token", rowOptions.token(),
+        ))
+        check(u16(angledRow.readBytes(), 6) == 1) {
+            "Row by Row must not adopt diagonal panel-only recovery"
         }
 
         // Both platforms must recognize clear panel gutters in wide strips.

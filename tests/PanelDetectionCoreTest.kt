@@ -512,5 +512,83 @@ fun main() {
         true) { fallbackEvents.add(it) }.usedFullPageFallback)
     check(fallbackEvents.any { it.decision == "fallback" && it.detail.contains("long strip") })
 
+    // Irregular-but-confident panels: a diagonal pale gutter separates
+    // two trapezoidal illustrated regions. Keep overlapping bounding
+    // rectangles rather than polygon-cutting away a balloon at the edge.
+    val angledW = 300
+    val angledH = 420
+    val angled = ByteArray(angledW * angledH) { 255.toByte() }
+    for (y in 0 until angledH) {
+        val divider = 126 + (48L * y / (angledH - 1)).toInt()
+        if (y in 8..411) {
+            for (x in 8 until divider - 8) angled[y * angledW + x] = 70.toByte()
+            for (x in divider + 8 until 292) angled[y * angledW + x] = 100.toByte()
+        }
+    }
+    val diagonalRtl = PanelDetectionCore.detect(angledW, angledH, angled, true)
+    val diagonalLtr = PanelDetectionCore.detect(angledW, angledH, angled, false)
+    check(!diagonalRtl.usedFullPageFallback && diagonalRtl.regions.size == 2 &&
+        diagonalRtl.reason.contains("slanted pale gutter")) {
+        "A continuous slanted bright boundary between illustrated panels should recover safely: $diagonalRtl"
+    }
+    check(diagonalRtl.regions == diagonalLtr.regions.reversed()) {
+        "Diagonal recovery must retain Japanese RTL ordering"
+    }
+    val leftAngle = diagonalLtr.regions.first()
+    val rightAngle = diagonalLtr.regions.last()
+    check(leftAngle.left == 0 && rightAngle.right == angledW &&
+        rightAngle.left < leftAngle.right &&
+        leftAngle.top == 0 && leftAngle.bottom == angledH &&
+        rightAngle.top == 0 && rightAngle.bottom == angledH) {
+        "Slanted separation must conserve the entire original page with overlap"
+    }
+    val expanded = PanelDetectionCore.sourceRegions(
+        diagonalRtl, angledW, angledH, 1200, 1680)
+    check(expanded.size == 2 && expanded[0].left < expanded[1].right &&
+        expanded[1].left == 0 && expanded[0].right == 1200) {
+        "Slanted thumbnail bounding boxes must remain padded and cover the source"
+    }
+    check(PanelDetectionCore.detectRows(angledW, angledH, angled).usedFullPageFallback) {
+        "Independent Row by Row must not treat diagonal gutters as horizontal tiers"
+    }
+
+    // Scanned pale-gray (not pure white) gutters can be considered when
+    // the full slanted corridor stays bright and both illustrated edges
+    // independently meet the strict long-border checks.
+    val paleGray = angled.copyOf()
+    for (y in 0 until angledH) {
+        val divider = 126 + (48L * y / (angledH - 1)).toInt()
+        for (at in divider - 6..divider + 6)
+            paleGray[y * angledW + at] = 241.toByte()
+    }
+    val graySlanted = PanelDetectionCore.detect(angledW, angledH, paleGray, true)
+    check(!graySlanted.usedFullPageFallback &&
+        graySlanted.regions.size == 2 &&
+        graySlanted.regions[0].left < graySlanted.regions[1].right) {
+        "A truly continuous PALE GRAY angled divider should remain eligible: $graySlanted"
+    }
+
+    // If a speech balloon / character crosses the supposed separator,
+    // never cut there even if the rest of the slanted gap looks clean.
+    val crossed = angled.copyOf()
+    for (x in 85..215) for (y in 206..213)
+        crossed[y * angledW + x] = 30.toByte()
+    check(PanelDetectionCore.detect(angledW, angledH, crossed, true)
+        .usedFullPageFallback) {
+        "A dark artwork bridge across the diagonal vetoes speculative splitting"
+    }
+
+    // A continuous DARK diagonal line is a border, not an empty safe gap.
+    val darkDivider = angled.copyOf()
+    for (y in 0 until angledH) {
+        val x = 126 + (48L * y / (angledH - 1)).toInt()
+        for (at in x - 3..x + 3)
+            darkDivider[y * angledW + at] = 45.toByte()
+    }
+    check(PanelDetectionCore.detect(angledW, angledH, darkDivider, true)
+        .usedFullPageFallback) {
+        "Dark or touching diagonal dividers remain grouped until independently verified"
+    }
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
