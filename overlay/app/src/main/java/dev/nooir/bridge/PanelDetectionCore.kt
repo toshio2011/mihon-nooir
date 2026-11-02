@@ -207,6 +207,18 @@ object PanelDetectionCore {
                     )
                 }
             }
+            // One Piece frame 884: rows can be bounded by two *slanted*
+            // horizontal frame rails. The normal horizontal row search is
+            // intentionally strict and must not invent a flat cut through
+            // their artwork. Only recover if all previous detectors failed.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val angled = recoverSlantedHorizontalRails(width, height, grayscale)
+                if (angled != null) {
+                    val why = "strong slanted horizontal frame rails with overlapping protected rows"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(angled, false, why)
+                }
+            }
             return fallback("no validated rows or panels")
         }
         val reason = if (recoveredRows > 0)
@@ -214,6 +226,124 @@ object PanelDetectionCore {
         else "row-first partition with per-row panel fallback"
         trace?.invoke(PanelDebugEvent("page", whole, "accept", reason))
         return PanelPlan(output, false, reason)
+    }
+
+    /**
+     * Conservative recovery for sloped HORIZONTAL comics rows, not arbitrary
+     * panel shapes. A rail must be almost continuous dark ink with bright
+     * paper immediately above and below it. Multiple separated rails are
+     * permitted, but every resulting interior row needs distributed art.
+     *
+     * A rectangular crop expands past the full diagonal travel on BOTH
+     * sides of the boundary. Thus a character touching the angled frame may
+     * be repeated but no original pixels disappear. Called only if the
+     * regular row-first, column, pale diagonal and dark straight paths fail.
+     * No OCR, image allocation, polygon masks or external library is needed.
+     */
+    private fun recoverSlantedHorizontalRails(
+        width: Int, height: Int, gray: ByteArray,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 200..1024 ||
+            height.toLong() > width.toLong() * 3) return null
+        data class Rail(val center: Int, val tiltPercent: Int, val score: Int) {
+            val halfTravel: Int get() = (width * kotlin.math.abs(tiltPercent) + 199) / 200
+        }
+        val xStep = maxOf(3, width / 80)
+        val candidates = mutableListOf<Rail>()
+        // Bounded ~20*170*85 samples on typical X4 input thumbs.
+        for (tilt in -20..20 step 2) {
+            if (kotlin.math.abs(tilt) < 6) continue
+            for (center in height * 18 / 100..height * 82 / 100 step 4) {
+                val travel = (width * kotlin.math.abs(tilt) + 199) / 200
+                if (center - travel < height * 14 / 100 ||
+                    center + travel > height * 86 / 100) continue
+                var dark = 0
+                var paperBefore = 0
+                var paperAfter = 0
+                var samples = 0
+                for (x in 8 until width - 8 step xStep) {
+                    val y = center + (x - width / 2) * tilt / 100
+                    if (y - 10 <= 0 || y + 10 >= height) continue
+                    fun value(atY: Int): Int = gray[atY * width + x].toInt() and 255
+                    if ((-3..3).any { value(y + it) < 115 }) dark++
+                    if (value(y - 9) > 242) paperBefore++
+                    if (value(y + 9) > 242) paperAfter++
+                    samples++
+                }
+                if (samples < 25 ||
+                    dark * 100 < samples * 90 ||
+                    paperBefore * 100 < samples * 85 ||
+                    paperAfter * 100 < samples * 85) continue
+                candidates += Rail(center, tilt, dark * 100 / samples +
+                    minOf(paperBefore, paperAfter) * 100 / samples)
+            }
+        }
+        if (candidates.isEmpty()) return null
+        val selected = mutableListOf<Rail>()
+        val minSeparation = maxOf(35, height / 12)
+        for (c in candidates.sortedWith(
+            compareByDescending<Rail> { it.score }.thenBy { it.center }
+        )) {
+            if (selected.none { kotlin.math.abs(it.center - c.center) <= minSeparation })
+                selected.add(c)
+            if (selected.size >= 5) break
+        }
+        selected.sortBy { it.center }
+        if (selected.isEmpty()) return null
+
+        val guard = maxOf(8, height / 50)
+        // Check artwork well outside the rail/overlap envelope. Sparse
+        // credits, titles with decorative rules and splash backgrounds must
+        // not be promoted into independent reading panels.
+        fun illustrated(innerTop: Int, innerBottom: Int): Boolean {
+            if (innerBottom - innerTop < height * 10 / 100) return false
+            val dy = maxOf(2, (innerBottom - innerTop) / 80)
+            val dx = maxOf(2, width / 100)
+            val xInk = BooleanArray((width + dx - 1) / dx)
+            var rowsWithInk = 0
+            var dark = 0
+            var total = 0
+            var rowIndex = 0
+            for (y in innerTop until innerBottom step dy) {
+                var rowDark = 0
+                var colIndex = 0
+                for (x in 0 until width step dx) {
+                    total++
+                    if ((gray[y * width + x].toInt() and 255) < 220) {
+                        dark++
+                        rowDark++
+                        xInk[colIndex] = true
+                    }
+                    colIndex++
+                }
+                if (rowDark > 0) rowsWithInk++
+                rowIndex++
+            }
+            return total > 0 && dark * 100 >= total * 10 &&
+                rowsWithInk * 100 >= rowIndex * 45 &&
+                xInk.count { it } * 100 >= xInk.size * 40
+        }
+        var innerTop = 0
+        for (rail in selected) {
+            val innerBottom = rail.center - rail.halfTravel - guard
+            if (!illustrated(innerTop, innerBottom)) return null
+            innerTop = rail.center + rail.halfTravel + guard
+        }
+        if (!illustrated(innerTop, height)) return null
+
+        val result = mutableListOf<PageRegion>()
+        var top = 0
+        for (rail in selected) {
+            val lower = (rail.center + rail.halfTravel + guard).coerceAtMost(height)
+            result += PageRegion(0, top, width, lower)
+            top = (rail.center - rail.halfTravel - guard).coerceAtLeast(0)
+        }
+        result += PageRegion(0, top, width, height)
+        return if (result.size in 2..6 && result.all {
+            it.width > 0 && it.height > height / 10
+        } && result.zipWithNext().all { (a, b) ->
+            b.top < a.bottom
+        }) result else null
     }
 
     /**
