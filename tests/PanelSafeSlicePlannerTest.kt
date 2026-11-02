@@ -141,6 +141,17 @@ fun main() {
         "Accepted clean gutters should meaningfully enlarge panoramic frames"
     }
     covered(landscapeRtl, ultraWide)
+    // With zero overlap, the same trusted gutters must still work. The
+    // trailing solid section is kept as one view instead of invalidating
+    // every earlier cut merely because it has no fourth clean seam.
+    val strictLandscape = PanelSafeSlicePlanner.plan(ultraWide, 800, 480,
+        true, 0, panoramaInk)
+    check(strictLandscape.size in 3..6 && strictLandscape.first().right == ultraWide.right)
+    check(strictLandscape.last().left == ultraWide.left)
+    check(strictLandscape.zipWithNext().all { (a, b) -> b.right == a.left }) {
+        "Zero-overlap RTL must retain earlier clean cuts and a contiguous tail"
+    }
+    covered(strictLandscape, ultraWide)
     check(landscapeRtl.none { PanelSafeSlicePlanner.isSparse(it, panoramaInk) })
     check(PanelSafeSlicePlanner.plan(ultraWide, 800, 480, true, 8) { _, _ -> true } ==
         listOf(ultraWide)) {
