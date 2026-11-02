@@ -685,8 +685,8 @@ fun main() {
     fun illustrated(orientation: String): ByteArray {
         val pixels = ByteArray(darkW * darkH) { 218.toByte() }
         for (y in 4 until darkH - 4) for (x in 4 until darkW - 4) {
-            val before = if (orientation == "vertical") x in 8..183 || x in 217..391
-                         else y in 8..283 || y in 317..591
+            val before = if (orientation == "vertical") x in 8..188 || x in 211..391
+                         else y in 8..287 || y in 313..591
             if (before) pixels[y * darkW + x] =
                 if ((x / 9 + y / 9) % 3 == 0) 40.toByte() else 210.toByte()
         }
