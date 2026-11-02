@@ -112,6 +112,17 @@ object PanelSafeSlicePlanner {
         }
 
         val slices = mutableListOf<PageRegion>()
+        // A whole panel may have enough ink to pass the original sparse guard,
+        // while one clean corridor still leaves a nearly empty magnified page.
+        // Never drop that region: coalesce all remaining source pixels into the
+        // previous illustrated slice, or retain the whole original panel.
+        fun coalesceSparseTail(): List<PageRegion> {
+            if (slices.isEmpty()) return listOf(panel)
+            val previous = slices.last()
+            slices[slices.lastIndex] = if (tall) previous.copy(bottom = end)
+                else previous.copy(right = end)
+            return if (wide && rightToLeft) slices.reversed() else slices
+        }
         var cursor = start
         val overlap = overlapPercent.coerceIn(0, MAX_OVERLAP_PERCENT)
         while (cursor.toLong() + segment < end) {
@@ -184,12 +195,18 @@ object PanelSafeSlicePlanner {
                 if (isSparse(first, inkAt) || isSparse(remainder, inkAt))
                     return listOf(panel)
             }
+            // A clean seam can also isolate a sparse title/border fragment.
+            // Protect it just like an interrupted seam, without throwing away
+            // any previously validated dense regions.
+            if (isSparse(first, inkAt)) return coalesceSparseTail()
             slices += first
             cursor = (cut - repeated.toInt()).coerceAtLeast(cursor + 1)
         }
 
-        slices += if (tall) PageRegion(panel.left, cursor, panel.right, end)
-                  else PageRegion(cursor, panel.top, end, panel.bottom)
+        val tail = if (tall) PageRegion(panel.left, cursor, panel.right, end)
+                   else PageRegion(cursor, panel.top, end, panel.bottom)
+        if (isSparse(tail, inkAt)) return coalesceSparseTail()
+        slices += tail
         return if (wide && rightToLeft) slices.reversed() else slices
     }
 }
