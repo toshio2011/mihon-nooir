@@ -676,5 +676,74 @@ fun main() {
     check(PanelDetectionCore.sourceRegions(all, 300, 420, 1200, 1680, 5) ==
         listOf(PageRegion(0, 0, 1200, 1680)))
 
+    // Dark gutters are not white/pale separators. A thick black corridor
+    // with short light gutters and independently textured illustrated regions
+    // can be split *without discarding any pixels*. The selected overlap
+    // later repeats the seam and any nearby art on both screens.
+    val darkW = 400
+    val darkH = 600
+    fun illustrated(orientation: String): ByteArray {
+        val pixels = ByteArray(darkW * darkH) { 218.toByte() }
+        for (y in 4 until darkH - 4) for (x in 4 until darkW - 4) {
+            val before = if (orientation == "vertical") x in 8..183 || x in 217..391
+                         else y in 8..283 || y in 317..591
+            if (before) pixels[y * darkW + x] =
+                if ((x / 9 + y / 9) % 3 == 0) 40.toByte() else 210.toByte()
+        }
+        if (orientation == "vertical") {
+            for (y in 0 until darkH) for (x in 194..205)
+                pixels[y * darkW + x] = 24.toByte()
+        } else {
+            for (y in 294..305) for (x in 0 until darkW)
+                pixels[y * darkW + x] = 24.toByte()
+        }
+        return pixels
+    }
+    val darkColumns = illustrated("vertical")
+    val verticalDark = PanelDetectionCore.detect(darkW, darkH, darkColumns, true)
+    check(!verticalDark.usedFullPageFallback && verticalDark.regions.size == 2 &&
+        verticalDark.regions.first().left > verticalDark.regions.last().left) {
+        "Two textured panels divided by a bounded full-height dark gutter should recover in RTL: $verticalDark"
+    }
+    check(verticalDark.regions.sumOf { it.width.toLong() * it.height } ==
+        darkW.toLong() * darkH)
+    val darkRows = illustrated("horizontal")
+    val horizontalDark = PanelDetectionCore.detectRows(darkW, darkH, darkRows)
+    check(!horizontalDark.usedFullPageFallback && horizontalDark.regions.size == 2 &&
+        horizontalDark.regions[0].bottom == horizontalDark.regions[1].top) {
+        "Row by Row should consider a verified dark horizontal gutter but never switch to vertical cuts: $horizontalDark"
+    }
+    val sharedDark = PanelDetectionCore.sourceRegions(
+        verticalDark, darkW, darkH, 800, 1200,
+        PanelDetectionCore.overlapPaddingPercent(8),
+    )
+    check(sharedDark.size == 2 &&
+        sharedDark[0].left < sharedDark[1].right &&
+        sharedDark[1].right > sharedDark[0].left) {
+        "Dark separator and surrounding art must remain visible in BOTH overlapping views: $sharedDark"
+    }
+    // A one-pixel black rule is NOT a dark gutter.
+    val rule = illustrated("vertical")
+    for (y in 0 until darkH) for (x in 194..205)
+        rule[y * darkW + x] = 218.toByte()
+    for (y in 0 until darkH) rule[y * darkW + 199] = 15.toByte()
+    check(PanelDetectionCore.detect(darkW, darkH, rule, true).usedFullPageFallback) {
+        "A thin black rule without a thick dark corridor must not be promoted to two panels"
+    }
+    // A white balloon intersecting a large fraction of a dark band breaks
+    // its continuity; leave the ambiguous page intact.
+    val balloon = darkColumns.copyOf()
+    for (y in 170 until 420) for (x in 185..215)
+        balloon[y * darkW + x] = 255.toByte()
+    check(PanelDetectionCore.detect(darkW, darkH, balloon, true).usedFullPageFallback) {
+        "A bubble bridging a dark gap must veto the dark-gutter fallback"
+    }
+    // Solid black splash background has no illustrated paper on both sides.
+    val splashDark = ByteArray(darkW * darkH) { 30.toByte() }
+    for (y in 0 until darkH) for (x in 194..205)
+        splashDark[y * darkW + x] = 12.toByte()
+    check(PanelDetectionCore.detect(darkW, darkH, splashDark, true).usedFullPageFallback) {
+        "A black splash page must never be misclassified as separate framed panels"
+    }
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
