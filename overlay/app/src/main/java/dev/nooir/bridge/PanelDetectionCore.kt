@@ -182,6 +182,38 @@ object PanelDetectionCore {
                 }
             }
         }
+        // The usual shallow unframed footer absorption above is intentionally
+        // strict. A somewhat TALLER terminal strip made of almost nothing but
+        // a border may still escape it and become an entire near-white zoom
+        // frame. Fold it back ONLY when its immediate predecessor is one
+        // illustrated full-width row. Never cross a source-page boundary,
+        // merge a title above the story, or duplicate the same footer across
+        // independently ordered side-by-side panels.
+        var absorbedRuledTail = false
+        if (rows.size >= 2 && output.size >= 2) {
+            val tail = output.last()
+            val before = output[output.lastIndex - 1]
+            val precedingRow = rows[rows.lastIndex - 1]
+            if (tail == rows.last() &&
+                tail.left == 0 && tail.right == width && tail.bottom == height &&
+                before.left == 0 && before.right == width &&
+                before.top == precedingRow.top && before.bottom == tail.top &&
+                !detector.isSparseRow(before) &&
+                detector.isVerySparseRuledTail(tail)) {
+                output[output.lastIndex - 1] = before.copy(bottom = tail.bottom)
+                output.removeAt(output.lastIndex)
+                absorbedRuledTail = true
+                trace?.invoke(PanelDebugEvent("tier", tail, "absorb",
+                    "near-empty terminal border attached to full-width illustrated row"))
+            }
+        }
+        // The two-row case now legitimately produces ONE complete rectangle.
+        // Returning a generic fallback would send it back through the legacy
+        // free-form slicer and recreate the unwanted near-empty views.
+        if (absorbedRuledTail && output.size == 1 &&
+            coversEntirePage(output, width, height)) {
+            return PanelPlan(output, false, "illustrated row with absorbed terminal border")
+        }
         if (output.size !in 2..MAX_PANELS || !coversEntirePage(output, width, height)) {
             // Preserve all v1.0.16 row-first, subtitle, title and recovery
             // guards. Only a fully unsplit non-sparse page gets the new path.
@@ -602,6 +634,49 @@ object PanelDetectionCore {
                 for (x in row.left until row.right)
                     if ((gray[y * width + x].toInt() and 255) < INK) ink++
             return ink.toLong() * 100 < row.width.toLong() * row.height * 12
+        }
+
+        /**
+         * Extremely faint terminal-border/tail classifier. Unlike the
+         * 3%-sparse guard, it is allowed to MERGE, so fail closed:
+         *  - the candidate must be short relative to both the page and width;
+         *  - less than 1% of ALL thumbnail pixels may be ink;
+         *  - remaining marks must include one unmistakably long straight
+         *    framing stroke, or the strip must be completely blank.
+         *
+         * This deliberately rejects word-only title/credit strips, broad
+         * speech balloons and real illustrated tiers. Every original source
+         * coordinate is preserved by the caller's rectangle UNION.
+         */
+        fun isVerySparseRuledTail(row: PageRegion): Boolean {
+            if (row.height < 8 ||
+                row.height.toLong() * 100 > height.toLong() * 18 ||
+                row.height.toLong() * 100 > row.width.toLong() * 32) return false
+            val columnRuns = IntArray(row.width)
+            var longestHorizontal = 0
+            var longestVertical = 0
+            var ink = 0L
+            val area = row.width.toLong() * row.height
+            for (y in row.top until row.bottom) {
+                var horizontalRun = 0
+                for (x in row.left until row.right) {
+                    if ((gray[y * width + x].toInt() and 255) < INK) {
+                        ink++
+                        if (ink * 100 >= area) return false
+                        horizontalRun++
+                        longestHorizontal = maxOf(longestHorizontal, horizontalRun)
+                        val column = x - row.left
+                        columnRuns[column]++
+                        longestVertical = maxOf(longestVertical, columnRuns[column])
+                    } else {
+                        horizontalRun = 0
+                        columnRuns[x - row.left] = 0
+                    }
+                }
+            }
+            return ink == 0L ||
+                longestHorizontal.toLong() * 100 >= row.width.toLong() * 55 ||
+                longestVertical.toLong() * 100 >= row.height.toLong() * 65
         }
 
         fun hasCleanFullHeightColumn(region: PageRegion): Boolean {
