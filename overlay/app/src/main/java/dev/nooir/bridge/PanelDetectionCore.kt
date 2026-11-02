@@ -14,6 +14,10 @@ data class PanelPlan(
     val regions: List<PageRegion>,
     val usedFullPageFallback: Boolean,
     val reason: String,
+    // One successfully absorbed terminal ruled strip yields a full source
+    // rectangle. The renderer must not then run an independent corridor
+    // slicer over it and recreate the same unwanted extra reading screen.
+    val preserveSingleFrame: Boolean = false,
 )
 
 /** Optional, bounded diagnostic event. No image data or titles are carried here. */
@@ -212,7 +216,8 @@ object PanelDetectionCore {
         // free-form slicer and recreate the unwanted near-empty views.
         if (absorbedRuledTail && output.size == 1 &&
             coversEntirePage(output, width, height)) {
-            return PanelPlan(output, false, "illustrated row with absorbed terminal border")
+            return PanelPlan(output, false, "illustrated row with absorbed terminal border",
+                preserveSingleFrame = true)
         }
         if (output.size !in 2..MAX_PANELS || !coversEntirePage(output, width, height)) {
             // Preserve all v1.0.16 row-first, subtitle, title and recovery
