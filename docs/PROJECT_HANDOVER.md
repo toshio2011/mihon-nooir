@@ -1,5 +1,10 @@
 # MangaNooir — project handover and continuation guide
 
+> [!IMPORTANT]
+> **LATEST HANDOVER — 2 NOVEMBER 2026:** Read **[the current panel / Android / Windows handover](HANDOVER_2026-11-02_PANEL_V1.0.17.md)** first. Official Android is signed v1.0.16; PR #55 is merged into a release-based integration branch; PR #56 provides an unreleased CI-signed v1.0.17 test APK; PR #57 is experimental overlap/dark-gutter work and must pass same-commit CI before any merge. Older status text below is historical and may be stale.
+
+
+
 
 > [!IMPORTANT]
 > **LATEST HANDOVER — 21 OCTOBER 2026:** Read **[docs/HANDOVER_2026-10-21.md](HANDOVER_2026-10-21.md)** first. It contains the current PR, branch, CI, EPUB 2, XTC/XTCH, device-profile, test and next-step status. The summary and status table later in **this** file are a historical snapshot and must NOT be interpreted as the current state.

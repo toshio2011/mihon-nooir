@@ -1,5 +1,10 @@
 # MangaNooir — user guides
 
+> [!IMPORTANT]
+> **LATEST HANDOVER — 2 NOVEMBER 2026:** Read **[the current panel / Android / Windows handover](HANDOVER_2026-11-02_PANEL_V1.0.17.md)** first. Official Android is signed v1.0.16; PR #55 is merged into a release-based integration branch; PR #56 provides an unreleased CI-signed v1.0.17 test APK; PR #57 is experimental overlap/dark-gutter work and must pass same-commit CI before any merge. Older status text below is historical and may be stale.
+
+
+
 [← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
