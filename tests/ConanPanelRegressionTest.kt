@@ -59,6 +59,58 @@ fun main() {
         "Footer safeguard must not change Row by Row"
     }
 
+    // A2. A terminal row taller than the old 9%-height guard contains
+    // ONLY two long, thin border marks. Detected as a substantial enough
+    // horizontal tier, it used to become a nearly blank standalone view.
+    // Merge its source pixels into the single full-width illustrated region,
+    // but never into a separate source page or multiple side-by-side panels.
+    val nearW = 480
+    val nearH = 800
+    val nearBlank = ByteArray(nearW * nearH) { 255.toByte() }
+    draw(nearBlank, nearW, 14, 10, 466, 638, 92)
+    draw(nearBlank, nearW, 24, 699, 456, 701, 32)
+    draw(nearBlank, nearW, 24, 714, 456, 716, 32)
+    val nearRows = PanelDetectionCore.detectRows(nearW, nearH, nearBlank)
+    check(!nearRows.usedFullPageFallback && nearRows.regions.size == 2) {
+        "Fixture must contain an illustrated row and separately admitted quiet rail: ${nearRows.regions}"
+    }
+    val nearEvents = mutableListOf<PanelDebugEvent>()
+    val mergedNear = PanelDetectionCore.detect(nearW, nearH, nearBlank, true) {
+        nearEvents.add(it)
+    }
+    check(!mergedNear.usedFullPageFallback && mergedNear.regions ==
+        listOf(PageRegion(0, 0, nearW, nearH))) {
+        "Near-empty terminal rule should be preserved with prior full-width artwork: ${mergedNear.regions}"
+    }
+    check(nearEvents.any { it.stage == "tier" && it.decision == "absorb" &&
+        it.detail.contains("near-empty terminal border") }) {
+        "Must hit the new conservative terminal-border safeguard: $nearEvents"
+    }
+    coveredExactly(mergedNear.regions, nearW, nearH)
+    check(PanelDetectionCore.detect(nearW, nearH, nearBlank, false).regions ==
+        mergedNear.regions) {
+        "Merging full-width tiers must not change RTL/LTR reading order"
+    }
+    check(PanelDetectionCore.detectRows(nearW, nearH, nearBlank) == nearRows) {
+        "Independent Row by Row may not inherit Panel-by-Panel coalescing"
+    }
+
+    // Text-like small glyphs instead of connected border lines: protect the
+    // meaning of a short credit/title band rather than hiding it in artwork.
+    val credits = ByteArray(nearW * nearH) { 255.toByte() }
+    draw(credits, nearW, 14, 10, 466, 638, 92)
+    for (y in listOf(701, 722)) {
+        for (x in listOf(20, 62, 104, 146, 188, 230, 272, 314, 356, 398, 440)) {
+            draw(credits, nearW, x, y, x + 15, y + 7, 40)
+        }
+    }
+    val creditsPlan = PanelDetectionCore.detect(nearW, nearH, credits, true)
+    check(creditsPlan.regions.size >= 2 &&
+        creditsPlan.regions.last().top >= 600) {
+        "Meaningful standalone title/credits must not be joined to preceding art: ${creditsPlan.regions}"
+    }
+    coveredExactly(creditsPlan.regions, nearW, nearH)
+
     // B. Original panel-by-panel rejected-row recovery fixture. The upper two
     // illustrated columns share a dark bottom border and its 1px antialiased
     // fringe. The fringe is near an established full-width frame rule, NOT an
