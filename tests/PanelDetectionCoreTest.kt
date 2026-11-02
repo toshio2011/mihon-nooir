@@ -779,5 +779,73 @@ fun main() {
     check(PanelDetectionCore.detect(darkW, darkH, splashDark, true).usedFullPageFallback) {
         "A black splash page must never be misclassified as separate framed panels"
     }
+    // Private One Piece output-frame #884 exposed an important unsplit case:
+    // 3 real illustrated TIERS bounded by two strong SLOPED horizontal rails.
+    // This independently authored synthetic shape contains no manga artwork.
+    // No straight full-width gap exists, so a flat row cutter cannot guess.
+    val angledRowW = 480
+    val angledRowH = 800
+    val angledRows = ByteArray(angledRowW * angledRowH) { 255.toByte() }
+    for (x in 0 until angledRowW) {
+        val rail1 = 204 + (x - angledRowW / 2) * 10 / 100
+        val rail2 = 472 - (x - angledRowW / 2) * 8 / 100
+        for (y in 12 until 788) {
+            angledRows[y * angledRowW + x] = when {
+                kotlin.math.abs(y - rail1) <= 2 ||
+                    kotlin.math.abs(y - rail2) <= 2 -> 30.toByte()
+                x in 16 until angledRowW - 16 &&
+                    (y < rail1 - 15 ||
+                        (y > rail1 + 15 && y < rail2 - 15) ||
+                        y > rail2 + 15) -> 105.toByte()
+                else -> 255.toByte()
+            }
+        }
+    }
+    val angledRtl = PanelDetectionCore.detect(angledRowW, angledRowH, angledRows, true)
+    val angledLtr = PanelDetectionCore.detect(angledRowW, angledRowH, angledRows, false)
+    check(!angledRtl.usedFullPageFallback && angledRtl.regions.size == 3 &&
+        angledRtl.reason.contains("slanted horizontal")) {
+        "Protect strong slanted comic row gutters instead of leaving a 3-row page tiny: $angledRtl"
+    }
+    check(angledRtl.regions == angledLtr.regions) {
+        "RTL/LTR cannot reverse top-to-bottom slanted rows"
+    }
+    check(angledRtl.regions.first().top == 0 &&
+        angledRtl.regions.last().bottom == angledRowH &&
+        angledRtl.regions.zipWithNext().all { (a, b) -> b.top < a.bottom }) {
+        "The full diagonal travel must be duplicated in both adjacent crops"
+    }
+    // Row by Row remains STRICTLY horizontal and uses only existing
+    // independently validated straight row gutters. This new guarded
+    // fallback is exclusive to Panel by Panel.
+    check(PanelDetectionCore.detectRows(angledRowW, angledRowH, angledRows)
+        .usedFullPageFallback) {
+        "Row by Row must not inherit speculative angled frame recognition"
+    }
+    // Sparse title page with angled decorations is NOT 3 illustrated rows.
+    val slantedTitles = ByteArray(angledRows.size) { 255.toByte() }
+    for (x in 0 until angledRowW) {
+        val first = 204 + (x - angledRowW / 2) * 10 / 100
+        val second = 472 - (x - angledRowW / 2) * 8 / 100
+        for (y in first - 2..first + 2) slantedTitles[y * angledRowW + x] = 25.toByte()
+        for (y in second - 2..second + 2) slantedTitles[y * angledRowW + x] = 25.toByte()
+    }
+    check(PanelDetectionCore.detect(angledRowW, angledRowH, slantedTitles, true)
+        .usedFullPageFallback) {
+        "Sparse angled title rules cannot be mistaken for independent comic tiers"
+    }
+    // A broad balloon crossing a rail vetoes THAT seam. The other rail may
+    // still be accepted, but no proposed boundary may cut through the bubble.
+    val crossedRail = angledRows.copyOf()
+    for (x in 132..348) {
+        val y = 204 + (x - angledRowW / 2) * 10 / 100
+        for (dy in -13..13) crossedRail[(y + dy) * angledRowW + x] = 255.toByte()
+    }
+    val crossed = PanelDetectionCore.detect(angledRowW, angledRowH, crossedRail, true)
+    check(crossed.regions.size <= 2 ||
+        !crossed.reason.contains("slanted horizontal")) {
+        "Don't split a heavily crossed angled speech balloon: $crossed"
+    }
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }
