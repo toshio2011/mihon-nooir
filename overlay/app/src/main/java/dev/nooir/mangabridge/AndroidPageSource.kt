@@ -381,7 +381,20 @@ class AndroidPageSource(private val context: Context) {
             val viewWidth = if (needsRotation) frameHeight else frameWidth
             val viewHeight = if (needsRotation) frameWidth else frameHeight
             val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
-            val r = if (!isOverview && options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
+            // A rejected Panel-by-Panel detection may still take the legacy
+            // full-page/spread renderer. Its fast sampled trimWhite() can miss
+            // a one-pixel balloon stroke or faint credit between sample lines
+            // and then crop it away. Use the same fully verified, pixel-veto
+            // margin trim as accepted panel regions for this opt-in mode only.
+            // Preserve OFF, Row by Row and WEBTOON fast/legacy behavior.
+            val r = when {
+                isOverview || !options.cropWhiteMargins || panels != null -> sourceRegion
+                options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" ->
+                    trimDetectedPanel(src, initial).let {
+                        Rect(it.left, it.top, it.right, it.bottom)
+                    }
+                else -> trimWhite(src, sourceRegion)
+            }
             val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
             val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)
