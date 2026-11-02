@@ -136,7 +136,10 @@ object PanelSafeSlicePlanner {
             // far enough ahead to recover the same real white corridor.
             val high = minOf(end - segment * 35 / 100,
                 ideal + segment * maxOf(10, overlap + 2) / 100)
-            if (low > high) return listOf(panel)
+            // No usable seam near the tail. Earlier cuts were verified and
+            // remain safe: keep them, then emit the entire unsplit remainder.
+            // A first-cut failure still returns the original whole panel.
+            if (low > high) break
 
             // Search outward from the ideal frame length. Keep the source
             // intact if there is no unambiguous, truly empty corridor.
@@ -174,7 +177,10 @@ object PanelSafeSlicePlanner {
                     }
                 }
             }
-            if (boundary == null) return listOf(panel)
+            // Do not undo earlier clean, proven cuts just because a later
+            // portion is continuous art with no trustworthy separator.
+            // The final remainder stays whole, without losing any pixels.
+            if (boundary == null) break
             val cut = boundary
             // When the divider contains any artwork, repeat a generous band
             // AFTER the nominal cut as well as BEFORE the next slice. Merely
@@ -193,7 +199,7 @@ object PanelSafeSlicePlanner {
                 val remainder = if (tall) PageRegion(panel.left, cut, panel.right, end)
                                 else PageRegion(cut, panel.top, end, panel.bottom)
                 if (isSparse(first, inkAt) || isSparse(remainder, inkAt))
-                    return listOf(panel)
+                    break // Keep previous cuts; group the unsafe remainder.
             }
             // A clean seam can also isolate a sparse title/border fragment.
             // Protect it just like an interrupted seam, without throwing away
