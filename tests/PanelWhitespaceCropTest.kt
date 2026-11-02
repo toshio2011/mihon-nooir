@@ -27,6 +27,24 @@ fun main() {
         "A small missed edge detail must veto proposed trimming"
     }
 
+    // One Piece-like fallback geometry: a detailed illustration is surrounded
+    // by paper, but a single faint credit/speech pixel lies between the coarse
+    // sample lines. A fast sampled crop would silently lose the edge detail.
+    // The Panel-by-Panel fallback now uses this same pixel-veto helper.
+    val fallbackPage = PageRegion(0, 0, 800, 480)
+    val fallbackMainArt: (Int, Int) -> Boolean = { x, y ->
+        x in 200..650 && y in 100..390
+    }
+    val confidentlyTrimmed = PanelWhitespaceCrop.trim(fallbackPage, fallbackMainArt)
+    check(confidentlyTrimmed.width < fallbackPage.width &&
+        confidentlyTrimmed.height < fallbackPage.height)
+    val withUnsampledDetail = PanelWhitespaceCrop.trim(fallbackPage) { x, y ->
+        fallbackMainArt(x, y) || (x == 5 && y == 5)
+    }
+    check(withUnsampledDetail == fallbackPage) {
+        "Pixel-veto fallback must retain tiny original ink away from sampled art"
+    }
+
     // A panel touching the left and upper page edges must preserve them.
     val edge = PanelWhitespaceCrop.trim(frame) { x, y ->
         x in 0..270 && y in 0..500
