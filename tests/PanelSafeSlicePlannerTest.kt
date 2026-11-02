@@ -43,6 +43,30 @@ fun main() {
     }) { "Never cut through a speech balloon tail" }
     covered(protected, tall)
 
+    // Opt-in overlapping cut: a well-illustrated long panel has a narrow pale
+    // horizontal gutter near y=500, except for a small character/balloon
+    // crossing the boundary (20% of the width). Both adjacent frames must
+    // retain pixels on BOTH sides of the crossing. Zero overlap stays strict.
+    val bridgeInk: (Int, Int) -> Boolean = { x, y ->
+        y % 500 !in 496..504 || (x in 125..174 && y % 500 in 496..504)
+    }
+    check(PanelSafeSlicePlanner.plan(tall, 480, 800, true, 0, bridgeInk) ==
+        listOf(tall)) { "Without overlap, never cut an inked corridor" }
+    val guarded = PanelSafeSlicePlanner.plan(tall, 480, 800, true, 8, bridgeInk)
+    check(guarded.size >= 4) { "Locally overlapping art may be safely repeated: $guarded" }
+    check(guarded.any { it.top == 0 && it.bottom > 505 } &&
+        guarded.any { it.top < 495 && it.top > 0 && it.bottom > 505 }) {
+        "Both adjacent fragments should contain the full small crossing near y=500: $guarded"
+    }
+    covered(guarded, tall)
+    val tooWideBridge: (Int, Int) -> Boolean = { x, y ->
+        y % 500 !in 496..504 || (x in 65..235 && y % 500 in 496..504)
+    }
+    check(PanelSafeSlicePlanner.plan(tall, 480, 800, true, 8, tooWideBridge) ==
+        listOf(tall)) {
+        "A mostly blocked divider is not a reliably detected safe split"
+    }
+
     // No entirely clean strip -> return original art, not an arbitrary slice.
     check(PanelSafeSlicePlanner.plan(tall, 480, 800, true, 8) { _, _ -> true } == listOf(tall))
 
