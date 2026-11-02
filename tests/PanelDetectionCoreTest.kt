@@ -610,6 +610,14 @@ fun main() {
         recoveredRows.regions.all { it.left == 0 && it.right == grayW }) {
         "Recovered row bounds must retain full width, top-to-bottom ordering and every source pixel"
     }
+    // Panel by Panel must detect those same trustworthy horizontal rows
+    // BEFORE considering columns inside them. Pale-gray is not row-only.
+    val palePanel = PanelDetectionCore.detect(grayW, grayH, grayRows, true)
+    check(!palePanel.usedFullPageFallback && palePanel.regions.size == 2 &&
+        palePanel.regions[0].top < palePanel.regions[1].top &&
+        palePanel.regions[0].bottom == palePanel.regions[1].top) {
+        "Panel mode should prioritize validated pale-gray horizontal rows: $palePanel"
+    }
     val paddedGray = PanelDetectionCore.sourceRegions(
         recoveredRows, grayW, grayH, 1200, 1680)
     check(paddedGray.size == 2 && paddedGray[0].bottom >= paddedGray[1].top &&
@@ -708,6 +716,18 @@ fun main() {
     check(verticalDark.regions.sumOf { it.width.toLong() * it.height } ==
         darkW.toLong() * darkH)
     val darkRows = illustrated("horizontal")
+    val darkRowFirstTrace = mutableListOf<dev.nooir.bridge.PanelDebugEvent>()
+    val darkAsPanels = PanelDetectionCore.detect(darkW, darkH, darkRows, true) {
+        darkRowFirstTrace += it
+    }
+    check(!darkAsPanels.usedFullPageFallback &&
+        darkRowFirstTrace.any { it.stage == "row-search" && it.decision == "split" &&
+            "dark" in it.detail }) {
+        "Panel by Panel should validate dark horizontal ROWS before trying columns"
+    }
+    check(darkAsPanels.regions.first().top < darkAsPanels.regions.last().top) {
+        "Row-first dark recovery must retain top-to-bottom reading order: $darkAsPanels"
+    }
     val horizontalDark = PanelDetectionCore.detectRows(darkW, darkH, darkRows)
     check(!horizontalDark.usedFullPageFallback && horizontalDark.regions.size == 2 &&
         horizontalDark.regions[0].bottom == horizontalDark.regions[1].top) {
