@@ -175,7 +175,13 @@ class AndroidPageSource(private val context: Context) {
                     PanelSafeSlicePlanner.isSparse(plan.regions[index]) { x, y ->
                         (gray[y * w + x].toInt() and 255) < 220
                     }
-                DetectedPanel(region, sparse)
+                // A merged terminal border must stay attached all the way
+                // through margin trim, Auto Fit and safe corridor slicing.
+                // Otherwise a later planner could recreate a near-white page.
+                // Only Panel by Panel emits this explicit one-frame decision.
+                DetectedPanel(region, sparse ||
+                    (options.panelMode == "PANEL_BY_PANEL" &&
+                        plan.preserveSingleFrame && plan.regions.size == 1))
             }
         } finally {
             if (thumb !== src) thumb.recycle()
