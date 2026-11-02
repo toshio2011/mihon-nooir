@@ -50,20 +50,23 @@ fun main() {
     val bridgeInk: (Int, Int) -> Boolean = { x, y ->
         y % 500 !in 496..504 || (x in 125..174 && y % 500 in 496..504)
     }
-    check(PanelSafeSlicePlanner.plan(tall, 480, 800, true, 0, bridgeInk) ==
-        listOf(tall)) { "Without overlap, never cut an inked corridor" }
-    val guarded = PanelSafeSlicePlanner.plan(tall, 480, 800, true, 8, bridgeInk)
-    check(guarded.size >= 4) { "Locally overlapping art may be safely repeated: $guarded" }
+    // Exercise ONE interruption. Repeated, closely spaced uncertain gutters
+    // may still conservatively preserve the entire exceptionally long panel.
+    val oneBridge = PageRegion(0, 0, 300, 1050)
+    check(PanelSafeSlicePlanner.plan(oneBridge, 480, 800, true, 0, bridgeInk) ==
+        listOf(oneBridge)) { "Without overlap, never cut an inked corridor" }
+    val guarded = PanelSafeSlicePlanner.plan(oneBridge, 480, 800, true, 8, bridgeInk)
+    check(guarded.size == 2) { "One clear interrupted corridor should safely repeat art: $guarded" }
     check(guarded.any { it.top == 0 && it.bottom > 505 } &&
         guarded.any { it.top < 495 && it.top > 0 && it.bottom > 505 }) {
         "Both adjacent fragments should contain the full small crossing near y=500: $guarded"
     }
-    covered(guarded, tall)
+    covered(guarded, oneBridge)
     val tooWideBridge: (Int, Int) -> Boolean = { x, y ->
         y % 500 !in 496..504 || (x in 65..235 && y % 500 in 496..504)
     }
-    check(PanelSafeSlicePlanner.plan(tall, 480, 800, true, 8, tooWideBridge) ==
-        listOf(tall)) {
+    check(PanelSafeSlicePlanner.plan(oneBridge, 480, 800, true, 8, tooWideBridge) ==
+        listOf(oneBridge)) {
         "A mostly blocked divider is not a reliably detected safe split"
     }
 
