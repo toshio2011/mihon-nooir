@@ -841,10 +841,10 @@ fun main() {
         val y = 204 + (x - angledRowW / 2) * 10 / 100
         for (dy in -13..13) crossedRail[(y + dy) * angledRowW + x] = 255.toByte()
     }
-    val crossed = PanelDetectionCore.detect(angledRowW, angledRowH, crossedRail, true)
-    check(crossed.regions.size <= 2 ||
-        !crossed.reason.contains("slanted horizontal")) {
-        "Don't split a heavily crossed angled speech balloon: $crossed"
+    val crossedRailPlan = PanelDetectionCore.detect(angledRowW, angledRowH, crossedRail, true)
+    check(crossedRailPlan.regions.size <= 2 ||
+        !crossedRailPlan.reason.contains("slanted horizontal")) {
+        "Don't split a heavily crossed angled speech balloon: $crossedRailPlan"
     }
 
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
