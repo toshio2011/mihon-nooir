@@ -48,8 +48,10 @@ fun main() {
     // crossing the boundary (20% of the width). Both adjacent frames must
     // retain pixels on BOTH sides of the crossing. Zero overlap stays strict.
     val bridgeInk: (Int, Int) -> Boolean = { x, y ->
-        y % 500 !in 496..504 || (x in 125..174 && y % 500 in 496..504)
+        y !in 496..504 || x in 125..174
     }
+    // Use an explicit single 496..504 band. A modulo seam mistakenly
+    // treated 500..504 as dense art (0..4 % 500) and invalidated the test.
     // Exercise ONE interruption. Repeated, closely spaced uncertain gutters
     // may still conservatively preserve the entire exceptionally long panel.
     val oneBridge = PageRegion(0, 0, 300, 1050)
@@ -63,7 +65,7 @@ fun main() {
     }
     covered(guarded, oneBridge)
     val tooWideBridge: (Int, Int) -> Boolean = { x, y ->
-        y % 500 !in 496..504 || (x in 65..235 && y % 500 in 496..504)
+        y !in 496..504 || x in 65..235
     }
     check(PanelSafeSlicePlanner.plan(oneBridge, 480, 800, true, 8, tooWideBridge) ==
         listOf(oneBridge)) {
