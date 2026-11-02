@@ -43,6 +43,26 @@ fun main() {
     }) { "Never cut through a speech balloon tail" }
     covered(protected, tall)
 
+    // Regression for partial progress: a TALL page has one validated
+    // horizontal corridor near the first viewport, then uninterrupted art
+    // for the entire remainder. Do not throw away the safe first cut just
+    // because the subsequent portion has no acceptable seam.
+    val oneSeamTall = PageRegion(0, 0, 300, 1500)
+    val oneSeamInk: (Int, Int) -> Boolean = { _, y -> y !in 496..504 }
+    for (chosenOverlap in listOf(0, 8, 12)) {
+        val result = PanelSafeSlicePlanner.plan(
+            oneSeamTall, 480, 800, true, chosenOverlap, oneSeamInk,
+        )
+        check(result.size == 2) {
+            "Retain the validated first cut and keep the solid tail (overlap=$chosenOverlap): $result"
+        }
+        check(result.first().top == 0 && result.last().bottom == oneSeamTall.bottom)
+        check(result.first().bottom in 498..503)
+        check(result.last().top <= result.first().bottom)
+        covered(result, oneSeamTall)
+        check(result.all { !PanelSafeSlicePlanner.isSparse(it, oneSeamInk) })
+    }
+
     // Opt-in overlapping cut: a well-illustrated long panel has a narrow pale
     // horizontal gutter near y=500, except for a small character/balloon
     // crossing the boundary (20% of the width). Both adjacent frames must
