@@ -46,10 +46,12 @@ object PanelDetectionCore {
         if (height.toLong() > width.toLong() * 3L) return fallback("long strip: preserve existing webtoon slicing")
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
         val detector = Detector(width, height, grayscale, trace)
-        // Row detection is authoritative. Each row is independently eligible
-        // for finer panel partitioning; a rejected panel split keeps that row.
-        // If no row seam exists, try panel detection on the whole page.
-        val rows = detector.partitionRows(whole)
+        // Row detection is authoritative, including conservatively verified
+        // pale-gray and dark HORIZONTAL separators. Try columns only INSIDE
+        // each resulting row; if a row cannot be split safely, retain it.
+        // The same recovery validators are already used by Row by Row.
+        val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true,
+            allowDarkRecovery = true)
         val output = mutableListOf<PageRegion>()
         var recoveredRows = 0
         for ((index, row) in rows.withIndex()) {
