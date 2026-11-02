@@ -123,6 +123,30 @@ fun main() {
     check(rtl.first().right == wide.right && rtl.last().left == wide.left)
     covered(rtl, wide)
 
+    // Private Conan diagnostic QA dimensions, recreated as synthetic ink.
+    // Three old views were ultra-wide (707x99 / 580x94 / 660x98) and
+    // occupied less than 30% of the e-reader. When those aspect ratios DO
+    // contain genuinely clean vertical seams, allow the shared slicer to
+    // produce larger protected views. Never cut a solid panorama arbitrarily.
+    val ultraWide = PageRegion(0, 0, 707, 99)
+    val panoramaInk: (Int, Int) -> Boolean = { x, y ->
+        y in 4..95 && x % 165 !in 160..170
+    }
+    val landscapeRtl = PanelSafeSlicePlanner.plan(ultraWide, 800, 480, true, 8, panoramaInk)
+    val landscapeLtr = PanelSafeSlicePlanner.plan(ultraWide, 800, 480, false, 8, panoramaInk)
+    check(landscapeRtl.size in 3..6 && landscapeLtr == landscapeRtl.reversed()) {
+        "Split a clean ultra-wide strip into larger RTL/LTR reading views: $landscapeRtl"
+    }
+    check(landscapeRtl.any { it.width < ultraWide.width / 2 }) {
+        "Accepted clean gutters should meaningfully enlarge panoramic frames"
+    }
+    covered(landscapeRtl, ultraWide)
+    check(landscapeRtl.none { PanelSafeSlicePlanner.isSparse(it, panoramaInk) })
+    check(PanelSafeSlicePlanner.plan(ultraWide, 800, 480, true, 8) { _, _ -> true } ==
+        listOf(ultraWide)) {
+        "A solid illustrated panorama must stay whole if it lacks a verified gutter"
+    }
+
     // A giant, mostly-white ruled strip must remain ONE frame rather than
     // becoming four or five isolated border/blank screens. Preserve every
     // stroke as part of the original rectangle; do not discard the strip.
