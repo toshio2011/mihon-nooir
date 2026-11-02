@@ -48,6 +48,9 @@ fun main() {
     val footerEvents = mutableListOf<PanelDebugEvent>()
     val footerPlan = PanelDetectionCore.detect(fw, fh, footer, true) { footerEvents.add(it) }
     check(!footerPlan.usedFullPageFallback) { "Footer case lost real panels: ${footerPlan.reason}" }
+    check(!footerPlan.preserveSingleFrame) {
+        "Existing multi-panel footer join must not disable further valid panels"
+    }
     coveredExactly(footerPlan.regions, fw, fh)
     check(footerEvents.any { it.stage == "tier" && it.decision == "absorb" }) {
         "Fixture must exercise actual terminal-footer absorption, not a lucky unsplit row: $footerEvents"
@@ -79,8 +82,8 @@ fun main() {
         nearEvents.add(it)
     }
     check(!mergedNear.usedFullPageFallback && mergedNear.regions ==
-        listOf(PageRegion(0, 0, nearW, nearH))) {
-        "Near-empty terminal rule should be preserved with prior full-width artwork: ${mergedNear.regions}"
+        listOf(PageRegion(0, 0, nearW, nearH)) && mergedNear.preserveSingleFrame) {
+        "Near-empty terminal rule must be merged AND protected from downstream slicing: ${mergedNear.regions}"
     }
     check(nearEvents.any { it.stage == "tier" && it.decision == "absorb" &&
         it.detail.contains("near-empty terminal border") }) {
@@ -108,6 +111,9 @@ fun main() {
     check(creditsPlan.regions.size >= 2 &&
         creditsPlan.regions.last().top >= 600) {
         "Meaningful standalone title/credits must not be joined to preceding art: ${creditsPlan.regions}"
+    }
+    check(!creditsPlan.preserveSingleFrame) {
+        "Meaningful credits must remain eligible for their normal reading frames"
     }
     coveredExactly(creditsPlan.regions, nearW, nearH)
 
