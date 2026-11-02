@@ -26,13 +26,13 @@ All occupancy measurements simulate the 480×800 portrait and 800×480 landscape
 | Views occupying under 60% of screen | **45** |
 | Views with at least 4 percentage points of possible improvement from orientation alone | **11** |
 
-The three under-30%-fill views came from original source pages **37** and **66**, with final region dimensions **707×99**, **580×94**, **660×98**. They are extremely shallow panoramic strips; rotating alone cannot improve their maximum occupied area. These remain meaningful QA targets for safe vertical segmentation **only if a trustworthy seam is present**.
+The three under-30%-fill views came from original source pages **37** and **66**, with final region dimensions **707×99**, **580×94**, **660×98**. **Visual inspection of the original private detector thumbnails confirmed these are chapter/story TITLE or HEADLINE bands, not illustrated panoramas.** Their low screen occupancy is expected from the short text geometry; subdividing them further would make wording harder to follow and may create worse almost-empty frames. Treat them as **intentional preserved headings**, not three missing panel-splitting opportunities. No image content from the private diagnostic is included here.
 
 The 11 orientation-only opportunities are the class addressed by the current PR #57 *maximum-fill orientation after final slicing* work; the current APK must be re-run to confirm those improvements on real frames.
 
 ## Regression and acceptance
 
-- Commit `8a4a764f` adds **synthetic** 707×99 landscape-panel regression coverage in `PanelSafeSlicePlannerTest.kt`, checking that clean vertical seams can yield useful RTL/LTR views, preserve all coordinates, and refuse to invent seams across dense uninterrupted art.
+- Commit `8a4a764f` adds **synthetic** 707×99 panorama regression coverage in `PanelSafeSlicePlannerTest.kt`, checking that independently illustrated strips with *actual verified* clean vertical seams can yield useful RTL/LTR views, preserve all coordinates, and refuse cuts through uninterrupted artwork. **The exact dimensions do not imply the observed Conan title bands should be subdivided**; this is a hypothetical edge case, not a claim about those specific pages.
 - PR #57 protects cross-panel artwork with bounded source overlap and pixel-veto margin trim. This old ZIP used 0% overlap, so it is **not** real-manga proof of the newer 8% protection.
 - The older export already had zero detected ink-coordinate omissions in this replay; do not claim that a new cut fixed that aspect merely because the old output had tiny crops.
 - Follow-up acceptance: use a **new CI-built PR #57 APK**, identical chapter selection/settings, opt-in private diagnostic ZIP, and compare source-page frames, old/new maximum-fill occupancy, number of panorama strips, speech and art boundary continuity, and actual XTEINK X4 legibility.
