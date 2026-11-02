@@ -15,6 +15,19 @@ The user-supplied `One Piece.epub` was inspected locally from the user's private
   - **373**: 0.28% ink, a small isolated fragment.
 - Long successive TOC/credit/title screens are a high-priority over-fragmentation concern, not automatically a reason to delete or skip those pixels. Whole original source, chapter order and speech-bubble data must be preserved.
 
+## Repeated credit-frame evidence (follow-up)
+
+Full-resolution comparison of frames **276** and **373** (both 800×480):
+- **99.7354% of grayscale pixels exactly match** (382,984 of 384,000).
+- The only differences are 1,016 pixels with luminance differences of ±85, suggesting near-identical small logos/credit artwork in slightly different positions.
+- Both contain only about **0.28%** ink (<220), rather than cut-off illustrated panels.
+- This strongly suggests **repeated sparse credit/watermark content**, not proof of detector over-splitting. Other frames (notably 239–248) remain suspicious because unrelated headings have been enlarged into separate screens.
+- **Do not suppress low-ink images by threshold alone**. The output-only file cannot prove whether a particular screen came from a separate original source image.
+
+## Fallback crop safety patch
+
+Commit `06a70107` closes a separate confirmed risk in the Android rendering path. When *Panel by Panel* detection is rejected but the older page/spread renderer still applies optional white-margin cropping, it previously used the approximate sample-only `trimWhite()`. That can overlook a faint speech/credit pixel between sample points and then crop it away. Panel-by-Panel, non-WEBTOON fallback now uses the pixel-verified `trimDetectedPanel` / `PanelWhitespaceCrop.trim` with full excluded-pixel veto. The OFF, Row by Row, and legacy WEBTOON paths retain existing behavior. The host test `PanelWhitespaceCropTest` now exercises an off-sampling-grid credit pixel alongside dense illustration. This is a **data preservation fix**, not evidence that old One Piece output frame counts are corrected.
+
 ## Risk analysis
 The converter can over-fragment a reasonably inked original page via more than one path: independent row/panel detection, long-panel safe corridor slicing, margin trim, or the older generic PageSlicePlanner fallback. An output EPUB **cannot identify which path produced an image** unless the original page index + diagnostic trace and matching export options are available.
 
