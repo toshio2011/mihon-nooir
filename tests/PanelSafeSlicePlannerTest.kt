@@ -72,6 +72,46 @@ fun main() {
         "A mostly blocked divider is not a reliably detected safe split"
     }
 
+    // One Piece-style sparse screen regression: a dense illustrated source can
+    // still have long blank tails after a perfectly CLEAN split. The whole
+    // panel passes the sparse gate, but the last individual viewport does not.
+    // Keep all original pixels without emitting a separate almost-empty frame.
+    val quietTailPage = PageRegion(0, 0, 300, 1800)
+    val quietTailInk: (Int, Int) -> Boolean = { x, y ->
+        x in 12..287 && y < 1180 && y !in 496..504 && y !in 996..1004
+    }
+    check(!PanelSafeSlicePlanner.isSparse(quietTailPage, quietTailInk))
+    val noEmptyTail = PanelSafeSlicePlanner.plan(
+        quietTailPage, 480, 800, true, 0, quietTailInk,
+    )
+    check(noEmptyTail.size in 2..3 &&
+        noEmptyTail.all { !PanelSafeSlicePlanner.isSparse(it, quietTailInk) }) {
+        "Clean splitting must coalesce a sparse end instead of zooming whitespace: $noEmptyTail"
+    }
+    check(noEmptyTail.last().bottom == quietTailPage.bottom)
+    covered(noEmptyTail, quietTailPage)
+    // If the *first* potential view is only blank space/title strokes,
+    // conservative fallback is safer than emitting it as a separate screen.
+    val quietHeadInk: (Int, Int) -> Boolean = { x, y ->
+        x in 12..287 && y >= 1100
+    }
+    val quietHeadPage = PageRegion(0, 0, 300, 1600)
+    check(PanelSafeSlicePlanner.plan(quietHeadPage, 480, 800, true, 0, quietHeadInk) ==
+        listOf(quietHeadPage)) {
+        "A sparse first slice must preserve the original full frame"
+    }
+    // RTL applies to wide cuts too; coalescing cannot accidentally reverse
+    // top/bottom or left/right coverage.
+    val wideQuiet = PageRegion(0, 0, 1800, 300)
+    val wideInk: (Int, Int) -> Boolean = { x, y ->
+        y in 12..287 && x < 1180 && x !in 496..504 && x !in 996..1004
+    }
+    val wideQuietLTR = PanelSafeSlicePlanner.plan(wideQuiet, 800, 480, false, 0, wideInk)
+    val wideQuietRTL = PanelSafeSlicePlanner.plan(wideQuiet, 800, 480, true, 0, wideInk)
+    check(wideQuietLTR.size in 2..3 && wideQuietRTL == wideQuietLTR.reversed())
+    check(wideQuietLTR.all { !PanelSafeSlicePlanner.isSparse(it, wideInk) })
+    covered(wideQuietRTL, wideQuiet)
+
     // No entirely clean strip -> return original art, not an arbitrary slice.
     check(PanelSafeSlicePlanner.plan(tall, 480, 800, true, 8) { _, _ -> true } == listOf(tall))
 
