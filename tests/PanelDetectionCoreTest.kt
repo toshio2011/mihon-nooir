@@ -715,6 +715,14 @@ fun main() {
     }
     check(verticalDark.regions.sumOf { it.width.toLong() * it.height } ==
         darkW.toLong() * darkH)
+    // LTR must use the same verified dark seam, changing reading order only.
+    // This is not a mirror transform; source bounds and artwork stay identical.
+    val verticalDarkLtr = PanelDetectionCore.detect(darkW, darkH, darkColumns, false)
+    check(!verticalDarkLtr.usedFullPageFallback &&
+        verticalDarkLtr.regions == verticalDark.regions.reversed() &&
+        verticalDarkLtr.regions.first().left < verticalDarkLtr.regions.last().left) {
+        "Dark-gutter panels must read LEFT first for LTR: $verticalDarkLtr"
+    }
     val darkRows = illustrated("horizontal")
     val darkRowFirstTrace = mutableListOf<dev.nooir.bridge.PanelDebugEvent>()
     val darkAsPanels = PanelDetectionCore.detect(darkW, darkH, darkRows, true) {
@@ -727,6 +735,12 @@ fun main() {
     }
     check(darkAsPanels.regions.first().top < darkAsPanels.regions.last().top) {
         "Row-first dark recovery must retain top-to-bottom reading order: $darkAsPanels"
+    }
+    // Changing RTL/LTR must NEVER invert rows. Both visit top before bottom.
+    val darkRowsLtr = PanelDetectionCore.detect(darkW, darkH, darkRows, false)
+    check(!darkRowsLtr.usedFullPageFallback &&
+        darkRowsLtr.regions == darkAsPanels.regions) {
+        "Horizontal reading rows must remain TOP to BOTTOM in both LTR and RTL"
     }
     val horizontalDark = PanelDetectionCore.detectRows(darkW, darkH, darkRows)
     check(!horizontalDark.usedFullPageFallback && horizontalDark.regions.size == 2 &&
