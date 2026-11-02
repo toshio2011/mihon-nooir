@@ -117,6 +117,38 @@ fun main() {
     }
     coveredExactly(creditsPlan.regions, nearW, nearH)
 
+    // A3. The ORIGINAL shallow-terminal-footer absorption (the earlier
+    // Conan path) can also leave exactly one full-width region. Historically
+    // that looked like an invalid one-panel plan and fell back into general
+    // page slicing. Its "absorb" decision must produce a protected one-frame
+    // result, not another set of near-empty reading screens.
+    val shortW = 480
+    val shortH = 800
+    val shortFooter = ByteArray(shortW * shortH) { 255.toByte() }
+    draw(shortFooter, shortW, 12, 12, 468, 720, 100)
+    draw(shortFooter, shortW, 30, 768, 451, 772, 30)
+    val shortRows = PanelDetectionCore.detectRows(shortW, shortH, shortFooter)
+    check(!shortRows.usedFullPageFallback && shortRows.regions.size == 2) {
+        "Short-footer fixture must expose 2 rows: ${shortRows.regions}"
+    }
+    val shortEvents = mutableListOf<PanelDebugEvent>()
+    val shortPlan = PanelDetectionCore.detect(shortW, shortH, shortFooter, true) {
+        shortEvents.add(it)
+    }
+    check(!shortPlan.usedFullPageFallback && shortPlan.preserveSingleFrame &&
+        shortPlan.regions == listOf(PageRegion(0, 0, shortW, shortH))) {
+        "Existing shallow-footer absorption must retain one protected frame: $shortPlan"
+    }
+    check(shortEvents.any { it.stage == "tier" && it.decision == "absorb" &&
+        it.detail.contains("terminal ruled footer retained") }) {
+        "The old short-footer route, not the later ruled-tail route, must be exercised: $shortEvents"
+    }
+    coveredExactly(shortPlan.regions, shortW, shortH)
+    check(PanelDetectionCore.detect(shortW, shortH, shortFooter, false) == shortPlan)
+    check(PanelDetectionCore.detectRows(shortW, shortH, shortFooter) == shortRows) {
+        "Existing Row by Row must still have its original two horizontal regions"
+    }
+
     // B. Original panel-by-panel rejected-row recovery fixture. The upper two
     // illustrated columns share a dark bottom border and its 1px antialiased
     // fringe. The fringe is near an established full-width frame rule, NOT an
