@@ -251,7 +251,10 @@ object NooirDesktopCli {
             PanelDetectionCore.detectRows(w, h, gray)
         else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
         return if (plan.usedFullPageFallback) null
-            else PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+            else PanelDetectionCore.sourceRegions(
+                plan, w, h, src.width, src.height,
+                PanelDetectionCore.overlapPaddingPercent(options.overlapPercent),
+            )
     }
 
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,

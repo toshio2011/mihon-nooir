@@ -638,5 +638,43 @@ fun main() {
     check(PanelDetectionCore.detectRows(grayW, grayH, unsplitGray).usedFullPageFallback) {
         "A solid illustrated page is not a row grid"
     }
+    // User-selected overlap must protect art across an ALREADY CONFIRMED
+    // panel/row boundary. Do not weaken the underlying seam detector:
+    // expand original-source crops AFTER the strict detection decision.
+    val twoRegions = dev.nooir.bridge.PanelPlan(
+        listOf(PageRegion(0, 0, 150, 420), PageRegion(150, 0, 300, 420)),
+        usedFullPageFallback = false, reason = "confirmed column boundary"
+    )
+    check(PanelDetectionCore.overlapPaddingPercent(0) == 1)
+    check(PanelDetectionCore.overlapPaddingPercent(8) == 4)
+    check(PanelDetectionCore.overlapPaddingPercent(30) == 5)
+    val originalOverlap = PanelDetectionCore.sourceRegions(
+        twoRegions, 300, 420, 1200, 1680,
+        PanelDetectionCore.overlapPaddingPercent(0),
+    )
+    val protectiveOverlap = PanelDetectionCore.sourceRegions(
+        twoRegions, 300, 420, 1200, 1680,
+        PanelDetectionCore.overlapPaddingPercent(8),
+    )
+    val boundaryX = 600
+    // Artwork bridging 40 source pixels in either direction should be
+    // repeated in BOTH outputs with 8% selected overlap.
+    check(protectiveOverlap[0].right >= boundaryX + 40 &&
+        protectiveOverlap[1].left <= boundaryX - 40) {
+        "Both cropped panels must retain artwork that crosses the split"
+    }
+    check(protectiveOverlap[0].right > originalOverlap[0].right &&
+        protectiveOverlap[1].left < originalOverlap[1].left)
+    check(protectiveOverlap.all { it.left >= 0 && it.right <= 1200 &&
+        it.top >= 0 && it.bottom <= 1680 })
+    check(protectiveOverlap.sumOf { it.width.toLong() * it.height } >
+        1200L * 1680L) { "Overlap intentionally repeats source pixels; never drops them" }
+    // Whole-page fallback stays intact regardless of overlap preference.
+    val all = dev.nooir.bridge.PanelPlan(
+        listOf(PageRegion(0, 0, 300, 420)), true, "uncertain"
+    )
+    check(PanelDetectionCore.sourceRegions(all, 300, 420, 1200, 1680, 5) ==
+        listOf(PageRegion(0, 0, 1200, 1680)))
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }

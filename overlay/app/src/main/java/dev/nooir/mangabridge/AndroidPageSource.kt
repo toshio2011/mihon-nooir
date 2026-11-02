@@ -152,7 +152,13 @@ class AndroidPageSource(private val context: Context) {
                 debug?.noteAnalysis(w, h, gray, plan, emptyList())
                 return null
             }
-            val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+            // Apply user-selected overlap to *detected* rows/panels too,
+            // not only to later slices inside exceptionally long panels.
+            // Pad after detection; the detector still sees original pixels.
+            val regions = PanelDetectionCore.sourceRegions(
+                plan, w, h, src.width, src.height,
+                PanelDetectionCore.overlapPaddingPercent(options.overlapPercent),
+            )
             // Decide on the UNPADDED thumbnail region. Source overlap
             // padding is essential for artwork safety but can pull dark
             // strokes from a neighbouring illustrated tier into a nearly

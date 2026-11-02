@@ -324,6 +324,16 @@ object PanelDetectionCore {
     }
 
     /**
+     * Convert the user's overlap setting to a bounded detector crop allowance.
+     * Existing 1% minimum padding remains in place for zero overlap; an 8%
+     * selected overlap gives 4% of the original source on EACH shared side.
+     * Total duplicated coverage near a boundary is about 8% of page width
+     * or height (subject to source limits), without altering split detection.
+     */
+    fun overlapPaddingPercent(overlapPercent: Int): Int =
+        maxOf(1, (overlapPercent.coerceIn(0, 30) + 1) / 2).coerceAtMost(5)
+
+    /**
      * Convert bounded-thumbnail rectangles back to source-image coordinates,
      * adding overlapping guard padding. The extra padding protects border art
      * and balloons near a gutter; it never changes the reading order.
