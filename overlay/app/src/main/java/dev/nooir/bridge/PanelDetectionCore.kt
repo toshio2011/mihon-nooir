@@ -640,7 +640,7 @@ object PanelDetectionCore {
          * Extremely faint terminal-border/tail classifier. Unlike the
          * 3%-sparse guard, it is allowed to MERGE, so fail closed:
          *  - the candidate must be short relative to both the page and width;
-         *  - less than 1% of ALL thumbnail pixels may be ink;
+         *  - less than 3% of ALL thumbnail pixels may be ink;
          *  - remaining marks must include one unmistakably long straight
          *    framing stroke, or the strip must be completely blank.
          *
@@ -662,7 +662,7 @@ object PanelDetectionCore {
                 for (x in row.left until row.right) {
                     if ((gray[y * width + x].toInt() and 255) < INK) {
                         ink++
-                        if (ink * 100 >= area) return false
+                        if (ink * 100 >= area * 3) return false
                         horizontalRun++
                         longestHorizontal = maxOf(longestHorizontal, horizontalRun)
                         val column = x - row.left
