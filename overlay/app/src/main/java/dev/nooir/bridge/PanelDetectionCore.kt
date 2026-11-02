@@ -58,6 +58,10 @@ object PanelDetectionCore {
             allowDarkRecovery = true)
         val output = mutableListOf<PageRegion>()
         var recoveredRows = 0
+        // The existing short-footer path can also collapse two rows to one.
+        // Remember that decision so the later page-count guard doesn't
+        // accidentally return the legacy free-form slicer fallback.
+        var absorbedShortFooter = false
         for ((index, row) in rows.withIndex()) {
             // Reserve one output slot for every remaining detected row.
             // Extra panel candidates must never force a page-wide fallback.
@@ -90,6 +94,7 @@ object PanelDetectionCore {
                     }
                 if (joinsSafely) {
                     for (ix in adjacent) output[ix] = output[ix].copy(bottom = row.bottom)
+                    absorbedShortFooter = true
                     trace?.invoke(PanelDebugEvent("tier", row, "absorb",
                         "terminal ruled footer retained inside preceding illustrated tier"))
                 } else {
@@ -214,7 +219,7 @@ object PanelDetectionCore {
         // The two-row case now legitimately produces ONE complete rectangle.
         // Returning a generic fallback would send it back through the legacy
         // free-form slicer and recreate the unwanted near-empty views.
-        if (absorbedRuledTail && output.size == 1 &&
+        if ((absorbedRuledTail || absorbedShortFooter) && output.size == 1 &&
             coversEntirePage(output, width, height)) {
             return PanelPlan(output, false, "illustrated row with absorbed terminal border",
                 preserveSingleFrame = true)
