@@ -1,5 +1,27 @@
 # Private One Piece EPUB — output-only audit (2 November 2026)
 
+> **3 November follow-up:** The 735-frame numbers below remain a valid **older private output snapshot** and are not interchangeable with the newer 979-frame EPUB. For current code/CI and release gates see [current Android v1.0.17 handover](../HANDOVER_2026-11-03_ANDROID_PANEL_V1.0.17.md). This document contains derived numerical results only, **not manga images**.
+
+## Follow-up: the 979-frame re-export (distinct from the 735-frame baseline)
+
+The user provided an additional, private exported EPUB containing **979** PNG reading frames, after an intermediate **976**-frame version. The new export also includes an additional chapter, so **735→979 is NOT a 244-frame increase in corrected panel splits**. At least **696 exported PNG byte payloads** exactly match frames in the old 735-frame baseline.
+
+| Check | Observed output-only result |
+| --- | --- |
+| Previously missed angled layout #884 | Old full-page artwork is retained as overview #884, followed by three NEW actual slanted-row views #885–887 |
+| Previously missed angled layout #114 | Still a whole small illustrated source view, byte-identical to old export; detector refusal reason cannot be recovered from exported PNG alone |
+| #87, #391, #603 | Intentional whole-page overviews followed by splits; not evidence of newly missed panel boundaries |
+| <1% dark pixels (threshold <220 grayscale) | **10/979** frames, **8** byte-for-byte identical to prior export payloads |
+| <3% dark pixels | **33/979** frames, some meaningful credits/headings, others almost empty |
+| Representative near-white fragments | #278, #281, #287, #344, #379; speech-outline-only or border-heavy #477 and #507; additional chapter #941 and #949 |
+| New #884 quality | Safer multi-view coverage but visible **excessive repeated border strips / overlap** still merits review |
+
+**Do not conflate output hashes with detector source decisions.** Most nearly blank output frames were already in the old file; #331's similarly sparse fragment is visually comparable but not byte identical, while #941 is from an added chapter. An unrelated small source-page credit can be legitimately sparse. It is therefore UNSAFE to drop every frame below an arbitrary ink threshold or claim these cases all come from one detector bug.
+
+This newer EPUB was still produced **before** the terminal-strip absorption, preserved single-frame Android handoff, and latest two-test emulator validation. No original source-image-to-output ZIP accompanies it, so even a modified script/algorithm cannot retrospectively establish whether it fixes these exact frames. Fresh original-source export + private diagnostic ZIP are required. Consult [QA checklist](android-v1.0.17-pr57-qa-checklist.md). Do not commit/share the copyrighted originals, EPUBs, thumbnails or contact sheets.
+
+
+
 ## Source and privacy
 The user-supplied `One Piece.epub` was inspected locally from the user's private file library. **Never commit or attach the EPUB, manga images, output image contact sheets, original manga, or diagnostic screenshots to this public repository.** This document contains only derived counts, frame numbers and processing guidance. This export was produced before the latest PR #57 patches. We do **not** have its original uncropped manga pages or settings, so frame-to-source-page correspondence cannot be proven.
 
