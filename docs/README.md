@@ -3,7 +3,7 @@
 [← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **Choose the guide for your installed version.** The latest [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) publishes the APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) with [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) merged. Physical-device testing is still needed. Nooir Tools is absent from older v1.0.1 APKs.
+> **Choose the guide for your installed version.** The latest verified public [MihonNooir v1.0.16 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) was published on **29 October 2026**. Android **v1.0.17** panel refinements remain **experimental**, in [draft PR #57](https://github.com/toshio2011/mihon-nooir/pull/57); they are not a released APK. CI QA APKs are debug-signed and must not be installed as updates over the official release-signed app. For current development/QA status see the [3 November handover](HANDOVER_2026-11-03_ANDROID_PANEL_V1.0.17.md). Historical v1.0.12 instructions apply to that older release only.
 
 ## If this is your first time
 
@@ -32,10 +32,11 @@
 | Document | Purpose |
 |---|---|
 | [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
-| [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
+| [**Current 3 Nov Android v1.0.17 panel handover**](HANDOVER_2026-11-03_ANDROID_PANEL_V1.0.17.md) | Latest PR #57 branch, One Piece QA, debug-APK/CI pitfalls, next test steps and copy-paste continuation prompt |
+| [Developer handover](PROJECT_HANDOVER.md) | Project architecture plus historical handover snapshots |
 | [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
-| [v1.0.12 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) · [PR #22](https://github.com/toshio2011/mihon-nooir/pull/22) | Official release APKs, compatibility changes and tests |
-| [Automatic Panel-by-Panel implementation status](PANEL_IMPLEMENTATION_STATUS.md) | Experimental implementation integrated on main; real-panel and X4 acceptance still required before public release |
+| [**Latest public v1.0.16 release**](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.16) | Official signed Android release; do not replace with debug-signed PR #57 QA APK |
+| [Automatic Panel-by-Panel implementation status](PANEL_IMPLEMENTATION_STATUS.md) | Historical panel implementation status; later PR #57 quality work remains experimental and requires real-book/X4 QA |
 | [Panel EPUB comparison QA](PANEL_EXPORT_QA.md) | Offline frame-by-frame content matching for old versus new exports, without uploading manga artwork |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |
 
