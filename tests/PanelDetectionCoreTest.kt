@@ -610,6 +610,14 @@ fun main() {
         recoveredRows.regions.all { it.left == 0 && it.right == grayW }) {
         "Recovered row bounds must retain full width, top-to-bottom ordering and every source pixel"
     }
+    // Panel by Panel must detect those same trustworthy horizontal rows
+    // BEFORE considering columns inside them. Pale-gray is not row-only.
+    val palePanel = PanelDetectionCore.detect(grayW, grayH, grayRows, true)
+    check(!palePanel.usedFullPageFallback && palePanel.regions.size == 2 &&
+        palePanel.regions[0].top < palePanel.regions[1].top &&
+        palePanel.regions[0].bottom == palePanel.regions[1].top) {
+        "Panel mode should prioritize validated pale-gray horizontal rows: $palePanel"
+    }
     val paddedGray = PanelDetectionCore.sourceRegions(
         recoveredRows, grayW, grayH, 1200, 1680)
     check(paddedGray.size == 2 && paddedGray[0].bottom >= paddedGray[1].top &&
@@ -638,5 +646,206 @@ fun main() {
     check(PanelDetectionCore.detectRows(grayW, grayH, unsplitGray).usedFullPageFallback) {
         "A solid illustrated page is not a row grid"
     }
+    // User-selected overlap must protect art across an ALREADY CONFIRMED
+    // panel/row boundary. Do not weaken the underlying seam detector:
+    // expand original-source crops AFTER the strict detection decision.
+    val twoRegions = dev.nooir.bridge.PanelPlan(
+        listOf(PageRegion(0, 0, 150, 420), PageRegion(150, 0, 300, 420)),
+        usedFullPageFallback = false, reason = "confirmed column boundary"
+    )
+    check(PanelDetectionCore.overlapPaddingPercent(0) == 1)
+    check(PanelDetectionCore.overlapPaddingPercent(8) == 4)
+    check(PanelDetectionCore.overlapPaddingPercent(30) == 5)
+    val originalOverlap = PanelDetectionCore.sourceRegions(
+        twoRegions, 300, 420, 1200, 1680,
+        PanelDetectionCore.overlapPaddingPercent(0),
+    )
+    val protectiveOverlap = PanelDetectionCore.sourceRegions(
+        twoRegions, 300, 420, 1200, 1680,
+        PanelDetectionCore.overlapPaddingPercent(8),
+    )
+    val boundaryX = 600
+    // Artwork bridging 40 source pixels in either direction should be
+    // repeated in BOTH outputs with 8% selected overlap.
+    check(protectiveOverlap[0].right >= boundaryX + 40 &&
+        protectiveOverlap[1].left <= boundaryX - 40) {
+        "Both cropped panels must retain artwork that crosses the split"
+    }
+    check(protectiveOverlap[0].right > originalOverlap[0].right &&
+        protectiveOverlap[1].left < originalOverlap[1].left)
+    check(protectiveOverlap.all { it.left >= 0 && it.right <= 1200 &&
+        it.top >= 0 && it.bottom <= 1680 })
+    check(protectiveOverlap.sumOf { it.width.toLong() * it.height } >
+        1200L * 1680L) { "Overlap intentionally repeats source pixels; never drops them" }
+    // Whole-page fallback stays intact regardless of overlap preference.
+    val all = dev.nooir.bridge.PanelPlan(
+        listOf(PageRegion(0, 0, 300, 420)), true, "uncertain"
+    )
+    check(PanelDetectionCore.sourceRegions(all, 300, 420, 1200, 1680, 5) ==
+        listOf(PageRegion(0, 0, 1200, 1680)))
+
+    // Dark gutters are not white/pale separators. A thick black corridor
+    // with short light gutters and independently textured illustrated regions
+    // can be split *without discarding any pixels*. The selected overlap
+    // later repeats the seam and any nearby art on both screens.
+    val darkW = 400
+    val darkH = 600
+    fun illustrated(orientation: String): ByteArray {
+        val pixels = ByteArray(darkW * darkH) { 218.toByte() }
+        for (y in 4 until darkH - 4) for (x in 4 until darkW - 4) {
+            val before = if (orientation == "vertical") x in 8..188 || x in 211..391
+                         else y in 8..287 || y in 313..591
+            if (before) pixels[y * darkW + x] =
+                if ((x / 9 + y / 9) % 3 == 0) 40.toByte() else 210.toByte()
+        }
+        if (orientation == "vertical") {
+            for (y in 0 until darkH) for (x in 194..205)
+                pixels[y * darkW + x] = 24.toByte()
+        } else {
+            for (y in 294..305) for (x in 0 until darkW)
+                pixels[y * darkW + x] = 24.toByte()
+        }
+        return pixels
+    }
+    val darkColumns = illustrated("vertical")
+    val verticalDark = PanelDetectionCore.detect(darkW, darkH, darkColumns, true)
+    check(!verticalDark.usedFullPageFallback && verticalDark.regions.size == 2 &&
+        verticalDark.regions.first().left > verticalDark.regions.last().left) {
+        "Two textured panels divided by a bounded full-height dark gutter should recover in RTL: $verticalDark"
+    }
+    check(verticalDark.regions.sumOf { it.width.toLong() * it.height } ==
+        darkW.toLong() * darkH)
+    // LTR must use the same verified dark seam, changing reading order only.
+    // This is not a mirror transform; source bounds and artwork stay identical.
+    val verticalDarkLtr = PanelDetectionCore.detect(darkW, darkH, darkColumns, false)
+    check(!verticalDarkLtr.usedFullPageFallback &&
+        verticalDarkLtr.regions == verticalDark.regions.reversed() &&
+        verticalDarkLtr.regions.first().left < verticalDarkLtr.regions.last().left) {
+        "Dark-gutter panels must read LEFT first for LTR: $verticalDarkLtr"
+    }
+    val darkRows = illustrated("horizontal")
+    val darkRowFirstTrace = mutableListOf<dev.nooir.bridge.PanelDebugEvent>()
+    val darkAsPanels = PanelDetectionCore.detect(darkW, darkH, darkRows, true) {
+        darkRowFirstTrace += it
+    }
+    check(!darkAsPanels.usedFullPageFallback &&
+        darkRowFirstTrace.any { it.stage == "row-search" && it.decision == "split" &&
+            "dark" in it.detail }) {
+        "Panel by Panel should validate dark horizontal ROWS before trying columns"
+    }
+    check(darkAsPanels.regions.first().top < darkAsPanels.regions.last().top) {
+        "Row-first dark recovery must retain top-to-bottom reading order: $darkAsPanels"
+    }
+    // Changing RTL/LTR must NEVER invert rows. Both visit top before bottom.
+    val darkRowsLtr = PanelDetectionCore.detect(darkW, darkH, darkRows, false)
+    check(!darkRowsLtr.usedFullPageFallback &&
+        darkRowsLtr.regions == darkAsPanels.regions) {
+        "Horizontal reading rows must remain TOP to BOTTOM in both LTR and RTL"
+    }
+    val horizontalDark = PanelDetectionCore.detectRows(darkW, darkH, darkRows)
+    check(!horizontalDark.usedFullPageFallback && horizontalDark.regions.size == 2 &&
+        horizontalDark.regions[0].bottom == horizontalDark.regions[1].top) {
+        "Row by Row should consider a verified dark horizontal gutter but never switch to vertical cuts: $horizontalDark"
+    }
+    val sharedDark = PanelDetectionCore.sourceRegions(
+        verticalDark, darkW, darkH, 800, 1200,
+        PanelDetectionCore.overlapPaddingPercent(8),
+    )
+    check(sharedDark.size == 2 &&
+        sharedDark[0].left < sharedDark[1].right &&
+        sharedDark[1].right > sharedDark[0].left) {
+        "Dark separator and surrounding art must remain visible in BOTH overlapping views: $sharedDark"
+    }
+    // A one-pixel black rule is NOT a dark gutter.
+    val rule = illustrated("vertical")
+    for (y in 0 until darkH) for (x in 194..205)
+        rule[y * darkW + x] = 218.toByte()
+    for (y in 0 until darkH) rule[y * darkW + 199] = 15.toByte()
+    check(PanelDetectionCore.detect(darkW, darkH, rule, true).usedFullPageFallback) {
+        "A thin black rule without a thick dark corridor must not be promoted to two panels"
+    }
+    // A white balloon intersecting a large fraction of a dark band breaks
+    // its continuity; leave the ambiguous page intact.
+    val balloon = darkColumns.copyOf()
+    for (y in 170 until 420) for (x in 185..215)
+        balloon[y * darkW + x] = 255.toByte()
+    check(PanelDetectionCore.detect(darkW, darkH, balloon, true).usedFullPageFallback) {
+        "A bubble bridging a dark gap must veto the dark-gutter fallback"
+    }
+    // Solid black splash background has no illustrated paper on both sides.
+    val splashDark = ByteArray(darkW * darkH) { 30.toByte() }
+    for (y in 0 until darkH) for (x in 194..205)
+        splashDark[y * darkW + x] = 12.toByte()
+    check(PanelDetectionCore.detect(darkW, darkH, splashDark, true).usedFullPageFallback) {
+        "A black splash page must never be misclassified as separate framed panels"
+    }
+    // Private One Piece output-frame #884 exposed an important unsplit case:
+    // 3 real illustrated TIERS bounded by two strong SLOPED horizontal rails.
+    // This independently authored synthetic shape contains no manga artwork.
+    // No straight full-width gap exists, so a flat row cutter cannot guess.
+    val angledRowW = 480
+    val angledRowH = 800
+    val angledRows = ByteArray(angledRowW * angledRowH) { 255.toByte() }
+    for (x in 0 until angledRowW) {
+        val rail1 = 204 + (x - angledRowW / 2) * 10 / 100
+        val rail2 = 472 - (x - angledRowW / 2) * 8 / 100
+        for (y in 12 until 788) {
+            angledRows[y * angledRowW + x] = when {
+                kotlin.math.abs(y - rail1) <= 2 ||
+                    kotlin.math.abs(y - rail2) <= 2 -> 30.toByte()
+                x in 16 until angledRowW - 16 &&
+                    (y < rail1 - 15 ||
+                        (y > rail1 + 15 && y < rail2 - 15) ||
+                        y > rail2 + 15) -> 105.toByte()
+                else -> 255.toByte()
+            }
+        }
+    }
+    val angledRtl = PanelDetectionCore.detect(angledRowW, angledRowH, angledRows, true)
+    val angledLtr = PanelDetectionCore.detect(angledRowW, angledRowH, angledRows, false)
+    check(!angledRtl.usedFullPageFallback && angledRtl.regions.size == 3 &&
+        angledRtl.reason.contains("slanted horizontal")) {
+        "Protect strong slanted comic row gutters instead of leaving a 3-row page tiny: $angledRtl"
+    }
+    check(angledRtl.regions == angledLtr.regions) {
+        "RTL/LTR cannot reverse top-to-bottom slanted rows"
+    }
+    check(angledRtl.regions.first().top == 0 &&
+        angledRtl.regions.last().bottom == angledRowH &&
+        angledRtl.regions.zipWithNext().all { (a, b) -> b.top < a.bottom }) {
+        "The full diagonal travel must be duplicated in both adjacent crops"
+    }
+    // Row by Row remains STRICTLY horizontal and uses only existing
+    // independently validated straight row gutters. This new guarded
+    // fallback is exclusive to Panel by Panel.
+    check(PanelDetectionCore.detectRows(angledRowW, angledRowH, angledRows)
+        .usedFullPageFallback) {
+        "Row by Row must not inherit speculative angled frame recognition"
+    }
+    // Sparse title page with angled decorations is NOT 3 illustrated rows.
+    val slantedTitles = ByteArray(angledRows.size) { 255.toByte() }
+    for (x in 0 until angledRowW) {
+        val first = 204 + (x - angledRowW / 2) * 10 / 100
+        val second = 472 - (x - angledRowW / 2) * 8 / 100
+        for (y in first - 2..first + 2) slantedTitles[y * angledRowW + x] = 25.toByte()
+        for (y in second - 2..second + 2) slantedTitles[y * angledRowW + x] = 25.toByte()
+    }
+    check(PanelDetectionCore.detect(angledRowW, angledRowH, slantedTitles, true)
+        .usedFullPageFallback) {
+        "Sparse angled title rules cannot be mistaken for independent comic tiers"
+    }
+    // A broad balloon crossing a rail vetoes THAT seam. The other rail may
+    // still be accepted, but no proposed boundary may cut through the bubble.
+    val crossedRail = angledRows.copyOf()
+    for (x in 132..348) {
+        val y = 204 + (x - angledRowW / 2) * 10 / 100
+        for (dy in -13..13) crossedRail[(y + dy) * angledRowW + x] = 255.toByte()
+    }
+    val crossedRailPlan = PanelDetectionCore.detect(angledRowW, angledRowH, crossedRail, true)
+    check(crossedRailPlan.regions.size <= 2 ||
+        !crossedRailPlan.reason.contains("slanted horizontal")) {
+        "Don't split a heavily crossed angled speech balloon: $crossedRailPlan"
+    }
+
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
 }

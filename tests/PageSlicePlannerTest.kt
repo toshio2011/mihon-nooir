@@ -18,6 +18,16 @@ fun main() {
         b.top < a.bottom && b.top > a.top && b.bottom > a.bottom
     }) { "Every continuation should repeat a few rows with guaranteed forward progress" }
 
+    // TTB webtoon reading is independent of western LTR / manga RTL.
+    // A long strip always progresses from the top, never reverses on LTR.
+    val webtoonLtr = plan(600, 3600, rtl = false)
+    check(webtoonLtr == overlapping) {
+        "LTR should not reverse top-to-bottom webtoon scroll order"
+    }
+    check(webtoonLtr.indices.all { i -> i == 0 ||
+        webtoonLtr[i].top > webtoonLtr[i - 1].top }) {
+        "Every continued vertical frame must progress down the source"
+    }
     val seamless = plan(600, 3600, overlap = 0)
     check(seamless.zipWithNext().all { (a, b) -> a.bottom == b.top })
     check(seamless.first().top == 0 && seamless.last().bottom == 3600)

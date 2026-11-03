@@ -188,6 +188,18 @@ def inspect(path, frame=None):
             require(item.get("mode") == "PANEL_BY_PANEL" or
                     item.get("path") == "whole-page",
                     f"Unexpected detector mode for page {n}")
+            # Optional since older archives predate the guarded merge.
+            # A preserved merge is one COMPLETE image, not a vague fallback
+            # or an invitation to discard a low-ink text/credit page.
+            preserved = item.get("detectorPreserveSingleFrame", False)
+            require(type(preserved) is bool,
+                    f"Invalid preserved-frame flag on page {n}")
+            if preserved:
+                require(item.get("mode") == "PANEL_BY_PANEL" and
+                        item.get("detectorFallback") is False and count == 1 and
+                        planned == actual == [[0, 0, w, h]] and
+                        item["detectorRegionsThumbnail"] == [[0, 0, tw, th]],
+                        f"Preserved footer must produce exactly one whole source frame on page {n}")
             events = item.get("events", [])
             dropped = item.get("traceDroppedEvents")
             require(isinstance(events, list) and len(events) <= 384 and
@@ -211,8 +223,10 @@ def inspect(path, frame=None):
                        "chapterPageOrdinal": item.get("chapterPageOrdinal"),
                        "firstFrame": start, "frameCount": count,
                        "path": item.get("path"), "reason": item.get("reason"),
+                       "detectorPreserveSingleFrame": preserved,
                        "events": item.get("events", []), "originalImage": original}
-            if count >= 4 or any(e.get("decision") == "reject" for e in item.get("events", [])):
+            if preserved or count >= 4 or any(
+                    e.get("decision") == "reject" for e in item.get("events", [])):
                 interesting.append(n)
             next_frame += count
         require(next_frame == cover + output + 1,

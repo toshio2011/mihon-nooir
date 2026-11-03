@@ -48,6 +48,9 @@ fun main() {
     val footerEvents = mutableListOf<PanelDebugEvent>()
     val footerPlan = PanelDetectionCore.detect(fw, fh, footer, true) { footerEvents.add(it) }
     check(!footerPlan.usedFullPageFallback) { "Footer case lost real panels: ${footerPlan.reason}" }
+    check(!footerPlan.preserveSingleFrame) {
+        "Existing multi-panel footer join must not disable further valid panels"
+    }
     coveredExactly(footerPlan.regions, fw, fh)
     check(footerEvents.any { it.stage == "tier" && it.decision == "absorb" }) {
         "Fixture must exercise actual terminal-footer absorption, not a lucky unsplit row: $footerEvents"
@@ -57,6 +60,93 @@ fun main() {
     }
     check(PanelDetectionCore.detectRows(fw, fh, footer) == footerRowBaseline) {
         "Footer safeguard must not change Row by Row"
+    }
+
+    // A2. A terminal row taller than the old 9%-height guard contains
+    // ONLY two long, thin border marks. Detected as a substantial enough
+    // horizontal tier, it used to become a nearly blank standalone view.
+    // Merge its source pixels into the single full-width illustrated region,
+    // but never into a separate source page or multiple side-by-side panels.
+    val nearW = 480
+    val nearH = 800
+    val nearBlank = ByteArray(nearW * nearH) { 255.toByte() }
+    draw(nearBlank, nearW, 14, 10, 466, 638, 92)
+    draw(nearBlank, nearW, 24, 699, 456, 701, 32)
+    draw(nearBlank, nearW, 24, 714, 456, 716, 32)
+    val nearRows = PanelDetectionCore.detectRows(nearW, nearH, nearBlank)
+    check(!nearRows.usedFullPageFallback && nearRows.regions.size == 2) {
+        "Fixture must contain an illustrated row and separately admitted quiet rail: ${nearRows.regions}"
+    }
+    val nearEvents = mutableListOf<PanelDebugEvent>()
+    val mergedNear = PanelDetectionCore.detect(nearW, nearH, nearBlank, true) {
+        nearEvents.add(it)
+    }
+    check(!mergedNear.usedFullPageFallback && mergedNear.regions ==
+        listOf(PageRegion(0, 0, nearW, nearH)) && mergedNear.preserveSingleFrame) {
+        "Near-empty terminal rule must be merged AND protected from downstream slicing: ${mergedNear.regions}"
+    }
+    check(nearEvents.any { it.stage == "tier" && it.decision == "absorb" &&
+        it.detail.contains("near-empty terminal border") }) {
+        "Must hit the new conservative terminal-border safeguard: $nearEvents"
+    }
+    coveredExactly(mergedNear.regions, nearW, nearH)
+    check(PanelDetectionCore.detect(nearW, nearH, nearBlank, false).regions ==
+        mergedNear.regions) {
+        "Merging full-width tiers must not change RTL/LTR reading order"
+    }
+    check(PanelDetectionCore.detectRows(nearW, nearH, nearBlank) == nearRows) {
+        "Independent Row by Row may not inherit Panel-by-Panel coalescing"
+    }
+
+    // Text-like small glyphs instead of connected border lines: protect the
+    // meaning of a short credit/title band rather than hiding it in artwork.
+    val credits = ByteArray(nearW * nearH) { 255.toByte() }
+    draw(credits, nearW, 14, 10, 466, 638, 92)
+    for (y in listOf(701, 722)) {
+        for (x in listOf(20, 62, 104, 146, 188, 230, 272, 314, 356, 398, 440)) {
+            draw(credits, nearW, x, y, x + 15, y + 7, 40)
+        }
+    }
+    val creditsPlan = PanelDetectionCore.detect(nearW, nearH, credits, true)
+    check(creditsPlan.regions.size >= 2 &&
+        creditsPlan.regions.last().top >= 600) {
+        "Meaningful standalone title/credits must not be joined to preceding art: ${creditsPlan.regions}"
+    }
+    check(!creditsPlan.preserveSingleFrame) {
+        "Meaningful credits must remain eligible for their normal reading frames"
+    }
+    coveredExactly(creditsPlan.regions, nearW, nearH)
+
+    // A3. The ORIGINAL shallow-terminal-footer absorption (the earlier
+    // Conan path) can also leave exactly one full-width region. Historically
+    // that looked like an invalid one-panel plan and fell back into general
+    // page slicing. Its "absorb" decision must produce a protected one-frame
+    // result, not another set of near-empty reading screens.
+    val shortW = 480
+    val shortH = 800
+    val shortFooter = ByteArray(shortW * shortH) { 255.toByte() }
+    draw(shortFooter, shortW, 12, 12, 468, 720, 100)
+    draw(shortFooter, shortW, 30, 768, 451, 772, 30)
+    val shortRows = PanelDetectionCore.detectRows(shortW, shortH, shortFooter)
+    check(!shortRows.usedFullPageFallback && shortRows.regions.size == 2) {
+        "Short-footer fixture must expose 2 rows: ${shortRows.regions}"
+    }
+    val shortEvents = mutableListOf<PanelDebugEvent>()
+    val shortPlan = PanelDetectionCore.detect(shortW, shortH, shortFooter, true) {
+        shortEvents.add(it)
+    }
+    check(!shortPlan.usedFullPageFallback && shortPlan.preserveSingleFrame &&
+        shortPlan.regions == listOf(PageRegion(0, 0, shortW, shortH))) {
+        "Existing shallow-footer absorption must retain one protected frame: $shortPlan"
+    }
+    check(shortEvents.any { it.stage == "tier" && it.decision == "absorb" &&
+        it.detail.contains("terminal ruled footer retained") }) {
+        "The old short-footer route, not the later ruled-tail route, must be exercised: $shortEvents"
+    }
+    coveredExactly(shortPlan.regions, shortW, shortH)
+    check(PanelDetectionCore.detect(shortW, shortH, shortFooter, false) == shortPlan)
+    check(PanelDetectionCore.detectRows(shortW, shortH, shortFooter) == shortRows) {
+        "Existing Row by Row must still have its original two horizontal regions"
     }
 
     // B. Original panel-by-panel rejected-row recovery fixture. The upper two

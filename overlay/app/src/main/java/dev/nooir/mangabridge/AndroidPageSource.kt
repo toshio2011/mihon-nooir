@@ -152,7 +152,13 @@ class AndroidPageSource(private val context: Context) {
                 debug?.noteAnalysis(w, h, gray, plan, emptyList())
                 return null
             }
-            val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+            // Apply user-selected overlap to *detected* rows/panels too,
+            // not only to later slices inside exceptionally long panels.
+            // Pad after detection; the detector still sees original pixels.
+            val regions = PanelDetectionCore.sourceRegions(
+                plan, w, h, src.width, src.height,
+                PanelDetectionCore.overlapPaddingPercent(options.overlapPercent),
+            )
             // Decide on the UNPADDED thumbnail region. Source overlap
             // padding is essential for artwork safety but can pull dark
             // strokes from a neighbouring illustrated tier into a nearly
@@ -169,7 +175,13 @@ class AndroidPageSource(private val context: Context) {
                     PanelSafeSlicePlanner.isSparse(plan.regions[index]) { x, y ->
                         (gray[y * w + x].toInt() and 255) < 220
                     }
-                DetectedPanel(region, sparse)
+                // A merged terminal border must stay attached all the way
+                // through margin trim, Auto Fit and safe corridor slicing.
+                // Otherwise a later planner could recreate a near-white page.
+                // Only Panel by Panel emits this explicit one-frame decision.
+                DetectedPanel(region, sparse ||
+                    (options.panelMode == "PANEL_BY_PANEL" &&
+                        plan.preserveSingleFrame && plan.regions.size == 1))
             }
         } finally {
             if (thumb !== src) thumb.recycle()
@@ -375,7 +387,20 @@ class AndroidPageSource(private val context: Context) {
             val viewWidth = if (needsRotation) frameHeight else frameWidth
             val viewHeight = if (needsRotation) frameWidth else frameHeight
             val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
-            val r = if (!isOverview && options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
+            // A rejected Panel-by-Panel detection may still take the legacy
+            // full-page/spread renderer. Its fast sampled trimWhite() can miss
+            // a one-pixel balloon stroke or faint credit between sample lines
+            // and then crop it away. Use the same fully verified, pixel-veto
+            // margin trim as accepted panel regions for this opt-in mode only.
+            // Preserve OFF, Row by Row and WEBTOON fast/legacy behavior.
+            val r = when {
+                isOverview || !options.cropWhiteMargins || panels != null -> sourceRegion
+                options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" ->
+                    trimDetectedPanel(src, initial).let {
+                        Rect(it.left, it.top, it.right, it.bottom)
+                    }
+                else -> trimWhite(src, sourceRegion)
+            }
             val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
             val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)

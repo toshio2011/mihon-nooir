@@ -28,15 +28,24 @@ adb install -r "$test_apk"
 adb shell pm list instrumentation | tee android-panel-instrumentation-packages.txt
 adb logcat -c
 
-echo "Running Android CBZ-to-panel diagnostics parity/integrity test"
+echo "Running both Android panel diagnostics and footer-render tests"
 adb shell am instrument -w -r \
   -e class dev.nooir.mangabridge.PanelDiagnosticArchiveInstrumentedTest \
   dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
   | tee diagnostic-instrumentation.txt
 
-# Android runner writes one 'OK (1 test)' success line for our single test.
-# Fail CI on test assertion failures, process crashes or a missing test.
-grep -Eq '^OK \(1 test\)' diagnostic-instrumentation.txt
+# Both tests MUST have run and passed, and the runner must have finished
+# successfully. The old hardcoded "OK (1 test)" check was incorrect after
+# introducing the second instrumentation test.
+for required in \
+  realAndroidCbzZipAndRenderParity \
+  shortRuledFooterStaysOneFrameThroughAndroidRender
+do
+  grep -Fq "INSTRUMENTATION_STATUS: test=${required}" diagnostic-instrumentation.txt
+done
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.txt)" -eq 2
+grep -Fxq 'OK (2 tests)' diagnostic-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root

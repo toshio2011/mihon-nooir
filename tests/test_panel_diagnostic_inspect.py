@@ -103,6 +103,34 @@ class DiagnosticInspectionTest(unittest.TestCase):
         with self.assertRaises(validator.InvalidDiagnostic):
             self.valid()
 
+    def test_private_merged_footer_decision_visible_in_frame_lookup(self):
+        # Later diagnostics declare safe full-frame coalescing explicitly.
+        # Old archives lacking the optional flag still work unchanged.
+        make_zip(self.path, [
+            ("second", "detectorPreserveSingleFrame", True),
+            ("second", "detectorFallback", False),
+            ("second", "reason", "illustrated row with absorbed terminal border"),
+        ])
+        result = self.valid()
+        self.assertIn(2, result["suspiciousSourceOrdinals"])
+        frame = validator.inspect(self.path, 5)["frameDetails"]
+        self.assertTrue(frame["detectorPreserveSingleFrame"])
+        self.assertIn("absorbed terminal border", frame["reason"])
+
+    def test_protected_merge_cannot_hide_an_extra_output_screen(self):
+        self.assert_invalid([
+            ("first", "detectorPreserveSingleFrame", True),
+            ("first", "detectorFallback", False),
+        ])
+
+    def test_protected_merge_requires_one_whole_frame_not_a_crop(self):
+        self.assert_invalid([
+            ("second", "detectorPreserveSingleFrame", True),
+            ("second", "detectorFallback", False),
+            ("second", "outputSlicesSource", [[0, 0, 100, 100]]),
+            ("second", "preOverviewSlicesSource", [[0, 0, 100, 100]]),
+        ])
+
     def test_noncontiguous_frame_mapping(self):
         self.assert_invalid([("second", "outputFrameStartOneBased", 6)])
 

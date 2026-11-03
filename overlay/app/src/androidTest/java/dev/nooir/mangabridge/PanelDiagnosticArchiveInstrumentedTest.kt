@@ -62,6 +62,84 @@ class PanelDiagnosticArchiveInstrumentedTest {
         return cbz
     }
 
+    /**
+     * The host detector can safely join a short terminal ruled footer, but
+     * that alone does not prove Android will respect the decision. Landscape
+     * output is intentionally used here: the old PAGED fallback would cut
+     * this portrait source into several vertically paginated screens.
+     *
+     * This is fully synthetic gray geometry, not copyrighted manga artwork.
+     */
+    @Test fun shortRuledFooterStaysOneFrameThroughAndroidRender() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val temp = scratch(context, "merged-footer")
+        try {
+            val bitmap = Bitmap.createBitmap(480, 800, Bitmap.Config.ARGB_8888)
+            val input = File(temp, "ruled-footer.png")
+            try {
+                bitmap.eraseColor(Color.WHITE)
+                val canvas = Canvas(bitmap)
+                val ink = Paint().apply { color = Color.rgb(100, 100, 100) }
+                canvas.drawRect(Rect(12, 12, 468, 720), ink)
+                ink.color = Color.rgb(30, 30, 30)
+                canvas.drawRect(Rect(30, 768, 451, 772), ink)
+                ByteArrayOutputStream().use { bytes ->
+                    assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes))
+                    input.writeBytes(bytes.toByteArray())
+                }
+            } finally { bitmap.recycle() }
+
+            val uri = Uri.fromFile(input)
+            val pages = AndroidPageSource(context)
+            val settings = MangaConversionOptions(
+                panelMode = "PANEL_BY_PANEL",
+                layout = "PAGED", orientation = "LANDSCAPE",
+                rightToLeft = true, cropWhiteMargins = true,
+                overlapPercent = 8, showFullPageBeforeSplits = true,
+                keepChapterFirstPageWhole = false, panelDiagnostics = true,
+            )
+            // Proof that an unprotected landscape PAGED full source would
+            // really create unwanted extra slices, not merely one page.
+            val unsafeBaseline = pages.pages(listOf(uri), 480, 800, 1,
+                settings.copy(panelMode = "OFF", panelDiagnostics = false,
+                    cropWhiteMargins = false)).toList()
+            assertTrue("Fixture must expose the landscape pagination trap",
+                unsafeBaseline.size > 1)
+
+            val archiveDir = scratch(context, "merged-footer-diagnostics")
+            try {
+                val diagnostic = PanelDiagnosticArchive(archiveDir)
+                val exported = pages.pages(listOf(uri), 480, 800, 1,
+                    settings, diagnostics = diagnostic).toList()
+                assertEquals("Merged footer must never become a blank reading frame",
+                    1, exported.size)
+                assertEquals(480, exported[0].width)
+                assertEquals(800, exported[0].height)
+                assertTrue("The rendered frame must still contain artwork",
+                    exported[0].levels.any { (it.toInt() and 255) == 0 })
+
+                val status = diagnostic.publish(context)
+                assertTrue(status, status.startsWith("Ready:"))
+                ZipFile(PanelDiagnosticArchive.latestFile(context)).use { zip ->
+                    val report = JSONObject(zip.getInputStream(zip.getEntry("pages/00001.json"))
+                        .bufferedReader().use { it.readText() })
+                    assertTrue("Detector must join the short footer itself",
+                        report.getBoolean("detectorPreserveSingleFrame"))
+                    assertFalse("Joined footer is NOT an uncertain detector fallback",
+                        report.getBoolean("detectorFallback"))
+                    assertEquals(1, report.getInt("outputFrameCount"))
+                    assertEquals(1, report.getJSONArray("preOverviewSlicesSource").length())
+                    assertEquals(1, report.getJSONArray("outputSlicesSource").length())
+                    val rect = report.getJSONArray("outputSlicesSource").getJSONArray(0)
+                    assertEquals(listOf(0, 0, 480, 800),
+                        (0..3).map { rect.getInt(it) })
+                    assertTrue("Landscape Auto Fit is not required for this manual mode",
+                        report.getJSONArray("outputRotated").getBoolean(0))
+                }
+            } finally { archiveDir.deleteRecursively() }
+        } finally { temp.deleteRecursively() }
+    }
+
     @Test fun realAndroidCbzZipAndRenderParity() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val temp = scratch(context, "cbz")
