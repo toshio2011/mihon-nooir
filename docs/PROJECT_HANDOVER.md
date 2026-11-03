@@ -1,8 +1,12 @@
 # MangaNooir — project handover and continuation guide
 
+> [!IMPORTANT]
+> **CURRENT ANDROID PANEL HANDOVER — 3 NOVEMBER 2026:** Start with **[HANDOVER_2026-11-03_ANDROID_PANEL_V1.0.17.md](HANDOVER_2026-11-03_ANDROID_PANEL_V1.0.17.md)** for draft PR #57, official signed Android v1.0.16 vs experimental v1.0.17, One Piece output-only findings, CI shell-script repair, current tests and release safety. Check GitHub for the live head/CI. The 21 October notes and historical status tables below are preserved **only as older snapshots**; they do not state the current Android release or branch status.
+
+
 
 > [!IMPORTANT]
-> **LATEST HANDOVER — 21 OCTOBER 2026:** Read **[docs/HANDOVER_2026-10-21.md](HANDOVER_2026-10-21.md)** first. It contains the current PR, branch, CI, EPUB 2, XTC/XTCH, device-profile, test and next-step status. The summary and status table later in **this** file are a historical snapshot and must NOT be interpreted as the current state.
+> **HISTORICAL HANDOVER — 21 OCTOBER 2026:** Read **[docs/HANDOVER_2026-10-21.md](HANDOVER_2026-10-21.md)** first. It contains the current PR, branch, CI, EPUB 2, XTC/XTCH, device-profile, test and next-step status. The summary and status table later in **this** file are a historical snapshot and must NOT be interpreted as the current state.
 >
 > **Current facts:** Public prerelease remains **v1.0.11**; `main` application source remains v1.0.1. [Draft PR #21](https://github.com/toshio2011/mihon-nooir/pull/21) (experimental v1.0.12 multiprovider + EPUB 2/XTC/XTCH) is **NOT merged**, and its parent [draft PR #18](https://github.com/toshio2011/mihon-nooir/pull/18) is **NOT merged**. The latest v1.0.12 head `df151e9` passed [full Android build + EPUBCheck CI #39452868331](https://github.com/toshio2011/mihon-nooir/actions/runs/39452868331). **Do not merge/release or modify Folio Nooir without approval.**
 
