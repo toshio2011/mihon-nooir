@@ -34,9 +34,34 @@ adb shell am instrument -w -r \
   dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
   | tee diagnostic-instrumentation.txt
 
-# Android runner writes one 'OK (1 test)' success line for our single test.
-# Fail CI on test assertion failures, process crashes or a missing test.
-grep -Eq '^OK \(1 test\)' diagnostic-instrumentation.txt
+# The instrumentation suite now exercises BOTH the original CBZ/ZIP
+# round-trip and the new short-footer Android render regression. Previously
+# this script hardcoded "OK (1 test)" and reported a false CI failure even
+# when the runner printed "OK (2 tests)" and both cases passed.
+#
+# Require both test names and the actual successful runner summary. Keep this
+# check explicit: silently running only the older smoke test must not pass.
+for required in \
+  realAndroidCbzZipAndRenderParity \
+  shortRuledFooterStaysOneFrameThroughAndroidRender
+do
+  grep -Fq "INSTRUMENTATION_STATUS: test=${required}" diagnostic-instrumentation.txt
+done
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0
+
+echo "Reading the actual privately saved diagnostic ZIP from the emulator"
+adb root
+adb wait-for-device
+adb pull \
+  /data/user/0/dev.nooir.mihontrial.foss/files/manganooir_panel_debug/latest.zip \
+  android-runtime-panel-diagnostic.zip
+test -s android-runtime-panel-diagnostic.zip
+python3 tools/panel_diagnostic_inspect.py \
+  android-runtime-panel-diagnostic.zip --json \
+  | tee android-panel-diagnostic-inspection.json
+ diagnostic-instrumentation.txt)" -eq 2
+grep -Fxq 'OK (2 tests)' diagnostic-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root
