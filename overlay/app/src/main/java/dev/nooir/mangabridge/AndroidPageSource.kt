@@ -41,6 +41,8 @@ class AndroidPageSource(private val context: Context) {
     fun pages(inputUris: List<Uri>, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions = MangaConversionOptions(),
         fixedFramebuffer: Boolean = true,
+        diagnostics: PanelDiagnosticArchive? = null,
+        chapterOrdinal: Int = 1,
     ): Sequence<QuantizedPage> = sequence {
         var sourceIndex = 0
         for (uri in inputUris.sortedWith { a, b -> NaturalPageOrder.compare(name(a), name(b)) }) {
@@ -63,7 +65,9 @@ class AndroidPageSource(private val context: Context) {
                                     it.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED") else it
                             }
                             sourceIndex++
-                            try { for (page in render(image, width, height, depth, pageOptions, fixedFramebuffer)) yield(page) }
+                            try { for (page in render(image, width, height, depth, pageOptions,
+                                fixedFramebuffer, diagnostics, chapterOrdinal, sourceIndex - 1,
+                                { zip.getInputStream(entry) })) yield(page) }
                             finally { image.recycle() }
                         }
                     }
@@ -75,7 +79,9 @@ class AndroidPageSource(private val context: Context) {
                         it.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED") else it
                 }
                 sourceIndex++
-                try { for (page in render(image, width, height, depth, pageOptions, fixedFramebuffer)) yield(page) }
+                try { for (page in render(image, width, height, depth, pageOptions,
+                    fixedFramebuffer, diagnostics, chapterOrdinal, sourceIndex - 1,
+                    { resolver.openInputStream(uri) ?: error("Cannot reopen source image") })) yield(page) }
                 finally { image.recycle() }
             }
         }
@@ -119,7 +125,8 @@ class AndroidPageSource(private val context: Context) {
     // dark pixels from its illustrated neighbour and wrongly re-enable cuts.
     private data class DetectedPanel(val region: PageRegion, val preserveWhole: Boolean)
 
-    private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<DetectedPanel>? {
+    private fun detectPanels(src: Bitmap, options: MangaConversionOptions,
+        debug: PanelDiagnosticArchive.Page? = null): List<DetectedPanel>? {
         if (options.panelMode != "PANEL_BY_PANEL" && options.panelMode != "ROW_BY_ROW") return null
         if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
@@ -138,9 +145,13 @@ class AndroidPageSource(private val context: Context) {
                 // Transparent gutters on PNGs are white, not black.
                 ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
             }
-            val plan = if (options.panelMode == "ROW_BY_ROW") PanelDetectionCore.detectRows(w, h, gray)
-                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
-            if (plan.usedFullPageFallback) return null
+            val plan = if (options.panelMode == "ROW_BY_ROW")
+                PanelDetectionCore.detectRows(w, h, gray, debug?.trace)
+                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft, debug?.trace)
+            if (plan.usedFullPageFallback) {
+                debug?.noteAnalysis(w, h, gray, plan, emptyList())
+                return null
+            }
             val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
             // Decide on the UNPADDED thumbnail region. Source overlap
             // padding is essential for artwork safety but can pull dark
@@ -151,6 +162,7 @@ class AndroidPageSource(private val context: Context) {
             // Every region remains present, with its original source pixels.
             // This only controls whether an otherwise-valid elongated region
             // is further divided by the viewport slicer.
+            debug?.noteAnalysis(w, h, gray, plan, regions)
             return regions.mapIndexed { index, region ->
                 val sparse = options.panelMode == "PANEL_BY_PANEL" &&
                     options.layout != "WEBTOON" &&
@@ -253,7 +265,11 @@ class AndroidPageSource(private val context: Context) {
     private fun render(
         src: Bitmap, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean,
+        diagnostics: PanelDiagnosticArchive? = null,
+        chapterOrdinal: Int = 1, sourceIndex: Int = 0,
+        rawInput: (() -> InputStream)? = null,
     ): Sequence<QuantizedPage> = sequence {
+        val debug = diagnostics?.beginPage(chapterOrdinal, sourceIndex, src)
         val auto = options.panelMode != "OFF" && options.orientation == "AUTO_FIT"
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
@@ -274,9 +290,11 @@ class AndroidPageSource(private val context: Context) {
             src.height.toLong() <= src.width.toLong() * 3L &&
             PanelSafeSlicePlanner.isSparse(sourceWhole) { x, y -> inkAt(src, x, y) }
         ) sourceWhole else null
+        if (sparseWhole != null) debug?.noteSkipped("sparse entire original source")
         val detectedPanels = if (sparseWhole != null)
             listOf(DetectedPanel(sparseWhole, true))
-        else detectPanels(src, options)
+        else detectPanels(src, options, debug)
+        if (options.panelMode == "OFF") debug?.noteSkipped("panel detection disabled for this page")
         // A sparse source or tier must never be trimmed/re-sliced; preserving
         // the full, padded region also retains border-adjacent speech balloons.
         val panels = if (detectedPanels != null && options.cropWhiteMargins)
@@ -332,6 +350,9 @@ class AndroidPageSource(private val context: Context) {
         val outputSlices = if (options.showFullPageBeforeSplits && slices.size > 1) {
             listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + slices
         } else slices
+        // Capture the exact source-to-output mapping *before* yielding frames.
+        // ZIP failures never change the actual e-reader conversion.
+        debug?.finish(src, options, slices, outputSlices, rawInput)
         // Render one frame at a time, with per-panel orientation only in Auto Fit.
         for ((sliceIndex, slice) in outputSlices.withIndex()) {
             val isOverview = options.showFullPageBeforeSplits && slices.size > 1 && sliceIndex == 0

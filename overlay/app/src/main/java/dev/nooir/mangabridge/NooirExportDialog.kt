@@ -10,6 +10,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +79,28 @@ fun NooirExportDialog(
     }
     val activePreviewUri = chosenPreviewUri ?: previewSourceUri
     var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
+    val diagnosticsFile = PanelDiagnosticArchive.latestFile(context)
+    var diagnosticsSaveStatus by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val diagnosticsPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) scope.launch {
+            diagnosticsSaveStatus = "Saving diagnostic ZIP…"
+            diagnosticsSaveStatus = withContext(Dispatchers.IO) {
+                runCatching {
+                    check(diagnosticsFile.isFile && diagnosticsFile.length() > 0L) {
+                        "No completed panel diagnostics found"
+                    }
+                    context.contentResolver.openOutputStream(uri, "w")?.use { output ->
+                        diagnosticsFile.inputStream().use { input ->
+                            input.copyTo(output, 64 * 1024)
+                        }
+                    } ?: error("Cannot create selected diagnostic file")
+                    "Diagnostic ZIP saved. It contains manga images; review before sharing."
+                }.getOrElse { "Could not save ZIP: " + it.message.orEmpty().take(120) }
+            }
+        }
+    }
 
     fun saveSettings() {
         prefs.edit()
@@ -85,7 +109,10 @@ fun NooirExportDialog(
             .putString("host", host.trim())
             .putString("destination", destination.trim())
             .apply()
-        options.save(prefs)
+        // Diagnostics may contain copyrighted pages. Do not leave the capture
+        // toggle enabled for the user's next ordinary export: the current
+        // work request still receives the explicitly chosen options below.
+        options.copy(panelDiagnostics = false).save(prefs)
     }
     val canExport = !quickExport || (onlineSource && selectedChapterCount >= 1)
     val profile = NooirDeviceProfiles.forId(device)
@@ -137,6 +164,16 @@ fun NooirExportDialog(
                     options = updated
                     previewIndex = 0
                 })
+                if (diagnosticsFile.isFile && diagnosticsFile.length() > 0L) {
+                    TextButton(onClick = { diagnosticsPicker.launch("MihonNooir-panel-diagnostics.zip") }) {
+                        Text("Save latest panel diagnostics ZIP")
+                    }
+                    Text("Last diagnostic ZIP created: " +
+                        java.text.DateFormat.getDateTimeInstance().format(
+                            java.util.Date(diagnosticsFile.lastModified())) +
+                        ". Stored privately; no automatic sharing or upload.")
+                }
+                if (diagnosticsSaveStatus.isNotBlank()) Text(diagnosticsSaveStatus)
                 TextButton(onClick = { previewPicker.launch(arrayOf("image/*", "application/zip", "application/x-cbz", "application/vnd.comicbook+zip")) }) {
                     Text("Choose manga image or CBZ for preview")
                 }

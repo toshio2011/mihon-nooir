@@ -54,6 +54,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
         const val KEY_CONFIRMATION_DETAILS = "preflight_details"
         const val KEY_SKIPPED_CHAPTERS = "skipped_chapters"
         const val KEY_MISSING_COVER = "missing_cover"
+        const val KEY_PANEL_DIAGNOSTICS = "panel_diagnostics_status"
         private const val PREF_HANDLED = "preflight_handled_ids"
 
         fun enqueue(context: Context, mangaId: Long, mangaTitle: String, chapterIds: List<Long>,
@@ -265,7 +266,8 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
                 else "XTEink confirmed manga upload", ongoing = false))
             return Result.success(Data.Builder()
                 .putString(KEY_SKIPPED_CHAPTERS, exported.skippedChapters.joinToString("; ").take(1500))
-                .putBoolean(KEY_MISSING_COVER, exported.missingCover).build())
+                .putBoolean(KEY_MISSING_COVER, exported.missingCover)
+                .putString(KEY_PANEL_DIAGNOSTICS, exported.diagnosticsMessage).build())
         } catch (e: NooirExportPreflightException) {
             needsDecision = true
             manager.notify(notificationId, notif("Action needed: " + e.message.orEmpty().take(80),

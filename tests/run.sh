@@ -69,6 +69,13 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/PanelDetectionCoreTest.kt -include-runtime -d "$tmp/panel-phase-a.jar"
 java -jar "$tmp/panel-phase-a.jar"
 
+# Private Conan diagnostic cases reproduced as independently authored geometry:
+# terminal footer merging, dark framed corridor, shallow header protection.
+# All cover the complete source page and preserve independent Row by Row.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/ConanPanelRegressionTest.kt -include-runtime -d "$tmp/panel-conan-regressions.jar"
+java -jar "$tmp/panel-conan-regressions.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
