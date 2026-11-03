@@ -230,6 +230,10 @@ class PanelDiagnosticArchive(workDir: File) : AutoCloseable {
                     .put("path", actualMode)
                     .put("reason", fallback)
                     .put("detectorFallback", plan?.usedFullPageFallback ?: true)
+                    // Distinguish a real detector-preserved merged footer
+                    // from a generic single-page fallback in private QA.
+                    // Older diagnostic ZIPs without this optional field remain valid.
+                    .put("detectorPreserveSingleFrame", plan?.preserveSingleFrame ?: false)
                     .put("detectorRegionsThumbnail", arrayOfRegions(plan?.regions.orEmpty()))
                     .put("sourceRegionsWithPadding", arrayOfRegions(padded))
                     .put("preOverviewSlicesSource", arrayOfRegions(slices.map { it.region }))
