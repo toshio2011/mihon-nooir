@@ -82,6 +82,12 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/TextDominantPageRegressionTest.kt -include-runtime -d "$tmp/panel-text-pages.jar"
 java -jar "$tmp/panel-text-pages.jar"
 
+# Experimental black-background gutter recovery: only meaningful thick
+# frames between independently illustrated regions; Row Only unchanged.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/BlackFramedGutterRegressionTest.kt -include-runtime -d "$tmp/panel-black-framed-gutter.jar"
+java -jar "$tmp/panel-black-framed-gutter.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
