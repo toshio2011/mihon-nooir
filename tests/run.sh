@@ -88,6 +88,12 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/BlackFramedGutterRegressionTest.kt -include-runtime -d "$tmp/panel-black-framed-gutter.jar"
 java -jar "$tmp/panel-black-framed-gutter.jar"
 
+# Source-75-shaped shallow speech strip regression (synthetic pixels only):
+# merge aligned columns, reject a crossing balloon, preserve all coordinates.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/SpeechTierCoalescingRegressionTest.kt -include-runtime -d "$tmp/panel-speech-tier.jar"
+java -jar "$tmp/panel-speech-tier.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
