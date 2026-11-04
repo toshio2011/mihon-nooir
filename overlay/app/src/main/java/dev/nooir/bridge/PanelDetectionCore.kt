@@ -35,6 +35,115 @@ object PanelDetectionCore {
     private const val INK = 220
 
     /**
+     * Conservative post-pass for a shallow strip accidentally separated from
+     * the SAME two illustrated columns above and below it. In some comic pages,
+     * the upper halves of two dialogue balloons look like four tiny panels.
+     * Only consolidate when BOTH surrounding tiers already independently
+     * validated exactly two columns with aligned boundaries, the central tier
+     * was fragmented into >=3 vertical pieces, and one nearly empty vertical
+     * seam survives the ENTIRE merged span.
+     *
+     * This does not generalize across unequal/staggered columns or across a
+     * crossing balloon: if a safe full-height seam is absent, leave the
+     * existing panels untouched. All coordinates remain fully covered.
+     * Row-by-Row never calls this function.
+     */
+    internal fun consolidateShallowDialogueStrip(
+        width: Int, height: Int, gray: ByteArray, rows: List<PageRegion>,
+        panels: List<PageRegion>, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion> {
+        if (rows.size < 3 || panels.size < 8 || gray.size != width * height) return panels
+        val result = panels.toMutableList()
+        fun slices(row: PageRegion): List<PageRegion> =
+            result.filter { it.top == row.top && it.bottom == row.bottom }
+        fun coversWidth(parts: List<PageRegion>): Boolean {
+            if (parts.isEmpty()) return false
+            val ordered = parts.sortedBy { it.left }
+            return ordered.first().left == 0 && ordered.last().right == width &&
+                ordered.zipWithNext().all { (a, b) -> a.right == b.left }
+        }
+        for (i in 1 until rows.lastIndex) {
+            val above = rows[i - 1]
+            val strip = rows[i]
+            val below = rows[i + 1]
+            if (above.bottom != strip.top || strip.bottom != below.top ||
+                strip.height > maxOf(48, height * 6 / 100) ||
+                above.height > maxOf(80, height / 10) ||
+                below.height < strip.height * 2) continue
+
+            val top = slices(above)
+            val center = slices(strip)
+            val bottom = slices(below)
+            if (top.size != 2 || center.size !in 3..6 || bottom.size != 2 ||
+                !coversWidth(top) || !coversWidth(center) || !coversWidth(bottom))
+                continue
+
+            val topSeam = top.minByOrNull { it.left }!!.right
+            val bottomSeam = bottom.minByOrNull { it.left }!!.right
+            if (kotlin.math.abs(topSeam - bottomSeam) > maxOf(8, width / 25)) continue
+
+            // Search only within a few pixels of the TWO independently
+            // verified column seams. Reject a dark/interrupted corridor,
+            // including a real speech bubble drawn across the boundary.
+            val radius = maxOf(2, width / 180)
+            val firstX = (minOf(topSeam, bottomSeam) - radius).coerceAtLeast(1)
+            val lastX = (maxOf(topSeam, bottomSeam) + radius).coerceAtMost(width - 2)
+            val combinedTop = above.top
+            val combinedBottom = below.bottom
+            val span = combinedBottom - combinedTop
+            var safestX = -1
+            var lowestInk = Int.MAX_VALUE
+            for (x in firstX..lastX) {
+                var ink = 0
+                var pale = 0
+                var continuousDark = 0
+                var longestDark = 0
+                for (y in combinedTop until combinedBottom) {
+                    val value = gray[y * width + x].toInt() and 255
+                    if (value < INK) ink++
+                    if (value >= 240) pale++
+                    continuousDark = if (value < 180) continuousDark + 1 else 0
+                    longestDark = maxOf(longestDark, continuousDark)
+                }
+                if (ink * 100 > span * 8 || pale * 100 < span * 80 ||
+                    longestDark >= maxOf(4, span / 40)) continue
+                if (ink < lowestInk ||
+                    (ink == lowestInk &&
+                        kotlin.math.abs(x * 2 - topSeam - bottomSeam) <
+                        kotlin.math.abs(safestX * 2 - topSeam - bottomSeam))) {
+                    lowestInk = ink
+                    safestX = x
+                }
+            }
+            if (safestX < 0) continue
+
+            val start = result.indexOfFirst {
+                it.top == above.top && it.bottom == above.bottom
+            }
+            val count = top.size + center.size + bottom.size
+            if (start < 0 || start + count > result.size) continue
+            val expected = listOf(above, strip, below)
+            val actual = result.subList(start, start + count)
+            if (actual.map { p -> expected.indexOfFirst {
+                    it.top == p.top && it.bottom == p.bottom
+                } }.let { positions ->
+                    positions.any { it < 0 } ||
+                        positions != positions.sorted()
+                }) continue
+
+            val left = PageRegion(0, combinedTop, safestX, combinedBottom)
+            val right = PageRegion(safestX, combinedTop, width, combinedBottom)
+            result.subList(start, start + count).clear()
+            result.addAll(start, if (rightToLeft) listOf(right, left)
+                else listOf(left, right))
+            trace?.invoke(PanelDebugEvent("tier", PageRegion(0, combinedTop, width, combinedBottom),
+                "coalesce", "shallow dialogue strip joined into two aligned story columns"))
+        }
+        return result
+    }
+
+    /**
      * OCR-free fail-safe for a source image with repeated short text-like
      * horizontal bands. Clean paragraph spacing can otherwise look like
      * comic gutters and a row-first + column retry multiplies one prose
@@ -275,6 +384,14 @@ object PanelDetectionCore {
                 trace?.invoke(PanelDebugEvent("tier", tail, "absorb",
                     "near-empty terminal border attached to full-width illustrated row"))
             }
+        }
+        // Correct rare speech-bubble strips between otherwise aligned columns.
+        // This is a geometrically validated Panel-by-Panel post-pass only.
+        val consolidated = consolidateShallowDialogueStrip(
+            width, height, grayscale, rows, output, rightToLeft, trace)
+        if (consolidated.size != output.size) {
+            output.clear()
+            output.addAll(consolidated)
         }
         // The two-row case now legitimately produces ONE complete rectangle.
         // Returning a generic fallback would send it back through the legacy
