@@ -34,6 +34,60 @@ object PanelDetectionCore {
     private const val WHITE = 247
     private const val INK = 220
 
+    /**
+     * OCR-free fail-safe for a source image with repeated short text-like
+     * horizontal bands. Clean paragraph spacing can otherwise look like
+     * comic gutters and a row-first + column retry multiplies one prose
+     * page into dozens of tiny zoomed fragments.
+     *
+     * This is intentionally VERY narrow: at least 18 separate narrow ink
+     * bands in the central page and at most two tall illustrated bands.
+     * Keeping the whole image cannot discard pixels, and the preserve flag
+     * also disables the downstream legacy corridor slicer.
+     *
+     * Never apply this to Row by Row mode or to ordinary comics where large
+     * illustrated blocks occupy several vertical rows.
+     */
+    private fun looksLikeTextDominantPage(width: Int, height: Int, gray: ByteArray): Boolean {
+        if (height < 420 || width < 260) return false
+        val left = width * 8 / 100
+        val right = width * 92 / 100
+        val top = height * 9 / 100
+        val bottom = height * 94 / 100
+        val span = right - left
+        if (span < 40) return false
+        val shortMin = maxOf(2, height * 3 / 900)
+        val shortMax = maxOf(12, height * 22 / 900)
+        var runStart = -1
+        var narrowBands = 0
+        var tallBands = 0
+        for (y in top..bottom) {
+            // A row with >3.5% black-ish ink in the central 84% width.
+            // Integer threshold avoids floating-point work on the X4
+            // conversion pipeline; no bitmap/array allocation per row.
+            var ink = 0
+            if (y < bottom) {
+                val base = y * width
+                for (x in left until right) {
+                    if ((gray[base + x].toInt() and 255) < 160) ink++
+                }
+            }
+            val occupied = y < bottom && ink * 1000 > span * 35
+            if (occupied) {
+                if (runStart < 0) runStart = y
+            } else if (runStart >= 0) {
+                val length = y - runStart
+                if (length in shortMin..shortMax) narrowBands++
+                else if (length > shortMax) tallBands++
+                // No need to inspect the remaining pixels once it can no
+                // longer be a text-dominant/low-illustration page.
+                if (tallBands > 2) return false
+                runStart = -1
+            }
+        }
+        return narrowBands >= 18 && tallBands <= 2
+    }
+
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
         trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
@@ -48,6 +102,12 @@ object PanelDetectionCore {
         // No OCR means we cannot prove that a low-ink region has no lettering.
         // Only trust clear rectangular gutters; uncertain pages stay intact.
         if (height.toLong() > width.toLong() * 3L) return fallback("long strip: preserve existing webtoon slicing")
+        if (looksLikeTextDominantPage(width, height, grayscale)) {
+            trace?.invoke(PanelDebugEvent("page", whole, "keep",
+                "repeated text-like horizontal bands; do not fragment prose into comic panels"))
+            return PanelPlan(listOf(whole), false,
+                "text-dominant source kept intact", preserveSingleFrame = true)
+        }
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
         val detector = Detector(width, height, grayscale, trace)
         // Row detection is authoritative, including conservatively verified
