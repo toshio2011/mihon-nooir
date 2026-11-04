@@ -573,24 +573,30 @@ object PanelDetectionCore {
             val columnInk = BooleanArray((width + dx - 1) / dx)
             var rowsWithInk = 0
             var sampledRows = 0
-            var ink = 0
+            var darkInk = 0
+            var lightPaper = 0
             var total = 0
             for (y in top until bottom step dy) {
                 var rowInk = 0
                 var col = 0
                 for (x in 0 until width step dx) {
                     total++
-                    if ((gray[y * width + x].toInt() and 255) < 220) {
-                        ink++
+                    val value = gray[y * width + x].toInt() and 255
+                    if (value < 160) {
+                        darkInk++
                         rowInk++
                         columnInk[col] = true
                     }
+                    if (value >= 230) lightPaper++
                     col++
                 }
                 if (rowInk > 0) rowsWithInk++
                 sampledRows++
             }
-            return total > 0 && ink * 100 >= total * 10 &&
+            // Distributed DARK linework and LIGHT paper, not simply gray
+            // or black fill, are required in each actual story zone.
+            return total > 0 && darkInk * 100 >= total * 10 &&
+                lightPaper * 100 >= total * 15 &&
                 rowsWithInk * 100 >= sampledRows * 45 &&
                 columnInk.count { it } * 100 >= columnInk.size * 40
         }
