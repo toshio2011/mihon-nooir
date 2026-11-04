@@ -14,7 +14,7 @@ private fun angledArtwork(twoRails: Boolean = true,
     val pixels = ByteArray(w * h) {
         val x = it % w
         val y = it / w
-        (if ((x / 16 + y / 17) % 5 == 0) 75 else 215).toByte()
+        (if ((x / 16 + y / 17) % 5 == 0) 75 else 245).toByte()
     }
     val rails = if (twoRails) listOf(390 to -16,
         530 to (if (oppositeDirections) 16 else -16)) else listOf(390 to -16)
@@ -26,7 +26,7 @@ private fun angledArtwork(twoRails: Boolean = true,
             pixels[(y + offset) * w + x] = 255.toByte()
     }
     if (blankBottom) for (y in 620 until h) for (x in 0 until w)
-        pixels[y * w + x] = 215.toByte()
+        pixels[y * w + x] = 245.toByte()
     return Triple(w, h, pixels)
 }
 
