@@ -457,6 +457,21 @@ object PanelDetectionCore {
                     )
                 }
             }
+            // Secondary, *paired* diagonal-rail recovery. On illustrated
+            // comics a thick slanted border may have bright paper on one
+            // side and artwork directly against the other. The earlier
+            // symmetric white-shoulder test correctly fails those bars.
+            // Require TWO similar parallel, long, near-black borders and
+            // meaningful illustrations in all three story zones before
+            // returning overlapping (never polygon-clipped) rectangles.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val paired = recoverPairedSlantedFramedRows(width, height, grayscale)
+                if (paired != null) {
+                    val why = "two strong parallel slanted frame rails with three illustrated story zones"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(paired, false, why)
+                }
+            }
             return fallback("no validated rows or panels")
         }
         val reason = if (recoveredRows > 0)
@@ -464,6 +479,168 @@ object PanelDetectionCore {
         else "row-first partition with per-row panel fallback"
         trace?.invoke(PanelDebugEvent("page", whole, "accept", reason))
         return PanelPlan(output, false, reason)
+    }
+
+    /**
+     * OCR-free final fallback for TWO near-parallel diagonal comic frame
+     * rails. The legacy slanted-rail validator requires light paper on BOTH
+     * sides; a genuine border beside artwork may have paper on only one
+     * side. This deliberately DOES NOT loosen that established validator.
+     *
+     * A rail is only a candidate when:
+     *  - >=90% of its long path has near-black ink within +/-3 pixels;
+     *  - one 9-pixel shoulder is >=90% pale and the other >=30% pale;
+     *  - there is a second substantial rail of the same direction/slope.
+     * The paired rails must bound three independently illustrated story
+     * zones, including the middle strip. An isolated action stroke or a
+     * single black line therefore cannot trigger this fallback.
+     *
+     * The returned THREE full-width rectangles overlap enough to cover the
+     * complete diagonal travel, preserving every original source pixel,
+     * balloon and border. It is only called for a wholly unsplit Panel
+     * source. Row-by-Row and all already-validated ordinary pages are
+     * unaffected. Tested on independently authored synthetic fixtures.
+     */
+    internal fun recoverPairedSlantedFramedRows(
+        width: Int, height: Int, gray: ByteArray,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 200..1024 ||
+            width.toLong() * height > MAX_THUMB_PIXELS ||
+            height.toLong() > width.toLong() * 3 || gray.size != width * height)
+            return null
+
+        data class Rail(
+            val center: Int, val tilt: Int, val halfTravel: Int, val score: Int,
+        )
+        val xStep = maxOf(3, width / 80)
+        val proposals = mutableListOf<Rail>()
+        for (tilt in -20..20 step 2) {
+            if (kotlin.math.abs(tilt) < 6) continue
+            val halfTravel = (width * kotlin.math.abs(tilt) + 199) / 200
+            for (center in height * 18 / 100..height * 82 / 100 step 4) {
+                if (center - halfTravel < height * 14 / 100 ||
+                    center + halfTravel > height * 86 / 100) continue
+                var dark = 0
+                var paleBefore = 0
+                var paleAfter = 0
+                var count = 0
+                for (x in 8 until width - 8 step xStep) {
+                    val y = center + (x - width / 2) * tilt / 100
+                    if (y - 10 <= 0 || y + 10 >= height) continue
+                    var nearBlack = false
+                    for (offset in -3..3) {
+                        if ((gray[(y + offset) * width + x].toInt() and 255) < 115) {
+                            nearBlack = true
+                            break
+                        }
+                    }
+                    if (nearBlack) dark++
+                    if ((gray[(y - 9) * width + x].toInt() and 255) > 242) paleBefore++
+                    if ((gray[(y + 9) * width + x].toInt() and 255) > 242) paleAfter++
+                    count++
+                }
+                if (count < 25 || dark * 100 < count * 90 ||
+                    maxOf(paleBefore, paleAfter) * 100 < count * 90 ||
+                    minOf(paleBefore, paleAfter) * 100 < count * 30) continue
+                val score = (dark * 100 / count) +
+                    (maxOf(paleBefore, paleAfter) * 100 / count)
+                proposals.add(Rail(center, tilt, halfTravel, score))
+            }
+        }
+        if (proposals.size < 2) return null
+
+        // Suppress near-identical scores from one physical drawn border:
+        // they must never count as a matched *pair*. Limit combinatorial
+        // work on busy manga thumbnails without allocating another bitmap.
+        val rails = mutableListOf<Rail>()
+        for (proposal in proposals.sortedWith(
+            compareByDescending<Rail> { it.score }
+                .thenByDescending { kotlin.math.abs(it.tilt) }
+                .thenBy { it.center }
+        )) {
+            if (rails.none {
+                kotlin.math.abs(it.center - proposal.center) < maxOf(24, height / 24)
+            }) rails.add(proposal)
+            if (rails.size >= 24) break
+        }
+        if (rails.size < 2) return null
+
+        fun illustrated(top: Int, bottom: Int): Boolean {
+            if (top < 0 || bottom > height || bottom - top < height * 8 / 100)
+                return false
+            val dy = maxOf(2, (bottom - top) / 80)
+            val dx = maxOf(2, width / 100)
+            val columnInk = BooleanArray((width + dx - 1) / dx)
+            var rowsWithInk = 0
+            var sampledRows = 0
+            var ink = 0
+            var total = 0
+            for (y in top until bottom step dy) {
+                var rowInk = 0
+                var col = 0
+                for (x in 0 until width step dx) {
+                    total++
+                    if ((gray[y * width + x].toInt() and 255) < 220) {
+                        ink++
+                        rowInk++
+                        columnInk[col] = true
+                    }
+                    col++
+                }
+                if (rowInk > 0) rowsWithInk++
+                sampledRows++
+            }
+            return total > 0 && ink * 100 >= total * 10 &&
+                rowsWithInk * 100 >= sampledRows * 45 &&
+                columnInk.count { it } * 100 >= columnInk.size * 40
+        }
+
+        // Return the highest-scoring valid pair, not arbitrary first match.
+        // Art within a thin diagonal middle strip is checked near its
+        // CENTERLINES, not after discarding the complete diagonal travel:
+        // an aggressive full-travel exclusion would erase a real 120px row.
+        var best: List<PageRegion>? = null
+        var bestScore = -1
+        val middleMargin = maxOf(10, height / 40)
+        val outerMargin = maxOf(25, height / 15)
+        val overlapGuard = maxOf(8, height / 50)
+        for (i in rails.indices) for (j in i + 1 until rails.size) {
+            val a = rails[i]
+            val b = rails[j]
+            if (a.tilt * b.tilt <= 0 ||
+                kotlin.math.abs(a.tilt - b.tilt) > 4) continue
+            val upper = if (a.center <= b.center) a else b
+            val lower = if (a.center <= b.center) b else a
+            if (lower.center - upper.center < maxOf(60, height / 9)) continue
+            if (!illustrated(0, upper.center - outerMargin) ||
+                !illustrated(upper.center + middleMargin,
+                    lower.center - middleMargin) ||
+                !illustrated(lower.center + outerMargin, height)) continue
+
+            val firstBottom = (upper.center + upper.halfTravel +
+                overlapGuard).coerceAtMost(height)
+            val middleTop = (upper.center - upper.halfTravel -
+                overlapGuard).coerceAtLeast(0)
+            val middleBottom = (lower.center + lower.halfTravel +
+                overlapGuard).coerceAtMost(height)
+            val lastTop = (lower.center - lower.halfTravel -
+                overlapGuard).coerceAtLeast(0)
+            if (firstBottom <= height / 10 ||
+                middleBottom - middleTop <= height / 10 ||
+                height - lastTop <= height / 10 ||
+                middleTop >= firstBottom || lastTop >= middleBottom ||
+                lastTop > firstBottom) continue
+            val score = upper.score + lower.score
+            if (score > bestScore) {
+                bestScore = score
+                best = listOf(
+                    PageRegion(0, 0, width, firstBottom),
+                    PageRegion(0, middleTop, width, middleBottom),
+                    PageRegion(0, lastTop, width, height),
+                )
+            }
+        }
+        return best
     }
 
     /**
