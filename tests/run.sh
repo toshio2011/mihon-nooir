@@ -76,6 +76,12 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/ConanPanelRegressionTest.kt -include-runtime -d "$tmp/panel-conan-regressions.jar"
 java -jar "$tmp/panel-conan-regressions.jar"
 
+# Page-level safeguard: printed introduction/contents pages must not be
+# fragmented into tiny comic panels; ordinary illustrated rows still split.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/TextDominantPageRegressionTest.kt -include-runtime -d "$tmp/panel-text-pages.jar"
+java -jar "$tmp/panel-text-pages.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
