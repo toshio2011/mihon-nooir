@@ -94,6 +94,12 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/SpeechTierCoalescingRegressionTest.kt -include-runtime -d "$tmp/panel-speech-tier.jar"
 java -jar "$tmp/panel-speech-tier.jar"
 
+# Conservative paired slanted rail fallback: middle story row can have
+# asymmetric paper shoulders; no unsafe crossing/slash or lost pixels.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/PairedSlantedFrameRegressionTest.kt -include-runtime -d "$tmp/panel-paired-slants.jar"
+java -jar "$tmp/panel-paired-slants.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
