@@ -321,6 +321,25 @@ object PanelDetectionCore {
                     return PanelPlan(angled, false, why)
                 }
             }
+            // Dark full-width backgrounds between ink-rich comics rows
+            // (e.g. One Piece source ordinals 18/123) are not necessarily
+            // bordered by 22% immediate dark art on BOTH sides. Recover only
+            // when a substantial, almost-solid divider with pale shoulders
+            // separates two independently illustrated page regions.
+            // Avoid applying these broader flank rules to Row-by-Row.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val framedAxis = detector.recoverDarkGutter(
+                    whole, horizontal = true, allowStrongFramedFallback = true,
+                )
+                if (framedAxis != null) {
+                    val why = "strong black framed horizontal divider with two illustrated regions"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(
+                        listOf(whole.copy(bottom = framedAxis), whole.copy(top = framedAxis)),
+                        false, why,
+                    )
+                }
+            }
             return fallback("no validated rows or panels")
         }
         val reason = if (recoveredRows > 0)
@@ -1008,7 +1027,8 @@ object PanelDetectionCore {
          * horizontally. Panel mode may retry a dark vertical gutter after
          * the established cleaner split/recovery algorithms have failed.
          */
-        fun recoverDarkGutter(r: PageRegion, horizontal: Boolean): Int? {
+        fun recoverDarkGutter(r: PageRegion, horizontal: Boolean,
+            allowStrongFramedFallback: Boolean = false): Int? {
             val length = if (horizontal) r.height else r.width
             val span = if (horizontal) r.width else r.height
             if (length < 120 || span < 110) return null
@@ -1107,10 +1127,23 @@ object PanelDetectionCore {
                 val artAfter = band.end + artOffset
                 if (artBefore <= first - minChild || artAfter >= last + minChild)
                     continue
-                if (fraction(before) { it >= 185 } < 70 ||
-                    fraction(after) { it >= 185 } < 70) continue
-                if (fraction(artBefore) { it < 135 } < 22 ||
-                    fraction(artAfter) { it < 135 } < 22) continue
+                val brightBefore = fraction(before) { it >= 185 }
+                val brightAfter = fraction(after) { it >= 185 }
+                val inkBefore = fraction(artBefore) { it < 135 }
+                val inkAfter = fraction(artAfter) { it < 135 }
+                val standardDarkSeam = brightBefore >= 70 && brightAfter >= 70 &&
+                    inkBefore >= 22 && inkAfter >= 22
+                // A heavily black-FRAMED manga row can have a broad,
+                // nearly solid divider and immediate white dialogue/paper
+                // under one flank. Require a THICK 97%-dark bar, >=60% bright
+                // paper on BOTH sides, and independent illustrated children.
+                // This never affects detectRows(), or ordinary dark-gutter
+                // detection: only the final whole-page Panel-by-Panel
+                // recovery explicitly opts in.
+                val stronglyFramed = allowStrongFramedFallback && horizontal &&
+                    band.end - band.start >= maxOf(14, length / 65) &&
+                    brightBefore >= 60 && brightAfter >= 60
+                if (!standardDarkSeam && !stronglyFramed) continue
                 val axis = (band.start + band.end) / 2
                 val firstPart = if (horizontal) r.copy(bottom = axis)
                     else r.copy(right = axis)
