@@ -628,8 +628,7 @@ object PanelDetectionCore {
             if (firstBottom <= height / 10 ||
                 middleBottom - middleTop <= height / 10 ||
                 height - lastTop <= height / 10 ||
-                middleTop >= firstBottom || lastTop >= middleBottom ||
-                lastTop > firstBottom) continue
+                middleTop >= firstBottom || lastTop >= middleBottom) continue
             val score = upper.score + lower.score
             if (score > bestScore) {
                 bestScore = score
