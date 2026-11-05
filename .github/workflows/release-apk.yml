@@ -1,7 +1,11 @@
 name: Verify or publish stable-signed MihonNooir v1.0.17
-# One-shot public experimental release. Source is frozen to the last green
-# user-tested Conan Panel EPUB commit, not the later failed title-polish commit.
+# One-time, explicitly owner-approved release on merging the reviewed v1.0.17 notes.
+# The same certificate and package checks run before any public asset is uploaded.
 on:
+  push:
+    branches: [main]
+    paths:
+      - docs/releases/v1.0.17.md
   workflow_dispatch:
     inputs:
       publish:
@@ -183,7 +187,7 @@ jobs:
             stage='verify package identifier'
             grep -Fq "name='dev.nooir.mihontrial.foss'" <<< "$badging"
             stage='verify version code'
-            grep -Fq "versionCode='1000016'" <<< "$badging"
+            grep -Fq "versionCode='1000017'" <<< "$badging"
             stage='verify version name'
             grep -Fq "versionName='1.0.17'" <<< "$badging"
             stage='verify app label'
@@ -262,8 +266,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Publish official v1.0.17 only after manual opt-in
-        if: ${{ inputs.publish }}
+      - name: Publish owner-approved official v1.0.17 after all signer checks
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
