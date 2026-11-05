@@ -1,0 +1,56 @@
+name: Restore previously verified MihonNooir v1.0.17 release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/republish-v1.0.17.yml
+
+permissions:
+  contents: write
+
+jobs:
+  republish:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify preserved release, published baseline, tag and all six assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release=$(gh api "repos/$GH_REPO/releases/435031230")
+          jq -e --arg sha "25353f836da54bfe416caa7555b4f686a547f5b0" '
+            .id == 435031230 and
+            .tag_name == "v1.0.17" and
+            .draft == true and
+            .prerelease == false and
+            .target_commitish == $sha and
+            (.assets | length) == 6 and
+            ([.assets[].name] | sort) ==
+              (["app-arm64-v8a-foss.apk", "app-armeabi-v7a-foss.apk", "app-universal-foss.apk", "app-x86-foss.apk", "app-x86_64-foss.apk", "SHA256SUMS.txt"] | sort) and
+            (.assets | all(.state == "uploaded")) and
+            ([.assets[] | select(.name == "app-arm64-v8a-foss.apk") | .digest] == ["sha256:ff85847c9c6c50c34839318d536d82de672643437677296d31f22a50e94567b4"]) and
+            ([.assets[] | select(.name == "app-armeabi-v7a-foss.apk") | .digest] == ["sha256:d8232fcf6bf9c983d45fc0ae0f49aad1496e7cdbd952d9d8b6cbc2edea21eb1c"]) and
+            ([.assets[] | select(.name == "app-universal-foss.apk") | .digest] == ["sha256:537c6c30752af6d673dc56bea9536736fc3fa8f86ee5fbfefd45f66d7f25b84f"]) and
+            ([.assets[] | select(.name == "app-x86-foss.apk") | .digest] == ["sha256:6f14adc86d673ac74ad4768164503a55dcc876446eb8127d1af64db80cedf67f"]) and
+            ([.assets[] | select(.name == "app-x86_64-foss.apk") | .digest] == ["sha256:4e4980ffb9678341f10da5b5191483d348eb7eef70776c651dce45b579f2eac5"]) and
+            ([.assets[] | select(.name == "SHA256SUMS.txt") | .digest] == ["sha256:531d2935439b5cc21b7629acffddc05d6ab0f8f8c4c7fb81527e886d74cf18af"])
+          ' <<< "$release"
+          baseline=$(gh api "repos/$GH_REPO/releases/tags/v1.0.16")
+          jq -e '.draft == false and .tag_name == "v1.0.16"' <<< "$baseline"
+          tag=$(gh api "repos/$GH_REPO/git/ref/tags/v1.0.17")
+          jq -e '.object.type == "commit" and .object.sha == "25353f836da54bfe416caa7555b4f686a547f5b0"' <<< "$tag"
+          echo 'Existing v1.0.17 artifacts unchanged. Original release workflow 42005320177 passed signing certificate continuity against v1.0.16.'
+
+      - name: Publish existing verified draft without rebuilding or replacing assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/$GH_REPO/releases/435031230" -F draft=false -F prerelease=false >/dev/null
+          gh api "repos/$GH_REPO/releases/435031230" --jq '{tag_name, draft, prerelease, html_url, asset_count:(.assets|length)}'
+          test "$(gh api "repos/$GH_REPO/releases/435031230" --jq .draft)" = false
