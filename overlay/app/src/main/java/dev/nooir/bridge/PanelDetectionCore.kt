@@ -285,6 +285,297 @@ object PanelDetectionCore {
         return views
     }
 
+
+    /**
+     * Independent, conservative frame-confidence recovery for a FULLY
+     * unsplit illustrated page. Adapted as a Kotlin design experiment from
+     * the general ideas in Panels+ (KristanLaimon, MIT): background-relative
+     * binary ink, 8-neighbour connected components, approximately straight
+     * box-edge support, page coverage and enclosed shared-balloon vetoes.
+     * No third-party implementation was copied. All allocation is temporary,
+     * at HALF thumbnail resolution, and runs on Android export, never X4.
+     *
+     * No speculative crop is accepted unless at least THREE substantial
+     * components have sufficient evidence of panel framing and collectively
+     * cover >=90% of the source's contrast ink. Dark/angled recovery and the
+     * three-overlap-row rescue remain independent, ordered later/earlier.
+     */
+    internal fun recoverFrameEvidenceViews(
+        width: Int, height: Int, gray: ByteArray, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 240..1024 ||
+            height.toLong() > width.toLong() * 3L ||
+            width.toLong() * height > MAX_THUMB_PIXELS ||
+            gray.size != width * height) return null
+
+        val w = width / 2
+        val h = height / 2
+        val size = w * h
+        if (w < 80 || h < 120) return null
+        val thumbnail = IntArray(size)
+        val histogram = IntArray(256)
+        var ringSamples = 0
+        for (y in 0 until h) for (x in 0 until w) {
+            val sourceX = x * 2
+            val sourceY = y * 2
+            val idx = sourceY * width + sourceX
+            val value = (
+                (gray[idx].toInt() and 255) +
+                (gray[idx + 1].toInt() and 255) +
+                (gray[idx + width].toInt() and 255) +
+                (gray[idx + width + 1].toInt() and 255) + 2
+            ) / 4
+            thumbnail[y * w + x] = value
+            if (x < 8 || y < 8 || x >= w - 8 || y >= h - 8) {
+                histogram[value]++
+                ringSamples++
+            }
+        }
+        var cumulative = 0
+        var background = 255
+        for (value in 0..255) {
+            cumulative += histogram[value]
+            if (cumulative * 2 >= ringSamples) {
+                background = value
+                break
+            }
+        }
+
+        val ink = ByteArray(size)
+        var totalInk = 0
+        for (pos in 0 until size) {
+            if (kotlin.math.abs(thumbnail[pos] - background) > 40) {
+                ink[pos] = 1
+                totalInk++
+            }
+        }
+        if (totalInk < size * 18 / 100 || totalInk > size * 82 / 100)
+            return null
+
+        data class FrameCandidate(val box: PageRegion, val sides: Int)
+        val candidates = mutableListOf<FrameCandidate>()
+        val seen = ByteArray(size)
+        val queue = IntArray(size)
+
+        // Best support of a straight, possibly slanted frame boundary
+        // through measured row/column ink extrema. This is not a
+        // line-pixel-intensity shortcut: it checks a complete component side.
+        fun straightSupport(profile: IntArray, limit: Int): Int {
+            val valid = IntArray(profile.size)
+            var n = 0
+            for (index in profile.indices)
+                if (profile[index] in 0 until limit) valid[n++] = index
+            if (n < 12) return 0
+            val leftFractions = intArrayOf(0, 12, 25, 38, 50)
+            val rightFractions = intArrayOf(50, 62, 75, 88, 100)
+            var best = 0
+            for (fractionA in leftFractions) for (fractionB in rightFractions) {
+                val a = valid[(n - 1) * fractionA / 100]
+                val b = valid[(n - 1) * fractionB / 100]
+                if (b <= a) continue
+                val slope = (profile[b] - profile[a]).toDouble() / (b - a)
+                if (kotlin.math.abs(slope) > 0.35) continue
+                var matches = 0
+                for (i in 0 until n) {
+                    val k = valid[i]
+                    val projected = profile[a] + (k - a) * slope
+                    if (kotlin.math.abs(profile[k] - projected) <= 2.5) matches++
+                }
+                best = maxOf(best, matches * 100 / n)
+                if (best >= 94) return best
+            }
+            return best
+        }
+
+        for (seed in ink.indices) {
+            if (ink[seed].toInt() == 0 || seen[seed].toInt() != 0) continue
+            var head = 0
+            var tail = 1
+            queue[0] = seed
+            seen[seed] = 1
+            var minX = seed % w
+            var maxX = minX
+            var minY = seed / w
+            var maxY = minY
+            while (head < tail) {
+                val pixel = queue[head++]
+                val x = pixel % w
+                val y = pixel / w
+                minX = minOf(minX, x)
+                maxX = maxOf(maxX, x)
+                minY = minOf(minY, y)
+                maxY = maxOf(maxY, y)
+                for (dy in -1..1) {
+                    val ny = y + dy
+                    if (ny < 0 || ny >= h) continue
+                    for (dx in -1..1) {
+                        val nx = x + dx
+                        if (nx < 0 || nx >= w || (dx == 0 && dy == 0)) continue
+                        val neighbour = ny * w + nx
+                        if (ink[neighbour].toInt() != 0 && seen[neighbour].toInt() == 0) {
+                            seen[neighbour] = 1
+                            queue[tail++] = neighbour
+                        }
+                    }
+                }
+            }
+            val bw = maxX - minX + 1
+            val bh = maxY - minY + 1
+            val boxArea = bw * bh
+            if (bw * 100 < w * 24 || bh * 100 < h * 16 ||
+                boxArea * 1000 < size * 55 ||
+                tail * 1000 < size * 12 ||
+                tail * 100 < boxArea * 10 ||
+                tail * 100 > boxArea * 92) continue
+
+            val rowLeft = IntArray(bh) { bw }
+            val rowRight = IntArray(bh) { -1 }
+            val colTop = IntArray(bw) { bh }
+            val colBottom = IntArray(bw) { -1 }
+            for (i in 0 until tail) {
+                val pixel = queue[i]
+                val rx = pixel % w - minX
+                val ry = pixel / w - minY
+                rowLeft[ry] = minOf(rowLeft[ry], rx)
+                rowRight[ry] = maxOf(rowRight[ry], rx)
+                colTop[rx] = minOf(colTop[rx], ry)
+                colBottom[rx] = maxOf(colBottom[rx], ry)
+            }
+            val sides = listOf(
+                straightSupport(rowLeft, bw),
+                straightSupport(rowRight, bw),
+                straightSupport(colTop, bh),
+                straightSupport(colBottom, bh),
+            ).count { it >= 74 }
+            if (sides >= 2) candidates.add(
+                FrameCandidate(PageRegion(
+                    (minX * 2 - 1).coerceAtLeast(0),
+                    (minY * 2 - 1).coerceAtLeast(0),
+                    ((maxX + 1) * 2 + 1).coerceAtMost(width),
+                    ((maxY + 1) * 2 + 1).coerceAtMost(height),
+                ), sides)
+            )
+            if (candidates.size > 9) return null
+        }
+        if (candidates.size < 3 ||
+            candidates.count { it.sides >= 3 } * 100 < candidates.size * 60 ||
+            candidates.sumOf { it.sides } * 2 < candidates.size * 5) return null
+
+        fun intersectArea(a: PageRegion, b: PageRegion): Long {
+            val dx = maxOf(0, minOf(a.right, b.right) - maxOf(a.left, b.left))
+            val dy = maxOf(0, minOf(a.bottom, b.bottom) - maxOf(a.top, b.top))
+            return dx.toLong() * dy
+        }
+        for (i in candidates.indices) for (j in i + 1 until candidates.size) {
+            val a = candidates[i].box
+            val b = candidates[j].box
+            val aArea = a.width.toLong() * a.height
+            val bArea = b.width.toLong() * b.height
+            if (intersectArea(a, b) * 100 >
+                minOf(aArea, bArea) * 28) return null
+        }
+
+        // Verify page-wide ink coverage, rather than accepting a collage of
+        // only a few speech boxes or page-furniture decorations.
+        val covered = ByteArray(size)
+        for (candidate in candidates) {
+            val box = candidate.box
+            for (y in box.top / 2 until ((box.bottom + 1) / 2).coerceAtMost(h))
+                for (x in box.left / 2 until ((box.right + 1) / 2).coerceAtMost(w))
+                    covered[y * w + x] = 1
+        }
+        var coveredArea = 0
+        var coveredInk = 0
+        for (pos in 0 until size) {
+            if (covered[pos].toInt() == 0) continue
+            coveredArea++
+            if (ink[pos].toInt() != 0) coveredInk++
+        }
+        if (coveredArea * 100 < size * 45 ||
+            coveredInk * 100 < totalInk * 90) return null
+
+        // Shared-balloon veto: an enclosed background component that has
+        // substantial exclusive pixels in two proposed panels is likely a
+        // speech balloon or drawing crossing their boundary. If uncertain,
+        // keep the conventional overlapping reading-row rescue instead.
+        val paperSeen = ByteArray(size)
+        for (seed in ink.indices) {
+            if (ink[seed].toInt() != 0 || paperSeen[seed].toInt() != 0) continue
+            var head = 0
+            var tail = 1
+            queue[0] = seed
+            paperSeen[seed] = 1
+            var borderTouch = false
+            while (head < tail) {
+                val pixel = queue[head++]
+                val x = pixel % w
+                val y = pixel / w
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1)
+                    borderTouch = true
+                for (dy in -1..1) {
+                    val ny = y + dy
+                    if (ny < 0 || ny >= h) continue
+                    for (dx in -1..1) {
+                        val nx = x + dx
+                        if (nx < 0 || nx >= w || (dx == 0 && dy == 0)) continue
+                        val neighbour = ny * w + nx
+                        if (ink[neighbour].toInt() == 0 &&
+                            paperSeen[neighbour].toInt() == 0) {
+                            paperSeen[neighbour] = 1
+                            queue[tail++] = neighbour
+                        }
+                    }
+                }
+            }
+            if (borderTouch || tail * 1000 < size * 2 ||
+                tail * 100 > size * 12) continue
+            val owners = IntArray(candidates.size)
+            for (i in 0 until tail) {
+                val pixel = queue[i]
+                val x = pixel % w * 2
+                val y = pixel / w * 2
+                var owner = -1
+                for (index in candidates.indices) {
+                    val box = candidates[index].box
+                    if (x in box.left until box.right &&
+                        y in box.top until box.bottom) {
+                        if (owner >= 0) { owner = -2; break }
+                        owner = index
+                    }
+                }
+                if (owner >= 0) owners[owner]++
+            }
+            if (owners.count { it * 100 >= tail * 8 } >= 2) {
+                trace?.invoke(PanelDebugEvent("frame-confidence",
+                    PageRegion(0, 0, width, height), "reject",
+                    "enclosed speech/background region crosses candidate panel frames"))
+                return null
+            }
+        }
+
+        // Every source region remains a complete bounding rectangle. Group
+        // approximately co-top rows first, then preserve manga RTL or comic LTR
+        // order within each row; never depend on BFS discovery order.
+        val sorted = candidates.map { it.box }.sortedWith(
+            compareBy<PageRegion> { it.top }.thenBy { it.left })
+        val ordered = mutableListOf<PageRegion>()
+        val remaining = sorted.toMutableList()
+        while (remaining.isNotEmpty()) {
+            val leader = remaining.first()
+            val sameRow = remaining.filter {
+                kotlin.math.abs(it.top - leader.top) <= maxOf(14, height / 12)
+            }
+            ordered.addAll(if (rightToLeft) sameRow.sortedByDescending { it.left }
+                else sameRow.sortedBy { it.left })
+            remaining.removeAll(sameRow)
+        }
+        trace?.invoke(PanelDebugEvent("frame-confidence",
+            PageRegion(0, 0, width, height), "accept",
+            "background-relative components with validated frame sides, coverage and balloon veto"))
+        return ordered
+    }
+
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
         trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
@@ -558,6 +849,21 @@ object PanelDetectionCore {
                     val why = "two strong parallel slanted frame rails with three illustrated story zones"
                     trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
                     return PanelPlan(paired, false, why)
+                }
+            }
+            // Components can expose genuinely framed, irregularly arranged
+            // panels even where a single clean straight or slanted GUTTER does
+            // not exist (Panels+-inspired background-relative evidence).
+            // This is strictly the *last* detector, before the deliberately
+            // approximate overlapping reading-row rescue.
+            if (output.size == 1 && rows.size == 1 &&
+                !detector.isSparseRow(whole)) {
+                val frames = recoverFrameEvidenceViews(
+                    width, height, grayscale, rightToLeft, trace)
+                if (frames != null) {
+                    val why = "background-relative framed components with shared-balloon safety"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(frames, false, why)
                 }
             }
             // All validated boundaries failed. Instead of silently
