@@ -70,12 +70,15 @@ fun main() {
 
     // Explicit PORTRAIT/LANDSCAPE choices must remain authoritative;
     // only AUTO_FIT may independently refit the new reading views.
+    val illustratedNotFramed: (Int, Int) -> Boolean = { x,y ->
+        x in 72..720 && y in 65..1100 && (x+y)%7 < 4
+    }
     val manualPortrait = PanelReadableSliceRefiner.refine(
-        huge,W,H,480,800,{ _,_->true },autoFit=false)
+        huge,W,H,480,800,illustratedNotFramed,autoFit=false)
     check(manualPortrait.size==3 && manualPortrait.none { it.landscape })
     val manualLandscape = PanelReadableSliceRefiner.refine(
-        huge.map { it.copy(landscape=true) },W,H,480,800,{ _,_->true },
-        autoFit=false)
+        huge.map { it.copy(landscape=true) },W,H,480,800,
+        illustratedNotFramed,autoFit=false)
     check(manualLandscape.size==3 && manualLandscape.all { it.landscape })
 
     // Over-60%-source row is eligible, not only the former 2/3 threshold.
