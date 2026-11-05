@@ -78,6 +78,24 @@ fun main() {
     check(footerResult.size==1 && footerResult[0].region==PageRegion(0,0,800,1200))
     preservesAll(withTinyFooter,footerResult)
 
+    // Exact source-197 / source-201 style geometries from private QA6
+    // diagnostics: 25px expected safety-padding overlap, and a roughly
+    // 2–3mm standalone footer. No actual manga pixels are copied.
+    for ((h,firstEnd,lastTop) in listOf(
+        Triple(965,947,922), Triple(979,961,936)
+    )) {
+        val actual = listOf(
+            PanelFitSlice(PageRegion(0,0,1200,firstEnd),false),
+            PanelFitSlice(PageRegion(0,lastTop,1200,h),true),
+        )
+        val changed = PanelReadableSliceRefiner.refine(
+            actual,1200,h,480,800, { _,_->true })
+        check(changed.size == 1 && changed.single().region ==
+            PageRegion(0,0,1200,h)) {
+            "Do not leave tiny padded footer as a zoom frame: $changed"
+        }
+    }
+
     // The app's old sparse/preserveWhole path remains off-limits.
     val protected=listOf(view(0,0,800,900),view(0,900,800,1200))
     check(refine(protected,protected=listOf(protected[0].region))==protected)
