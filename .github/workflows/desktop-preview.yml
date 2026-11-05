@@ -10,7 +10,8 @@ on:
       - 'tests/run.sh'
       - '.github/workflows/desktop-preview.yml'
   push:
-    branches: [main]
+    # Keep this isolated full-Windows branch testable before the workflow is merged.
+    branches: [main, feature/windows-full-v1.0.16]
     paths:
       - 'desktop/**'
       - 'overlay/app/src/main/java/dev/nooir/bridge/**'
