@@ -56,6 +56,25 @@ class TestOverlay(unittest.TestCase):
             updater = root/'app/src/main/java/eu/kanade/tachiyomi/data/updater'
             updater.mkdir(parents=True)
             (updater/'AppUpdateChecker.kt').write_text('"mihonapp/mihon-preview"\n"mihonapp/mihon"\n')
+            releases = root/'data/src/main/java/tachiyomi/data/release'
+            releases.mkdir(parents=True)
+            (releases/'ReleaseServiceImpl.kt').write_text(
+                '    private fun getDownloadLink(release: GithubRelease, isFoss: Boolean): String? {\\n'
+                '        val map = release.assets.associate { asset ->\\n'
+                '            BUILD_TYPES.find { "-$it" in asset.name } to asset.downloadLink\\n'
+                '        }\\n'
+                '\\n'
+                '        return if (!isFoss) {\\n'
+                '            map[Build.SUPPORTED_ABIS[0]] ?: map[null]\\n'
+                '        } else {\\n'
+                '            map[FOSS]\\n'
+                '        }\\n'
+                '    }\\n'
+                '\\n'
+                '        private const val FOSS = "foss"\\n'
+                '        private val BUILD_TYPES = listOf(FOSS, "arm64-v8a", "armeabi-v7a", "x86_64", "x86")\\n'
+                '\\n'
+            )
             subprocess.run(['python3',str(ROOT/'tools/apply_overlay.py'),str(root)],check=True,text=True)
             gradle_text = (app/'build.gradle.kts').read_text()
             self.assertIn('testBuildType = "foss"', gradle_text)
@@ -128,6 +147,12 @@ class TestOverlay(unittest.TestCase):
             self.assertIn(f'versionName = "{version}"',(app/'build.gradle.kts').read_text())
             self.assertIn(f'versionCode = {version_code}',(app/'build.gradle.kts').read_text())
             self.assertIn('toshio2011/mihon-nooir',(updater/'AppUpdateChecker.kt').read_text())
+            release_text = (releases/'ReleaseServiceImpl.kt').read_text()
+            self.assertIn('NooirReleaseApkSelector.select(', release_text)
+            self.assertIn('Build.SUPPORTED_ABIS.toList()', release_text)
+            self.assertNotIn('map[FOSS]', release_text)
+            self.assertTrue((releases/'NooirReleaseApkSelector.kt').exists())
+
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/MihonNooirExporter.kt').exists())
             self.assertTrue((root/'app/src/main/java/dev/nooir/mangabridge/NooirExportDialog.kt').exists())
             profiles = root/'app/src/main/java/dev/nooir/bridge/NooirDeviceProfiles.kt'
