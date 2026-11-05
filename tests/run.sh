@@ -107,6 +107,12 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/OverlappingRowRescueRegressionTest.kt -include-runtime -d "$tmp/panel-overlapping-rows.jar"
 java -jar "$tmp/panel-overlapping-rows.jar"
 
+# Panels+-inspired Kotlin frame-confidence recovery is still an
+# EXPERIMENT, validated independently on synthetic framed/negative pages.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/FrameEvidenceRegressionTest.kt -include-runtime -d "$tmp/panel-frame-evidence.jar"
+java -jar "$tmp/panel-frame-evidence.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
