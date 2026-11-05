@@ -63,5 +63,48 @@ fun main() {
         PageRegion(180,642,360,900))
     check(PanelDetectionCore.coalesceShallowSameColumnFragment(
         w,h,pale,differentColumns) == differentColumns)
+    // Pixel-free geometry fixtures from the private QA6 diagnostic set.
+    // These are exact shape measurements, not uploaded copyrighted art.
+    // The guard has to work for different source widths and BOTH short-top
+    // and short-bottom fragments. The positive fixtures were independently
+    // audited against the original source thumbnails on 5 Nov 2026.
+    data class FragmentFixture(
+        val source: Int, val thumbWidth: Int,
+        val first: PageRegion, val second: PageRegion,
+    )
+    val measured = listOf(
+        FragmentFixture(37,567,
+            PageRegion(432,609,567,639), PageRegion(432,639,567,900)),
+        FragmentFixture(72,593,
+            PageRegion(0,42,294,71), PageRegion(0,71,294,277)),
+        FragmentFixture(135,555,
+            PageRegion(0,84,175,116), PageRegion(0,116,175,322)),
+        FragmentFixture(158,555,
+            PageRegion(0,651,174,827), PageRegion(0,827,174,857)),
+        FragmentFixture(160,549,
+            PageRegion(0,527,248,562), PageRegion(0,562,248,872)),
+    )
+    for (f in measured) {
+        val syntheticPale = ByteArray(f.thumbWidth * 900) { 255.toByte() }
+        val mergedMeasured = PanelDetectionCore.coalesceShallowSameColumnFragment(
+            f.thumbWidth,900,syntheticPale,listOf(f.first,f.second))
+        check(mergedMeasured == listOf(PageRegion(
+            f.first.left,f.first.top,f.second.right,f.second.bottom))) {
+            "Do not leave a shallow source-${f.source} speech/art fragment alone: $mergedMeasured"
+        }
+    }
+    // A page-62-like short strip must NOT get merged if a strong rule
+    // actually separates two mini-panels. Never infer safety from size.
+    val ruledWidth = 593
+    val ruledPage = ByteArray(ruledWidth * 900) { 255.toByte() }
+    for (y in 66..70) for (x in 0 until 204)
+        ruledPage[y * ruledWidth + x] = 0
+    val framedMiniPanels = listOf(
+        PageRegion(0,41,204,68), PageRegion(0,68,204,160))
+    check(PanelDetectionCore.coalesceShallowSameColumnFragment(
+        ruledWidth,900,ruledPage,framedMiniPanels) == framedMiniPanels) {
+        "A continuous frame border must preserve two genuine panels"
+    }
+
     println("Bubble fragment guard passed: same-column whole speech, ruled veto, complete source coverage, RTL/LTR")
 }
