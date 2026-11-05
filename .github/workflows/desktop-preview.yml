@@ -92,6 +92,48 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 'package/MihonNooir-Windows-Preview.zip').Hash.ToLowerInvariant()
           Set-Content -Path 'package/MihonNooir-Windows-Preview.zip.sha256' -Encoding ascii -NoNewline -Value "$hash  MihonNooir-Windows-Preview.zip"
           Write-Host "Portable Windows ZIP SHA256: $hash"
+      - name: Smoke test bundled Windows runtime with an offline EPUB 2 conversion
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'package/output/MihonNooir-Preview'
+          $runtime = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          if (!(Test-Path $runtime) -or !(Test-Path $jar)) {
+            throw 'Packaged runtime or application JAR missing'
+          }
+
+          # Generate our own tiny legal fixture. No manga, network or Suwayomi.
+          Add-Type -AssemblyName System.Drawing
+          $sample = Join-Path $env:RUNNER_TEMP 'mihonnooir-smoke-pages'
+          New-Item -ItemType Directory -Force -Path $sample | Out-Null
+          $png = Join-Path $sample '001.png'
+          $bitmap = [System.Drawing.Bitmap]::new(128, 192)
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          try {
+            $graphics.Clear([System.Drawing.Color]::White)
+            $graphics.FillRectangle([System.Drawing.Brushes]::Black, 10, 10, 108, 75)
+            $bitmap.Save($png, [System.Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $graphics.Dispose()
+            $bitmap.Dispose()
+          }
+          $output = Join-Path $env:RUNNER_TEMP 'MihonNooir-packaged-runtime-smoke.epub'
+          & $runtime '-Djava.awt.headless=true' '-cp' $jar 'dev.nooir.desktop.cli.NooirDesktopCli' '--input' $sample '--output' $output '--format' 'EPUB2' '--device' 'X4' '--title' 'CI original page'
+          if ($LASTEXITCODE -ne 0) { throw "Packaged converter failed: $LASTEXITCODE" }
+          if (!(Test-Path $output) -or ((Get-Item $output).Length -lt 100)) {
+            throw 'Bundled Windows runtime did not produce a nonempty EPUB'
+          }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($output)
+          try {
+            if (!($zip.Entries | Where-Object { $_.FullName -eq 'mimetype' })) {
+              throw 'Packaged EPUB missing its mimetype entry'
+            }
+          } finally {
+            $zip.Dispose()
+          }
+          Write-Host 'Packaged Windows JVM converted original local PNG to EPUB 2 successfully'
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned
