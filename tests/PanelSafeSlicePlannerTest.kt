@@ -43,6 +43,95 @@ fun main() {
     }) { "Never cut through a speech balloon tail" }
     covered(protected, tall)
 
+    // Regression for partial progress: a TALL page has one validated
+    // horizontal corridor near the first viewport, then uninterrupted art
+    // for the entire remainder. Do not throw away the safe first cut just
+    // because the subsequent portion has no acceptable seam.
+    val oneSeamTall = PageRegion(0, 0, 300, 1500)
+    val oneSeamInk: (Int, Int) -> Boolean = { _, y -> y !in 496..504 }
+    for (chosenOverlap in listOf(0, 8, 12)) {
+        val result = PanelSafeSlicePlanner.plan(
+            oneSeamTall, 480, 800, true, chosenOverlap, oneSeamInk,
+        )
+        check(result.size == 2) {
+            "Retain the validated first cut and keep the solid tail (overlap=$chosenOverlap): $result"
+        }
+        check(result.first().top == 0 && result.last().bottom == oneSeamTall.bottom)
+        check(result.first().bottom in 498..503)
+        check(result.last().top <= result.first().bottom)
+        covered(result, oneSeamTall)
+        check(result.all { !PanelSafeSlicePlanner.isSparse(it, oneSeamInk) })
+    }
+
+    // Opt-in overlapping cut: a well-illustrated long panel has a narrow pale
+    // horizontal gutter near y=500, except for a small character/balloon
+    // crossing the boundary (20% of the width). Both adjacent frames must
+    // retain pixels on BOTH sides of the crossing. Zero overlap stays strict.
+    val bridgeInk: (Int, Int) -> Boolean = { x, y ->
+        y !in 496..504 || x in 125..174
+    }
+    // Use an explicit single 496..504 band. A modulo seam mistakenly
+    // treated 500..504 as dense art (0..4 % 500) and invalidated the test.
+    // Exercise ONE interruption. Repeated, closely spaced uncertain gutters
+    // may still conservatively preserve the entire exceptionally long panel.
+    val oneBridge = PageRegion(0, 0, 300, 1050)
+    check(PanelSafeSlicePlanner.plan(oneBridge, 480, 800, true, 0, bridgeInk) ==
+        listOf(oneBridge)) { "Without overlap, never cut an inked corridor" }
+    val guarded = PanelSafeSlicePlanner.plan(oneBridge, 480, 800, true, 8, bridgeInk)
+    check(guarded.size == 2) { "One clear interrupted corridor should safely repeat art: $guarded" }
+    check(guarded.any { it.top == 0 && it.bottom > 505 } &&
+        guarded.any { it.top < 495 && it.top > 0 && it.bottom > 505 }) {
+        "Both adjacent fragments should contain the full small crossing near y=500: $guarded"
+    }
+    covered(guarded, oneBridge)
+    val tooWideBridge: (Int, Int) -> Boolean = { x, y ->
+        y !in 496..504 || x in 65..235
+    }
+    check(PanelSafeSlicePlanner.plan(oneBridge, 480, 800, true, 8, tooWideBridge) ==
+        listOf(oneBridge)) {
+        "A mostly blocked divider is not a reliably detected safe split"
+    }
+
+    // One Piece-style sparse screen regression: a dense illustrated source can
+    // still have long blank tails after a perfectly CLEAN split. The whole
+    // panel passes the sparse gate, but the last individual viewport does not.
+    // Keep all original pixels without emitting a separate almost-empty frame.
+    val quietTailPage = PageRegion(0, 0, 300, 1800)
+    val quietTailInk: (Int, Int) -> Boolean = { x, y ->
+        x in 12..287 && y < 1180 && y !in 496..504 && y !in 996..1004
+    }
+    check(!PanelSafeSlicePlanner.isSparse(quietTailPage, quietTailInk))
+    val noEmptyTail = PanelSafeSlicePlanner.plan(
+        quietTailPage, 480, 800, true, 0, quietTailInk,
+    )
+    check(noEmptyTail.size in 2..3 &&
+        noEmptyTail.all { !PanelSafeSlicePlanner.isSparse(it, quietTailInk) }) {
+        "Clean splitting must coalesce a sparse end instead of zooming whitespace: $noEmptyTail"
+    }
+    check(noEmptyTail.last().bottom == quietTailPage.bottom)
+    covered(noEmptyTail, quietTailPage)
+    // If the *first* potential view is only blank space/title strokes,
+    // conservative fallback is safer than emitting it as a separate screen.
+    val quietHeadInk: (Int, Int) -> Boolean = { x, y ->
+        x in 12..287 && y >= 1100
+    }
+    val quietHeadPage = PageRegion(0, 0, 300, 1600)
+    check(PanelSafeSlicePlanner.plan(quietHeadPage, 480, 800, true, 0, quietHeadInk) ==
+        listOf(quietHeadPage)) {
+        "A sparse first slice must preserve the original full frame"
+    }
+    // RTL applies to wide cuts too; coalescing cannot accidentally reverse
+    // top/bottom or left/right coverage.
+    val wideQuiet = PageRegion(0, 0, 1800, 300)
+    val wideInk: (Int, Int) -> Boolean = { x, y ->
+        y in 12..287 && x < 1180 && x !in 496..504 && x !in 996..1004
+    }
+    val wideQuietLTR = PanelSafeSlicePlanner.plan(wideQuiet, 800, 480, false, 0, wideInk)
+    val wideQuietRTL = PanelSafeSlicePlanner.plan(wideQuiet, 800, 480, true, 0, wideInk)
+    check(wideQuietLTR.size in 2..3 && wideQuietRTL == wideQuietLTR.reversed())
+    check(wideQuietLTR.all { !PanelSafeSlicePlanner.isSparse(it, wideInk) })
+    covered(wideQuietRTL, wideQuiet)
+
     // No entirely clean strip -> return original art, not an arbitrary slice.
     check(PanelSafeSlicePlanner.plan(tall, 480, 800, true, 8) { _, _ -> true } == listOf(tall))
 
@@ -53,6 +142,41 @@ fun main() {
     check(ltr.size >= 5 && rtl == ltr.reversed())
     check(rtl.first().right == wide.right && rtl.last().left == wide.left)
     covered(rtl, wide)
+
+    // Private Conan diagnostic QA dimensions, recreated as synthetic ink.
+    // Three old views were ultra-wide (707x99 / 580x94 / 660x98) and
+    // occupied less than 30% of the e-reader. When those aspect ratios DO
+    // contain genuinely clean vertical seams, allow the shared slicer to
+    // produce larger protected views. Never cut a solid panorama arbitrarily.
+    val ultraWide = PageRegion(0, 0, 707, 99)
+    val panoramaInk: (Int, Int) -> Boolean = { x, y ->
+        y in 4..95 && x % 165 !in 160..170
+    }
+    val landscapeRtl = PanelSafeSlicePlanner.plan(ultraWide, 800, 480, true, 8, panoramaInk)
+    val landscapeLtr = PanelSafeSlicePlanner.plan(ultraWide, 800, 480, false, 8, panoramaInk)
+    check(landscapeRtl.size in 3..6 && landscapeLtr == landscapeRtl.reversed()) {
+        "Split a clean ultra-wide strip into larger RTL/LTR reading views: $landscapeRtl"
+    }
+    check(landscapeRtl.any { it.width < ultraWide.width / 2 }) {
+        "Accepted clean gutters should meaningfully enlarge panoramic frames"
+    }
+    covered(landscapeRtl, ultraWide)
+    // With zero overlap, the same trusted gutters must still work. The
+    // trailing solid section is kept as one view instead of invalidating
+    // every earlier cut merely because it has no fourth clean seam.
+    val strictLandscape = PanelSafeSlicePlanner.plan(ultraWide, 800, 480,
+        true, 0, panoramaInk)
+    check(strictLandscape.size in 3..6 && strictLandscape.first().right == ultraWide.right)
+    check(strictLandscape.last().left == ultraWide.left)
+    check(strictLandscape.zipWithNext().all { (a, b) -> b.right == a.left }) {
+        "Zero-overlap RTL must retain earlier clean cuts and a contiguous tail"
+    }
+    covered(strictLandscape, ultraWide)
+    check(landscapeRtl.none { PanelSafeSlicePlanner.isSparse(it, panoramaInk) })
+    check(PanelSafeSlicePlanner.plan(ultraWide, 800, 480, true, 8) { _, _ -> true } ==
+        listOf(ultraWide)) {
+        "A solid illustrated panorama must stay whole if it lacks a verified gutter"
+    }
 
     // A giant, mostly-white ruled strip must remain ONE frame rather than
     // becoming four or five isolated border/blank screens. Preserve every

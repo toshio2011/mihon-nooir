@@ -69,6 +69,72 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/PanelDetectionCoreTest.kt -include-runtime -d "$tmp/panel-phase-a.jar"
 java -jar "$tmp/panel-phase-a.jar"
 
+# Private Conan diagnostic cases reproduced as independently authored geometry:
+# terminal footer merging, dark framed corridor, shallow header protection.
+# All cover the complete source page and preserve independent Row by Row.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/ConanPanelRegressionTest.kt -include-runtime -d "$tmp/panel-conan-regressions.jar"
+java -jar "$tmp/panel-conan-regressions.jar"
+
+# Page-level safeguard: printed introduction/contents pages must not be
+# fragmented into tiny comic panels; ordinary illustrated rows still split.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/TextDominantPageRegressionTest.kt -include-runtime -d "$tmp/panel-text-pages.jar"
+java -jar "$tmp/panel-text-pages.jar"
+
+# Experimental black-background gutter recovery: only meaningful thick
+# frames between independently illustrated regions; Row Only unchanged.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/BlackFramedGutterRegressionTest.kt -include-runtime -d "$tmp/panel-black-framed-gutter.jar"
+java -jar "$tmp/panel-black-framed-gutter.jar"
+
+# Source-75-shaped shallow speech strip regression (synthetic pixels only):
+# merge aligned columns, reject a crossing balloon, preserve all coordinates.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/SpeechTierCoalescingRegressionTest.kt -include-runtime -d "$tmp/panel-speech-tier.jar"
+java -jar "$tmp/panel-speech-tier.jar"
+
+# Conservative paired slanted rail fallback: middle story row can have
+# asymmetric paper shoulders; no unsafe crossing/slash or lost pixels.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/PairedSlantedFrameRegressionTest.kt -include-runtime -d "$tmp/panel-paired-slants.jar"
+java -jar "$tmp/panel-paired-slants.jar"
+
+# Experimental last-resort overlapping three-row reading views. This
+# explicitly tests guaranteed source coverage, conservative inner columns,
+# order and non-fragmentation of prose/splash/already split pages.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/OverlappingRowRescueRegressionTest.kt -include-runtime -d "$tmp/panel-overlapping-rows.jar"
+java -jar "$tmp/panel-overlapping-rows.jar"
+
+# Panels+-inspired Kotlin frame-confidence recovery is still an
+# EXPERIMENT, validated independently on synthetic framed/negative pages.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/FrameEvidenceRegressionTest.kt -include-runtime -d "$tmp/panel-frame-evidence.jar"
+java -jar "$tmp/panel-frame-evidence.jar"
+
+# Experimental fitted-size post-processor: 5mm hard merge / 10mm soft
+# sparse-only merge, and safe 12%-overlap halves for source-wide >2/3 rows.
+# Never drop an image pixel or change normal row-only/whole-page cases.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelSafeSlicePlanner.kt,PanelAutoFit.kt,PanelReadableSliceRefiner.kt} \
+  tests/PanelReadableSliceRefinerTest.kt -include-runtime -d "$tmp/panel-readable-slices.jar"
+java -jar "$tmp/panel-readable-slices.jar"
+
+# Detect a falsely isolated speech strip from an otherwise single
+# narrow manga panel (private source72 geometry, independently authored).
+# Its 35px source fragment can appear large after AUTO_FIT: fitted-size
+# checks alone cannot solve this case. Preserve every source pixel.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/BubbleFragmentSameColumnRegressionTest.kt -include-runtime -d "$tmp/panel-bubble-fragment.jar"
+java -jar "$tmp/panel-bubble-fragment.jar"
+
+# QA9: full-width near-empty scan header/footer must not become its
+# own zoom viewport. Preserve pixels by joining only physically touching,
+# full-coverage illustrated neighbors; leave real mini panels intact.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/SparsePageEdgeRegressionTest.kt -include-runtime -d "$tmp/panel-sparse-page-edge.jar"
+java -jar "$tmp/panel-sparse-page-edge.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
@@ -82,13 +148,13 @@ kotlinc \
   -include-runtime -d "$tmp/desktop-panel-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/desktop-panel-tests.jar" DesktopPanelExportTestKt
 
-# Panel Phase C: deterministic per-panel Auto Fit without OCR or cropping.
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelAutoFit.kt} \
+# Panel Phase C: preserve safe splits, then independently refit every piece.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelSafeSlicePlanner.kt,PanelAutoFit.kt} \
   tests/PanelAutoFitTest.kt -include-runtime -d "$tmp/panel-auto-fit.jar"
 java -jar "$tmp/panel-auto-fit.jar"
 
 # Opt-in panel crop: shrink paper borders without losing artwork or balloons.
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelWhitespaceCrop.kt} \
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt,PanelWhitespaceCrop.kt} \
   tests/PanelWhitespaceCropTest.kt -include-runtime -d "$tmp/panel-crop.jar"
 java -jar "$tmp/panel-crop.jar"
 

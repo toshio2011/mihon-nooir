@@ -20,6 +20,7 @@ import dev.nooir.bridge.PanelAutoFit
 import dev.nooir.bridge.PanelWhitespaceCrop
 import dev.nooir.bridge.PanelSafeSlicePlanner
 import dev.nooir.bridge.PanelFitSlice
+import dev.nooir.bridge.PanelReadableSliceRefiner
 import dev.nooir.bridge.PageRegion
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -41,6 +42,8 @@ class AndroidPageSource(private val context: Context) {
     fun pages(inputUris: List<Uri>, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions = MangaConversionOptions(),
         fixedFramebuffer: Boolean = true,
+        diagnostics: PanelDiagnosticArchive? = null,
+        chapterOrdinal: Int = 1,
     ): Sequence<QuantizedPage> = sequence {
         var sourceIndex = 0
         for (uri in inputUris.sortedWith { a, b -> NaturalPageOrder.compare(name(a), name(b)) }) {
@@ -63,7 +66,9 @@ class AndroidPageSource(private val context: Context) {
                                     it.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED") else it
                             }
                             sourceIndex++
-                            try { for (page in render(image, width, height, depth, pageOptions, fixedFramebuffer)) yield(page) }
+                            try { for (page in render(image, width, height, depth, pageOptions,
+                                fixedFramebuffer, diagnostics, chapterOrdinal, sourceIndex - 1,
+                                { zip.getInputStream(entry) })) yield(page) }
                             finally { image.recycle() }
                         }
                     }
@@ -75,7 +80,9 @@ class AndroidPageSource(private val context: Context) {
                         it.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED") else it
                 }
                 sourceIndex++
-                try { for (page in render(image, width, height, depth, pageOptions, fixedFramebuffer)) yield(page) }
+                try { for (page in render(image, width, height, depth, pageOptions,
+                    fixedFramebuffer, diagnostics, chapterOrdinal, sourceIndex - 1,
+                    { resolver.openInputStream(uri) ?: error("Cannot reopen source image") })) yield(page) }
                 finally { image.recycle() }
             }
         }
@@ -117,9 +124,14 @@ class AndroidPageSource(private val context: Context) {
     // A detected row can be sparse BEFORE sourceRegions adds overlap padding.
     // Carry this decision to rendering; retesting the padded crop may include
     // dark pixels from its illustrated neighbour and wrongly re-enable cuts.
-    private data class DetectedPanel(val region: PageRegion, val preserveWhole: Boolean)
+    private data class DetectedPanel(
+        val region: PageRegion,
+        val preserveWhole: Boolean,
+        val allowSingleEdgeZoom: Boolean = false,
+    )
 
-    private fun detectPanels(src: Bitmap, options: MangaConversionOptions): List<DetectedPanel>? {
+    private fun detectPanels(src: Bitmap, options: MangaConversionOptions,
+        debug: PanelDiagnosticArchive.Page? = null): List<DetectedPanel>? {
         if (options.panelMode != "PANEL_BY_PANEL" && options.panelMode != "ROW_BY_ROW") return null
         if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
@@ -138,10 +150,20 @@ class AndroidPageSource(private val context: Context) {
                 // Transparent gutters on PNGs are white, not black.
                 ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
             }
-            val plan = if (options.panelMode == "ROW_BY_ROW") PanelDetectionCore.detectRows(w, h, gray)
-                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
-            if (plan.usedFullPageFallback) return null
-            val regions = PanelDetectionCore.sourceRegions(plan, w, h, src.width, src.height, 1)
+            val plan = if (options.panelMode == "ROW_BY_ROW")
+                PanelDetectionCore.detectRows(w, h, gray, debug?.trace)
+                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft, debug?.trace)
+            if (plan.usedFullPageFallback) {
+                debug?.noteAnalysis(w, h, gray, plan, emptyList())
+                return null
+            }
+            // Apply user-selected overlap to *detected* rows/panels too,
+            // not only to later slices inside exceptionally long panels.
+            // Pad after detection; the detector still sees original pixels.
+            val regions = PanelDetectionCore.sourceRegions(
+                plan, w, h, src.width, src.height,
+                PanelDetectionCore.overlapPaddingPercent(options.overlapPercent),
+            )
             // Decide on the UNPADDED thumbnail region. Source overlap
             // padding is essential for artwork safety but can pull dark
             // strokes from a neighbouring illustrated tier into a nearly
@@ -151,13 +173,22 @@ class AndroidPageSource(private val context: Context) {
             // Every region remains present, with its original source pixels.
             // This only controls whether an otherwise-valid elongated region
             // is further divided by the viewport slicer.
+            debug?.noteAnalysis(w, h, gray, plan, regions)
             return regions.mapIndexed { index, region ->
                 val sparse = options.panelMode == "PANEL_BY_PANEL" &&
                     options.layout != "WEBTOON" &&
                     PanelSafeSlicePlanner.isSparse(plan.regions[index]) { x, y ->
                         (gray[y * w + x].toInt() and 255) < 220
                     }
-                DetectedPanel(region, sparse)
+                // A merged terminal border must stay attached all the way
+                // through margin trim, Auto Fit and safe corridor slicing.
+                // Otherwise a later planner could recreate a near-white page.
+                // Only Panel by Panel emits this explicit one-frame decision.
+                DetectedPanel(region, sparse ||
+                    (options.panelMode == "PANEL_BY_PANEL" &&
+                        plan.preserveSingleFrame && plan.regions.size == 1),
+                    allowSingleEdgeZoom = options.panelMode == "PANEL_BY_PANEL" &&
+                        plan.allowSingleEdgeZoom && plan.regions.size == 1)
             }
         } finally {
             if (thumb !== src) thumb.recycle()
@@ -250,10 +281,69 @@ class AndroidPageSource(private val context: Context) {
         panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
     ) { x, y -> inkAt(src, x, y) }
 
+    /**
+     * Android-only bounded second look at ONE confirmed large row. The
+     * original full-resolution source stays available for rendering, and
+     * the 600x900 gray ROI is released immediately after planning. This
+     * is intentionally not a second call to the fallback row splitter:
+     * it accepts only a new, confidently validated structural result.
+     *
+     * Final geometry gets an additional exact-source-coverage veto in the
+     * platform-neutral refiner before any exported view is changed.
+     */
+    private fun recoverInnerPanelsWithinRow(
+        src: Bitmap, region: PageRegion, rightToLeft: Boolean,
+    ): List<PageRegion>? {
+        if (region.width < 160 || region.height < 240 ||
+            region.right > src.width || region.bottom > src.height) return null
+        val scale = minOf(1.0, 600.0 / region.width, 900.0 / region.height)
+        val w = (region.width * scale).toInt().coerceAtLeast(1)
+        val h = (region.height * scale).toInt().coerceAtLeast(1)
+        if (w < 160 || h < 240) return null
+        val thumb = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        try {
+            Canvas(thumb).drawBitmap(
+                src, Rect(region.left, region.top, region.right, region.bottom),
+                Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+            val argb = IntArray(w * h)
+            thumb.getPixels(argb, 0, w, 0, 0, w, h)
+            val gray = ByteArray(argb.size) { i ->
+                val c = argb[i]
+                val alpha = Color.alpha(c)
+                val lum = (Color.red(c) * 299 + Color.green(c) * 587 +
+                    Color.blue(c) * 114) / 1000
+                ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
+            }
+            val plan = PanelDetectionCore.detect(w, h, gray, rightToLeft)
+            // Avoid recursive application of the experimental overlapping
+            // thirds. Such regions are reading views, not confident panels.
+            if (plan.usedFullPageFallback || plan.preserveSingleFrame ||
+                plan.regions.size !in 2..6 ||
+                !(
+                    plan.reason.startsWith("row-first partition") ||
+                    plan.reason.contains("slanted") ||
+                    plan.reason.contains("framed components")
+                )) return null
+            return PanelDetectionCore.sourceRegions(
+                plan, w, h, region.width, region.height, paddingPercent = 1,
+            ).map { crop ->
+                PageRegion(
+                    crop.left + region.left, crop.top + region.top,
+                    crop.right + region.left, crop.bottom + region.top)
+            }
+        } finally {
+            thumb.recycle()
+        }
+    }
+
     private fun render(
         src: Bitmap, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean,
+        diagnostics: PanelDiagnosticArchive? = null,
+        chapterOrdinal: Int = 1, sourceIndex: Int = 0,
+        rawInput: (() -> InputStream)? = null,
     ): Sequence<QuantizedPage> = sequence {
+        val debug = diagnostics?.beginPage(chapterOrdinal, sourceIndex, src)
         val auto = options.panelMode != "OFF" && options.orientation == "AUTO_FIT"
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
@@ -274,9 +364,11 @@ class AndroidPageSource(private val context: Context) {
             src.height.toLong() <= src.width.toLong() * 3L &&
             PanelSafeSlicePlanner.isSparse(sourceWhole) { x, y -> inkAt(src, x, y) }
         ) sourceWhole else null
+        if (sparseWhole != null) debug?.noteSkipped("sparse entire original source")
         val detectedPanels = if (sparseWhole != null)
             listOf(DetectedPanel(sparseWhole, true))
-        else detectPanels(src, options)
+        else detectPanels(src, options, debug)
+        if (options.panelMode == "OFF") debug?.noteSkipped("panel detection disabled for this page")
         // A sparse source or tier must never be trimmed/re-sliced; preserving
         // the full, padded region also retains border-adjacent speech balloons.
         val panels = if (detectedPanels != null && options.cropWhiteMargins)
@@ -285,10 +377,10 @@ class AndroidPageSource(private val context: Context) {
                 else panel.copy(region = trimDetectedPanel(src, panel.region))
             }
         else detectedPanels
-        val slices: List<PanelFitSlice> = when {
+        val plannedSlices: List<PanelFitSlice> = when {
             sparseWhole != null -> listOf(PanelFitSlice(
                 sparseWhole,
-                if (auto) PanelAutoFit.landscapeFor(
+                if (auto) PanelAutoFit.landscapeForMaximumFill(
                     sparseWhole, minOf(width, height), maxOf(width, height),
                 ) else manualRotate,
             ))
@@ -302,18 +394,29 @@ class AndroidPageSource(private val context: Context) {
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
                 panels.map { PanelFitSlice(it.region, manualRotate) }
-            panels != null && auto -> PanelAutoFit.plan(
-                panels.map { it.region }, minOf(width, height), maxOf(width, height),
-                options.rightToLeft, options.overlapPercent,
-                preserveWholePanels = true,
-            ).flatMapIndexed { index, fit ->
-                val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
-                val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
-                val parts = if (panels[index].preserveWhole) listOf(fit.region)
-                else safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
-                    options.overlapPercent)
-                parts.map { PanelFitSlice(it, fit.landscape) }
-            }
+            // Strict row-only mode: if no horizontal tier can be verified,
+            // do NOT pass the page to the general spread/webtoon slicer, which
+            // can introduce unintended non-row cuts. Keep the original artwork.
+            options.panelMode == "ROW_BY_ROW" && panels == null ->
+                listOf(PanelFitSlice(sourceWhole,
+                    if (auto) PanelAutoFit.landscapeFor(sourceWhole,
+                        minOf(width, height), maxOf(width, height))
+                    else manualRotate))
+            panels != null && options.panelMode == "PANEL_BY_PANEL" && auto ->
+                PanelAutoFit.plan(
+                    panels.map { it.region }, minOf(width, height), maxOf(width, height),
+                    options.rightToLeft, options.overlapPercent,
+                    preserveWholePanels = true,
+                ).flatMapIndexed { index, fit ->
+                    // Keep v1.0.16's sparse-tier guard and safe corridor splits.
+                    // After splitting, independently enlarge each resulting view.
+                    val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
+                    val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
+                    val parts = if (panels[index].preserveWhole) listOf(fit.region)
+                    else safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
+                        options.overlapPercent)
+                    PanelAutoFit.refitFinalSlices(parts, minOf(width, height), maxOf(width, height))
+                }
             panels != null -> panels.flatMap { panel ->
                 val parts = if (panel.preserveWhole) listOf(panel.region)
                 else safePanelSlices(src, panel.region, manualViewWidth, manualViewHeight,
@@ -326,12 +429,35 @@ class AndroidPageSource(private val context: Context) {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
+        // Experimental post-detection readability guard: combine short
+        // standalone border/speech fragments instead of deleting their art,
+        // then split genuinely huge *full-width* rows into two overlapping
+        // source views. Never touch OFF, strict Row by Row, webtoons, covers,
+        // protected sparse regions or intentionally preserved single pages.
+        val slices = if (options.panelMode == "PANEL_BY_PANEL" &&
+            panels != null && sparseWhole == null && options.layout != "WEBTOON") {
+            PanelReadableSliceRefiner.refine(
+                plannedSlices, src.width, src.height, minOf(width, height),
+                maxOf(width, height),
+                inkAt = { x, y -> inkAt(src, x, y) },
+                protectedRegions = panels.filter { it.preserveWhole }.map { it.region },
+                autoFit = auto,
+                allowSingleEdgeZoom = panels.size == 1 &&
+                    panels[0].allowSingleEdgeZoom,
+                recoverInnerPanels = { row ->
+                    recoverInnerPanelsWithinRow(src, row, options.rightToLeft)
+                },
+            )
+        } else plannedSlices
         // A source-page overview precedes any multi-frame result, including panels,
         // landscape overlap, spreads and webtoon slices. Never duplicate single frames.
         // Render the overview in portrait to preserve the full composition.
         val outputSlices = if (options.showFullPageBeforeSplits && slices.size > 1) {
             listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + slices
         } else slices
+        // Capture the exact source-to-output mapping *before* yielding frames.
+        // ZIP failures never change the actual e-reader conversion.
+        debug?.finish(src, options, slices, outputSlices, rawInput)
         // Render one frame at a time, with per-panel orientation only in Auto Fit.
         for ((sliceIndex, slice) in outputSlices.withIndex()) {
             val isOverview = options.showFullPageBeforeSplits && slices.size > 1 && sliceIndex == 0
@@ -343,7 +469,20 @@ class AndroidPageSource(private val context: Context) {
             val viewWidth = if (needsRotation) frameHeight else frameWidth
             val viewHeight = if (needsRotation) frameWidth else frameHeight
             val sourceRegion = Rect(initial.left, initial.top, initial.right, initial.bottom)
-            val r = if (!isOverview && options.cropWhiteMargins && panels == null) trimWhite(src, sourceRegion) else sourceRegion
+            // A rejected Panel-by-Panel detection may still take the legacy
+            // full-page/spread renderer. Its fast sampled trimWhite() can miss
+            // a one-pixel balloon stroke or faint credit between sample lines
+            // and then crop it away. Use the same fully verified, pixel-veto
+            // margin trim as accepted panel regions for this opt-in mode only.
+            // Preserve OFF, Row by Row and WEBTOON fast/legacy behavior.
+            val r = when {
+                isOverview || !options.cropWhiteMargins || panels != null -> sourceRegion
+                options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" ->
+                    trimDetectedPanel(src, initial).let {
+                        Rect(it.left, it.top, it.right, it.bottom)
+                    }
+                else -> trimWhite(src, sourceRegion)
+            }
             val scale = minOf(viewWidth.toFloat() / r.width(), viewHeight.toFloat() / r.height())
             val dw = (r.width() * scale).toInt().coerceIn(1, viewWidth)
             val dh = (r.height() * scale).toInt().coerceIn(1, viewHeight)

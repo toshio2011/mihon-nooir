@@ -36,6 +36,34 @@ object PanelAutoFit {
     }
 
     /**
+     * Choose maximum-fit orientation for each FINAL panel or safe split.
+     * The greater occupied screen fraction means a larger undistorted image.
+     * The legacy Row-by-Row 25% improvement threshold is left unchanged.
+     * Exact ties prefer portrait to avoid a pointless rotation.
+     */
+    fun landscapeForMaximumFill(
+        region: PageRegion, portraitWidth: Int, portraitHeight: Int,
+    ): Boolean {
+        val portrait = occupiedFraction(region, portraitWidth, portraitHeight)
+        val landscape = occupiedFraction(region, portraitHeight, portraitWidth)
+        return landscape > portrait + 1e-9
+    }
+
+    /**
+     * Assign portrait/landscape AFTER the unchanged safe white-corridor
+     * splitter has selected the final pixels. Never move split coordinates,
+     * drop safety overlap, or reorder RTL slices. Each piece is independent.
+     */
+    fun refitFinalSlices(
+        slices: List<PageRegion>, portraitWidth: Int, portraitHeight: Int,
+    ): List<PanelFitSlice> {
+        require(slices.isNotEmpty() && slices.size <= 32) { "Invalid final slice count" }
+        return slices.map { region ->
+            PanelFitSlice(region, landscapeForMaximumFill(region, portraitWidth, portraitHeight))
+        }
+    }
+
+    /**
      * Each confidently detected panel chooses its own viewport before
      * PanelViewportPlanner decides whether a very long panel needs slices.
      * Panels are never merged, reordered or silently cropped.

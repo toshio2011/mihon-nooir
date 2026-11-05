@@ -53,6 +53,7 @@ object MihonNooirExporter {
     data class ExportResult(
         val pageCount: Int, val fileBytes: Long, val format: ExportFormat,
         val skippedChapters: List<String> = emptyList(), val missingCover: Boolean = false,
+        val diagnosticsMessage: String = "",
     )
 
     suspend fun export(
@@ -138,6 +139,10 @@ object MihonNooirExporter {
         val safeTitle = manga.title.take(70).map { c ->
             if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-' || c == '_') c else '_'
         }.joinToString("").ifBlank { "Manga" }
+        // Diagnostic capture is opt-in and never changes exported book content.
+        // Open only AFTER preflight so failed or paused jobs do not publish
+        // incomplete diagnostics over the last successful ZIP.
+        var diagnostics: PanelDiagnosticArchive? = null
         val tmp = File(tempFolder, safeTitle + "." + actual.extension)
         val renamed = if (outputName.isBlank()) tmp.name else
             NooirDestinationGuard.forManga(outputName, format, device)
@@ -216,7 +221,8 @@ object MihonNooirExporter {
                     val frameHeight = if (archiveLandscape) width else height
                     for (page in pageSource.pages(uris, frameWidth, frameHeight, depth,
                         if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) options.copy(epubColor = false) else options,
-                        fixedFramebuffer = (actual == ExportFormat.XTC || actual == ExportFormat.XTCH))) {
+                        fixedFramebuffer = (actual == ExportFormat.XTC || actual == ExportFormat.XTCH),
+                        diagnostics = diagnostics, chapterOrdinal = chapterIndex + 1)) {
                         ownerJob.ensureActive()
                         yield(chapter to page)
                     }
@@ -317,6 +323,10 @@ object MihonNooirExporter {
                 require(locations.isNotEmpty()) { "All selected chapters are unavailable; nothing to export" }
             }
 
+            if (options.panelDiagnostics && options.panelMode == "PANEL_BY_PANEL") {
+                diagnostics = runCatching { PanelDiagnosticArchive(tempFolder) }.getOrNull()
+                diagnostics?.setHasSeparateCover(preparedCover != null)
+            }
             val pageCount: Int
             tmp.outputStream().use { output ->
                 if (actual == ExportFormat.XTC || actual == ExportFormat.XTCH) {
@@ -387,8 +397,14 @@ object MihonNooirExporter {
                         locations.size, locations.size)
                 }
             }
-            ExportResult(pageCount, tmp.length(), actual, skippedNames, missingCover)
+            val debugStatus = if (options.panelDiagnostics && options.panelMode == "PANEL_BY_PANEL") {
+                onStage("Saving private panel diagnostic ZIP", locations.size, locations.size)
+                diagnostics?.publish(context) ?: "Diagnostic ZIP could not be initialized"
+            } else ""
+            ExportResult(pageCount, tmp.length(), actual, skippedNames, missingCover, debugStatus)
         } finally {
+            // Closing diagnostics on unsuccessful exports never publishes them.
+            runCatching { diagnostics?.close() }
             tempFolder.deleteRecursively()
         }
     }
