@@ -109,6 +109,105 @@ object PanelDetectionCore {
     }
 
     /**
+     * Restore a nearly-empty scan-header/scan-footer to the illustrated
+     * tier touching it. A full-width 35-47px gray watermark/header is not
+     * a readable manga panel; Auto Fit would magnify it into a whole page.
+     *
+     * Only the first or last <=8% of a page can qualify. Both very dark
+     * (<180) and faint (<220) ink ratios must be low, so a genuine narrow
+     * title, framed micro-panel or speaker strip remains independent.
+     * A strong horizontal border at the dividing line also vetoes merging.
+     *
+     * Union with EVERY directly adjoining panel whose union spans the
+     * complete source width, respecting their existing RTL/LTR positions.
+     * This duplicates the pale strip inside adjacent panels but NEVER
+     * discards artwork/text. No edit to Row By Row/WEBTOON/OFF detector.
+     */
+    internal fun coalesceSparsePageEdgeStrip(
+        width: Int, height: Int, gray: ByteArray,
+        panels: List<PageRegion>,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion> {
+        if (width < 160 || height < 320 || gray.size != width * height ||
+            panels.size < 2) return panels
+        val result = panels.toMutableList()
+        fun qualifies(strip: PageRegion, top: Boolean): Boolean {
+            if (strip.left != 0 || strip.right != width ||
+                strip.height <= 0 || strip.height.toLong() * 100 > height.toLong() * 8)
+                return false
+            if (top && strip.top != 0) return false
+            if (!top && strip.bottom != height) return false
+            var dark = 0
+            var faint = 0
+            val area = width.toLong() * strip.height
+            for (y in strip.top until strip.bottom) {
+                for (x in 0 until width) {
+                    val v = gray[y * width + x].toInt() and 255
+                    if (v < 180) dark++
+                    if (v < 220) faint++
+                    // Early rejection of substantial illustration/text. Both
+                    // conditions are required; a faint page-frame watermark
+                    // can qualify but illustrated title art cannot.
+                    if (dark.toLong() * 100 >= area * 3 ||
+                        faint.toLong() * 100 >= area * 55 / 10) return false
+                }
+            }
+            val boundary = if (top) strip.bottom else strip.top
+            val from = maxOf(0, boundary - 2)
+            val to = minOf(height - 1, boundary + 2)
+            for (y in from..to) {
+                var ruleInk = 0
+                for (x in 0 until width)
+                    if ((gray[y * width + x].toInt() and 255) < 130) ruleInk++
+                if (ruleInk * 100 >= width * 70) return false
+            }
+            return true
+        }
+        fun touchesAndCovers(neighbors: List<PageRegion>): Boolean {
+            if (neighbors.isEmpty() ||
+                neighbors.none { it.height.toLong() * 100 >= height.toLong() * 12 })
+                return false
+            val ordered = neighbors.sortedBy { it.left }
+            var cursor = 0
+            for (r in ordered) {
+                if (r.left > cursor) return false
+                cursor = maxOf(cursor, r.right)
+                if (cursor >= width) break
+            }
+            return cursor >= width
+        }
+        // Header and footer are checked separately, but an already removed
+        // strip cannot be merged twice. Order of surviving panels is stable.
+        for (top in listOf(true, false)) {
+            val idx = result.indexOfFirst { r ->
+                r.left == 0 && r.right == width &&
+                    (if (top) r.top == 0 else r.bottom == height) &&
+                    r.height.toLong() * 100 <= height.toLong() * 8
+            }
+            if (idx < 0) continue
+            val strip = result[idx]
+            if (!qualifies(strip, top)) continue
+            val boundary = if (top) strip.bottom else strip.top
+            val neighbors = result.indices.filter { i ->
+                i != idx &&
+                    (if (top) result[i].top == boundary
+                     else result[i].bottom == boundary)
+            }
+            if (!touchesAndCovers(neighbors.map { result[it] })) continue
+            for (i in neighbors) {
+                val r = result[i]
+                result[i] = if (top) r.copy(top = 0)
+                    else r.copy(bottom = height)
+            }
+            result.removeAt(idx)
+            trace?.invoke(PanelDebugEvent("sparse-page-edge",
+                strip, "absorb",
+                "low-ink scan edge joined into adjoining panel(s); all pixels retained"))
+        }
+        return result
+    }
+
+    /**
      * Conservative post-pass for a shallow strip accidentally separated from
      * the SAME two illustrated columns above and below it. In some comic pages,
      * the upper halves of two dialogue balloons look like four tiny panels.
@@ -855,10 +954,20 @@ object PanelDetectionCore {
             output.clear()
             output.addAll(wholeBubblePanels)
         }
+        // A near-white scan heading/footer must not become a giant
+        // landscape view after Auto Fit. Reattach only at page edges and only
+        // when its immediate illustrated neighbor(s) span the full width.
+        val coalescedEdges = coalesceSparsePageEdgeStrip(
+            width, height, grayscale, output, trace)
+        val absorbedPageEdge = coalescedEdges.size != output.size
+        if (absorbedPageEdge) {
+            output.clear()
+            output.addAll(coalescedEdges)
+        }
         // The two-row case now legitimately produces ONE complete rectangle.
         // Returning a generic fallback would send it back through the legacy
         // free-form slicer and recreate the unwanted near-empty views.
-        if ((absorbedRuledTail || absorbedShortFooter) && output.size == 1 &&
+        if ((absorbedRuledTail || absorbedShortFooter || absorbedPageEdge) && output.size == 1 &&
             coversEntirePage(output, width, height)) {
             return PanelPlan(output, false, "illustrated row with absorbed terminal border",
                 preserveSingleFrame = true)
