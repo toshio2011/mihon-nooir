@@ -43,8 +43,13 @@ object PanelReadableSliceRefiner {
 
     private fun compatible(a: PageRegion, b: PageRegion,
         sourceWidth: Int, sourceHeight: Int): Boolean {
-        val xTol = maxOf(2, sourceWidth / 40)
-        val yTol = maxOf(2, sourceHeight / 40)
+        // SourceRegions adds roughly 1.25% crop padding to BOTH adjacent
+        // regions, so a real neighboring horizontal tier can overlap by
+        // ~2.6% of source height (One Piece source 197 / 201: 25 pixels).
+        // A bounded 3% side-adjacency tolerance still requires matching
+        // opposite edges: unrelated panels cannot be arbitrarily merged.
+        val xTol = maxOf(2, sourceWidth * 3 / 100)
+        val yTol = maxOf(2, sourceHeight * 3 / 100)
         // Same original horizontal tier, adjacent left/right crops.
         val horizontal = kotlin.math.abs(a.top - b.top) <= yTol &&
             kotlin.math.abs(a.bottom - b.bottom) <= yTol &&
