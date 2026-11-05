@@ -128,6 +128,13 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/BubbleFragmentSameColumnRegressionTest.kt -include-runtime -d "$tmp/panel-bubble-fragment.jar"
 java -jar "$tmp/panel-bubble-fragment.jar"
 
+# QA9: full-width near-empty scan header/footer must not become its
+# own zoom viewport. Preserve pixels by joining only physically touching,
+# full-coverage illustrated neighbors; leave real mini panels intact.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/SparsePageEdgeRegressionTest.kt -include-runtime -d "$tmp/panel-sparse-page-edge.jar"
+java -jar "$tmp/panel-sparse-page-edge.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
