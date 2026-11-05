@@ -1,6 +1,6 @@
 name: Verify signed MihonNooir v1.0.18 upgrade candidate
 # Isolated branch-only verification, never creates or modifies a GitHub Release.
-# Persistent signing certificate and APK identity must match public v1.0.18.
+# Persistent signing certificate and APK identity must match public v1.0.17.
 on:
   push:
     branches: [fix/android-updater-abi-v1.0.18]
@@ -192,7 +192,7 @@ jobs:
             echo "Verified signed release variant: $(basename "$apk")"
           done
 
-      - name: Verify upgrade certificate matches published official v1.0.16
+      - name: Verify upgrade certificate matches published official v1.0.17
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -200,7 +200,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/previous-official"
-          gh release download v1.0.16 --repo "$GH_REPO" \
+          gh release download v1.0.17 --repo "$GH_REPO" \
             --pattern app-arm64-v8a-foss.apk \
             --dir "$RUNNER_TEMP/previous-official"
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
@@ -228,11 +228,11 @@ jobs:
           for candidate in "${apks[@]}"; do
             next=$(signer_sha "$candidate")
             if [[ "$actual" != "$next" ]]; then
-              echo "CERTIFICATE MISMATCH: $(basename "$candidate") cannot update official v1.0.16" >&2
+              echo "CERTIFICATE MISMATCH: $(basename "$candidate") cannot update official v1.0.17" >&2
               exit 1
             fi
           done
-          echo "All five v1.0.18 APK variants have the same signing certificate as official v1.0.16."
+          echo "All five v1.0.18 APK variants have the same signing certificate as official v1.0.17."
 
       - name: Stage verified release assets
         shell: bash
