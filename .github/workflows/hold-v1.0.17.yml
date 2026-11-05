@@ -1,0 +1,28 @@
+name: Temporarily hide v1.0.17 during signed upgrade investigation
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/hold-v1.0.17.yml
+permissions:
+  contents: write
+jobs:
+  hide-v1-0-17:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Return only v1.0.17 release to unpublished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release=$(gh api "repos/$GH_REPO/releases/tags/v1.0.17")
+          id=$(printf '%s' "$release" | jq -r '.id')
+          tag=$(printf '%s' "$release" | jq -r '.tag_name')
+          test "$id" = '435031230' && test "$tag" = 'v1.0.17'
+          gh api --method PATCH "repos/$GH_REPO/releases/$id" -F draft=true >/dev/null
+          state=$(gh api "repos/$GH_REPO/releases/$id" --jq .draft)
+          test "$state" = true
+          echo 'v1.0.17 unpublished as draft. Assets and tag retained for investigation.'
