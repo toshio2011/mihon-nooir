@@ -104,7 +104,8 @@ object PanelReadableSliceRefiner {
                 val combined = union(item.region, views[n].region)
                 combined.width.toLong() * combined.height -
                     views[n].region.width.toLong() * views[n].region.height
-            } ?: run { i++; continue }
+            }
+            if (other == null) { i++; continue }
             val merged = union(item.region, views[other].region)
             val refit = PanelFitSlice(merged, PanelAutoFit.landscapeForMaximumFill(
                 merged, portraitWidth, portraitHeight))
@@ -125,9 +126,14 @@ object PanelReadableSliceRefiner {
             val p = view.region
             val fullWidthRow = p.width.toLong() * 100 >= sourceWidth.toLong() * 80
             val hugeRow = p.height.toLong() * 3 > sourceHeight.toLong() * 2
-            val overlapsOther = views.any { it !== view && intersectArea(p, it.region) > 0 }
+            // Small border padding is expected. A genuinely overlapping
+            // diagonal/rotated crop is NOT a safe full-width 'row' to halve.
+            val overlapsOther = views.any { it !== view &&
+                intersectArea(p, it.region) * 100 >
+                    p.width.toLong() * p.height * 5
+            }
             if (!protected(p) && fullWidthRow && hugeRow &&
-                !overlapsOther && result.size + (views.size - result.size) < MAX_VIEWS) {
+                !overlapsOther && views.size < MAX_VIEWS) {
                 val firstEnd = p.top + (p.height.toLong() * 56 / 100).toInt()
                 val secondStart = p.top + (p.height.toLong() * 44 / 100).toInt()
                 val first = p.copy(bottom = firstEnd)
