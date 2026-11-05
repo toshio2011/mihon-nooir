@@ -64,10 +64,93 @@ object PanelReadableSliceRefiner {
     }
 
     /**
-     * First absorb tiny fragments, THEN split genuinely oversized rows.
-     * A source-wide row > 2/3 source height is split into two 56%-high views
-     * overlapping over 12% of THAT row. Only on already multi-view pages,
-     * and never for narrow/tall genuine panels or a protected sparse view.
+     * A successful second pass must cover the ENTIRE original source row,
+     * even gutters, so no dialogue or sound effect can silently disappear.
+     * Sweep the rectangle boundaries exactly (not a low-res sampling guess).
+     */
+    internal fun coversSourceRow(outer: PageRegion, parts: List<PageRegion>): Boolean {
+        if (parts.isEmpty() || parts.any {
+            it.left < outer.left || it.top < outer.top ||
+                it.right > outer.right || it.bottom > outer.bottom ||
+                it.width <= 0 || it.height <= 0
+        }) return false
+        val yCuts = (parts.flatMap { listOf(it.top, it.bottom) } +
+            listOf(outer.top, outer.bottom)).distinct().sorted()
+        for (i in 0 until yCuts.lastIndex) {
+            val top = yCuts[i]
+            val bottom = yCuts[i + 1]
+            if (bottom <= top) continue
+            val spans = parts.filter { it.top <= top && it.bottom >= bottom }
+                .map { it.left to it.right }.sortedBy { it.first }
+            var x = outer.left
+            for ((left, right) in spans) {
+                if (left > x) return false
+                x = maxOf(x, right)
+                if (x >= outer.right) break
+            }
+            if (x < outer.right) return false
+        }
+        return true
+    }
+
+    /**
+     * Pixel-only no-OCR signal that one long row is a deliberately framed
+     * illustration. Look for a nearly unbroken 4-sided outer border within
+     * the first/last six percent of source pixels; do not mistake a dark
+     * interior stroke for a safe split point. Conservative false negatives
+     * are acceptable because the second-look detector runs FIRST.
+     */
+    internal fun looksLikeOneFramedPanel(
+        p: PageRegion, inkAt: (Int, Int) -> Boolean,
+    ): Boolean {
+        if (p.width < 120 || p.height < 160) return false
+        val xBand = maxOf(3, p.width * 6 / 100)
+        val yBand = maxOf(3, p.height * 6 / 100)
+        val stepX = maxOf(1, p.width / 120)
+        val stepY = maxOf(1, p.height / 120)
+        fun vertical(fromLeft: Boolean): Double {
+            var hits = 0
+            var n = 0
+            for (y in p.top until p.bottom step stepY) {
+                n++
+                var found = false
+                for (dx in 0 until xBand step maxOf(1, xBand / 6)) {
+                    val x = if (fromLeft) p.left + dx else p.right - dx - 1
+                    if (inkAt(x, y)) { found = true; break }
+                }
+                if (found) hits++
+            }
+            return if (n > 0) hits.toDouble() / n else 0.0
+        }
+        fun horizontal(fromTop: Boolean): Double {
+            var hits = 0
+            var n = 0
+            for (x in p.left until p.right step stepX) {
+                n++
+                var found = false
+                for (dy in 0 until yBand step maxOf(1, yBand / 6)) {
+                    val y = if (fromTop) p.top + dy else p.bottom - dy - 1
+                    if (inkAt(x, y)) { found = true; break }
+                }
+                if (found) hits++
+            }
+            return if (n > 0) hits.toDouble() / n else 0.0
+        }
+        val edges = listOf(vertical(true), vertical(false),
+            horizontal(true), horizontal(false))
+        return edges.count { it >= 0.76 } == 4
+    }
+
+    /**
+     * First absorb tiny fragments, then revisit broad rows that still
+     * occupy >50% of the source page. The caller gets ONE opportunity to
+     * find safe inner panels before any fallback.
+     *
+     * Unresolved >60%-height rows use two 56%-high views (12% overlap)
+     * only without dominant one-panel framing. Rows at 50-60% need the
+     * stronger condition of poor final fitted-screen occupancy (<55%).
+     * Never force-cut narrow tall panels, previously overlapping diagonal
+     * views, protected sparse/art pages or recovered genuine panels.
      *
      * @param inkAt callback to existing decoded-source bitmap, only used
      *              when judging optional 5–10 mm sparse strips.
@@ -79,6 +162,7 @@ object PanelReadableSliceRefiner {
         inkAt: (Int, Int) -> Boolean,
         protectedRegions: List<PageRegion> = emptyList(),
         autoFit: Boolean = true,
+        recoverInnerPanels: ((PageRegion) -> List<PageRegion>?)? = null,
     ): List<PanelFitSlice> {
         require(sourceWidth > 0 && sourceHeight > 0)
         require(portraitWidth > 0 && portraitHeight > 0)
@@ -126,39 +210,77 @@ object PanelReadableSliceRefiner {
         }
 
         // Protect intentionally whole splash art and the tiny-footer case
-        // already absorbed into a single source region. Splitting it again
-        // would resurrect exactly the frame we wanted to eliminate.
+        // already absorbed into one source rectangle. Never recreate the
+        // useless tiny view by forcing a new cut through the merged page.
         if (views.size < 2) return views
         val result = mutableListOf<PanelFitSlice>()
         for (view in views) {
             val p = view.region
             val fullWidthRow = p.width.toLong() * 100 >= sourceWidth.toLong() * 80
-            val hugeRow = p.height.toLong() * 3 > sourceHeight.toLong() * 2
-            // Small border padding is expected. A genuinely overlapping
-            // diagonal/rotated crop is NOT a safe full-width 'row' to halve.
+            val overHalf = p.height.toLong() * 100 > sourceHeight.toLong() * 50
+            // Ordinary 1%-padding overlap is expected. Strong overlap means
+            // a deliberately repeated slanted/diagonal viewport already.
             val overlapsOther = views.any { it !== view &&
                 intersectArea(p, it.region) * 100 >
                     p.width.toLong() * p.height * 5
             }
-            if (!protected(p) && fullWidthRow && hugeRow &&
-                !overlapsOther && views.size < MAX_VIEWS) {
-                val firstEnd = p.top + (p.height.toLong() * 56 / 100).toInt()
-                val secondStart = p.top + (p.height.toLong() * 44 / 100).toInt()
-                val first = p.copy(bottom = firstEnd)
-                val second = p.copy(top = secondStart)
-                if (first.height > 0 && second.height > 0) {
-                    result.add(PanelFitSlice(first,
-                        if (autoFit) PanelAutoFit.landscapeForMaximumFill(
-                            first, portraitWidth, portraitHeight)
-                        else view.landscape))
-                    result.add(PanelFitSlice(second,
-                        if (autoFit) PanelAutoFit.landscapeForMaximumFill(
-                            second, portraitWidth, portraitHeight)
-                        else view.landscape))
-                    continue
-                }
+            if (protected(p) || !fullWidthRow || !overHalf || overlapsOther ||
+                result.size + views.size >= MAX_VIEWS) {
+                result.add(view)
+                continue
             }
-            result.add(view)
+
+            // Recover actual page structure INSIDE the remaining large row,
+            // and accept it only when every original pixel is represented
+            // by the proposed source rectangles. A half-blank gutter or
+            // missing isolated letter is a hard veto, not an ignored 10%.
+            val recovered = recoverInnerPanels?.invoke(p)
+            if (recovered != null && recovered.size in 2..6 &&
+                result.size + recovered.size + views.size <= MAX_VIEWS &&
+                coversSourceRow(p, recovered) &&
+                recovered.all {
+                    it.width.toLong() * 100 >= p.width.toLong() * 16 &&
+                    it.height.toLong() * 100 >= p.height.toLong() * 16 &&
+                    it.width.toLong() * it.height * 100 >=
+                        p.width.toLong() * p.height * 8
+                }) {
+                for (r in recovered) result.add(PanelFitSlice(r,
+                    if (autoFit) PanelAutoFit.landscapeForMaximumFill(
+                        r, portraitWidth, portraitHeight)
+                    else view.landscape))
+                continue
+            }
+
+            val hugeRow = p.height.toLong() * 100 > sourceHeight.toLong() * 60
+            val viewportW = if (view.landscape) maxOf(portraitWidth, portraitHeight)
+                else minOf(portraitWidth, portraitHeight)
+            val viewportH = if (view.landscape) minOf(portraitWidth, portraitHeight)
+                else maxOf(portraitWidth, portraitHeight)
+            val poorFit = PanelAutoFit.occupiedFraction(p, viewportW, viewportH) < 0.55
+            val shouldOverlap = hugeRow || poorFit
+            // A strong enclosing border indicates one intentionally large
+            // manga panel. Preserve its composition rather than halving it.
+            if (!shouldOverlap || looksLikeOneFramedPanel(p, inkAt)) {
+                result.add(view)
+                continue
+            }
+
+            val firstEnd = p.top + (p.height.toLong() * 56 / 100).toInt()
+            val secondStart = p.top + (p.height.toLong() * 44 / 100).toInt()
+            val first = p.copy(bottom = firstEnd)
+            val second = p.copy(top = secondStart)
+            if (first.height <= 0 || second.height <= 0) {
+                result.add(view)
+                continue
+            }
+            result.add(PanelFitSlice(first,
+                if (autoFit) PanelAutoFit.landscapeForMaximumFill(
+                    first, portraitWidth, portraitHeight)
+                else view.landscape))
+            result.add(PanelFitSlice(second,
+                if (autoFit) PanelAutoFit.landscapeForMaximumFill(
+                    second, portraitWidth, portraitHeight)
+                else view.landscape))
         }
         return if (result.size <= MAX_VIEWS) result else views
     }
