@@ -275,6 +275,61 @@ class AndroidPageSource(private val context: Context) {
         panel, viewWidth, viewHeight, rightToLeft, overlapPercent,
     ) { x, y -> inkAt(src, x, y) }
 
+    /**
+     * Android-only bounded second look at ONE confirmed large row. The
+     * original full-resolution source stays available for rendering, and
+     * the 600x900 gray ROI is released immediately after planning. This
+     * is intentionally not a second call to the fallback row splitter:
+     * it accepts only a new, confidently validated structural result.
+     *
+     * Final geometry gets an additional exact-source-coverage veto in the
+     * platform-neutral refiner before any exported view is changed.
+     */
+    private fun recoverInnerPanelsWithinRow(
+        src: Bitmap, region: PageRegion, rightToLeft: Boolean,
+    ): List<PageRegion>? {
+        if (region.width < 160 || region.height < 240 ||
+            region.right > src.width || region.bottom > src.height) return null
+        val scale = minOf(1.0, 600.0 / region.width, 900.0 / region.height)
+        val w = (region.width * scale).toInt().coerceAtLeast(1)
+        val h = (region.height * scale).toInt().coerceAtLeast(1)
+        if (w < 160 || h < 240) return null
+        val thumb = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        try {
+            Canvas(thumb).drawBitmap(
+                src, Rect(region.left, region.top, region.right, region.bottom),
+                Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+            val argb = IntArray(w * h)
+            thumb.getPixels(argb, 0, w, 0, 0, w, h)
+            val gray = ByteArray(argb.size) { i ->
+                val c = argb[i]
+                val alpha = Color.alpha(c)
+                val lum = (Color.red(c) * 299 + Color.green(c) * 587 +
+                    Color.blue(c) * 114) / 1000
+                ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
+            }
+            val plan = PanelDetectionCore.detect(w, h, gray, rightToLeft)
+            // Avoid recursive application of the experimental overlapping
+            // thirds. Such regions are reading views, not confident panels.
+            if (plan.usedFullPageFallback || plan.preserveSingleFrame ||
+                plan.regions.size !in 2..6 ||
+                !(
+                    plan.reason.startsWith("row-first partition") ||
+                    plan.reason.contains("slanted") ||
+                    plan.reason.contains("framed components")
+                )) return null
+            return PanelDetectionCore.sourceRegions(
+                plan, w, h, region.width, region.height, paddingPercent = 1,
+            ).map { crop ->
+                PageRegion(
+                    crop.left + region.left, crop.top + region.top,
+                    crop.right + region.left, crop.bottom + region.top)
+            }
+        } finally {
+            thumb.recycle()
+        }
+    }
+
     private fun render(
         src: Bitmap, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean,
@@ -381,6 +436,9 @@ class AndroidPageSource(private val context: Context) {
                 inkAt = { x, y -> inkAt(src, x, y) },
                 protectedRegions = panels.filter { it.preserveWhole }.map { it.region },
                 autoFit = auto,
+                recoverInnerPanels = { row ->
+                    recoverInnerPanelsWithinRow(src, row, options.rightToLeft)
+                },
             )
         } else plannedSlices
         // A source-page overview precedes any multi-frame result, including panels,
