@@ -305,7 +305,7 @@ replace_once(update_model,
         context.startActivity(intent)
     }
 ''')
-replace_once(update_model, "import eu.kanade.tachiyomi.extension.util.ExtensionInstaller\\n", "")
-replace_once(update_model, "import eu.kanade.tachiyomi.util.storage.getUriCompat\\n", "")
+replace_once(update_model, "import eu.kanade.tachiyomi.extension.util.ExtensionInstaller\n", "")
+replace_once(update_model, "import eu.kanade.tachiyomi.util.storage.getUriCompat\n", "")
 
 print("Mihon Nooir integration overlay applied to", upstream)
