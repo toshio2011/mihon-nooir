@@ -93,6 +93,10 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
         context.startActivity(intent)
     }
 """)
+            (morescreen/'NewUpdateScreen.kt').write_text("""NewUpdateScreenModel.Stage.Available -> stringResource(MR.strings.update_check_confirm)
+            TextButton(
+                onClick = onOpenInBrowser,
+""")
             subprocess.run(['python3',str(ROOT/'tools/apply_overlay.py'),str(root)],check=True,text=True)
             gradle_text = (app/'build.gradle.kts').read_text()
             self.assertIn('testBuildType = "foss"', gradle_text)
@@ -174,6 +178,10 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
             update_model_text = (moretab/'NewUpdateScreenModel.kt').read_text()
             self.assertIn('android.net.Uri.parse(downloadLink)', update_model_text)
             self.assertNotIn('apkFile.getUriCompat(context)', update_model_text)
+            presentation_update = (morescreen/'NewUpdateScreen.kt').read_text()
+            self.assertIn('Download official APK in browser', presentation_update)
+            self.assertIn('do not uninstall MihonNooir', presentation_update)
+
 
             self.assertNotIn('map[FOSS]', release_text)
             self.assertTrue((releases/'NooirReleaseApkSelector.kt').exists())
