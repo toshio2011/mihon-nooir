@@ -308,4 +308,24 @@ replace_once(update_model,
 replace_once(update_model, "import eu.kanade.tachiyomi.extension.util.ExtensionInstaller\n", "")
 replace_once(update_model, "import eu.kanade.tachiyomi.util.storage.getUriCompat\n", "")
 
+# Make the browser-mediated path explicit to the user. The previous
+# upstream CTA said "Download" or "Install" even though it now opens Downloads.
+update_presentation = upstream / "app/src/main/java/eu/kanade/presentation/more/NewUpdateScreen.kt"
+replace_once(update_presentation,
+    'NewUpdateScreenModel.Stage.Available -> stringResource(MR.strings.update_check_confirm)',
+    'NewUpdateScreenModel.Stage.Available -> "Download official APK in browser"')
+replace_once(update_presentation,
+    '''            TextButton(
+                onClick = onOpenInBrowser,
+''',
+    '''            Text(
+                text = "Your browser will download the verified release APK. " +
+                    "Install it over the current app with Android's confirmation; do not uninstall MihonNooir.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            TextButton(
+                onClick = onOpenInBrowser,
+''')
+
 print("Mihon Nooir integration overlay applied to", upstream)
