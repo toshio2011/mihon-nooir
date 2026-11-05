@@ -269,4 +269,43 @@ replace_once(release_service,
 ''',
     "")
 
+# The fork deliberately cannot install arbitrary Android packages. The
+# official updater should hand off the correctly matched release APK to the
+# user's browser / Downloads installer, not invoke the APK installer as an
+# unprivileged source or silently grant package-install capability.
+update_screen = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/NewUpdateScreen.kt"
+replace_once(update_screen,
+    '''            onAcceptUpdate = {
+                when (state.stage) {
+                    NewUpdateScreenModel.Stage.Available, NewUpdateScreenModel.Stage.Failed -> viewModel.startDownload()
+                    NewUpdateScreenModel.Stage.Downloaded -> viewModel.installUpdate()
+                    else -> Unit
+                }
+            },
+''',
+    '''            onAcceptUpdate = { viewModel.installUpdate() },
+''')
+
+update_model = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/NewUpdateScreenModel.kt"
+replace_once(update_model,
+    '''    fun installUpdate() {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkFile.getUriCompat(context), ExtensionInstaller.APK_MIME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        context.startActivity(intent)
+    }
+''',
+    '''    fun installUpdate() {
+        // User-initiated browser/Downloads installation: no package-installer
+        // permission, no hidden install session, and no duplicate APK copy.
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(downloadLink)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    }
+''')
+replace_once(update_model, "import eu.kanade.tachiyomi.extension.util.ExtensionInstaller\\n", "")
+replace_once(update_model, "import eu.kanade.tachiyomi.util.storage.getUriCompat\\n", "")
+
 print("Mihon Nooir integration overlay applied to", upstream)
