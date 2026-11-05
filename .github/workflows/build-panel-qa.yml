@@ -1,0 +1,144 @@
+name: Build parallel QA9 (sparse edge coalescing)
+on:
+  pull_request:
+    branches:
+      - feature/panel-sparse-edge-coalesce-v1.0.17
+    paths:
+      - .github/workflows/build-panel-qa.yml
+      - .github/scripts/panel-qa-coinstall.sh
+      - tools/prepare_parallel_qa.py
+      - tests/test_parallel_qa.py
+      - docs/testing/android-v1.0.17-parallel-qa.md
+permissions:
+  contents: read
+concurrency:
+  group: panel-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-parallel-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout PR code (never the official release)
+        uses: actions/checkout@v4
+      - name: Check QA scripts and immutable-identity guards
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/prepare_parallel_qa.py tests/test_parallel_qa.py
+          python3 -m unittest discover -s tests -p 'test_parallel_qa.py' -v
+          bash -n .github/scripts/panel-qa-coinstall.sh
+      - name: Read pinned upstream SHA
+        id: pin
+        run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Mihon upstream into disposable workspace
+        uses: actions/checkout@v4
+        with:
+          repository: mihonapp/mihon
+          ref: ${{ steps.pin.outputs.sha }}
+          path: upstream
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Apply same panel-overlay code as PR 57
+        run: python3 tools/apply_overlay.py upstream
+      - name: Strip disallowed package installer capabilities
+        run: python3 tools/secure_android_installers.py upstream
+      - name: Apply temporary QA-only package identity and disable updater
+        run: python3 tools/prepare_parallel_qa.py upstream
+      - name: Assemble parallel FOSS QA APKs
+        working-directory: upstream
+        run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
+      - name: Verify distinct package, label, signing and permission safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(upstream/app/build/outputs/apk/foss/*.apk)
+          (( ${#apks[@]} > 0 )) || { echo "QA build produced no APKs"; exit 1; }
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk"
+          build_tools=$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          test -x "$build_tools/aapt" && test -x "$build_tools/apksigner"
+          for apk in "${apks[@]}"; do
+            unzip -tq "$apk" >/dev/null
+            "$build_tools/apksigner" verify --verbose --print-certs "$apk"
+            badging=$("$build_tools/aapt" dump badging "$apk")
+            grep -Fq "name='dev.nooir.mihonqa9.foss'" <<< "$badging"
+            grep -Fq "versionName='1.0.17-sparse-edge-qa'" <<< "$badging"
+            grep -Fq "application-label:'MihonNooir QA9'" <<< "$badging"
+            if grep -Fq "name='dev.nooir.mihontrial.foss'" <<< "$badging"; then
+              echo "Unsafe collision with signed v1.0.16 package"
+              exit 1
+            fi
+            manifest=$("$build_tools/aapt" dump xmltree "$apk" AndroidManifest.xml)
+            for banned in ShizukuProvider ExtensionInstallService ExtensionInstallActivity; do
+              if grep -Fq "$banned" <<< "$manifest"; then echo "Forbidden install component: $banned"; exit 1; fi
+            done
+            perms=$("$build_tools/aapt" dump permissions "$apk")
+            for permission in REQUEST_INSTALL_PACKAGES REQUEST_DELETE_PACKAGES UPDATE_PACKAGES_WITHOUT_USER_ACTION; do
+              if grep -Fq "android.permission.$permission" <<< "$perms"; then echo "Forbidden permission: $permission"; exit 1; fi
+            done
+            echo "PASS: independent QA-only APK: $(basename "$apk")"
+          done
+          test -f upstream/app/build/outputs/apk/foss/app-x86_64-foss.apk
+          test -f upstream/app/build/outputs/apk/foss/app-arm64-v8a-foss.apk
+          (cd upstream/app/build/outputs/apk/foss && sha256sum ./*.apk > SHA256SUMS.txt)
+      - name: Upload verified parallel QA APKs (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-v1.0.17-sparse-edge-qa9-parallel
+          path: |
+            upstream/app/build/outputs/apk/foss/*.apk
+            upstream/app/build/outputs/apk/foss/SHA256SUMS.txt
+          if-no-files-found: error
+
+  android-qa-coinstall:
+    needs: build-parallel-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download QA APKs from this exact CI run
+        uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-v1.0.17-sparse-edge-qa9-parallel
+          path: qa-artifact
+      - name: Download and verify unchanged signed v1.0.16 x86_64 release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p official-apk
+          base=https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.16
+          curl -fL --retry 3 -o official-apk/app-x86_64-foss.apk "$base/app-x86_64-foss.apk"
+          curl -fL --retry 3 -o official-apk/SHA256SUMS.txt "$base/SHA256SUMS.txt"
+          (cd official-apk && grep 'app-x86_64-foss.apk' SHA256SUMS.txt | sha256sum -c -)
+      - name: Enable KVM for emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install signed official and QA simultaneously; launch QA
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/scripts/panel-qa-coinstall.sh
+      - name: Upload emulator coexistence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-sparse-edge-qa9-coinstall-smoke
+          path: |
+            qa-official-package.txt
+            qa-parallel-package.txt
+            qa-package-list.txt
+            qa-launch.txt
+            qa-running-process.txt
+          if-no-files-found: warn
