@@ -78,6 +78,7 @@ object PanelReadableSliceRefiner {
         portraitWidth: Int, portraitHeight: Int,
         inkAt: (Int, Int) -> Boolean,
         protectedRegions: List<PageRegion> = emptyList(),
+        autoFit: Boolean = true,
     ): List<PanelFitSlice> {
         require(sourceWidth > 0 && sourceHeight > 0)
         require(portraitWidth > 0 && portraitHeight > 0)
@@ -112,8 +113,10 @@ object PanelReadableSliceRefiner {
             }
             if (other == null) { i++; continue }
             val merged = union(item.region, views[other].region)
-            val refit = PanelFitSlice(merged, PanelAutoFit.landscapeForMaximumFill(
-                merged, portraitWidth, portraitHeight))
+            val refit = PanelFitSlice(merged,
+                if (autoFit) PanelAutoFit.landscapeForMaximumFill(
+                    merged, portraitWidth, portraitHeight)
+                else item.landscape)
             val index = minOf(i, other)
             val remove = maxOf(i, other)
             views.removeAt(remove)
@@ -144,10 +147,14 @@ object PanelReadableSliceRefiner {
                 val first = p.copy(bottom = firstEnd)
                 val second = p.copy(top = secondStart)
                 if (first.height > 0 && second.height > 0) {
-                    result.add(PanelFitSlice(first, PanelAutoFit.landscapeForMaximumFill(
-                        first, portraitWidth, portraitHeight)))
-                    result.add(PanelFitSlice(second, PanelAutoFit.landscapeForMaximumFill(
-                        second, portraitWidth, portraitHeight)))
+                    result.add(PanelFitSlice(first,
+                        if (autoFit) PanelAutoFit.landscapeForMaximumFill(
+                            first, portraitWidth, portraitHeight)
+                        else view.landscape))
+                    result.add(PanelFitSlice(second,
+                        if (autoFit) PanelAutoFit.landscapeForMaximumFill(
+                            second, portraitWidth, portraitHeight)
+                        else view.landscape))
                     continue
                 }
             }
