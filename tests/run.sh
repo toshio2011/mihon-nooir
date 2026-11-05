@@ -120,6 +120,14 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelVie
   tests/PanelReadableSliceRefinerTest.kt -include-runtime -d "$tmp/panel-readable-slices.jar"
 java -jar "$tmp/panel-readable-slices.jar"
 
+# Detect a falsely isolated speech strip from an otherwise single
+# narrow manga panel (private source72 geometry, independently authored).
+# Its 35px source fragment can appear large after AUTO_FIT: fitted-size
+# checks alone cannot solve this case. Preserve every source pixel.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDetectionCore.kt} \
+  tests/BubbleFragmentSameColumnRegressionTest.kt -include-runtime -d "$tmp/panel-bubble-fragment.jar"
+java -jar "$tmp/panel-bubble-fragment.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"
