@@ -259,6 +259,11 @@ fun NooirActivityQueueDialog(onDismiss: () -> Unit) {
                                 val skipped = job.outputData.getString(
                                     NooirMangaExportWorker.KEY_SKIPPED_CHAPTERS).orEmpty()
                                 if (skipped.isNotBlank()) Text("Skipped chapters: " + skipped)
+                                val diagnosticsStatus = job.outputData.getString(
+                                    NooirMangaExportWorker.KEY_PANEL_DIAGNOSTICS).orEmpty()
+                                if (diagnosticsStatus.isNotBlank()) {
+                                    Text("Panel diagnostics: " + diagnosticsStatus.take(240))
+                                }
                                 if (job.outputData.getBoolean(
                                         NooirMangaExportWorker.KEY_MISSING_COVER, false)) {
                                     Text("Exported without a separate series cover (confirmed)")

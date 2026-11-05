@@ -14,6 +14,22 @@ data class PanelPlan(
     val regions: List<PageRegion>,
     val usedFullPageFallback: Boolean,
     val reason: String,
+    // One successfully absorbed terminal ruled strip yields a full source
+    // rectangle. The renderer must not then run an independent corridor
+    // slicer over it and recreate the same unwanted extra reading screen.
+    val preserveSingleFrame: Boolean = false,
+    // Only a FULL source page created by absorbing one near-empty edge
+    // strip may try a fresh, bounded full-panel readability pass.
+    // True single-panel/splash/text protections remain unchanged.
+    val allowSingleEdgeZoom: Boolean = false,
+)
+
+/** Optional, bounded diagnostic event. No image data or titles are carried here. */
+data class PanelDebugEvent(
+    val stage: String,
+    val region: PageRegion,
+    val decision: String,
+    val detail: String,
 )
 
 object PanelDetectionCore {
@@ -22,33 +38,800 @@ object PanelDetectionCore {
     private const val WHITE = 247
     private const val INK = 220
 
-    fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean): PanelPlan {
+    /**
+     * False-panel rescue for the actual One Piece source-72 failure.
+     * The detector separated a 35px-tall top of a speech bubble from the
+     * 258px-high remainder of the SAME 196px-wide column. Final AUTO_FIT
+     * enlarged that isolated top into an apparently large landscape frame,
+     * so a 5mm/10mm *displayed* size guard could never catch the bug.
+     *
+     * Coalesce only directly successive, EXACTLY aligned column pieces.
+     * The smaller piece must be <=6% of source height, <=25% of column
+     * width and <=25% of combined column height. A strong horizontal ink
+     * rule at the shared edge vetoes merging a framed miniature panel.
+     * Source coordinates are unioned, never cropped or discarded. This
+     * runs on accepted Panel-by-Panel results, not Row-by-Row.
+     */
+    internal fun coalesceShallowSameColumnFragment(
+        width: Int, height: Int, gray: ByteArray, panels: List<PageRegion>,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion> {
+        if (width < 160 || height < 320 || gray.size != width * height ||
+            panels.size < 2) return panels
+        val result = panels.toMutableList()
+
+        fun strongHorizontalFrame(left: Int, right: Int, y: Int): Boolean {
+            if (y <= 2 || y >= height - 2) return true
+            val regionWidth = right - left
+            val stepX = maxOf(1, regionWidth / 128)
+            for (yy in y - 2..y + 2) {
+                var dark = 0
+                var total = 0
+                for (x in left until right step stepX) {
+                    total++
+                    if ((gray[yy * width + x].toInt() and 255) < 130)
+                        dark++
+                }
+                // A genuinely separate framed miniature usually has a
+                // continuous horizontal border at the split, not a few
+                // interrupted edges of a shared dialogue balloon.
+                if (total > 0 && dark * 100 >= total * 70) return true
+            }
+            return false
+        }
+        var i = 0
+        while (i + 1 < result.size) {
+            val a = result[i]
+            val b = result[i + 1]
+            if (a.left != b.left || a.right != b.right ||
+                a.width <= 0 || b.height <= 0 || a.height <= 0 ||
+                a.bottom != b.top || a.width.toLong() * 100 > width.toLong() * 60) {
+                i++
+                continue
+            }
+            val small = minOf(a.height, b.height)
+            val combined = a.height + b.height
+            if (small.toLong() * 100 > height.toLong() * 6 ||
+                small.toLong() * 100 > a.width.toLong() * 25 ||
+                small.toLong() * 4 > combined ||
+                strongHorizontalFrame(a.left, a.right, a.bottom)) {
+                i++
+                continue
+            }
+            val whole = PageRegion(a.left, a.top, a.right, b.bottom)
+            // Never reorder other panels: replace only the successive
+            // mistaken fragments with one complete reading view.
+            result[i] = whole
+            result.removeAt(i + 1)
+            trace?.invoke(PanelDebugEvent("bubble-fragment",whole,"absorb",
+                "shallow same-column speech/art fragment attached to its panel"))
+            // A second shallow text strip in the same column may also need
+            // absorbing, but do not scan or change unrelated panels.
+            if (i > 0) i--
+        }
+        return result
+    }
+
+    /**
+     * Restore a nearly-empty scan-header/scan-footer to the illustrated
+     * tier touching it. A full-width 35-47px gray watermark/header is not
+     * a readable manga panel; Auto Fit would magnify it into a whole page.
+     *
+     * Only the first or last <=8% of a page can qualify. Both very dark
+     * (<180) and faint (<220) ink ratios must be low, so a genuine narrow
+     * title, framed micro-panel or speaker strip remains independent.
+     * A strong horizontal border at the dividing line also vetoes merging.
+     *
+     * Union with EVERY directly adjoining panel whose union spans the
+     * complete source width, respecting their existing RTL/LTR positions.
+     * This duplicates the pale strip inside adjacent panels but NEVER
+     * discards artwork/text. No edit to Row By Row/WEBTOON/OFF detector.
+     */
+    internal fun coalesceSparsePageEdgeStrip(
+        width: Int, height: Int, gray: ByteArray,
+        panels: List<PageRegion>,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion> {
+        if (width < 160 || height < 320 || gray.size != width * height ||
+            panels.size < 2) return panels
+        val result = panels.toMutableList()
+        fun qualifies(strip: PageRegion, top: Boolean): Boolean {
+            if (strip.left != 0 || strip.right != width ||
+                strip.height <= 0 || strip.height.toLong() * 100 > height.toLong() * 8)
+                return false
+            if (top && strip.top != 0) return false
+            if (!top && strip.bottom != height) return false
+            var dark = 0
+            var faint = 0
+            val area = width.toLong() * strip.height
+            for (y in strip.top until strip.bottom) {
+                for (x in 0 until width) {
+                    val v = gray[y * width + x].toInt() and 255
+                    if (v < 180) dark++
+                    if (v < 220) faint++
+                    // Early rejection of substantial illustration/text. Both
+                    // conditions are required; a faint page-frame watermark
+                    // can qualify but illustrated title art cannot.
+                    if (dark.toLong() * 100 >= area * 3 ||
+                        faint.toLong() * 100 >= area * 55 / 10) return false
+                }
+            }
+            val boundary = if (top) strip.bottom else strip.top
+            val from = maxOf(0, boundary - 2)
+            val to = minOf(height - 1, boundary + 2)
+            for (y in from..to) {
+                var ruleInk = 0
+                for (x in 0 until width)
+                    if ((gray[y * width + x].toInt() and 255) < 130) ruleInk++
+                if (ruleInk * 100 >= width * 70) return false
+            }
+            return true
+        }
+        fun touchesAndCovers(neighbors: List<PageRegion>): Boolean {
+            if (neighbors.isEmpty() ||
+                neighbors.none { it.height.toLong() * 100 >= height.toLong() * 12 })
+                return false
+            val ordered = neighbors.sortedBy { it.left }
+            var cursor = 0
+            for (r in ordered) {
+                if (r.left > cursor) return false
+                cursor = maxOf(cursor, r.right)
+                if (cursor >= width) break
+            }
+            return cursor >= width
+        }
+        // Header and footer are checked separately, but an already removed
+        // strip cannot be merged twice. Order of surviving panels is stable.
+        for (top in listOf(true, false)) {
+            val idx = result.indexOfFirst { r ->
+                r.left == 0 && r.right == width &&
+                    (if (top) r.top == 0 else r.bottom == height) &&
+                    r.height.toLong() * 100 <= height.toLong() * 8
+            }
+            if (idx < 0) continue
+            val strip = result[idx]
+            if (!qualifies(strip, top)) continue
+            val boundary = if (top) strip.bottom else strip.top
+            val neighbors = result.indices.filter { i ->
+                i != idx &&
+                    (if (top) result[i].top == boundary
+                     else result[i].bottom == boundary)
+            }
+            if (!touchesAndCovers(neighbors.map { result[it] })) continue
+            for (i in neighbors) {
+                val r = result[i]
+                result[i] = if (top) r.copy(top = 0)
+                    else r.copy(bottom = height)
+            }
+            result.removeAt(idx)
+            trace?.invoke(PanelDebugEvent("sparse-page-edge",
+                strip, "absorb",
+                "low-ink scan edge joined into adjoining panel(s); all pixels retained"))
+        }
+        return result
+    }
+
+    /**
+     * Conservative post-pass for a shallow strip accidentally separated from
+     * the SAME two illustrated columns above and below it. In some comic pages,
+     * the upper halves of two dialogue balloons look like four tiny panels.
+     * Only consolidate when BOTH surrounding tiers already independently
+     * validated exactly two columns with aligned boundaries, the central tier
+     * was fragmented into >=3 vertical pieces, and one nearly empty vertical
+     * seam survives the ENTIRE merged span.
+     *
+     * This does not generalize across unequal/staggered columns or across a
+     * crossing balloon: if a safe full-height seam is absent, leave the
+     * existing panels untouched. All coordinates remain fully covered.
+     * Row-by-Row never calls this function.
+     */
+    internal fun consolidateShallowDialogueStrip(
+        width: Int, height: Int, gray: ByteArray, rows: List<PageRegion>,
+        panels: List<PageRegion>, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion> {
+        if (rows.size < 3 || panels.size < 8 || gray.size != width * height) return panels
+        val result = panels.toMutableList()
+        fun slices(row: PageRegion): List<PageRegion> =
+            result.filter { it.top == row.top && it.bottom == row.bottom }
+        fun coversWidth(parts: List<PageRegion>): Boolean {
+            if (parts.isEmpty()) return false
+            val ordered = parts.sortedBy { it.left }
+            return ordered.first().left == 0 && ordered.last().right == width &&
+                ordered.zipWithNext().all { (a, b) -> a.right == b.left }
+        }
+        for (i in 1 until rows.lastIndex) {
+            val above = rows[i - 1]
+            val strip = rows[i]
+            val below = rows[i + 1]
+            if (above.bottom != strip.top || strip.bottom != below.top ||
+                strip.height > maxOf(48, height * 6 / 100) ||
+                above.height > maxOf(80, height / 10) ||
+                below.height < strip.height * 2) continue
+
+            val top = slices(above)
+            val center = slices(strip)
+            val bottom = slices(below)
+            if (top.size != 2 || center.size !in 3..6 || bottom.size != 2 ||
+                !coversWidth(top) || !coversWidth(center) || !coversWidth(bottom))
+                continue
+
+            val topSeam = top.minByOrNull { it.left }!!.right
+            val bottomSeam = bottom.minByOrNull { it.left }!!.right
+            if (kotlin.math.abs(topSeam - bottomSeam) > maxOf(8, width / 25)) continue
+
+            // Search only within a few pixels of the TWO independently
+            // verified column seams. Reject a dark/interrupted corridor,
+            // including a real speech bubble drawn across the boundary.
+            val radius = maxOf(2, width / 180)
+            val firstX = (minOf(topSeam, bottomSeam) - radius).coerceAtLeast(1)
+            val lastX = (maxOf(topSeam, bottomSeam) + radius).coerceAtMost(width - 2)
+            val combinedTop = above.top
+            val combinedBottom = below.bottom
+            val span = combinedBottom - combinedTop
+            var safestX = -1
+            var lowestInk = Int.MAX_VALUE
+            for (x in firstX..lastX) {
+                var ink = 0
+                var pale = 0
+                var continuousDark = 0
+                var longestDark = 0
+                for (y in combinedTop until combinedBottom) {
+                    val value = gray[y * width + x].toInt() and 255
+                    if (value < INK) ink++
+                    if (value >= 240) pale++
+                    continuousDark = if (value < 180) continuousDark + 1 else 0
+                    longestDark = maxOf(longestDark, continuousDark)
+                }
+                if (ink * 100 > span * 8 || pale * 100 < span * 80 ||
+                    longestDark >= maxOf(4, span / 40)) continue
+                if (ink < lowestInk ||
+                    (ink == lowestInk &&
+                        kotlin.math.abs(x * 2 - topSeam - bottomSeam) <
+                        kotlin.math.abs(safestX * 2 - topSeam - bottomSeam))) {
+                    lowestInk = ink
+                    safestX = x
+                }
+            }
+            if (safestX < 0) continue
+
+            val start = result.indexOfFirst {
+                it.top == above.top && it.bottom == above.bottom
+            }
+            val count = top.size + center.size + bottom.size
+            if (start < 0 || start + count > result.size) continue
+            val expected = listOf(above, strip, below)
+            val actual = result.subList(start, start + count)
+            if (actual.map { p -> expected.indexOfFirst {
+                    it.top == p.top && it.bottom == p.bottom
+                } }.let { positions ->
+                    positions.any { it < 0 } ||
+                        positions != positions.sorted()
+                }) continue
+
+            val left = PageRegion(0, combinedTop, safestX, combinedBottom)
+            val right = PageRegion(safestX, combinedTop, width, combinedBottom)
+            result.subList(start, start + count).clear()
+            result.addAll(start, if (rightToLeft) listOf(right, left)
+                else listOf(left, right))
+            trace?.invoke(PanelDebugEvent("tier", PageRegion(0, combinedTop, width, combinedBottom),
+                "coalesce", "shallow dialogue strip joined into two aligned story columns"))
+        }
+        return result
+    }
+
+    /**
+     * OCR-free fail-safe for a source image with repeated short text-like
+     * horizontal bands. Clean paragraph spacing can otherwise look like
+     * comic gutters and a row-first + column retry multiplies one prose
+     * page into dozens of tiny zoomed fragments.
+     *
+     * This is intentionally VERY narrow: at least 18 separate narrow ink
+     * bands in the central page and at most two tall illustrated bands.
+     * Keeping the whole image cannot discard pixels, and the preserve flag
+     * also disables the downstream legacy corridor slicer.
+     *
+     * Never apply this to Row by Row mode or to ordinary comics where large
+     * illustrated blocks occupy several vertical rows.
+     */
+    private fun looksLikeTextDominantPage(width: Int, height: Int, gray: ByteArray): Boolean {
+        if (height < 420 || width < 260) return false
+        val left = width * 8 / 100
+        val right = width * 92 / 100
+        val top = height * 9 / 100
+        val bottom = height * 94 / 100
+        val span = right - left
+        if (span < 40) return false
+        val shortMin = maxOf(2, height * 3 / 900)
+        val shortMax = maxOf(12, height * 22 / 900)
+        var runStart = -1
+        var narrowBands = 0
+        var tallBands = 0
+        for (y in top..bottom) {
+            // A row with >3.5% black-ish ink in the central 84% width.
+            // Integer threshold avoids floating-point work on the X4
+            // conversion pipeline; no bitmap/array allocation per row.
+            var ink = 0
+            if (y < bottom) {
+                val base = y * width
+                for (x in left until right) {
+                    if ((gray[base + x].toInt() and 255) < 160) ink++
+                }
+            }
+            val occupied = y < bottom && ink * 1000 > span * 35
+            if (occupied) {
+                if (runStart < 0) runStart = y
+            } else if (runStart >= 0) {
+                val length = y - runStart
+                if (length in shortMin..shortMax) narrowBands++
+                else if (length > shortMax) tallBands++
+                // No need to inspect the remaining pixels once it can no
+                // longer be a text-dominant/low-illustration page.
+                if (tallBands > 2) return false
+                runStart = -1
+            }
+        }
+        return narrowBands >= 18 && tallBands <= 2
+    }
+
+    /**
+     * EXPERIMENTAL: only used after *all* conventional panel, gray/dark and
+     * slanted-rail detection has failed for a wholly unsplit Panel-by-Panel
+     * portrait page. We deliberately produce overlapping READING VIEWS, not
+     * claimed source-panel boundaries. This prevents the X4 reader having to
+     * shrink an otherwise unreadably dense manga page into a single screen.
+     *
+     * Three source-coordinate windows cover 0-40%, 30-70%, 60-100% of the
+     * height. The 10% overlap is independent of the user's normal crop
+     * padding. The complete source is preserved; duplicated areas are
+     * intentional. A strict clean full-height column may split a WINDOW into
+     * two RTL/LTR panels; otherwise the entire overlapping window is kept.
+     *
+     * A bounded (<=~100k sampled pixels) thumbnail gate protects plain
+     * covers, text, uniformly dark splash pages and almost-empty pages.
+     * This is an imperfect heuristic, not semantic panel recognition, so
+     * this prototype must remain draft/QA-only until actual exports pass.
+     */
+    internal fun recoverOverlappingRowViews(
+        width: Int, height: Int, gray: ByteArray, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 320..1024 ||
+            width.toLong() * height > MAX_THUMB_PIXELS ||
+            gray.size != width * height ||
+            height.toLong() * 10 < width.toLong() * 11 ||
+            height.toLong() * 10 > width.toLong() * 25) return null
+
+        val windows = listOf(
+            PageRegion(0, 0, width, height * 40 / 100),
+            PageRegion(0, height * 30 / 100, width, height * 70 / 100),
+            PageRegion(0, height * 60 / 100, width, height),
+        )
+        if (windows.any { it.height < 90 }) return null
+
+        // All three sections must look like illustrated comic material,
+        // rather than an isolated cover title, one picture above blank
+        // paper, or near-monochrome splash. Edge texture is OCR-free.
+        for (row in windows) {
+            var ink = 0
+            var pale = 0
+            var edge = 0
+            var samples = 0
+            for (y in row.top until row.bottom step 3) {
+                val offset = y * width
+                for (x in 0 until width - 3 step 3) {
+                    val v = gray[offset + x].toInt() and 255
+                    val next = gray[offset + x + 3].toInt() and 255
+                    if (v < 180) ink++
+                    if (v >= 220) pale++
+                    if (kotlin.math.abs(v - next) >= 55) edge++
+                    samples++
+                }
+            }
+            if (samples == 0 ||
+                ink.toLong() * 100 < samples.toLong() * 14 ||
+                ink.toLong() * 100 > samples.toLong() * 72 ||
+                pale.toLong() * 100 < samples.toLong() * 20 ||
+                edge.toLong() * 100 < samples.toLong() * 8) {
+                trace?.invoke(PanelDebugEvent("overlap-rescue", row, "reject",
+                    "low contrast, low illustration or splash-like section"))
+                return null
+            }
+        }
+
+        val detector = Detector(width, height, gray, trace)
+        val views = mutableListOf<PageRegion>()
+        for (row in windows) {
+            // Use ONLY a strong clean full-height vertical gutter. Recursive
+            // panel splitting in overlapping windows can multiply speech
+            // fragments and is deliberately not attempted in v1.
+            val column = detector.fallbackCleanColumn(row)
+            if (column != null) {
+                val left = row.copy(right = column)
+                val right = row.copy(left = column)
+                views.addAll(if (rightToLeft) listOf(right, left)
+                    else listOf(left, right))
+                trace?.invoke(PanelDebugEvent("overlap-rescue", row, "column",
+                    "two validated columns inside protected overlapping row"))
+            } else {
+                views.add(row)
+                trace?.invoke(PanelDebugEvent("overlap-rescue", row, "keep",
+                    "overlapping row retained; no safe inner panel boundary"))
+            }
+        }
+        return views
+    }
+
+
+    /**
+     * Independent, conservative frame-confidence recovery for a FULLY
+     * unsplit illustrated page. Adapted as a Kotlin design experiment from
+     * the general ideas in Panels+ (KristanLaimon, MIT): background-relative
+     * binary ink, 8-neighbour connected components, approximately straight
+     * box-edge support, page coverage and enclosed shared-balloon vetoes.
+     * No third-party implementation was copied. All allocation is temporary,
+     * at HALF thumbnail resolution, and runs on Android export, never X4.
+     *
+     * No speculative crop is accepted unless at least THREE substantial
+     * components have sufficient evidence of panel framing and collectively
+     * cover >=90% of the source's contrast ink. Dark/angled recovery and the
+     * three-overlap-row rescue remain independent, ordered later/earlier.
+     */
+    internal fun recoverFrameEvidenceViews(
+        width: Int, height: Int, gray: ByteArray, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 240..1024 ||
+            height.toLong() > width.toLong() * 3L ||
+            width.toLong() * height > MAX_THUMB_PIXELS ||
+            gray.size != width * height) return null
+
+        val w = width / 2
+        val h = height / 2
+        val size = w * h
+        if (w < 80 || h < 120) return null
+        val thumbnail = IntArray(size)
+        val histogram = IntArray(256)
+        var ringSamples = 0
+        for (y in 0 until h) for (x in 0 until w) {
+            val sourceX = x * 2
+            val sourceY = y * 2
+            val idx = sourceY * width + sourceX
+            val value = (
+                (gray[idx].toInt() and 255) +
+                (gray[idx + 1].toInt() and 255) +
+                (gray[idx + width].toInt() and 255) +
+                (gray[idx + width + 1].toInt() and 255) + 2
+            ) / 4
+            thumbnail[y * w + x] = value
+            if (x < 8 || y < 8 || x >= w - 8 || y >= h - 8) {
+                histogram[value]++
+                ringSamples++
+            }
+        }
+        var cumulative = 0
+        var background = 255
+        for (value in 0..255) {
+            cumulative += histogram[value]
+            if (cumulative * 2 >= ringSamples) {
+                background = value
+                break
+            }
+        }
+
+        val ink = ByteArray(size)
+        var totalInk = 0
+        for (pos in 0 until size) {
+            if (kotlin.math.abs(thumbnail[pos] - background) > 40) {
+                ink[pos] = 1
+                totalInk++
+            }
+        }
+        if (totalInk < size * 18 / 100 || totalInk > size * 82 / 100)
+            return null
+
+        data class FrameCandidate(val box: PageRegion, val sides: Int)
+        val candidates = mutableListOf<FrameCandidate>()
+        val seen = ByteArray(size)
+        val queue = IntArray(size)
+
+        // Best support of a straight, possibly slanted frame boundary
+        // through measured row/column ink extrema. This is not a
+        // line-pixel-intensity shortcut: it checks a complete component side.
+        fun straightSupport(profile: IntArray, limit: Int): Int {
+            val valid = IntArray(profile.size)
+            var n = 0
+            for (index in profile.indices)
+                if (profile[index] in 0 until limit) valid[n++] = index
+            if (n < 12) return 0
+            val leftFractions = intArrayOf(0, 12, 25, 38, 50)
+            val rightFractions = intArrayOf(50, 62, 75, 88, 100)
+            var best = 0
+            for (fractionA in leftFractions) for (fractionB in rightFractions) {
+                val a = valid[(n - 1) * fractionA / 100]
+                val b = valid[(n - 1) * fractionB / 100]
+                if (b <= a) continue
+                val slope = (profile[b] - profile[a]).toDouble() / (b - a)
+                if (kotlin.math.abs(slope) > 0.35) continue
+                var matches = 0
+                for (i in 0 until n) {
+                    val k = valid[i]
+                    val projected = profile[a] + (k - a) * slope
+                    if (kotlin.math.abs(profile[k] - projected) <= 2.5) matches++
+                }
+                best = maxOf(best, matches * 100 / n)
+                if (best >= 94) return best
+            }
+            return best
+        }
+
+        for (seed in ink.indices) {
+            if (ink[seed].toInt() == 0 || seen[seed].toInt() != 0) continue
+            var head = 0
+            var tail = 1
+            queue[0] = seed
+            seen[seed] = 1
+            var minX = seed % w
+            var maxX = minX
+            var minY = seed / w
+            var maxY = minY
+            while (head < tail) {
+                val pixel = queue[head++]
+                val x = pixel % w
+                val y = pixel / w
+                minX = minOf(minX, x)
+                maxX = maxOf(maxX, x)
+                minY = minOf(minY, y)
+                maxY = maxOf(maxY, y)
+                for (dy in -1..1) {
+                    val ny = y + dy
+                    if (ny < 0 || ny >= h) continue
+                    for (dx in -1..1) {
+                        val nx = x + dx
+                        if (nx < 0 || nx >= w || (dx == 0 && dy == 0)) continue
+                        val neighbour = ny * w + nx
+                        if (ink[neighbour].toInt() != 0 && seen[neighbour].toInt() == 0) {
+                            seen[neighbour] = 1
+                            queue[tail++] = neighbour
+                        }
+                    }
+                }
+            }
+            val bw = maxX - minX + 1
+            val bh = maxY - minY + 1
+            val boxArea = bw * bh
+            if (bw * 100 < w * 24 || bh * 100 < h * 16 ||
+                boxArea * 1000 < size * 55 ||
+                tail * 1000 < size * 12 ||
+                tail * 100 < boxArea * 10 ||
+                tail * 100 > boxArea * 92) continue
+
+            val rowLeft = IntArray(bh) { bw }
+            val rowRight = IntArray(bh) { -1 }
+            val colTop = IntArray(bw) { bh }
+            val colBottom = IntArray(bw) { -1 }
+            for (i in 0 until tail) {
+                val pixel = queue[i]
+                val rx = pixel % w - minX
+                val ry = pixel / w - minY
+                rowLeft[ry] = minOf(rowLeft[ry], rx)
+                rowRight[ry] = maxOf(rowRight[ry], rx)
+                colTop[rx] = minOf(colTop[rx], ry)
+                colBottom[rx] = maxOf(colBottom[rx], ry)
+            }
+            val sides = listOf(
+                straightSupport(rowLeft, bw),
+                straightSupport(rowRight, bw),
+                straightSupport(colTop, bh),
+                straightSupport(colBottom, bh),
+            ).count { it >= 74 }
+            if (sides >= 2) candidates.add(
+                FrameCandidate(PageRegion(
+                    (minX * 2 - 1).coerceAtLeast(0),
+                    (minY * 2 - 1).coerceAtLeast(0),
+                    ((maxX + 1) * 2 + 1).coerceAtMost(width),
+                    ((maxY + 1) * 2 + 1).coerceAtMost(height),
+                ), sides)
+            )
+            if (candidates.size > 9) return null
+        }
+        if (candidates.size < 3 ||
+            candidates.count { it.sides >= 3 } * 100 < candidates.size * 60 ||
+            candidates.sumOf { it.sides } * 2 < candidates.size * 5) return null
+
+        fun intersectArea(a: PageRegion, b: PageRegion): Long {
+            val dx = maxOf(0, minOf(a.right, b.right) - maxOf(a.left, b.left))
+            val dy = maxOf(0, minOf(a.bottom, b.bottom) - maxOf(a.top, b.top))
+            return dx.toLong() * dy
+        }
+        for (i in candidates.indices) for (j in i + 1 until candidates.size) {
+            val a = candidates[i].box
+            val b = candidates[j].box
+            val aArea = a.width.toLong() * a.height
+            val bArea = b.width.toLong() * b.height
+            if (intersectArea(a, b) * 100 >
+                minOf(aArea, bArea) * 28) return null
+        }
+
+        // Verify page-wide ink coverage, rather than accepting a collage of
+        // only a few speech boxes or page-furniture decorations.
+        val covered = ByteArray(size)
+        for (candidate in candidates) {
+            val box = candidate.box
+            for (y in box.top / 2 until ((box.bottom + 1) / 2).coerceAtMost(h))
+                for (x in box.left / 2 until ((box.right + 1) / 2).coerceAtMost(w))
+                    covered[y * w + x] = 1
+        }
+        var coveredArea = 0
+        var coveredInk = 0
+        for (pos in 0 until size) {
+            if (covered[pos].toInt() == 0) continue
+            coveredArea++
+            if (ink[pos].toInt() != 0) coveredInk++
+        }
+        if (coveredArea * 100 < size * 45 ||
+            coveredInk * 100 < totalInk * 90) return null
+
+        // Shared-balloon veto: an enclosed background component that has
+        // substantial exclusive pixels in two proposed panels is likely a
+        // speech balloon or drawing crossing their boundary. If uncertain,
+        // keep the conventional overlapping reading-row rescue instead.
+        val paperSeen = ByteArray(size)
+        for (seed in ink.indices) {
+            if (ink[seed].toInt() != 0 || paperSeen[seed].toInt() != 0) continue
+            var head = 0
+            var tail = 1
+            queue[0] = seed
+            paperSeen[seed] = 1
+            var borderTouch = false
+            while (head < tail) {
+                val pixel = queue[head++]
+                val x = pixel % w
+                val y = pixel / w
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1)
+                    borderTouch = true
+                for (dy in -1..1) {
+                    val ny = y + dy
+                    if (ny < 0 || ny >= h) continue
+                    for (dx in -1..1) {
+                        val nx = x + dx
+                        if (nx < 0 || nx >= w || (dx == 0 && dy == 0)) continue
+                        val neighbour = ny * w + nx
+                        if (ink[neighbour].toInt() == 0 &&
+                            paperSeen[neighbour].toInt() == 0) {
+                            paperSeen[neighbour] = 1
+                            queue[tail++] = neighbour
+                        }
+                    }
+                }
+            }
+            if (borderTouch || tail * 1000 < size * 2 ||
+                tail * 100 > size * 12) continue
+            val owners = IntArray(candidates.size)
+            for (i in 0 until tail) {
+                val pixel = queue[i]
+                val x = pixel % w * 2
+                val y = pixel / w * 2
+                var owner = -1
+                for (index in candidates.indices) {
+                    val box = candidates[index].box
+                    if (x in box.left until box.right &&
+                        y in box.top until box.bottom) {
+                        if (owner >= 0) { owner = -2; break }
+                        owner = index
+                    }
+                }
+                if (owner >= 0) owners[owner]++
+            }
+            if (owners.count { it * 100 >= tail * 8 } >= 2) {
+                trace?.invoke(PanelDebugEvent("frame-confidence",
+                    PageRegion(0, 0, width, height), "reject",
+                    "enclosed speech/background region crosses candidate panel frames"))
+                return null
+            }
+        }
+
+        // Every source region remains a complete bounding rectangle. Group
+        // approximately co-top rows first, then preserve manga RTL or comic LTR
+        // order within each row; never depend on BFS discovery order.
+        val sorted = candidates.map { it.box }.sortedWith(
+            compareBy<PageRegion> { it.top }.thenBy { it.left })
+        val ordered = mutableListOf<PageRegion>()
+        val remaining = sorted.toMutableList()
+        while (remaining.isNotEmpty()) {
+            val leader = remaining.first()
+            val sameRow = remaining.filter {
+                kotlin.math.abs(it.top - leader.top) <= maxOf(14, height / 12)
+            }
+            ordered.addAll(if (rightToLeft) sameRow.sortedByDescending { it.left }
+                else sameRow.sortedBy { it.left })
+            remaining.removeAll(sameRow)
+        }
+        trace?.invoke(PanelDebugEvent("frame-confidence",
+            PageRegion(0, 0, width, height), "accept",
+            "background-relative components with validated frame sides, coverage and balloon veto"))
+        return ordered
+    }
+
+    fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
             "Panel detection needs a bounded, nonempty thumbnail"
         }
         require(grayscale.size == width * height) { "Grayscale thumbnail dimensions do not match" }
         val whole = PageRegion(0, 0, width, height)
-        fun fallback(why: String) = PanelPlan(listOf(whole), true, why)
+        fun fallback(why: String): PanelPlan {
+            trace?.invoke(PanelDebugEvent("page", whole, "fallback", why))
+            return PanelPlan(listOf(whole), true, why)
+        }
         // No OCR means we cannot prove that a low-ink region has no lettering.
         // Only trust clear rectangular gutters; uncertain pages stay intact.
         if (height.toLong() > width.toLong() * 3L) return fallback("long strip: preserve existing webtoon slicing")
+        if (looksLikeTextDominantPage(width, height, grayscale)) {
+            trace?.invoke(PanelDebugEvent("page", whole, "keep",
+                "repeated text-like horizontal bands; do not fragment prose into comic panels"))
+            return PanelPlan(listOf(whole), false,
+                "text-dominant source kept intact", preserveSingleFrame = true)
+        }
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
-        val detector = Detector(width, height, grayscale)
-        // Row detection is authoritative. Each row is independently eligible
-        // for finer panel partitioning; a rejected panel split keeps that row.
-        // If no row seam exists, try panel detection on the whole page.
-        val rows = detector.partitionRows(whole)
+        val detector = Detector(width, height, grayscale, trace)
+        // Row detection is authoritative, including conservatively verified
+        // pale-gray and dark HORIZONTAL separators. Try columns only INSIDE
+        // each resulting row; if a row cannot be split safely, retain it.
+        // The same recovery validators are already used by Row by Row.
+        val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true,
+            allowDarkRecovery = true)
         val output = mutableListOf<PageRegion>()
         var recoveredRows = 0
+        // The existing short-footer path can also collapse two rows to one.
+        // Remember that decision so the later page-count guard doesn't
+        // accidentally return the legacy free-form slicer fallback.
+        var absorbedShortFooter = false
         for ((index, row) in rows.withIndex()) {
             // Reserve one output slot for every remaining detected row.
             // Extra panel candidates must never force a page-wide fallback.
             val available = MAX_PANELS - output.size - (rows.size - index - 1)
             if (available < 2) {
+                trace?.invoke(PanelDebugEvent("tier", row, "keep", "panel limit"))
                 output.add(row)
                 continue
             }
-            val rowDetector = Detector(width, height, grayscale)
+            val rowDetector = Detector(width, height, grayscale, trace)
+            // Conan source 21: a shallow, almost uninked FINAL tier may be
+            // merely the foot of the illustrated row above it. Do not promote
+            // its vertical rule fragments into independent rotated pages.
+            // When the previous tier is a full-width partition of stable
+            // side-by-side columns, extend those columns through the footer.
+            // This conserves EVERY source pixel; otherwise keep the tier whole.
+            if (index == rows.lastIndex && index > 0 &&
+                row.bottom == height && rowDetector.isShallowUnframedTier(row) &&
+                rowDetector.isLowInkFooter(row)) {
+                val previousRow = rows[index - 1]
+                val adjacent = output.indices.filter { ix ->
+                    val r = output[ix]
+                    r.top == previousRow.top && r.bottom == row.top
+                }.sortedBy { output[it].left }
+                val joinsSafely = adjacent.size in 1..3 &&
+                    output[adjacent.first()].left == 0 &&
+                    output[adjacent.last()].right == width &&
+                    adjacent.zipWithNext().all { (a, b) ->
+                        output[a].right == output[b].left
+                    }
+                if (joinsSafely) {
+                    for (ix in adjacent) output[ix] = output[ix].copy(bottom = row.bottom)
+                    absorbedShortFooter = true
+                    trace?.invoke(PanelDebugEvent("tier", row, "absorb",
+                        "terminal ruled footer retained inside preceding illustrated tier"))
+                } else {
+                    output.add(row)
+                    trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                        "terminal ruled footer has no safe adjacent full-width partition"))
+                }
+                continue
+            }
+            // Sparse terminal footers should be considered for safe absorption
+            // BEFORE this generic no-split rule. Otherwise a nearly blank
+            // footer is preserved as its own unnecessary reading frame.
             // A whole detected horizontal tier can consist of just a page
             // frame, a few decorative rules, or sparse lettering. Recursively
             // splitting that tier turns thin strokes into standalone viewports
@@ -56,11 +839,24 @@ object PanelDetectionCore {
             // screens. Preserve the entire tier, including all its pixels;
             // this guard belongs ONLY to Panel by Panel, not detectRows().
             if (rowDetector.isSparseRow(row)) {
+                trace?.invoke(PanelDebugEvent("tier", row, "keep", "sparse thumbnail tier"))
                 output.add(row)
                 continue
             }
             val node = rowDetector.partition(row, 0)
             val candidates = node?.let { PanelReadingOrder.flatten(it, rightToLeft) }
+            // Conan source 66: the multi-word title row generated five tiny
+            // "panels". A shallow, UNFRAMED top-band with 3+ recursive pieces
+            // has insufficient visual evidence to classify word groups as
+            // illustrated panels. Keep the band intact; retain real art below.
+            if (row.bottom.toLong() * 4 <= height.toLong() &&
+                rowDetector.isShallowUnframedTier(row) &&
+                candidates != null && candidates.size >= 3) {
+                output.add(row)
+                trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                    "shallow unframed headline candidate fragments"))
+                continue
+            }
             val valid = candidates != null && candidates.size in 2..available &&
                 candidates.all { it.width > 0 && it.height > 0 &&
                     rowDetector.hasContent(it) && !rowDetector.isLikelyBorderFragment(it) } &&
@@ -76,28 +872,610 @@ object PanelDetectionCore {
                 } >= 4) &&
                 coversRegion(candidates, row)
             if (valid) {
+                trace?.invoke(PanelDebugEvent("tier", row, "accept",
+                    "validated ${candidates!!.size} panel candidates"))
                 output.addAll(candidates!!)
             } else {
+                // Don't spend time inspecting rejected candidates when the
+                // user has not explicitly enabled diagnostics.
+                if (trace != null) {
+                    val rejected = when {
+                        candidates == null -> "recursive partition unavailable"
+                        candidates.size !in 2..available -> "candidate count outside permitted range"
+                        candidates.any { !rowDetector.hasContent(it) } -> "candidate has insufficient ink"
+                        candidates.any { rowDetector.isLikelyBorderFragment(it) } -> "candidate resembles border or text stroke"
+                        candidates.any { it.width.toLong() * it.height * 100 <
+                            row.width.toLong() * row.height * 2 } -> "candidate below minimum area"
+                        candidates.any { it.width.toLong() * 100 < row.width.toLong() * 8 ||
+                            it.height.toLong() * 100 < row.height.toLong() * 8 } -> "candidate too narrow or short"
+                        candidates.size > 12 -> "excessive small candidate fragments"
+                        else -> "candidate coverage invalid"
+                    }
+                    trace.invoke(PanelDebugEvent("tier", row, "reject", rejected))
+                    }
                 // The normal recursive candidate tree may over-split one small
                 // region and be rejected as a whole. Only *after* that rejection,
                 // retry independent vertical seams inside this exact row. A
                 // failed retry leaves the existing grouped-row fallback intact.
                 val recovered = rowDetector.retryRejectedRowColumns(
                     row, available, rightToLeft,
-                )
+                ) ?: rowDetector.recoverDarkGutter(row, horizontal = false)?.let { axis ->
+                    val left = row.copy(right = axis)
+                    val right = row.copy(left = axis)
+                    if (rightToLeft) listOf(right, left) else listOf(left, right)
+                }
                 if (recovered != null) {
+                    trace?.invoke(PanelDebugEvent("tier", row, "recover",
+                        "accepted ${recovered.size} substantial columns in reading order"))
                     output.addAll(recovered)
                     recoveredRows++
-                } else output.add(row)
+                } else {
+                    trace?.invoke(PanelDebugEvent("tier", row, "keep",
+                        "no safe alternative column split"))
+                    output.add(row)
+                }
             }
         }
+        // The usual shallow unframed footer absorption above is intentionally
+        // strict. A somewhat TALLER terminal strip made of almost nothing but
+        // a border may still escape it and become an entire near-white zoom
+        // frame. Fold it back ONLY when its immediate predecessor is one
+        // illustrated full-width row. Never cross a source-page boundary,
+        // merge a title above the story, or duplicate the same footer across
+        // independently ordered side-by-side panels.
+        var absorbedRuledTail = false
+        if (rows.size >= 2 && output.size >= 2) {
+            val tail = output.last()
+            val before = output[output.lastIndex - 1]
+            val precedingRow = rows[rows.lastIndex - 1]
+            if (tail == rows.last() &&
+                tail.left == 0 && tail.right == width && tail.bottom == height &&
+                before.left == 0 && before.right == width &&
+                before.top == precedingRow.top && before.bottom == tail.top &&
+                !detector.isSparseRow(before) &&
+                detector.isVerySparseRuledTail(tail)) {
+                output[output.lastIndex - 1] = before.copy(bottom = tail.bottom)
+                output.removeAt(output.lastIndex)
+                absorbedRuledTail = true
+                trace?.invoke(PanelDebugEvent("tier", tail, "absorb",
+                    "near-empty terminal border attached to full-width illustrated row"))
+            }
+        }
+        // Correct rare speech-bubble strips between otherwise aligned columns.
+        // This is a geometrically validated Panel-by-Panel post-pass only.
+        val consolidated = consolidateShallowDialogueStrip(
+            width, height, grayscale, rows, output, rightToLeft, trace)
+        if (consolidated.size != output.size) {
+            output.clear()
+            output.addAll(consolidated)
+        }
+        // Even a confidently accepted row can subdivide ONE narrow panel
+        // into an isolated first speech-balloon line and the art below it.
+        // Attach that unframed shallow strip before sizing or AUTO_FIT.
+        val wholeBubblePanels = coalesceShallowSameColumnFragment(
+            width, height, grayscale, output, trace)
+        if (wholeBubblePanels.size != output.size) {
+            output.clear()
+            output.addAll(wholeBubblePanels)
+        }
+        // A near-white scan heading/footer must not become a giant
+        // landscape view after Auto Fit. Reattach only at page edges and only
+        // when its immediate illustrated neighbor(s) span the full width.
+        val coalescedEdges = coalesceSparsePageEdgeStrip(
+            width, height, grayscale, output, trace)
+        val absorbedPageEdge = coalescedEdges.size != output.size
+        if (absorbedPageEdge) {
+            output.clear()
+            output.addAll(coalescedEdges)
+        }
+        // The two-row case now legitimately produces ONE complete rectangle.
+        // Returning a generic fallback would send it back through the legacy
+        // free-form slicer and recreate the unwanted near-empty views.
+        if ((absorbedRuledTail || absorbedShortFooter || absorbedPageEdge) && output.size == 1 &&
+            coversEntirePage(output, width, height)) {
+            // QA9 regression: source 60's pale 40px header is correctly
+            // absorbed, but this single-frame suppression also hid the two
+            // useful *enlarged* story views. Preserve the no-extra-strip
+            // decision, while authorizing ONLY edge-absorbed pages to try
+            // one guarded readability pass in the final planner.
+            val edgeZoom = absorbedPageEdge && !absorbedRuledTail && !absorbedShortFooter &&
+                rows.size == 2 && !detector.isSparseRow(output.single())
+            return PanelPlan(output, false,
+                if (edgeZoom) "sparse page edge absorbed; guarded zoom allowed"
+                else "illustrated row with absorbed terminal border",
+                preserveSingleFrame = !edgeZoom, allowSingleEdgeZoom = edgeZoom)
+        }
         if (output.size !in 2..MAX_PANELS || !coversEntirePage(output, width, height)) {
+            // Preserve all v1.0.16 row-first, subtitle, title and recovery
+            // guards. Only a fully unsplit non-sparse page gets the new path.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val recovered = recoverSlantedPaleGutter(width, height, grayscale, rightToLeft)
+                if (recovered != null) {
+                    val why = "two safe overlapping rectangular views along a slanted pale gutter"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(recovered, false, why)
+                }
+            }
+            // Dark *straight* horizontal gutters may separate independent rows.
+            // Unlike black frame lines, these need strongly supported artwork
+            // on both sides. Never treat a dark strip as proof by itself.
+            if (output.size == 1 && rows.size == 1) {
+                val axis = detector.recoverDarkGutter(whole, horizontal = true)
+                if (axis != null) {
+                    val why = "two illustrated rows divided by a validated dark gutter"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(
+                        listOf(whole.copy(bottom = axis), whole.copy(top = axis)),
+                        false, why
+                    )
+                }
+            }
+            // One Piece frame 884: rows can be bounded by two *slanted*
+            // horizontal frame rails. The normal horizontal row search is
+            // intentionally strict and must not invent a flat cut through
+            // their artwork. Only recover if all previous detectors failed.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val angled = recoverSlantedHorizontalRails(width, height, grayscale)
+                if (angled != null) {
+                    val why = "strong slanted horizontal frame rails with overlapping protected rows"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(angled, false, why)
+                }
+            }
+            // Dark full-width backgrounds between ink-rich comics rows
+            // (e.g. One Piece source ordinals 18/123) are not necessarily
+            // bordered by 22% immediate dark art on BOTH sides. Recover only
+            // when a substantial, almost-solid divider with pale shoulders
+            // separates two independently illustrated page regions.
+            // Avoid applying these broader flank rules to Row-by-Row.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val framedAxis = detector.recoverDarkGutter(
+                    whole, horizontal = true, allowStrongFramedFallback = true,
+                )
+                if (framedAxis != null) {
+                    val why = "strong black framed horizontal divider with two illustrated regions"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(
+                        listOf(whole.copy(bottom = framedAxis), whole.copy(top = framedAxis)),
+                        false, why,
+                    )
+                }
+            }
+            // Secondary, *paired* diagonal-rail recovery. On illustrated
+            // comics a thick slanted border may have bright paper on one
+            // side and artwork directly against the other. The earlier
+            // symmetric white-shoulder test correctly fails those bars.
+            // Require TWO similar parallel, long, near-black borders and
+            // meaningful illustrations in all three story zones before
+            // returning overlapping (never polygon-clipped) rectangles.
+            if (output.size == 1 && rows.size == 1 && !detector.isSparseRow(whole)) {
+                val paired = recoverPairedSlantedFramedRows(width, height, grayscale)
+                if (paired != null) {
+                    val why = "two strong parallel slanted frame rails with three illustrated story zones"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(paired, false, why)
+                }
+            }
+            // Components can expose genuinely framed, irregularly arranged
+            // panels even where a single clean straight or slanted GUTTER does
+            // not exist (Panels+-inspired background-relative evidence).
+            // This is strictly the *last* detector, before the deliberately
+            // approximate overlapping reading-row rescue.
+            if (output.size == 1 && rows.size == 1 &&
+                !detector.isSparseRow(whole)) {
+                val frames = recoverFrameEvidenceViews(
+                    width, height, grayscale, rightToLeft, trace)
+                if (frames != null) {
+                    val why = "background-relative framed components with shared-balloon safety"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(frames, false, why)
+                }
+            }
+            // All validated boundaries failed. Instead of silently
+            // shrinking a dense illustrated portrait page to one X4 frame,
+            // provide three protected, overlapping story views. This is a
+            // reading fallback, NOT a claim that arbitrary cuts are panels.
+            if (output.size == 1 && rows.size == 1 &&
+                !detector.isSparseRow(whole)) {
+                val overlapViews = recoverOverlappingRowViews(
+                    width, height, grayscale, rightToLeft, trace)
+                if (overlapViews != null) {
+                    val why = "experimental last-resort overlapping reading rows"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(overlapViews, false, why)
+                }
+            }
             return fallback("no validated rows or panels")
         }
         val reason = if (recoveredRows > 0)
             "row-first partition with rejected-row column recovery"
         else "row-first partition with per-row panel fallback"
+        trace?.invoke(PanelDebugEvent("page", whole, "accept", reason))
         return PanelPlan(output, false, reason)
+    }
+
+    /**
+     * OCR-free final fallback for TWO near-parallel diagonal comic frame
+     * rails. The legacy slanted-rail validator requires light paper on BOTH
+     * sides; a genuine border beside artwork may have paper on only one
+     * side. This deliberately DOES NOT loosen that established validator.
+     *
+     * A rail is only a candidate when:
+     *  - >=90% of its long path has near-black ink within +/-3 pixels;
+     *  - one 9-pixel shoulder is >=90% pale and the other >=30% pale;
+     *  - there is a second substantial rail of the same direction/slope.
+     * The paired rails must bound three independently illustrated story
+     * zones, including the middle strip. An isolated action stroke or a
+     * single black line therefore cannot trigger this fallback.
+     *
+     * The returned THREE full-width rectangles overlap enough to cover the
+     * complete diagonal travel, preserving every original source pixel,
+     * balloon and border. It is only called for a wholly unsplit Panel
+     * source. Row-by-Row and all already-validated ordinary pages are
+     * unaffected. Tested on independently authored synthetic fixtures.
+     */
+    internal fun recoverPairedSlantedFramedRows(
+        width: Int, height: Int, gray: ByteArray,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 200..1024 ||
+            width.toLong() * height > MAX_THUMB_PIXELS ||
+            height.toLong() > width.toLong() * 3 || gray.size != width * height)
+            return null
+
+        data class Rail(
+            val center: Int, val tilt: Int, val halfTravel: Int, val score: Int,
+        )
+        val xStep = maxOf(3, width / 80)
+        val proposals = mutableListOf<Rail>()
+        for (tilt in -20..20 step 2) {
+            if (kotlin.math.abs(tilt) < 6) continue
+            val halfTravel = (width * kotlin.math.abs(tilt) + 199) / 200
+            for (center in height * 18 / 100..height * 82 / 100 step 4) {
+                if (center - halfTravel < height * 14 / 100 ||
+                    center + halfTravel > height * 86 / 100) continue
+                var dark = 0
+                var paleBefore = 0
+                var paleAfter = 0
+                var count = 0
+                for (x in 8 until width - 8 step xStep) {
+                    val y = center + (x - width / 2) * tilt / 100
+                    if (y - 10 <= 0 || y + 10 >= height) continue
+                    var nearBlack = false
+                    for (offset in -3..3) {
+                        if ((gray[(y + offset) * width + x].toInt() and 255) < 115) {
+                            nearBlack = true
+                            break
+                        }
+                    }
+                    if (nearBlack) dark++
+                    if ((gray[(y - 9) * width + x].toInt() and 255) > 242) paleBefore++
+                    if ((gray[(y + 9) * width + x].toInt() and 255) > 242) paleAfter++
+                    count++
+                }
+                if (count < 25 || dark * 100 < count * 90 ||
+                    maxOf(paleBefore, paleAfter) * 100 < count * 90 ||
+                    minOf(paleBefore, paleAfter) * 100 < count * 30) continue
+                val score = (dark * 100 / count) +
+                    (maxOf(paleBefore, paleAfter) * 100 / count)
+                proposals.add(Rail(center, tilt, halfTravel, score))
+            }
+        }
+        if (proposals.size < 2) return null
+
+        // Suppress near-identical scores from one physical drawn border:
+        // they must never count as a matched *pair*. Limit combinatorial
+        // work on busy manga thumbnails without allocating another bitmap.
+        val rails = mutableListOf<Rail>()
+        for (proposal in proposals.sortedWith(
+            compareByDescending<Rail> { it.score }
+                .thenByDescending { kotlin.math.abs(it.tilt) }
+                .thenBy { it.center }
+        )) {
+            if (rails.none {
+                kotlin.math.abs(it.center - proposal.center) < maxOf(24, height / 24)
+            }) rails.add(proposal)
+            if (rails.size >= 24) break
+        }
+        if (rails.size < 2) return null
+
+        fun illustrated(top: Int, bottom: Int): Boolean {
+            if (top < 0 || bottom > height || bottom - top < height * 8 / 100)
+                return false
+            val dy = maxOf(2, (bottom - top) / 80)
+            val dx = maxOf(2, width / 100)
+            val columnInk = BooleanArray((width + dx - 1) / dx)
+            var rowsWithInk = 0
+            var sampledRows = 0
+            var darkInk = 0
+            var lightPaper = 0
+            var total = 0
+            for (y in top until bottom step dy) {
+                var rowInk = 0
+                var col = 0
+                for (x in 0 until width step dx) {
+                    total++
+                    val value = gray[y * width + x].toInt() and 255
+                    if (value < 160) {
+                        darkInk++
+                        rowInk++
+                        columnInk[col] = true
+                    }
+                    if (value >= 230) lightPaper++
+                    col++
+                }
+                if (rowInk > 0) rowsWithInk++
+                sampledRows++
+            }
+            // Distributed DARK linework and LIGHT paper, not simply gray
+            // or black fill, are required in each actual story zone.
+            return total > 0 && darkInk * 100 >= total * 10 &&
+                lightPaper * 100 >= total * 15 &&
+                rowsWithInk * 100 >= sampledRows * 45 &&
+                columnInk.count { it } * 100 >= columnInk.size * 40
+        }
+
+        // Return the highest-scoring valid pair, not arbitrary first match.
+        // Art within a thin diagonal middle strip is checked near its
+        // CENTERLINES, not after discarding the complete diagonal travel:
+        // an aggressive full-travel exclusion would erase a real 120px row.
+        var best: List<PageRegion>? = null
+        var bestScore = -1
+        val middleMargin = maxOf(10, height / 40)
+        val outerMargin = maxOf(25, height / 15)
+        val overlapGuard = maxOf(8, height / 50)
+        for (i in rails.indices) for (j in i + 1 until rails.size) {
+            val a = rails[i]
+            val b = rails[j]
+            if (a.tilt * b.tilt <= 0 ||
+                kotlin.math.abs(a.tilt - b.tilt) > 4) continue
+            val upper = if (a.center <= b.center) a else b
+            val lower = if (a.center <= b.center) b else a
+            if (lower.center - upper.center < maxOf(60, height / 9)) continue
+            if (!illustrated(0, upper.center - outerMargin) ||
+                !illustrated(upper.center + middleMargin,
+                    lower.center - middleMargin) ||
+                !illustrated(lower.center + outerMargin, height)) continue
+
+            val firstBottom = (upper.center + upper.halfTravel +
+                overlapGuard).coerceAtMost(height)
+            val middleTop = (upper.center - upper.halfTravel -
+                overlapGuard).coerceAtLeast(0)
+            val middleBottom = (lower.center + lower.halfTravel +
+                overlapGuard).coerceAtMost(height)
+            val lastTop = (lower.center - lower.halfTravel -
+                overlapGuard).coerceAtLeast(0)
+            if (firstBottom <= height / 10 ||
+                middleBottom - middleTop <= height / 10 ||
+                height - lastTop <= height / 10 ||
+                middleTop >= firstBottom || lastTop >= middleBottom) continue
+            val score = upper.score + lower.score
+            if (score > bestScore) {
+                bestScore = score
+                best = listOf(
+                    PageRegion(0, 0, width, firstBottom),
+                    PageRegion(0, middleTop, width, middleBottom),
+                    PageRegion(0, lastTop, width, height),
+                )
+            }
+        }
+        return best
+    }
+
+    /**
+     * Conservative recovery for sloped HORIZONTAL comics rows, not arbitrary
+     * panel shapes. A rail must be almost continuous dark ink with bright
+     * paper immediately above and below it. Multiple separated rails are
+     * permitted, but every resulting interior row needs distributed art.
+     *
+     * A rectangular crop expands past the full diagonal travel on BOTH
+     * sides of the boundary. Thus a character touching the angled frame may
+     * be repeated but no original pixels disappear. Called only if the
+     * regular row-first, column, pale diagonal and dark straight paths fail.
+     * No OCR, image allocation, polygon masks or external library is needed.
+     */
+    private fun recoverSlantedHorizontalRails(
+        width: Int, height: Int, gray: ByteArray,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 200..1024 ||
+            height.toLong() > width.toLong() * 3) return null
+        data class Rail(val center: Int, val tiltPercent: Int, val score: Int) {
+            val halfTravel: Int get() = (width * kotlin.math.abs(tiltPercent) + 199) / 200
+        }
+        val xStep = maxOf(3, width / 80)
+        val candidates = mutableListOf<Rail>()
+        // Bounded ~20*170*85 samples on typical X4 input thumbs.
+        for (tilt in -20..20 step 2) {
+            if (kotlin.math.abs(tilt) < 6) continue
+            for (center in height * 18 / 100..height * 82 / 100 step 4) {
+                val travel = (width * kotlin.math.abs(tilt) + 199) / 200
+                if (center - travel < height * 14 / 100 ||
+                    center + travel > height * 86 / 100) continue
+                var dark = 0
+                var paperBefore = 0
+                var paperAfter = 0
+                var samples = 0
+                for (x in 8 until width - 8 step xStep) {
+                    val y = center + (x - width / 2) * tilt / 100
+                    if (y - 10 <= 0 || y + 10 >= height) continue
+                    fun value(atY: Int): Int = gray[atY * width + x].toInt() and 255
+                    if ((-3..3).any { value(y + it) < 115 }) dark++
+                    if (value(y - 9) > 242) paperBefore++
+                    if (value(y + 9) > 242) paperAfter++
+                    samples++
+                }
+                if (samples < 25 ||
+                    dark * 100 < samples * 90 ||
+                    paperBefore * 100 < samples * 85 ||
+                    paperAfter * 100 < samples * 85) continue
+                candidates += Rail(center, tilt, dark * 100 / samples +
+                    minOf(paperBefore, paperAfter) * 100 / samples)
+            }
+        }
+        if (candidates.isEmpty()) return null
+        val selected = mutableListOf<Rail>()
+        val minSeparation = maxOf(35, height / 12)
+        for (c in candidates.sortedWith(
+            compareByDescending<Rail> { it.score }.thenBy { it.center }
+        )) {
+            if (selected.none { kotlin.math.abs(it.center - c.center) <= minSeparation })
+                selected.add(c)
+            if (selected.size >= 5) break
+        }
+        selected.sortBy { it.center }
+        if (selected.isEmpty()) return null
+
+        val guard = maxOf(8, height / 50)
+        // Check artwork well outside the rail/overlap envelope. Sparse
+        // credits, titles with decorative rules and splash backgrounds must
+        // not be promoted into independent reading panels.
+        fun illustrated(innerTop: Int, innerBottom: Int): Boolean {
+            if (innerBottom - innerTop < height * 10 / 100) return false
+            val dy = maxOf(2, (innerBottom - innerTop) / 80)
+            val dx = maxOf(2, width / 100)
+            val xInk = BooleanArray((width + dx - 1) / dx)
+            var rowsWithInk = 0
+            var dark = 0
+            var total = 0
+            var rowIndex = 0
+            for (y in innerTop until innerBottom step dy) {
+                var rowDark = 0
+                var colIndex = 0
+                for (x in 0 until width step dx) {
+                    total++
+                    if ((gray[y * width + x].toInt() and 255) < 220) {
+                        dark++
+                        rowDark++
+                        xInk[colIndex] = true
+                    }
+                    colIndex++
+                }
+                if (rowDark > 0) rowsWithInk++
+                rowIndex++
+            }
+            return total > 0 && dark * 100 >= total * 10 &&
+                rowsWithInk * 100 >= rowIndex * 45 &&
+                xInk.count { it } * 100 >= xInk.size * 40
+        }
+        var innerTop = 0
+        for (rail in selected) {
+            val innerBottom = rail.center - rail.halfTravel - guard
+            if (!illustrated(innerTop, innerBottom)) return null
+            innerTop = rail.center + rail.halfTravel + guard
+        }
+        if (!illustrated(innerTop, height)) return null
+
+        val result = mutableListOf<PageRegion>()
+        var top = 0
+        for (rail in selected) {
+            val lower = (rail.center + rail.halfTravel + guard).coerceAtMost(height)
+            result += PageRegion(0, top, width, lower)
+            top = (rail.center - rail.halfTravel - guard).coerceAtLeast(0)
+        }
+        result += PageRegion(0, top, width, height)
+        return if (result.size in 2..6 && result.all {
+            it.width > 0 && it.height > height / 10
+        } && result.zipWithNext().all { (a, b) ->
+            b.top < a.bottom
+        }) result else null
+    }
+
+    /**
+     * Limited recovery for TWO strong illustrated regions separated by a
+     * *continuous and slanted* light corridor. This is deliberately NOT a
+     * general polygon detector, and does not split black/gray/touching borders.
+     *
+     * The output rectangles overlap by the full horizontal travel of the
+     * slanted gap, plus a safety margin. Their union covers the entire page;
+     * no diagonal crop, alpha mask, balloon or original pixel is ever erased.
+     *
+     * Called ONLY after the strict row-first panel detector has returned one
+     * undivided, non-sparse page. Work is bounded to a 1 MP grayscale thumb.
+     */
+    private fun recoverSlantedPaleGutter(
+        width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 120..1024 ||
+            height.toLong() > width.toLong() * 3) return null
+        val minTravel = maxOf(14, width / 12)
+        val maxTravel = width / 5
+        if (minTravel > maxTravel) return null
+        val margin = maxOf(6, width / 25)
+        // Sample well OUTSIDE the pale corridor (not inside its white rim).
+        // A 12–16 px illustrated gutter needs an adjacent edge probe that
+        // reaches both actual panel borders before crediting the candidate.
+        val edgeOffset = maxOf(10, width / 25)
+        val centerStep = maxOf(2, width / 90)
+        val travelStep = maxOf(2, width / 90)
+        val yStep = maxOf(1, height / 260)
+        fun brightness(x: Int, y: Int): Int = grayscale[y * width + x].toInt() and 255
+        data class Candidate(val top: Int, val bottom: Int, val adjacentRows: Int)
+        var best: Candidate? = null
+        val requiredRows = (height + yStep - 1) / yStep
+        // A scanline is eligible only if a *five-pixel-wide* band stays
+        // consistently pale (even slightly off-white scan gutters), with
+        // dark illustrated borders on BOTH sides.
+        // Just a white line inside a dark splash page is insufficient without
+        // sustained parallel edges, and a single dark speech-balloon crossing
+        // vetoes the candidate completely.
+        for (travel in -maxTravel..maxTravel step travelStep) {
+            if (kotlin.math.abs(travel) < minTravel) continue
+            for (center in width * 30 / 100..width * 70 / 100 step centerStep) {
+                val top = center - travel / 2
+                val bottom = top + travel
+                if (minOf(top, bottom) < width / 5 ||
+                    maxOf(top, bottom) > width * 4 / 5) continue
+                var adjacent = 0
+                var checked = 0
+                var safe = true
+                for (y in 0 until height step yStep) {
+                    val x = top + (travel.toLong() * y / (height - 1)).toInt()
+                    if (x - edgeOffset < margin || x + edgeOffset >= width - margin ||
+                        (x - 2..x + 2).any { brightness(it, y) < 240 }) {
+                        safe = false
+                        break
+                    }
+                    val left = brightness(x - edgeOffset, y) < 215
+                    val right = brightness(x + edgeOffset, y) < 215
+                    if (left && right) adjacent++
+                    checked++
+                }
+                if (!safe || checked != requiredRows ||
+                    adjacent * 100 < checked * 80) continue
+                // Distinguish a genuine pair of illustrated panels from
+                // empty margins, isolated borders or sparse title lettering.
+                // Test ink distribution through the middle of each side.
+                var leftArtRows = 0
+                var rightArtRows = 0
+                for (y in 0 until height step yStep) {
+                    val x = top + (travel.toLong() * y / (height - 1)).toInt()
+                    var leftInk = 0
+                    var rightInk = 0
+                    for (col in margin until x - edgeOffset step maxOf(1, width / 90))
+                        if (brightness(col, y) < 200) leftInk++
+                    for (col in x + edgeOffset + 1 until width - margin step maxOf(1, width / 90))
+                        if (brightness(col, y) < 200) rightInk++
+                    if (leftInk >= 4) leftArtRows++
+                    if (rightInk >= 4) rightArtRows++
+                }
+                if (leftArtRows * 100 < requiredRows * 65 ||
+                    rightArtRows * 100 < requiredRows * 65) continue
+                if (best == null || adjacent > best.adjacentRows)
+                    best = Candidate(top, bottom, adjacent)
+            }
+        }
+        val chosen = best ?: return null
+        val padding = maxOf(4, width / 60)
+        val leftEnd = (maxOf(chosen.top, chosen.bottom) + edgeOffset + padding)
+            .coerceAtMost(width)
+        val rightStart = (minOf(chosen.top, chosen.bottom) - edgeOffset - padding)
+            .coerceAtLeast(0)
+        // Require useful standalone views, but retain overlap to guarantee
+        // every source coordinate survives the slanted boundary.
+        if (leftEnd < width / 3 || rightStart > width * 2 / 3 ||
+            rightStart >= leftEnd) return null
+        val left = PageRegion(0, 0, leftEnd, height)
+        val right = PageRegion(rightStart, 0, width, height)
+        return if (rightToLeft) listOf(right, left) else listOf(left, right)
     }
 
     /**
@@ -105,18 +1483,39 @@ object PanelDetectionCore {
      * separate rows. Vertical panel boundaries are intentionally ignored.
      * Uncertain pages remain whole rather than becoming arbitrary strips.
      */
-    fun detectRows(width: Int, height: Int, grayscale: ByteArray): PanelPlan {
+    fun detectRows(width: Int, height: Int, grayscale: ByteArray,
+        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS)
         require(grayscale.size == width * height)
         val whole = PageRegion(0, 0, width, height)
-        fun fallback(reason: String) = PanelPlan(listOf(whole), true, reason)
-        val detector = Detector(width, height, grayscale)
-        val rows = detector.partitionRows(whole)
+        fun fallback(reason: String): PanelPlan {
+            trace?.invoke(PanelDebugEvent("page", whole, "fallback", reason))
+            return PanelPlan(listOf(whole), true, reason)
+        }
+        val detector = Detector(width, height, grayscale, trace)
+        // The row-only mode gets a *second chance* for nonwhite but very
+        // pale, consistently empty horizontal bands. Panel-by-Panel keeps
+        // its established row-first detector unchanged.
+        val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true,
+            allowDarkRecovery = true)
         if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
         if (rows.any { !detector.hasContent(it) }) return fallback("empty row")
         if (!coversEntirePage(rows, width, height)) return fallback("unsafe row coverage")
-        return PanelPlan(rows, false, "validated horizontal white-strip rows")
+        trace?.invoke(PanelDebugEvent("page", whole, "accept",
+            "validated horizontal rows (including conservative pale-gray recovery)"))
+        return PanelPlan(rows, false,
+            "validated horizontal rows (including conservative pale-gray recovery)")
     }
+
+    /**
+     * Convert the user's overlap setting to a bounded detector crop allowance.
+     * Existing 1% minimum padding remains in place for zero overlap; an 8%
+     * selected overlap gives 4% of the original source on EACH shared side.
+     * Total duplicated coverage near a boundary is about 8% of page width
+     * or height (subject to source limits), without altering split detection.
+     */
+    fun overlapPaddingPercent(overlapPercent: Int): Int =
+        maxOf(1, (overlapPercent.coerceIn(0, 30) + 1) / 2).coerceAtMost(5)
 
     /**
      * Convert bounded-thumbnail rectangles back to source-image coordinates,
@@ -170,7 +1569,8 @@ object PanelDetectionCore {
             } }
     }
 
-    private class Detector(private val width: Int, private val height: Int, private val gray: ByteArray) {
+    private class Detector(private val width: Int, private val height: Int, private val gray: ByteArray,
+        private val trace: ((PanelDebugEvent) -> Unit)? = null) {
         private var leaves = 0
         private var invalid = false
 
@@ -202,6 +1602,100 @@ object PanelDetectionCore {
                 }
             }
             return samples > 0 && ink.toLong() * 100 < samples.toLong() * 3
+        }
+
+        /** Only a short unframed tier can be treated as a suspect header/footer.
+         * A genuine short comic strip with top/bottom frame rails remains
+         * eligible for independent panel splitting. This does not delete ink.
+         */
+        fun isShallowUnframedTier(row: PageRegion): Boolean {
+            if (row.height.toLong() * 100 > height.toLong() * 9 ||
+                row.height.toLong() * 100 > row.width.toLong() * 14) return false
+            val edge = maxOf(2, minOf(8, row.height / 8))
+            fun hasFrameRail(start: Int, end: Int): Boolean {
+                for (y in start until end) {
+                    var dark = 0
+                    for (x in row.left until row.right)
+                        if ((gray[y * width + x].toInt() and 255) < INK) dark++
+                    if (dark.toLong() * 100 >= row.width.toLong() * 65) return true
+                }
+                return false
+            }
+            val topRail = hasFrameRail(row.top, minOf(row.bottom, row.top + edge))
+            val bottomRail = hasFrameRail(maxOf(row.top, row.bottom - edge), row.bottom)
+            return !(topRail && bottomRail)
+        }
+
+        /** The footer merger requires little actual artwork as well as short
+         * dimensions. An ink-heavy or framed short story panel stays separate.
+         */
+        fun isLowInkFooter(row: PageRegion): Boolean {
+            var ink = 0
+            for (y in row.top until row.bottom)
+                for (x in row.left until row.right)
+                    if ((gray[y * width + x].toInt() and 255) < INK) ink++
+            return ink.toLong() * 100 < row.width.toLong() * row.height * 12
+        }
+
+        /**
+         * Extremely faint terminal-border/tail classifier. Unlike the
+         * 3%-sparse guard, it is allowed to MERGE, so fail closed:
+         *  - the candidate must be short relative to both the page and width;
+         *  - less than 3% of ALL thumbnail pixels may be ink;
+         *  - remaining marks must include one unmistakably long straight
+         *    framing stroke, or the strip must be completely blank.
+         *
+         * This deliberately rejects word-only title/credit strips, broad
+         * speech balloons and real illustrated tiers. Every original source
+         * coordinate is preserved by the caller's rectangle UNION.
+         */
+        fun isVerySparseRuledTail(row: PageRegion): Boolean {
+            if (row.height < 8 ||
+                row.height.toLong() * 100 > height.toLong() * 18 ||
+                row.height.toLong() * 100 > row.width.toLong() * 32) return false
+            val columnRuns = IntArray(row.width)
+            var longestHorizontal = 0
+            var longestVertical = 0
+            var ink = 0L
+            val area = row.width.toLong() * row.height
+            for (y in row.top until row.bottom) {
+                var horizontalRun = 0
+                for (x in row.left until row.right) {
+                    if ((gray[y * width + x].toInt() and 255) < INK) {
+                        ink++
+                        if (ink * 100 >= area * 3) return false
+                        horizontalRun++
+                        longestHorizontal = maxOf(longestHorizontal, horizontalRun)
+                        val column = x - row.left
+                        columnRuns[column]++
+                        longestVertical = maxOf(longestVertical, columnRuns[column])
+                    } else {
+                        horizontalRun = 0
+                        columnRuns[x - row.left] = 0
+                    }
+                }
+            }
+            return ink == 0L ||
+                longestHorizontal.toLong() * 100 >= row.width.toLong() * 55 ||
+                longestVertical.toLong() * 100 >= row.height.toLong() * 65
+        }
+
+        /** Safe v1 inner split for experimental overlapping rows only.
+         * The established clean-gutter finder already rejects strokes that
+         * run across the candidate column, including speech-balloon tails.
+         * Do not inherit recursive or dark/diagonal relaxations here.
+         */
+        fun fallbackCleanColumn(region: PageRegion): Int? {
+            val axis = bestGutter(region, horizontal = false) ?: return null
+            val left = region.copy(right = axis)
+            val right = region.copy(left = axis)
+            if (left.width.toLong() * 100 < region.width.toLong() * 25 ||
+                right.width.toLong() * 100 < region.width.toLong() * 25 ||
+                !hasContent(left) || !hasContent(right) ||
+                isSparseRow(left) || isSparseRow(right) ||
+                isLikelyBorderFragment(left) || isLikelyBorderFragment(right))
+                return null
+            return axis
         }
 
         fun hasCleanFullHeightColumn(region: PageRegion): Boolean {
@@ -342,10 +1836,20 @@ object PanelDetectionCore {
                     fun value(x: Int) = gray[y * width + x].toInt() and 255
                     val center = value(axis)
                     if (center < 235) inkOnAxis++
-                    // Retain the strict veto everywhere except an actual
-                    // near-edge, full-width frame rule. Isolated dark specks,
-                    // captions and thin balloon tails still veto the split.
-                    val allowedFrame = center < 220 && fullWidthFrameRule(y)
+                    // Shared panel frame lines have antialiased fringes:
+                    // Conan source 26 had a fully framed horizontal border at
+                    // y=452..454, followed by one dim line at y=455. Treat a
+                    // 1-2px fringe next to a genuine near-edge, full-width
+                    // frame as part of that frame, not a balloon crossing.
+                    // All interior strokes still veto the cut. The separate
+                    // 2%-of-height ink budget remains unchanged.
+                    val nearEdge = y - r.top < edgeBand ||
+                        r.bottom - 1 - y < edgeBand
+                    val allowedFrame = center < 220 && nearEdge &&
+                        (-2..2).any { delta ->
+                            val neighbor = y + delta
+                            neighbor in r.top until r.bottom && fullWidthFrameRule(neighbor)
+                        }
                     if (center < 220 && !allowedFrame) return false
                     if (!allowedFrame && value(axis - 1) < 180 &&
                         center < 180 && value(axis + 1) < 180) return false
@@ -384,24 +1888,46 @@ object PanelDetectionCore {
                     // search runs ONLY after the normal panel plan was rejected.
                     val radius = minOf(8, maxOf(2, current.width / 75))
                     var axis: Int? = null
+                    var attempted = 0
+                    var unsafeSeam = 0
+                    var leftNotIllustrated = 0
+                    var rightNotIllustrated = 0
                     for (proposal in options) {
                         for (distance in 0..radius) {
                             val neighbours = if (distance == 0) listOf(proposal)
                                 else listOf(proposal - distance, proposal + distance)
                             for (cut in neighbours) {
                                 if (cut <= current.left + 2 || cut >= current.right - 2) continue
-                                if (safeVerticalSeam(current, cut) &&
-                                    likelyIllustratedColumn(current.copy(right = cut)) &&
-                                    likelyIllustratedColumn(current.copy(left = cut))) {
-                                    axis = cut
-                                    break
+                                attempted++
+                                if (!safeVerticalSeam(current, cut)) {
+                                    unsafeSeam++
+                                    continue
                                 }
+                                if (!likelyIllustratedColumn(current.copy(right = cut))) {
+                                    leftNotIllustrated++
+                                    continue
+                                }
+                                if (!likelyIllustratedColumn(current.copy(left = cut))) {
+                                    rightNotIllustrated++
+                                    continue
+                                }
+                                axis = cut
+                                break
                             }
                             if (axis != null) break
                         }
                         if (axis != null) break
                     }
-                    val cut = axis ?: continue
+                    if (axis == null) {
+                        trace?.invoke(PanelDebugEvent("column-retry", current, "reject",
+                            "attempted=$attempted unsafeSeam=$unsafeSeam " +
+                            "leftNotIllustrated=$leftNotIllustrated " +
+                            "rightNotIllustrated=$rightNotIllustrated"))
+                        continue
+                    }
+                    val cut = requireNotNull(axis)
+                    trace?.invoke(PanelDebugEvent("column-retry", current, "split",
+                        "safe vertical seam x=$cut after $attempted attempts"))
                     columns.removeAt(i)
                     columns.add(i, current.copy(right = cut))
                     columns.add(i + 1, current.copy(left = cut))
@@ -417,7 +1943,225 @@ object PanelDetectionCore {
             }
         }
 
-        fun partitionRows(whole: PageRegion): List<PageRegion> {
+        /**
+         * Guarded recovery of a genuinely DARK, straight gutter between
+         * independent illustrated regions. A black line by itself is not a
+         * divider. It must be a sustained thick dark strip, with short pale
+         * margins immediately alongside it and real distributed ink just
+         * beyond BOTH margins. Title rules, black splash art, isolated frame
+         * strokes, faint captions and large blank paper margins fail closed.
+         *
+         * The result is an axis, not a crop: sourceRegions() subsequently
+         * applies the user's selected overlap on BOTH sides, preserving
+         * cross-boundary artwork. Independent Row by Row calls this only
+         * horizontally. Panel mode may retry a dark vertical gutter after
+         * the established cleaner split/recovery algorithms have failed.
+         */
+        fun recoverDarkGutter(r: PageRegion, horizontal: Boolean,
+            allowStrongFramedFallback: Boolean = false): Int? {
+            val length = if (horizontal) r.height else r.width
+            val span = if (horizontal) r.width else r.height
+            if (length < 120 || span < 110) return null
+            val minChild = maxOf(28, length / 5)
+            val minBand = maxOf(5, length / 100)
+            val maxBand = maxOf(14, length / 14)
+            val sampleStep = maxOf(1, span / 160)
+            fun sample(axis: Int, across: Int): Int {
+                val x = if (horizontal) across else axis
+                val y = if (horizontal) axis else across
+                return gray[y * width + x].toInt() and 255
+            }
+            val acrossStart = if (horizontal) r.left else r.top
+            val acrossEnd = if (horizontal) r.right else r.bottom
+            fun fraction(axis: Int, predicate: (Int) -> Boolean): Int {
+                var matches = 0
+                var samples = 0
+                for (across in acrossStart until acrossEnd step sampleStep) {
+                    samples++
+                    if (predicate(sample(axis, across))) matches++
+                }
+                return if (samples == 0) 0 else matches * 100 / samples
+            }
+            fun hasIndependentIllustration(child: PageRegion): Boolean {
+                if (!hasContent(child) || isSparseRow(child)) return false
+                // Both ink and paper must be distributed throughout a
+                // substantial region, not concentrated in a border or title.
+                val dx = maxOf(1, child.width / 85)
+                val dy = maxOf(1, child.height / 85)
+                var bright = 0
+                var dark = 0
+                var total = 0
+                var richStripes = 0
+                var stripes = 0
+                if (horizontal) {
+                    for (x in child.left + child.width / 8 until
+                        child.right - child.width / 8 step dx) {
+                        var inkAlong = 0
+                        for (y in child.top + child.height / 10 until
+                            child.bottom - child.height / 10 step dy) {
+                            val v = gray[y * width + x].toInt() and 255
+                            if (v < 130) { dark++; inkAlong++ }
+                            if (v >= 190) bright++
+                            total++
+                        }
+                        if (inkAlong >= 3) richStripes++
+                        stripes++
+                    }
+                } else {
+                    for (y in child.top + child.height / 8 until
+                        child.bottom - child.height / 8 step dy) {
+                        var inkAlong = 0
+                        for (x in child.left + child.width / 10 until
+                            child.right - child.width / 10 step dx) {
+                            val v = gray[y * width + x].toInt() and 255
+                            if (v < 130) { dark++; inkAlong++ }
+                            if (v >= 190) bright++
+                            total++
+                        }
+                        if (inkAlong >= 3) richStripes++
+                        stripes++
+                    }
+                }
+                return total > 0 && dark * 100 >= total * 12 &&
+                    bright * 100 >= total * 15 &&
+                    stripes > 0 && richStripes * 100 >= stripes * 55
+            }
+
+            data class Band(val start: Int, val end: Int)
+            val bands = mutableListOf<Band>()
+            var runStart = -1
+            val first = r.run { if (horizontal) top else left } + minChild
+            val last = r.run { if (horizontal) bottom else right } - minChild
+            if (first >= last) return null
+            fun finish(end: Int) {
+                if (runStart >= 0 && end - runStart in minBand..maxBand)
+                    bands += Band(runStart, end)
+                runStart = -1
+            }
+            // Complete cross-span dark strips only. Their *thickness* matters:
+            // single black rules are not sufficient split evidence.
+            for (axis in first until last) {
+                val dark = fraction(axis) { it <= 70 } >= 97
+                if (dark && runStart < 0) runStart = axis
+                if (!dark && runStart >= 0) finish(axis)
+            }
+            finish(last)
+            // Compare light margins on each side with artwork immediately
+            // beyond them; a dark line floating in white paper is rejected.
+            val gap = maxOf(3, length / 125)
+            val artOffset = maxOf(9, length / 55)
+            for (band in bands.sortedByDescending { it.end - it.start }.take(8)) {
+                val before = band.start - gap
+                val after = band.end + gap
+                val artBefore = band.start - artOffset
+                val artAfter = band.end + artOffset
+                if (artBefore <= first - minChild || artAfter >= last + minChild)
+                    continue
+                val brightBefore = fraction(before) { it >= 185 }
+                val brightAfter = fraction(after) { it >= 185 }
+                val inkBefore = fraction(artBefore) { it < 135 }
+                val inkAfter = fraction(artAfter) { it < 135 }
+                val standardDarkSeam = brightBefore >= 70 && brightAfter >= 70 &&
+                    inkBefore >= 22 && inkAfter >= 22
+                // A heavily black-FRAMED manga row can have a broad,
+                // nearly solid divider and immediate white dialogue/paper
+                // under one flank. Require a THICK 97%-dark bar, >=60% bright
+                // paper on BOTH sides, and independent illustrated children.
+                // This never affects detectRows(), or ordinary dark-gutter
+                // detection: only the final whole-page Panel-by-Panel
+                // recovery explicitly opts in.
+                val stronglyFramed = allowStrongFramedFallback && horizontal &&
+                    band.end - band.start >= maxOf(14, length / 65) &&
+                    brightBefore >= 60 && brightAfter >= 60
+                if (!standardDarkSeam && !stronglyFramed) continue
+                val axis = (band.start + band.end) / 2
+                val firstPart = if (horizontal) r.copy(bottom = axis)
+                    else r.copy(right = axis)
+                val secondPart = if (horizontal) r.copy(top = axis)
+                    else r.copy(left = axis)
+                if (firstPart.width.toLong() * 100 < r.width.toLong() * 18 ||
+                    secondPart.width.toLong() * 100 < r.width.toLong() * 18 ||
+                    firstPart.height.toLong() * 100 < r.height.toLong() * 18 ||
+                    secondPart.height.toLong() * 100 < r.height.toLong() * 18)
+                    continue
+                if (hasIndependentIllustration(firstPart) &&
+                    hasIndependentIllustration(secondPart)) return axis
+            }
+            return null
+        }
+
+        /**
+         * Strict Row-by-Row recovery. Only after all existing straight white,
+         * thin and adaptive seams fail, look for a broad continuous, very
+         * pale-gray band (>=225) with substantial illustration on BOTH sides.
+         *
+         * No dark-border guessing, text/balloon cutting, vertical partition or
+         * new source crop is allowed. A failed recovery returns null, so the
+         * caller retains the entire unsplittable tier.
+         */
+        private fun paleGrayRowSeam(region: PageRegion): Int? {
+            if (region.width < 80 || region.height < 84) return null
+            val minChild = maxOf(20, region.height / 5)
+            val first = region.top + minChild
+            val last = region.bottom - minChild
+            if (last - first < 8) return null
+            val gaps = mutableListOf<Pair<Int, Int>>()
+            var start = -1
+            // Scan the bounded thumbnail once for continuous pale rows.
+            // A dark stroke anywhere across the band vetoes the boundary.
+            for (y in first until last) {
+                var pale = true
+                val base = y * width
+                for (x in region.left until region.right) {
+                    if ((gray[base + x].toInt() and 255) < 225) {
+                        pale = false
+                        break
+                    }
+                }
+                if (pale && start < 0) start = y
+                if ((!pale || y == last - 1) && start >= 0) {
+                    val end = if (pale) y + 1 else y
+                    if (end - start >= maxOf(6, region.height / 70))
+                        gaps += start to end
+                    start = -1
+                }
+            }
+            fun illustratedAcross(r: PageRegion): Boolean {
+                if (r.height < 24 || isSparseRow(r) || !hasContent(r)) return false
+                val rows = listOf(r.top + r.height / 3, r.top + r.height / 2,
+                    r.bottom - r.height / 3)
+                val step = maxOf(1, r.width / 200)
+                var richRows = 0
+                for (y in rows) {
+                    var ink = 0
+                    var samples = 0
+                    for (x in r.left until r.right step step) {
+                        samples++
+                        if ((gray[y * width + x].toInt() and 255) < 205) ink++
+                    }
+                    if (ink.toLong() * 100 >= samples.toLong() * 30) richRows++
+                }
+                return richRows >= 2
+            }
+            // Prefer the longest trustworthy empty band over incidental white
+            // spaces inside a single panel. Its midpoint is safe by construction.
+            for ((begin, end) in gaps.sortedByDescending { it.second - it.first }.take(12)) {
+                val mid = (begin + end) / 2
+                // Require a generous uninterrupted gray corridor around the
+                // chosen axis. A short balloon/stroke through the *middle*
+                // of an otherwise pale gap can leave two thin pale strips;
+                // neither strip alone proves the artwork is safely separated.
+                val protect = maxOf(6, region.height / 25)
+                if (mid - protect < begin || mid + protect >= end) continue
+                val upper = region.copy(bottom = mid)
+                val lower = region.copy(top = mid)
+                if (illustratedAcross(upper) && illustratedAcross(lower)) return mid
+            }
+            return null
+        }
+
+        fun partitionRows(whole: PageRegion, allowPaleGrayRecovery: Boolean = false,
+            allowDarkRecovery: Boolean = false): List<PageRegion> {
             val rows = mutableListOf<PageRegion>()
             fun visit(region: PageRegion, depth: Int) {
                 if (depth >= 10 || rows.size >= MAX_PANELS) {
@@ -432,13 +2176,26 @@ object PanelDetectionCore {
                     val lower = region.copy(top = axis)
                     return axis.takeIf { hasContent(upper) && hasContent(lower) }
                 }
-                val axis = valid(bestGutter(region, horizontal = true))
+                val regular = valid(bestGutter(region, horizontal = true))
                     ?: valid(thinLineGutter(region, horizontal = true))
                     ?: valid(adaptiveGutter(region, horizontal = true))
+                val pale = if (regular == null && allowPaleGrayRecovery)
+                    valid(paleGrayRowSeam(region)) else null
+                val dark = if (regular == null && pale == null && allowDarkRecovery)
+                    valid(recoverDarkGutter(region, horizontal = true)) else null
+                val axis = regular ?: pale ?: dark
                 if (axis == null) {
+                    trace?.invoke(PanelDebugEvent("row-search", region, "keep",
+                        "no full-width horizontal gutter with content on both sides"))
                     rows += region
                     return
                 }
+                trace?.invoke(PanelDebugEvent("row-search", region, "split",
+                    when {
+                        regular != null -> "validated horizontal seam at y=$axis"
+                        pale != null -> "recovered pale-gray horizontal seam at y=$axis"
+                        else -> "recovered dark horizontal gutter at y=$axis"
+                    }))
                 val upper = region.copy(bottom = axis)
                 val lower = region.copy(top = axis)
                 visit(upper, depth + 1)
@@ -491,14 +2248,20 @@ object PanelDetectionCore {
                     else -> true to adaptiveHorizontal.first
                 }
             if (split == null) {
+                trace?.invoke(PanelDebugEvent("recursive", region, "keep",
+                    "no validated clean, thin or adaptive gutter"))
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
                 return PanelReadingOrder.Node.Leaf(region)
             }
             val (isHorizontal, mid) = split
+            trace?.invoke(PanelDebugEvent("recursive", region, "split",
+                if (isHorizontal) "horizontal candidate y=$mid" else "vertical candidate x=$mid"))
             val first = if (isHorizontal) region.copy(bottom = mid) else region.copy(right = mid)
             val second = if (isHorizontal) region.copy(top = mid) else region.copy(left = mid)
             if (!hasContent(first) || !hasContent(second)) {
+                trace?.invoke(PanelDebugEvent("recursive", region, "reject",
+                    "candidate would leave an ink-poor child"))
                 leaves++
                 if (leaves > MAX_PANELS) { invalid = true; return null }
                 return PanelReadingOrder.Node.Leaf(region)
