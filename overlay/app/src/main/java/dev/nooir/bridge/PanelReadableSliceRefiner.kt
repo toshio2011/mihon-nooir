@@ -163,11 +163,17 @@ object PanelReadableSliceRefiner {
         protectedRegions: List<PageRegion> = emptyList(),
         autoFit: Boolean = true,
         recoverInnerPanels: ((PageRegion) -> List<PageRegion>?)? = null,
+        allowSingleEdgeZoom: Boolean = false,
     ): List<PanelFitSlice> {
         require(sourceWidth > 0 && sourceHeight > 0)
         require(portraitWidth > 0 && portraitHeight > 0)
         require(input.isNotEmpty() && input.size <= MAX_VIEWS)
-        if (input.size < 2) return input
+        // An edge-strip merge may legitimately leave ONE large illustrated
+        // source rectangle, but QA9 accidentally interpreted it as a protected
+        // splash and suppressed all useful close-ups. This explicit flag is
+        // supplied only for that one precise detector state. No ordinary
+        // single-page splash, text, or spare image uses this route.
+        if (input.size < 2 && !allowSingleEdgeZoom) return input
 
         val views = input.toMutableList()
         fun protected(region: PageRegion) = protectedRegions.any { it == region }
@@ -212,7 +218,7 @@ object PanelReadableSliceRefiner {
         // Protect intentionally whole splash art and the tiny-footer case
         // already absorbed into one source rectangle. Never recreate the
         // useless tiny view by forcing a new cut through the merged page.
-        if (views.size < 2) return views
+        if (views.size < 2 && !allowSingleEdgeZoom) return views
         val result = mutableListOf<PanelFitSlice>()
         for (view in views) {
             val p = view.region

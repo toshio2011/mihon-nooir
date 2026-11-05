@@ -124,7 +124,11 @@ class AndroidPageSource(private val context: Context) {
     // A detected row can be sparse BEFORE sourceRegions adds overlap padding.
     // Carry this decision to rendering; retesting the padded crop may include
     // dark pixels from its illustrated neighbour and wrongly re-enable cuts.
-    private data class DetectedPanel(val region: PageRegion, val preserveWhole: Boolean)
+    private data class DetectedPanel(
+        val region: PageRegion,
+        val preserveWhole: Boolean,
+        val allowSingleEdgeZoom: Boolean = false,
+    )
 
     private fun detectPanels(src: Bitmap, options: MangaConversionOptions,
         debug: PanelDiagnosticArchive.Page? = null): List<DetectedPanel>? {
@@ -182,7 +186,9 @@ class AndroidPageSource(private val context: Context) {
                 // Only Panel by Panel emits this explicit one-frame decision.
                 DetectedPanel(region, sparse ||
                     (options.panelMode == "PANEL_BY_PANEL" &&
-                        plan.preserveSingleFrame && plan.regions.size == 1))
+                        plan.preserveSingleFrame && plan.regions.size == 1),
+                    allowSingleEdgeZoom = options.panelMode == "PANEL_BY_PANEL" &&
+                        plan.allowSingleEdgeZoom && plan.regions.size == 1)
             }
         } finally {
             if (thumb !== src) thumb.recycle()
@@ -436,6 +442,8 @@ class AndroidPageSource(private val context: Context) {
                 inkAt = { x, y -> inkAt(src, x, y) },
                 protectedRegions = panels.filter { it.preserveWhole }.map { it.region },
                 autoFit = auto,
+                allowSingleEdgeZoom = panels.size == 1 &&
+                    panels[0].allowSingleEdgeZoom,
                 recoverInnerPanels = { row ->
                     recoverInnerPanelsWithinRow(src, row, options.rightToLeft)
                 },

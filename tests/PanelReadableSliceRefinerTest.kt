@@ -136,6 +136,49 @@ fun main() {
         huge,W,H,480,800,{ _,_->true })
     check(framed==huge) { "Do not cut a confidently framed scene: $framed" }
 
+    // QA9 real One Piece source60 had ONE detector region remaining after
+    // merging a 40px near-empty header into 860px illustrated row.
+    // Its previous preserveSingleFrame suppressed BOTH useful close-ups.
+    // A caller-authorized *edge-only* single region must still offer zooms,
+    // with a 12% overlapping content band and independent Auto Fit.
+    val qa9Page60 = listOf(view(0,0,725,1100))
+    check(refine(qa9Page60) == qa9Page60) {
+        "Do not fragment normal single-page manga or text pages"
+    }
+    val edgeZoom = PanelReadableSliceRefiner.refine(
+        qa9Page60,725,1100,480,800,
+        { x,y -> x in 18..700 && y in 62..1090 &&
+            ((x+y)%7 < 4) },
+        allowSingleEdgeZoom = true,
+    )
+    check(edgeZoom.size == 2 &&
+        edgeZoom[0].region == PageRegion(0,0,725,616) &&
+        edgeZoom[1].region == PageRegion(0,484,725,1100)) {
+        "Source60 should have two protected close-ups instead of 1: $edgeZoom"
+    }
+    check(edgeZoom.all { it.landscape }) {
+        "Wide halves should independently select landscape on X4"
+    }
+    preservesAll(qa9Page60, edgeZoom)
+    // Explicit user Portrait/Landscape modes remain authoritative.
+    val manualEdgeZoom = PanelReadableSliceRefiner.refine(
+        qa9Page60,725,1100,480,800,
+        { x,y -> x in 18..700 && y in 62..1090 && (x+y)%7 < 4 },
+        autoFit = false, allowSingleEdgeZoom = true)
+    check(manualEdgeZoom.size==2 && manualEdgeZoom.none { it.landscape })
+    // An enclosed illustrated page or a protected single text/splash page
+    // is NOT a fallback target, even with the edge-only flag.
+    val framedEdge = PanelReadableSliceRefiner.refine(
+        qa9Page60,725,1100,480,800,{ _,_->true },
+        allowSingleEdgeZoom = true)
+    check(framedEdge == qa9Page60)
+    val protectedEdge = PanelReadableSliceRefiner.refine(
+        qa9Page60,725,1100,480,800,{ x,y ->
+            x in 18..700 && y in 62..1090 && (x+y)%7 < 4
+        },protectedRegions=listOf(qa9Page60[0].region),
+        allowSingleEdgeZoom = true)
+    check(protectedEdge == qa9Page60)
+
     // A narrow genuine portrait panel remains intact even if its height
     // covers most of the source page.
     val narrowTall=listOf(view(20,0,250,900),view(300,0,780,900))
