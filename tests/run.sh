@@ -113,6 +113,13 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelDet
   tests/FrameEvidenceRegressionTest.kt -include-runtime -d "$tmp/panel-frame-evidence.jar"
 java -jar "$tmp/panel-frame-evidence.jar"
 
+# Experimental fitted-size post-processor: 5mm hard merge / 10mm soft
+# sparse-only merge, and safe 12%-overlap halves for source-wide >2/3 rows.
+# Never drop an image pixel or change normal row-only/whole-page cases.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt,PanelSafeSlicePlanner.kt,PanelAutoFit.kt,PanelReadableSliceRefiner.kt} \
+  tests/PanelReadableSliceRefinerTest.kt -include-runtime -d "$tmp/panel-readable-slices.jar"
+java -jar "$tmp/panel-readable-slices.jar"
+
 # Panel Phase B: one panel per viewport, RTL wide-panel cuts, overlap and bounds.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelViewportPlanner.kt} \
   tests/PanelViewportPlannerTest.kt -include-runtime -d "$tmp/panel-phase-b.jar"

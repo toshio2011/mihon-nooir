@@ -20,6 +20,7 @@ import dev.nooir.bridge.PanelAutoFit
 import dev.nooir.bridge.PanelWhitespaceCrop
 import dev.nooir.bridge.PanelSafeSlicePlanner
 import dev.nooir.bridge.PanelFitSlice
+import dev.nooir.bridge.PanelReadableSliceRefiner
 import dev.nooir.bridge.PageRegion
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -315,7 +316,7 @@ class AndroidPageSource(private val context: Context) {
                 else panel.copy(region = trimDetectedPanel(src, panel.region))
             }
         else detectedPanels
-        val slices: List<PanelFitSlice> = when {
+        val plannedSlices: List<PanelFitSlice> = when {
             sparseWhole != null -> listOf(PanelFitSlice(
                 sparseWhole,
                 if (auto) PanelAutoFit.landscapeForMaximumFill(
@@ -367,6 +368,21 @@ class AndroidPageSource(private val context: Context) {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
+        // Experimental post-detection readability guard: combine short
+        // standalone border/speech fragments instead of deleting their art,
+        // then split genuinely huge *full-width* rows into two overlapping
+        // source views. Never touch OFF, strict Row by Row, webtoons, covers,
+        // protected sparse regions or intentionally preserved single pages.
+        val slices = if (options.panelMode == "PANEL_BY_PANEL" &&
+            panels != null && sparseWhole == null && options.layout != "WEBTOON") {
+            PanelReadableSliceRefiner.refine(
+                plannedSlices, src.width, src.height, minOf(width, height),
+                maxOf(width, height),
+                inkAt = { x, y -> inkAt(src, x, y) },
+                protectedRegions = panels.filter { it.preserveWhole }.map { it.region },
+                autoFit = auto,
+            )
+        } else plannedSlices
         // A source-page overview precedes any multi-frame result, including panels,
         // landscape overlap, spreads and webtoon slices. Never duplicate single frames.
         // Render the overview in portrait to preserve the full composition.
