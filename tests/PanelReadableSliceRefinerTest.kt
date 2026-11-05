@@ -66,6 +66,16 @@ fun main() {
     check(halved[0].region.bottom-halved[1].region.top==108)
     preservesAll(huge,halved)
 
+    // Explicit PORTRAIT/LANDSCAPE choices must remain authoritative;
+    // only AUTO_FIT may independently refit the new reading views.
+    val manualPortrait = PanelReadableSliceRefiner.refine(
+        huge,W,H,480,800,{ _,_->true },autoFit=false)
+    check(manualPortrait.size==3 && manualPortrait.none { it.landscape })
+    val manualLandscape = PanelReadableSliceRefiner.refine(
+        huge.map { it.copy(landscape=true) },W,H,480,800,{ _,_->true },
+        autoFit=false)
+    check(manualLandscape.size==3 && manualLandscape.all { it.landscape })
+
     // A narrow genuine portrait panel remains intact even if its height
     // covers most of the source page.
     val narrowTall=listOf(view(20,0,250,900),view(300,0,780,900))
