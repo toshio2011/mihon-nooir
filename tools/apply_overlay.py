@@ -241,4 +241,32 @@ replace_once(app_build, 'versionName = "0.21.3"', f'versionName = "{version}"')
 updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
 replace_once(updater, '"mihonapp/mihon-preview"', '"toshio2011/mihon-nooir"')
 replace_once(updater, '"mihonapp/mihon"', '"toshio2011/mihon-nooir"')
+# The pinned Mihon release parser matches every "-foss.apk" to the same key,
+# accidentally choosing GitHub's last architecture (x86_64 on ARM devices).
+# Keep the fork's selection strict, ABI-aware and independent of asset ordering.
+release_service = upstream / "data/src/main/java/tachiyomi/data/release/ReleaseServiceImpl.kt"
+replace_once(release_service,
+    '''        val map = release.assets.associate { asset ->
+            BUILD_TYPES.find { "-$it" in asset.name } to asset.downloadLink
+        }
+
+        return if (!isFoss) {
+            map[Build.SUPPORTED_ABIS[0]] ?: map[null]
+        } else {
+            map[FOSS]
+        }
+''',
+    '''        return NooirReleaseApkSelector.select(
+            assets = release.assets.map { it.name to it.downloadLink },
+            isFoss = isFoss,
+            supportedAbis = Build.SUPPORTED_ABIS.toList(),
+        )
+''')
+replace_once(release_service,
+    '''        private const val FOSS = "foss"
+        private val BUILD_TYPES = listOf(FOSS, "arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+
+''',
+    "")
+
 print("Mihon Nooir integration overlay applied to", upstream)
