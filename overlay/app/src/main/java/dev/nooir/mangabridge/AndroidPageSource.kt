@@ -380,6 +380,7 @@ class AndroidPageSource(private val context: Context) {
                 maxOf(width, height),
                 inkAt = { x, y -> inkAt(src, x, y) },
                 protectedRegions = panels.filter { it.preserveWhole }.map { it.region },
+                autoFit = auto,
             )
         } else plannedSlices
         // A source-page overview precedes any multi-frame result, including panels,
