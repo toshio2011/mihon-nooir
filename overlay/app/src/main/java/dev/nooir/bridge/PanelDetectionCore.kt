@@ -35,6 +35,80 @@ object PanelDetectionCore {
     private const val INK = 220
 
     /**
+     * False-panel rescue for the actual One Piece source-72 failure.
+     * The detector separated a 35px-tall top of a speech bubble from the
+     * 258px-high remainder of the SAME 196px-wide column. Final AUTO_FIT
+     * enlarged that isolated top into an apparently large landscape frame,
+     * so a 5mm/10mm *displayed* size guard could never catch the bug.
+     *
+     * Coalesce only directly successive, EXACTLY aligned column pieces.
+     * The smaller piece must be <=6% of source height, <=25% of column
+     * width and <=25% of combined column height. A strong horizontal ink
+     * rule at the shared edge vetoes merging a framed miniature panel.
+     * Source coordinates are unioned, never cropped or discarded. This
+     * runs on accepted Panel-by-Panel results, not Row-by-Row.
+     */
+    internal fun coalesceShallowSameColumnFragment(
+        width: Int, height: Int, gray: ByteArray, panels: List<PageRegion>,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion> {
+        if (width < 160 || height < 320 || gray.size != width * height ||
+            panels.size < 2) return panels
+        val result = panels.toMutableList()
+
+        fun strongHorizontalFrame(left: Int, right: Int, y: Int): Boolean {
+            if (y <= 2 || y >= height - 2) return true
+            val regionWidth = right - left
+            val stepX = maxOf(1, regionWidth / 128)
+            for (yy in y - 2..y + 2) {
+                var dark = 0
+                var total = 0
+                for (x in left until right step stepX) {
+                    total++
+                    if ((gray[yy * width + x].toInt() and 255) < 130)
+                        dark++
+                }
+                // A genuinely separate framed miniature usually has a
+                // continuous horizontal border at the split, not a few
+                // interrupted edges of a shared dialogue balloon.
+                if (total > 0 && dark * 100 >= total * 70) return true
+            }
+            return false
+        }
+        var i = 0
+        while (i + 1 < result.size) {
+            val a = result[i]
+            val b = result[i + 1]
+            if (a.left != b.left || a.right != b.right ||
+                a.width <= 0 || b.height <= 0 || a.height <= 0 ||
+                a.bottom != b.top || a.width.toLong() * 100 > width.toLong() * 60) {
+                i++
+                continue
+            }
+            val small = minOf(a.height, b.height)
+            val combined = a.height + b.height
+            if (small.toLong() * 100 > height.toLong() * 6 ||
+                small.toLong() * 100 > a.width.toLong() * 25 ||
+                small.toLong() * 4 > combined ||
+                strongHorizontalFrame(a.left, a.right, a.bottom)) {
+                i++
+                continue
+            }
+            val whole = PageRegion(a.left, a.top, a.right, b.bottom)
+            // Never reorder other panels: replace only the successive
+            // mistaken fragments with one complete reading view.
+            result[i] = whole
+            result.removeAt(i + 1)
+            trace?.invoke(PanelDebugEvent("bubble-fragment",whole,"absorb",
+                "shallow same-column speech/art fragment attached to its panel"))
+            // A second shallow text strip in the same column may also need
+            // absorbing, but do not scan or change unrelated panels.
+            if (i > 0) i--
+        }
+        return result
+    }
+
+    /**
      * Conservative post-pass for a shallow strip accidentally separated from
      * the SAME two illustrated columns above and below it. In some comic pages,
      * the upper halves of two dialogue balloons look like four tiny panels.
@@ -771,6 +845,15 @@ object PanelDetectionCore {
         if (consolidated.size != output.size) {
             output.clear()
             output.addAll(consolidated)
+        }
+        // Even a confidently accepted row can subdivide ONE narrow panel
+        // into an isolated first speech-balloon line and the art below it.
+        // Attach that unframed shallow strip before sizing or AUTO_FIT.
+        val wholeBubblePanels = coalesceShallowSameColumnFragment(
+            width, height, grayscale, output, trace)
+        if (wholeBubblePanels.size != output.size) {
+            output.clear()
+            output.addAll(wholeBubblePanels)
         }
         // The two-row case now legitimately produces ONE complete rectangle.
         // Returning a generic fallback would send it back through the legacy
