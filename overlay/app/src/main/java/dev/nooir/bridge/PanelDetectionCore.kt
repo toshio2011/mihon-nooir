@@ -197,6 +197,94 @@ object PanelDetectionCore {
         return narrowBands >= 18 && tallBands <= 2
     }
 
+    /**
+     * EXPERIMENTAL: only used after *all* conventional panel, gray/dark and
+     * slanted-rail detection has failed for a wholly unsplit Panel-by-Panel
+     * portrait page. We deliberately produce overlapping READING VIEWS, not
+     * claimed source-panel boundaries. This prevents the X4 reader having to
+     * shrink an otherwise unreadably dense manga page into a single screen.
+     *
+     * Three source-coordinate windows cover 0-40%, 30-70%, 60-100% of the
+     * height. The 10% overlap is independent of the user's normal crop
+     * padding. The complete source is preserved; duplicated areas are
+     * intentional. A strict clean full-height column may split a WINDOW into
+     * two RTL/LTR panels; otherwise the entire overlapping window is kept.
+     *
+     * A bounded (<=~100k sampled pixels) thumbnail gate protects plain
+     * covers, text, uniformly dark splash pages and almost-empty pages.
+     * This is an imperfect heuristic, not semantic panel recognition, so
+     * this prototype must remain draft/QA-only until actual exports pass.
+     */
+    internal fun recoverOverlappingRowViews(
+        width: Int, height: Int, gray: ByteArray, rightToLeft: Boolean,
+        trace: ((PanelDebugEvent) -> Unit)? = null,
+    ): List<PageRegion>? {
+        if (width !in 160..1024 || height !in 320..1024 ||
+            width.toLong() * height > MAX_THUMB_PIXELS ||
+            gray.size != width * height ||
+            height.toLong() * 10 < width.toLong() * 11 ||
+            height.toLong() * 10 > width.toLong() * 25) return null
+
+        val windows = listOf(
+            PageRegion(0, 0, width, height * 40 / 100),
+            PageRegion(0, height * 30 / 100, width, height * 70 / 100),
+            PageRegion(0, height * 60 / 100, width, height),
+        )
+        if (windows.any { it.height < 90 }) return null
+
+        // All three sections must look like illustrated comic material,
+        // rather than an isolated cover title, one picture above blank
+        // paper, or near-monochrome splash. Edge texture is OCR-free.
+        for (row in windows) {
+            var ink = 0
+            var pale = 0
+            var edge = 0
+            var samples = 0
+            for (y in row.top until row.bottom step 3) {
+                val offset = y * width
+                for (x in 0 until width - 3 step 3) {
+                    val v = gray[offset + x].toInt() and 255
+                    val next = gray[offset + x + 3].toInt() and 255
+                    if (v < 180) ink++
+                    if (v >= 220) pale++
+                    if (kotlin.math.abs(v - next) >= 55) edge++
+                    samples++
+                }
+            }
+            if (samples == 0 ||
+                ink.toLong() * 100 < samples.toLong() * 14 ||
+                ink.toLong() * 100 > samples.toLong() * 72 ||
+                pale.toLong() * 100 < samples.toLong() * 20 ||
+                edge.toLong() * 100 < samples.toLong() * 8) {
+                trace?.invoke(PanelDebugEvent("overlap-rescue", row, "reject",
+                    "low contrast, low illustration or splash-like section"))
+                return null
+            }
+        }
+
+        val detector = Detector(width, height, gray, trace)
+        val views = mutableListOf<PageRegion>()
+        for (row in windows) {
+            // Use ONLY a strong clean full-height vertical gutter. Recursive
+            // panel splitting in overlapping windows can multiply speech
+            // fragments and is deliberately not attempted in v1.
+            val column = detector.fallbackCleanColumn(row)
+            if (column != null) {
+                val left = row.copy(right = column)
+                val right = row.copy(left = column)
+                views.addAll(if (rightToLeft) listOf(right, left)
+                    else listOf(left, right))
+                trace?.invoke(PanelDebugEvent("overlap-rescue", row, "column",
+                    "two validated columns inside protected overlapping row"))
+            } else {
+                views.add(row)
+                trace?.invoke(PanelDebugEvent("overlap-rescue", row, "keep",
+                    "overlapping row retained; no safe inner panel boundary"))
+            }
+        }
+        return views
+    }
+
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
         trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
@@ -470,6 +558,20 @@ object PanelDetectionCore {
                     val why = "two strong parallel slanted frame rails with three illustrated story zones"
                     trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
                     return PanelPlan(paired, false, why)
+                }
+            }
+            // All validated boundaries failed. Instead of silently
+            // shrinking a dense illustrated portrait page to one X4 frame,
+            // provide three protected, overlapping story views. This is a
+            // reading fallback, NOT a claim that arbitrary cuts are panels.
+            if (output.size == 1 && rows.size == 1 &&
+                !detector.isSparseRow(whole)) {
+                val overlapViews = recoverOverlappingRowViews(
+                    width, height, grayscale, rightToLeft, trace)
+                if (overlapViews != null) {
+                    val why = "experimental last-resort overlapping reading rows"
+                    trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+                    return PanelPlan(overlapViews, false, why)
                 }
             }
             return fallback("no validated rows or panels")
@@ -1065,6 +1167,24 @@ object PanelDetectionCore {
             return ink == 0L ||
                 longestHorizontal.toLong() * 100 >= row.width.toLong() * 55 ||
                 longestVertical.toLong() * 100 >= row.height.toLong() * 65
+        }
+
+        /** Safe v1 inner split for experimental overlapping rows only.
+         * The established clean-gutter finder already rejects strokes that
+         * run across the candidate column, including speech-balloon tails.
+         * Do not inherit recursive or dark/diagonal relaxations here.
+         */
+        fun fallbackCleanColumn(region: PageRegion): Int? {
+            val axis = bestGutter(region, horizontal = false) ?: return null
+            val left = region.copy(right = axis)
+            val right = region.copy(left = axis)
+            if (left.width.toLong() * 100 < region.width.toLong() * 25 ||
+                right.width.toLong() * 100 < region.width.toLong() * 25 ||
+                !hasContent(left) || !hasContent(right) ||
+                isSparseRow(left) || isSparseRow(right) ||
+                isLikelyBorderFragment(left) || isLikelyBorderFragment(right))
+                return null
+            return axis
         }
 
         fun hasCleanFullHeightColumn(region: PageRegion): Boolean {
