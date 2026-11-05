@@ -7,7 +7,9 @@ private const val H = 1200
 private fun view(l: Int,t: Int,r: Int,b: Int, landscape: Boolean = false) =
     PanelFitSlice(PageRegion(l,t,r,b),landscape)
 private fun refine(items: List<PanelFitSlice>,
-    inkAt: (Int,Int)->Boolean = { _,_->true },
+    inkAt: (Int,Int)->Boolean = { x,y ->
+        x in 72..720 && y in 65..1100 && (x+y)%7 < 4
+    },
     protected: List<PageRegion> = emptyList()
 ) = PanelReadableSliceRefiner.refine(
     items,W,H,480,800,inkAt,protected)
@@ -75,6 +77,61 @@ fun main() {
         huge.map { it.copy(landscape=true) },W,H,480,800,{ _,_->true },
         autoFit=false)
     check(manualLandscape.size==3 && manualLandscape.all { it.landscape })
+
+    // Over-60%-source row is eligible, not only the former 2/3 threshold.
+    val sixty = listOf(view(0,0,800,735),view(0,735,800,1200))
+    val sixtyResult = refine(sixty)
+    check(sixtyResult.size==3 && sixtyResult[0].region.top==0 &&
+        sixtyResult[1].region.bottom==735) {
+        "60% broad row should get conservative overlapping halves: $sixtyResult"
+    }
+    preservesAll(sixty,sixtyResult)
+
+    // 50–60% is CONDITIONAL: an image that occupies less than 55% of
+    // its chosen portrait viewport is still hard to read.
+    val fifty = listOf(view(0,0,800,680),view(0,680,800,1200))
+    val poorPortrait = refine(fifty)
+    check(poorPortrait.size==3) { "Poor-fitting 50–60% row not rescued: $poorPortrait" }
+    preservesAll(fifty,poorPortrait)
+    // When AUTO_FIT has selected landscape and the same row fits well,
+    // preserve it. Do not cut for the sake of the 50% number.
+    val goodLandscape = fifty.map { it.copy(landscape=true) }
+    check(refine(goodLandscape)==goodLandscape) {
+        "Adequately filled landscape row is NOT an overlap candidate"
+    }
+
+    // A genuine second-look structure beats any speculative half-cut.
+    // Both panels cover the entire row, in the supplied manga order.
+    val real = listOf(PageRegion(400,0,800,900),PageRegion(0,0,400,900))
+    val realRecovered = PanelReadableSliceRefiner.refine(
+        huge,W,H,480,800,{ _,_->false },recoverInnerPanels={ row ->
+            if (row==huge[0].region) real else null
+        })
+    check(realRecovered.size==3 && realRecovered.take(2).map { it.region }==real) {
+        "Recovery of real panels must precede generic overlapping halves: $realRecovered"
+    }
+    preservesAll(huge,realRecovered)
+
+    // An apparent panel result with a missing 100px column is rejected:
+    // no stray sound effect or balloon may disappear from the output.
+    val incomplete = listOf(PageRegion(0,0,300,900),PageRegion(500,0,800,900))
+    check(!PanelReadableSliceRefiner.coversSourceRow(huge[0].region,incomplete))
+    check(PanelReadableSliceRefiner.coversSourceRow(huge[0].region,real))
+    val gapped = PanelReadableSliceRefiner.refine(
+        huge,W,H,480,800,{ x,y -> x in 72..720 && y in 65..850 &&
+            (x+y)%7 < 4 },recoverInnerPanels={ incomplete })
+    check(gapped.size==3 && gapped[0].region.right==800) {
+        "Invalid inner panels must not steal part of the original row: $gapped"
+    }
+    preservesAll(huge,gapped)
+
+    // Four strong outer sides signal one intentional big framed panel:
+    // keep its composition even when it crosses the 60% threshold.
+    check(PanelReadableSliceRefiner.looksLikeOneFramedPanel(
+        huge[0].region,{ _,_->true }))
+    val framed = PanelReadableSliceRefiner.refine(
+        huge,W,H,480,800,{ _,_->true })
+    check(framed==huge) { "Do not cut a confidently framed scene: $framed" }
 
     // A narrow genuine portrait panel remains intact even if its height
     // covers most of the source page.
