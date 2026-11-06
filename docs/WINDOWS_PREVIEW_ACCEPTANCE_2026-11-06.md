@@ -26,7 +26,7 @@ This is **unsigned development software**, not an endorsed Windows installer or 
 ## Automated evidence available
 
 - [x] Kotlin/JVM converter and mock Suwayomi CI completed green, plus the Windows portable ZIP creation and bundled-Java EPUB 2 smoke in [run 42143443109](https://github.com/toshio2011/mihon-nooir/actions/runs/42143443109).
-- [ ] Actual pinned Suwayomi server startup, real GraphQL request and owned shutdown on Windows (dedicated real-server CI job under active development).
+- [x] Pinned official Suwayomi v2.4.2366 server started from packaged Windows JVM, answered live empty-library/source GraphQL requests, and shut down its owned process in [CI run 42147453447](https://github.com/toshio2011/mihon-nooir/actions/runs/42147453447). No manga or extensions were downloaded.
 - [ ] Actual on-screen GUI clicks on a physical Windows desktop.
 - [ ] Updated Android v1.0.17 panel behavior reconciled without replacing newer Android code.
 - [ ] Official installer/portable distribution, signing approach and production hardening.
