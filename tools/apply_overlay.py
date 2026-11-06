@@ -241,4 +241,91 @@ replace_once(app_build, 'versionName = "0.21.3"', f'versionName = "{version}"')
 updater = upstream / "app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt"
 replace_once(updater, '"mihonapp/mihon-preview"', '"toshio2011/mihon-nooir"')
 replace_once(updater, '"mihonapp/mihon"', '"toshio2011/mihon-nooir"')
+# The pinned Mihon release parser matches every "-foss.apk" to the same key,
+# accidentally choosing GitHub's last architecture (x86_64 on ARM devices).
+# Keep the fork's selection strict, ABI-aware and independent of asset ordering.
+release_service = upstream / "data/src/main/java/tachiyomi/data/release/ReleaseServiceImpl.kt"
+replace_once(release_service,
+    '''        val map = release.assets.associate { asset ->
+            BUILD_TYPES.find { "-$it" in asset.name } to asset.downloadLink
+        }
+
+        return if (!isFoss) {
+            map[Build.SUPPORTED_ABIS[0]] ?: map[null]
+        } else {
+            map[FOSS]
+        }
+''',
+    '''        return NooirReleaseApkSelector.select(
+            assets = release.assets.map { it.name to it.downloadLink },
+            isFoss = isFoss,
+            supportedAbis = Build.SUPPORTED_ABIS.toList(),
+        )
+''')
+replace_once(release_service,
+    '''        private const val FOSS = "foss"
+        private val BUILD_TYPES = listOf(FOSS, "arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+
+''',
+    "")
+
+# The fork deliberately cannot install arbitrary Android packages. The
+# official updater should hand off the correctly matched release APK to the
+# user's browser / Downloads installer, not invoke the APK installer as an
+# unprivileged source or silently grant package-install capability.
+update_screen = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/NewUpdateScreen.kt"
+replace_once(update_screen,
+    '''            onAcceptUpdate = {
+                when (state.stage) {
+                    NewUpdateScreenModel.Stage.Available, NewUpdateScreenModel.Stage.Failed -> viewModel.startDownload()
+                    NewUpdateScreenModel.Stage.Downloaded -> viewModel.installUpdate()
+                    else -> Unit
+                }
+            },
+''',
+    '''            onAcceptUpdate = { viewModel.installUpdate() },
+''')
+
+update_model = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/more/NewUpdateScreenModel.kt"
+replace_once(update_model,
+    '''    fun installUpdate() {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkFile.getUriCompat(context), ExtensionInstaller.APK_MIME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        context.startActivity(intent)
+    }
+''',
+    '''    fun installUpdate() {
+        // User-initiated browser/Downloads installation: no package-installer
+        // permission, no hidden install session, and no duplicate APK copy.
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(downloadLink)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    }
+''')
+replace_once(update_model, "import eu.kanade.tachiyomi.extension.util.ExtensionInstaller\n", "")
+replace_once(update_model, "import eu.kanade.tachiyomi.util.storage.getUriCompat\n", "")
+
+# Make the browser-mediated path explicit to the user. The previous
+# upstream CTA said "Download" or "Install" even though it now opens Downloads.
+update_presentation = upstream / "app/src/main/java/eu/kanade/presentation/more/NewUpdateScreen.kt"
+replace_once(update_presentation,
+    'NewUpdateScreenModel.Stage.Available -> stringResource(MR.strings.update_check_confirm)',
+    'NewUpdateScreenModel.Stage.Available -> "Download official APK in browser"')
+replace_once(update_presentation,
+    '''            TextButton(
+                onClick = onOpenInBrowser,
+''',
+    '''            Text(
+                text = "Your browser will download the verified release APK. " +
+                    "Install it over the current app with Android's confirmation; do not uninstall MihonNooir.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            TextButton(
+                onClick = onOpenInBrowser,
+''')
+
 print("Mihon Nooir integration overlay applied to", upstream)

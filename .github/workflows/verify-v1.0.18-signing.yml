@@ -1,0 +1,302 @@
+name: Verify signed MihonNooir v1.0.18 upgrade candidate
+# Isolated branch-only verification, never creates or modifies a GitHub Release.
+# Persistent signing certificate and APK identity must match public v1.0.17.
+on:
+  push:
+    branches: [fix/android-updater-abi-v1.0.18]
+    paths:
+      - '.github/workflows/verify-v1.0.18-signing.yml'
+      - '.github/scripts/verify-signed-upgrade.sh'
+      - 'config/version.txt'
+      - 'tools/**'
+      - 'overlay/**'
+      - 'tests/**'
+      - 'desktop/**'
+permissions:
+  contents: read
+concurrency:
+  group: mihon-nooir-v1.0.18-signing-qa
+  cancel-in-progress: true
+
+jobs:
+  release:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout frozen release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require isolated v1.0.18 signing test branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/android-updater-abi-v1.0.18'
+          test "$(tr -d '\r\n' < config/version.txt)" = '1.0.18'
+          echo 'Signing test only; this workflow cannot publish GitHub Releases.'
+
+      - name: Verify stable Android signing credentials before starting any build
+        shell: bash
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEY_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ALIAS_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEY_B64" || -z "$KEY_PASS" || -z "$KEY_ALIAS" || -z "$ALIAS_PASS" ]]; then
+            echo 'Persistent Android signing credentials are missing. Release blocked; no debug APK may be published.' >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/nooir-release.keystore"
+          test -s "$RUNNER_TEMP/nooir-release.keystore"
+
+      - name: Validate host tests and offline diagnostic inspector
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          bash tests/run.sh
+
+      - name: Pin Mihon upstream revision
+        id: pin
+        shell: bash
+        run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned Mihon upstream
+        uses: actions/checkout@v4
+        with:
+          repository: mihonapp/mihon
+          ref: ${{ steps.pin.outputs.sha }}
+          path: upstream
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Ubuntu Actions already includes a working Android SDK. The optional
+      # setup-android action attempts to install obsolete package "tools" on
+      # newer runners and fails even though the full build-apk workflow works
+      # with the preinstalled SDK.
+      - name: Verify preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk" && test -d "$sdk"
+          test -d "$sdk/build-tools"
+          echo "Using runner Android SDK at $sdk"
+
+      - name: Apply fork overlay and restrict installation privileges
+        run: |
+          python3 tools/apply_overlay.py upstream
+          python3 tools/secure_android_installers.py upstream
+
+      - name: Compile persistent-key-signed Android FOSS APK variants
+        working-directory: upstream
+        env:
+          MIHON_GITHUB_RELEASE: 'true'
+          storeFile: ${{ runner.temp }}/nooir-release.keystore
+          storePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
+
+      - name: Block debug signatures, mismatched certificates or bad APK identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage='initialization'
+          apk='(no APK selected)'
+          trap 'echo "APK release verification stopped at stage: $stage; file: $(basename "$apk")" >&2' ERR
+          shopt -s nullglob
+          apks=(upstream/app/build/outputs/apk/foss/*.apk)
+          echo "Found ${#apks[@]} output APK files"
+          if (( ${#apks[@]} != 5 )); then
+            echo "Expected exactly five FOSS APK variants, got ${#apks[@]}" >&2
+            exit 1
+          fi
+          stage='locate APK signing and inspection tools'
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          test -x "$build_tools/apksigner" && test -x "$build_tools/aapt"
+          cert=''
+          for apk in "${apks[@]}"; do
+            echo "Inspecting APK: $(basename "$apk")"
+            stage='ZIP integrity'
+            unzip -tq "$apk" >/dev/null
+            stage='cryptographic signature verification'
+            signer=$("$build_tools/apksigner" verify --verbose --print-certs "$apk")
+            stage='APK Signature Scheme v2'
+            grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<< "$signer"
+            stage='reject Android Debug certificate'
+            if grep -Fq 'CN=Android Debug' <<< "$signer"; then
+              echo "Refusing to publish a debug-signed APK: $(basename "$apk")" >&2
+              exit 1
+            fi
+            stage='extract signer SHA-256 fingerprint'
+            # apksigner output varies in indentation, spacing and hex-case.
+            # Strictly accept ONE signer certificate SHA-256 fingerprint, never
+            # a digest from an unrelated APK entry or arbitrary output line.
+            fingerprint=$(python3 -c '
+          import re, sys
+          lines = sys.stdin.read().splitlines()
+          matches = []
+          for line in lines:
+              # Build Tools 36 reports "V2 Signer: certificate SHA-256 digest".
+              # Earlier apksigner versions used "Signer #1 certificate ...".
+              # Only accept a certificate SHA-256 field from a signer heading.
+              found = re.fullmatch(
+                  r"(?i)\s*(?:v2\s+signer|signer\s*#\s*1)\s*:?\s*certificate\s+SHA[-\s]*256\s+digest\s*:\s*([0-9a-f]{64})\s*",
+                  line,
+              )
+              if found:
+                  matches.append(found.group(1).lower())
+          if len(matches) != 1:
+              print(f"Expected one signer certificate SHA-256 digest; found {len(matches)}. Public output headings:", file=sys.stderr)
+              for line in lines:
+                  if "digest" in line.lower():
+                      print(re.sub(r"(?i)[a-f0-9]{16,}", "[redacted]", line[:160]), file=sys.stderr)
+              sys.exit(1)
+          print(matches[0])
+            ' <<< "$signer")
+            test -n "$fingerprint"
+            stage='compare persistent signing certificate across variants'
+            if [[ -n "$cert" && "$fingerprint" != "$cert" ]]; then
+              echo "The APK variants are not signed with one persistent certificate" >&2
+              exit 1
+            fi
+            cert="$fingerprint"
+            stage='read Android manifest package information'
+            badging=$("$build_tools/aapt" dump badging "$apk")
+            stage='verify package identifier'
+            grep -Fq "name='dev.nooir.mihontrial.foss'" <<< "$badging"
+            stage='verify version code'
+            grep -Fq "versionCode='1000018'" <<< "$badging"
+            stage='verify version name'
+            grep -Fq "versionName='1.0.18'" <<< "$badging"
+            stage='verify app label'
+            grep -Fq "application-label:'MihonNooir'" <<< "$badging"
+            stage='read Android permissions'
+            permissions=$("$build_tools/aapt" dump permissions "$apk")
+            for denied in REQUEST_INSTALL_PACKAGES REQUEST_DELETE_PACKAGES UPDATE_PACKAGES_WITHOUT_USER_ACTION; do
+              stage="reject privileged installer permission $denied"
+              if grep -Fq "android.permission.$denied" <<< "$permissions"; then
+                echo "Unsafe installation permission in $(basename "$apk"): $denied" >&2
+                exit 1
+              fi
+            done
+            echo "Verified signed release variant: $(basename "$apk")"
+          done
+
+      - name: Verify upgrade certificate matches published official v1.0.17
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/previous-official"
+          gh release download v1.0.17 --repo "$GH_REPO" \
+            --pattern app-arm64-v8a-foss.apk \
+            --dir "$RUNNER_TEMP/previous-official"
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          apksigner="$build_tools/apksigner"
+          signer_sha() {
+            "$apksigner" verify --verbose --print-certs "$1" | python3 -c '
+          import re,sys
+          lines=sys.stdin.read().splitlines()
+          matches=[]
+          for line in lines:
+              found=re.fullmatch(r"(?i)\s*(?:v2\s+signer|signer\s*#\s*1)\s*:?\s*certificate\s+SHA[-\s]*256\s+digest\s*:\s*([0-9a-f]{64})\s*",line)
+              if found: matches.append(found.group(1).lower())
+          if len(set(matches)) != 1:
+              print(f"Expected exactly one signer certificate digest; found {len(matches)}",file=sys.stderr)
+              sys.exit(1)
+          print(matches[0])
+            '
+          }
+          official="$RUNNER_TEMP/previous-official/app-arm64-v8a-foss.apk"
+          actual=$(signer_sha "$official")
+          test -n "$actual"
+          shopt -s nullglob
+          apks=(upstream/app/build/outputs/apk/foss/*-foss.apk)
+          test "${#apks[@]}" -eq 5
+          for candidate in "${apks[@]}"; do
+            next=$(signer_sha "$candidate")
+            if [[ "$actual" != "$next" ]]; then
+              echo "CERTIFICATE MISMATCH: $(basename "$candidate") cannot update official v1.0.17" >&2
+              exit 1
+            fi
+          done
+          echo "All five v1.0.18 APK variants have the same signing certificate as official v1.0.17."
+
+      - name: Stage verified release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp upstream/app/build/outputs/apk/foss/*-foss.apk dist/
+          (cd dist && sha256sum ./*-foss.apk > SHA256SUMS.txt)
+          test -s dist/app-arm64-v8a-foss.apk
+          test -s dist/app-universal-foss.apk
+
+      - name: Upload five signed candidate APKs for in-place upgrade testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-v1.0.18-signed-upgrade-candidate
+          path: |
+            dist/*-foss.apk
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Securely remove signing keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/nooir-release.keystore"
+
+  android-in-place-upgrade:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout emulator upgrade contract
+        uses: actions/checkout@v4
+      - name: Download release-key-signed APKs from same workflow run
+        uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-v1.0.18-signed-upgrade-candidate
+          path: candidate-v1.0.18
+      - name: Download existing official v1.0.17 x86_64 FOSS APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p official-v1.0.17
+          gh release download v1.0.17 --repo "$GH_REPO" \
+            --pattern app-x86_64-foss.apk --dir official-v1.0.17
+          (cd candidate-v1.0.18 && sha256sum -c SHA256SUMS.txt)
+          test -s official-v1.0.17/app-x86_64-foss.apk
+          test -s candidate-v1.0.18/app-x86_64-foss.apk
+          bash -n .github/scripts/verify-signed-upgrade.sh
+      - name: Enable emulator hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify package-manager in-place upgrade on Android 16
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/scripts/verify-signed-upgrade.sh
