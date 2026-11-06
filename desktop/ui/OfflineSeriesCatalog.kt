@@ -1,5 +1,7 @@
 package dev.nooir.desktop.ui
 
+import dev.nooir.desktop.storage.DesktopDataHome
+
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -37,7 +39,7 @@ internal data class OfflineSeries(
  * Metadata writes are atomic and preserve the existing index on errors.
  */
 internal class OfflineSeriesCatalog(
-    private val directory: Path = Path.of(System.getProperty("user.home"), ".mihonnooir"),
+    private val directory: Path = DesktopDataHome.root(),
 ) {
     companion object {
         private const val HEADER = "MIHONNOOIR_OFFLINE_SERIES_V1"
