@@ -1,5 +1,7 @@
 package dev.nooir.desktop.ui
 
+import dev.nooir.desktop.storage.DesktopDataHome
+
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
@@ -19,7 +21,7 @@ internal data class LocalLibraryBook(
 
 /** Small, versioned, atomic library index. All paths are user-approved local paths. */
 internal class LocalLibraryStore(
-    private val directory: Path = Path.of(System.getProperty("user.home"), ".mihonnooir"),
+    private val directory: Path = DesktopDataHome.root(),
 ) {
     companion object {
         private const val HEADER = "MIHONNOOIR_LOCAL_BOOKS_V1"
