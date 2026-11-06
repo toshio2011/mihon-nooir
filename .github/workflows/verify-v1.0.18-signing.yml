@@ -258,3 +258,44 @@ jobs:
         if: always()
         shell: bash
         run: rm -f "$RUNNER_TEMP/nooir-release.keystore"
+
+  android-in-place-upgrade:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout emulator upgrade contract
+        uses: actions/checkout@v4
+      - name: Download release-key-signed APKs from same workflow run
+        uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-v1.0.18-signed-upgrade-candidate
+          path: candidate-v1.0.18
+      - name: Download existing official v1.0.17 x86_64 FOSS APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p official-v1.0.17
+          gh release download v1.0.17 --repo "$GH_REPO" \
+            --pattern app-x86_64-foss.apk --dir official-v1.0.17
+          (cd candidate-v1.0.18 && sha256sum -c SHA256SUMS.txt)
+          test -s official-v1.0.17/app-x86_64-foss.apk
+          test -s candidate-v1.0.18/app-x86_64-foss.apk
+          bash -n .github/scripts/verify-signed-upgrade.sh
+      - name: Enable emulator hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify package-manager in-place upgrade on Android 16
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/scripts/verify-signed-upgrade.sh
