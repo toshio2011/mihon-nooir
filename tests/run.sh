@@ -163,3 +163,9 @@ java -Djava.awt.headless=true -cp "$tmp/windows-remote-batch-tests.jar" RemoteCh
 kotlinc desktop/storage/DesktopDataHome.kt desktop/ui/ReaderBookmarkStore.kt tests/ReaderBookmarkStoreTest.kt \
   -include-runtime -d "$tmp/windows-reader-bookmarks-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-reader-bookmarks-tests.jar" ReaderBookmarkStoreTestKt
+
+# The large desktop data root may be placed explicitly on another drive.
+# Preserve legacy ~/.mihonnooir by default and do not migrate or delete data.
+kotlinc desktop/storage/DesktopDataHome.kt tests/DesktopDataHomeTest.kt \
+  -include-runtime -d "$tmp/windows-storage-root-tests.jar"
+java -jar "$tmp/windows-storage-root-tests.jar"
