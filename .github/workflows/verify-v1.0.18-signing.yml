@@ -6,6 +6,7 @@ on:
     branches: [fix/android-updater-abi-v1.0.18]
     paths:
       - '.github/workflows/verify-v1.0.18-signing.yml'
+      - '.github/scripts/verify-signed-upgrade.sh'
       - 'config/version.txt'
       - 'tools/**'
       - 'overlay/**'
