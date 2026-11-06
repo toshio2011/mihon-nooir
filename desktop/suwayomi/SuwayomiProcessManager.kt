@@ -1,5 +1,7 @@
 package dev.nooir.desktop.suwayomi
 
+import dev.nooir.desktop.storage.DesktopDataHome
+
 import java.io.Closeable
 import java.io.File
 import java.net.InetSocketAddress
@@ -19,8 +21,7 @@ import java.util.zip.ZipFile
  * All network binding flags are forced to IPv4 loopback.
  */
 class SuwayomiProcessManager(
-    private val root: Path = Path.of(System.getProperty("user.home"),
-        ".mihonnooir", "managed-suwayomi"),
+    private val root: Path = DesktopDataHome.root().resolve("managed-suwayomi"),
     private val javaExecutable: Path = Path.of(System.getProperty("java.home"),
         "bin", if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java"),
     private val port: Int = 4567,
