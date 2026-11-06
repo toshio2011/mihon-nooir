@@ -1,5 +1,7 @@
 package dev.nooir.desktop.ui
 
+import dev.nooir.desktop.storage.DesktopDataHome
+
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
@@ -17,7 +19,7 @@ import java.util.UUID
 internal data class ReaderPageBookmark(val pageIndex: Int, val createdAt: Long)
 
 internal class ReaderBookmarkStore(
-    private val directory: Path = Path.of(System.getProperty("user.home"), ".mihonnooir"),
+    private val directory: Path = DesktopDataHome.root(),
 ) {
     companion object {
         private const val HEADER = "MIHONNOOIR_READER_BOOKMARKS_V1"
