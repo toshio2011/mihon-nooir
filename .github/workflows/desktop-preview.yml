@@ -142,3 +142,53 @@ jobs:
             package/MihonNooir-Windows-Preview.zip.sha256
           if-no-files-found: error
           retention-days: 14
+
+  real-suwayomi-server:
+    needs: windows-app-image
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download same-run packaged Windows preview
+        uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-windows-preview-unsigned
+          path: real-server-smoke
+      - name: Verify portable preview archive and unpack
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = 'real-server-smoke/MihonNooir-Windows-Preview.zip'
+          $shaFile = 'real-server-smoke/MihonNooir-Windows-Preview.zip.sha256'
+          if (!(Test-Path $archive) -or !(Test-Path $shaFile)) { throw 'Missing packaged preview or SHA-256' }
+          $expected = ((Get-Content $shaFile -Raw).Trim().Split(' '))[0].ToLowerInvariant()
+          $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw 'Packaged preview failed checksum verification' }
+          Expand-Archive -Path $archive -DestinationPath 'real-server-smoke/unpacked'
+          $base = 'real-server-smoke/unpacked/MihonNooir-Preview'
+          if (!(Test-Path "$base/runtime/bin/java.exe") -or
+              !(Test-Path "$base/app/mihonnooir-desktop-preview.jar")) {
+            throw 'Downloaded preview is missing bundled Java or shared conversion code'
+          }
+      - name: Download and verify pinned official Suwayomi server
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/Suwayomi/Suwayomi-Server/releases/download/v2.4.2366/Suwayomi-Server-v2.4.2366.jar'
+          $dest = Join-Path $env:RUNNER_TEMP 'Suwayomi-Server-v2.4.2366.jar'
+          & curl.exe --fail --location --retry 2 --connect-timeout 25 --max-time 360 --output $dest $url
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path $dest)) { throw 'Official Suwayomi download failed' }
+          $hash = (Get-FileHash -Algorithm SHA256 $dest).Hash.ToLowerInvariant()
+          if ($hash -ne 'af9feb20af9d7ebe9e30769e6c6ebc7fc7ab1c447388d42e0280b1da5fe07bfd') {
+            throw 'Official Suwayomi JAR checksum mismatch'
+          }
+      - name: Start real pinned Suwayomi, query GraphQL, and shut down owned process
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'real-server-smoke/unpacked/MihonNooir-Preview'
+          $runtime = Join-Path $base 'runtime/bin/java.exe'
+          $appJar = Join-Path $base 'app/mihonnooir-desktop-preview.jar'
+          $suwayomiJar = Join-Path $env:RUNNER_TEMP 'Suwayomi-Server-v2.4.2366.jar'
+          & $runtime '-Djava.awt.headless=true' '-cp' $appJar 'dev.nooir.desktop.suwayomi.RealSuwayomiServerSmoke' $suwayomiJar
+          if ($LASTEXITCODE -ne 0) { throw "Real Suwayomi integration failed: $LASTEXITCODE" }
