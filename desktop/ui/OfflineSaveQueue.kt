@@ -1,5 +1,7 @@
 package dev.nooir.desktop.ui
 
+import dev.nooir.desktop.storage.DesktopDataHome
+
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
@@ -31,7 +33,7 @@ internal data class OfflineSaveJob(
 }
 
 internal class OfflineSaveQueue(
-    private val folder: Path = Path.of(System.getProperty("user.home"), ".mihonnooir"),
+    private val folder: Path = DesktopDataHome.root(),
 ) {
     companion object {
         const val MAX_JOBS = 500
