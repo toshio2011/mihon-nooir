@@ -1,5 +1,7 @@
 package dev.nooir.desktop.suwayomi
 
+import dev.nooir.desktop.storage.DesktopDataHome
+
 import java.io.File
 import java.net.URI
 import java.net.http.HttpClient
@@ -24,8 +26,7 @@ import java.util.zip.ZipFile
  * SuwayomiProcessManager (which verifies the same hash independently).
  */
 internal class OfficialSuwayomiCache(
-    private val directory: Path = Path.of(System.getProperty("user.home"),
-        ".mihonnooir", "server-cache"),
+    private val directory: Path = DesktopDataHome.root().resolve("server-cache"),
     private val artifactUri: URI = URI.create(OFFICIAL_URL),
     private val expectedDigest: String = SuwayomiProcessManager.OFFICIAL_JAR_SHA256,
     private val client: HttpClient = HttpClient.newBuilder()
