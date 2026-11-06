@@ -1,5 +1,7 @@
 package dev.nooir.desktop.ui
 
+import dev.nooir.desktop.storage.DesktopDataHome
+
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 import dev.nooir.desktop.suwayomi.SuwayomiClient
 import java.io.File
@@ -32,8 +34,7 @@ internal object LocalCbzCopyProgress {
  */
 internal class OfflineChapterSaver(
     private val library: LocalLibraryStore = LocalLibraryStore(),
-    private val downloads: Path = Path.of(System.getProperty("user.home"),
-        ".mihonnooir", "downloaded-chapters"),
+    private val downloads: Path = DesktopDataHome.root().resolve("downloaded-chapters"),
     private val catalog: OfflineSeriesCatalog = OfflineSeriesCatalog(),
 ) {
     companion object {
