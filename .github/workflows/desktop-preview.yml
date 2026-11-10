@@ -32,6 +32,21 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guard Android v1.0.17 source against desktop integration regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          changed=$(git diff --name-only origin/main...HEAD)
+          # Windows integration may use shared Kotlin core, but must not
+          # overwrite current Android source, signing/build scripts or tests.
+          if printf '%s\n' "$changed" | grep -E '^(overlay/|tools/|config/|tests/run\.sh$|\.github/workflows/(build-apk|release-apk|verify-v1\.0\.18-signing)\.yml$)'; then
+            echo "STOP: Windows PR modifies protected Android paths" >&2
+            exit 1
+          fi
+          echo 'PASS: no Android production source, overlay, or build-test changes'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
