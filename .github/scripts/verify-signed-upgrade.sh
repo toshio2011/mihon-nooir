@@ -13,14 +13,23 @@ temp=$(mktemp -d)
 trap 'rm -rf "$temp"' EXIT
 
 package_uid() {
-  # Android dumpsys formatting can include extra fields after userId. Parse
-  # package-owned userId from a captured file, not a live pipe (SIGPIPE risk).
-  awk -F= '/^[[:space:]]*userId=[0-9]+/ {
-    if (match($2, /^[0-9]+/)) {
-      print substr($2, RSTART, RLENGTH)
-      exit
+  # Modern Android 'dumpsys package' may not include userId. Ask PackageManager
+  # for the installed application's UID explicitly, and match the EXACT package.
+  # Read a captured file to avoid pipefail/SIGPIPE and reject other packages.
+  awk -v pkg="package:$PKG" '$1 == pkg {
+    for (i=2; i<=NF; i++) {
+      if ($i ~ /^uid:[0-9]+$/) {
+        sub(/^uid:/, "", $i)
+        print $i
+        exit
+      }
     }
   }' "$1"
+}
+read_package_uid() {
+  local dest="$1"
+  adb shell pm list packages -U "$PKG" > "$temp/$dest.uid"
+  package_uid "$temp/$dest.uid"
 }
 
 check_package() {
@@ -52,10 +61,10 @@ adb wait-for-device
 echo "Installing official signed v1.0.17 baseline without uninstall"
 adb install -r "$OLD"
 check_package 1000017 1.0.17 before
-before_uid=$(package_uid "$temp/before.clean")
+before_uid=$(read_package_uid before)
 if [[ -z "$before_uid" ]]; then
-  echo "FAIL: Installed v1.0.17 package dump did not expose a numeric userId" >&2
-  awk '/userId=|versionCode=|versionName=/ {print; if (++n >= 12) exit}' "$temp/before.clean" >&2
+  echo "FAIL: PackageManager did not report a UID for installed v1.0.17" >&2
+  cat "$temp/before.uid" >&2
   exit 1
 fi
 
@@ -64,7 +73,7 @@ fi
 echo "Installing persistent-key-signed v1.0.18 over v1.0.17"
 adb install -r "$NEW"
 check_package 1000018 1.0.18 after
-after_uid=$(package_uid "$temp/after.clean")
+after_uid=$(read_package_uid after)
 if [[ -z "$after_uid" || "$after_uid" != "$before_uid" ]]; then
   echo "FAIL: Android package UID not preserved (before=$before_uid after=${after_uid:-missing})" >&2
   exit 1
