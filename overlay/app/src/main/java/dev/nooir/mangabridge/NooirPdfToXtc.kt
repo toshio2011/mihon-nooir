@@ -35,7 +35,7 @@ object NooirPdfToXtc {
         ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
             PdfRenderer(fd).use { pdf ->
                 val count = pdf.pageCount
-                require(count in 1..600) { "PDF must have 1–600 pages" }
+                require(count in 1..65535) { "XTC/XTCH format stores at most 65535 pages" }
                 val pages = sequence {
                     for (index in 0 until count) {
                         pdf.openPage(index).use { page ->
@@ -70,7 +70,13 @@ object NooirPdfToXtc {
                         metadata = BookMetadata(title = title, author = author, coverPage = 0),
                         chapters = listOf(BookChapter("PDF", 0, count - 1)),
                         direction = ReadingDirection.LEFT_TO_RIGHT,
-                        onPageEncoded = { onPage(it, count) })
+                        onPageEncoded = { page ->
+                        require((output.parentFile ?: source.parentFile).usableSpace >=
+                            64L * 1024 * 1024) {
+                            "Device storage is running low; clear space and retry PDF conversion"
+                        }
+                        onPage(page, count)
+                    })
                 }
                 return count
             }
