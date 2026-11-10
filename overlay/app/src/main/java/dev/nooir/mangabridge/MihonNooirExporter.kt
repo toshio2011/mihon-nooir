@@ -8,6 +8,7 @@ import dev.nooir.bridge.ExtendedMetadata
 import dev.nooir.bridge.ArchivePage
 import dev.nooir.bridge.BookArchiveWriter
 import dev.nooir.bridge.NooirUpload
+import dev.nooir.bridge.XteinkTransferPolicy
 import java.util.UUID
 import dev.nooir.bridge.XtcCodec
 import dev.nooir.bridge.XtcFormat
@@ -381,8 +382,8 @@ object MihonNooirExporter {
                     tmp.inputStream().use { it.copyTo(output, 64 * 1024) }
                 } ?: error("Cannot open selected output")
             } else {
-                require(tmp.length() <= 180L * 1024 * 1024) {
-                    "Output is over 180 MB: for XTEink stability, select fewer chapters or export smaller files."
+                require(tmp.length() <= XteinkTransferPolicy.MAX_UPLOAD_BYTES) {
+                    XteinkTransferPolicy.adviseIfTooLarge(tmp.length()) ?: "Unexpected transfer-size error"
                 }
                 onStage("Uploading to XTEink", locations.size, locations.size)
                 NooirUpload.upload(tmp, requireNotNull(deviceHost),
