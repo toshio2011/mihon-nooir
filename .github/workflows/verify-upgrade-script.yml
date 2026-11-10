@@ -1,0 +1,25 @@
+name: Validate in-place upgrade script before Android signing
+on:
+  push:
+    branches: [fix/android-updater-abi-v1.0.18]
+    paths:
+      - '.github/scripts/verify-signed-upgrade.sh'
+      - 'tests/test_android_upgrade_shell.py'
+      - '.github/workflows/verify-upgrade-script.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bash syntax and mock Android package-manager upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n .github/scripts/verify-signed-upgrade.sh
+          python3 -m unittest discover -s tests -p 'test_android_upgrade_shell.py' -v
