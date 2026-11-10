@@ -236,7 +236,7 @@ object NooirPdfToEpub {
                             // The EPUB ZIP is streamed to disk. Keep a real free-space
                             // reserve rather than rejecting an otherwise valid
                             // 1000+ page book at a fixed output byte limit.
-                            require(output.parentFile.usableSpace >= 64L * 1024 * 1024) {
+                            require(output.absoluteFile.parentFile.usableSpace >= 64L * 1024 * 1024) {
                                 "Device storage is running low; clear space and retry the PDF export"
                             }
                             onPage(index + 1, total, "Added to EPUB")
