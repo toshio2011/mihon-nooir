@@ -11,9 +11,13 @@ kotlinc desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
-  tests/DesktopGuiModelTest.kt \
+  tests/DesktopGuiModelTest.kt tests/WindowsOfflineJourneyTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+# Full Windows user journey: opt-in source request → separate offline CBZ copy →
+# persisted bookshelf/reader → EPUB2 and XTC without a running server.
+java --add-modules jdk.httpserver -Djava.awt.headless=true \
+  -cp "$tmp/windows-full-gui-tests.jar" WindowsOfflineJourneyTestKt
 
 # Windows-only lifecycle: launch arguments, pinned JAR, loopback binding and
 # refusal to claim an external server. No Suwayomi jar is executed in CI.
