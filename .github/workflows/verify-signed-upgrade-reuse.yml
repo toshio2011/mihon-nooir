@@ -8,6 +8,7 @@ on:
     paths:
       - '.github/workflows/verify-signed-upgrade-reuse.yml'
       - '.github/scripts/verify-signed-upgrade.sh'
+      - 'tests/test_android_upgrade_shell.py'
   workflow_dispatch:
 permissions:
   contents: read
