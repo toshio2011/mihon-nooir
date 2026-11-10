@@ -65,7 +65,12 @@ object NooirPdfToEpub {
                 try {
                     val name = operands[0] as COSName
                     val image = resources?.getXObject(name) as? PDImageXObject
-                    if (image != null && pictures.size < 30) {
+                    if (image != null && pictures.size >= 30) {
+                        // Protect illustration-heavy PDF pages: the per-page
+                        // extraction budget is not permission to silently drop
+                        // image 31+. Preserve the whole source page instead.
+                        hadImageErrors = true
+                    } else if (image != null) {
                         val ctm = graphicsState.currentTransformationMatrix
                         val top = (pageHeight - ctm.translateY - abs(ctm.scaleY)).coerceAtLeast(0f)
                         val bitmap = image.image
