@@ -174,3 +174,8 @@ java -Djava.awt.headless=true -jar "$tmp/pdf-long-epub.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/PdfBatchPlan.kt \
   tests/PdfBatchPlanTest.kt -include-runtime -d "$tmp/pdf-batch-plan.jar"
 java -jar "$tmp/pdf-batch-plan.jar"
+
+# Shared phone-vs-XTEINK size policy: only the upload is bounded.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/XteinkTransferPolicy.kt \
+  tests/XteinkTransferPolicyTest.kt -include-runtime -d "$tmp/xteink-transfer-advisory.jar"
+java -jar "$tmp/xteink-transfer-advisory.jar"
