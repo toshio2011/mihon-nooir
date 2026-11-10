@@ -45,7 +45,7 @@ jobs:
           kotlinc \
             overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
             overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
-            desktop/cli/NooirDesktopCli.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
+            desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
       - name: Verify headless UI model and Suwayomi mock integration
         shell: bash
