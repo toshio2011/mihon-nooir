@@ -10,7 +10,7 @@ trap 'rm -rf "$tmp"' EXIT
 kotlinc desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
-  desktop/cli/NooirDesktopCli.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
+  desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
