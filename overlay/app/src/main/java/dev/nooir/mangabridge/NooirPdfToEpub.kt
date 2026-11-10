@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.cos.COSBase
 import com.tom_roush.pdfbox.cos.COSName
 import com.tom_roush.pdfbox.pdmodel.PDDocument
@@ -129,14 +130,17 @@ object NooirPdfToEpub {
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ) {
-        require(pdf.isFile && pdf.length() in 1..(100L * 1024 * 1024)) {
-            "PDF must be between 1 byte and 100 MiB for experimental conversion"
-        }
+        require(pdf.isFile && pdf.length() > 0L) { "Missing or empty PDF input" }
         PDFBoxResourceLoader.init(context.applicationContext)
-        PDDocument.load(pdf).use { book ->
+        // Keep the PDF scratch streams off the Java heap for long documents.
+        // There is no arbitrary PDF file/page-count cutoff; physical storage
+        // and metadata/reader limits are enforced separately.
+        val scratch = MemoryUsageSetting.setupMixed(16L * 1024 * 1024)
+            .setTempDir(context.cacheDir)
+        PDDocument.load(pdf, scratch).use { book ->
             require(!book.isEncrypted) { "Password-protected PDFs aren't supported yet" }
             val total = book.numberOfPages
-            require(total in 1..600) { "PDF page count must be between 1 and 600" }
+            require(total > 0) { "PDF has no pages" }
             val info = book.documentInformation
             val title = titleOverride?.trim()?.takeIf { it.isNotBlank() }
                 ?: info.title?.takeIf { it.isNotBlank() }
@@ -229,8 +233,11 @@ object NooirPdfToEpub {
                                 // unbounded XHTML section on a small Android device.
                                 if (pendingBody.length > 300_000) finishSection()
                             }
-                            require(output.length() < 300L * 1024 * 1024) {
-                                "Generated EPUB is larger than 300 MiB; split the PDF into smaller sections"
+                            // The EPUB ZIP is streamed to disk. Keep a real free-space
+                            // reserve rather than rejecting an otherwise valid
+                            // 1000+ page book at a fixed output byte limit.
+                            require(output.parentFile.usableSpace >= 64L * 1024 * 1024) {
+                                "Device storage is running low; clear space and retry the PDF export"
                             }
                             onPage(index + 1, total, "Added to EPUB")
                         }
