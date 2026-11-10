@@ -64,8 +64,22 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
         })
     }
     var state by remember { mutableStateOf<WorkInfo?>(null) }
+    var batchIds by remember {
+        mutableStateOf(prefs.getString("last_pdf_batch_work_ids", "").orEmpty()
+            .split(',').mapNotNull { raw -> runCatching { UUID.fromString(raw) }.getOrNull() }.toSet())
+    }
+    var batchInfos by remember { mutableStateOf<List<WorkInfo>>(emptyList()) }
     LaunchedEffect(workId) {
         workId?.let { key -> workManager.getWorkInfoByIdFlow(key).collect { state = it } }
+    }
+    LaunchedEffect(batchIds) {
+        if (batchIds.isEmpty()) {
+            batchInfos = emptyList()
+        } else {
+            workManager.getWorkInfosForUniqueWorkFlow(NooirDeviceWorkQueue.NAME).collect { jobs ->
+                batchInfos = jobs.filter { it.id in batchIds }
+            }
+        }
     }
 
     fun enqueue(saveUri: Uri?, saveTree: Uri? = null) {
@@ -103,7 +117,12 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
             for (next in requests.drop(1)) continuation = continuation.then(next)
             continuation.enqueue()
             workId = requests.last().id
-            prefs.edit().putString(NooirPdfExportWorker.LAST_WORK, workId.toString()).apply()
+            batchInfos = emptyList()
+            batchIds = requests.map { it.id }.toSet()
+            prefs.edit()
+                .putString(NooirPdfExportWorker.LAST_WORK, workId.toString())
+                .putString("last_pdf_batch_work_ids", requests.joinToString(",") { it.id.toString() })
+                .apply()
             queuedSummary = "Queued " + requests.size + " PDF(s) in order. Each produces its own " +
                 (if (outputFormat == "EPUB2" || outputFormat == "EPUB3") "EPUB" else outputFormat) +
                 " book; see Nooir Tools → Activity Queue for individual progress."
@@ -193,7 +212,20 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
             enqueue(uri)
         }
     }
-    val busy = state?.state == WorkInfo.State.ENQUEUED || state?.state == WorkInfo.State.RUNNING
+    val tracked = batchInfos
+    val activeStates = setOf(WorkInfo.State.BLOCKED, WorkInfo.State.ENQUEUED, WorkInfo.State.RUNNING)
+    val busy = tracked.any { it.state in activeStates } ||
+        (tracked.isEmpty() && state?.state in activeStates)
+    val displayState = tracked.firstOrNull { it.state == WorkInfo.State.RUNNING }
+        ?: tracked.firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+        ?: tracked.firstOrNull { it.state == WorkInfo.State.BLOCKED }
+        ?: tracked.firstOrNull { NooirDeviceWorkQueue.hasFailed(it) }
+        ?: tracked.lastOrNull()
+        ?: state
+    val batchComplete = tracked.count { it.state == WorkInfo.State.SUCCEEDED &&
+        !NooirDeviceWorkQueue.hasFailed(it) }
+    val batchFailed = tracked.count { NooirDeviceWorkQueue.hasFailed(it) ||
+        it.state == WorkInfo.State.CANCELLED }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("PDF to e-reader") },
@@ -273,14 +305,21 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     onClick = { enqueue(null) }) { Text(if (documents.size > 1)
                     "Convert all PDFs & send separately to XTEink" else
                     "Convert PDF & send " + extension.uppercase() + " to XTEink") }
-                val phase = state?.progress?.getString(NooirPdfExportWorker.PHASE).orEmpty()
-                val percent = state?.progress?.getInt(NooirPdfExportWorker.PERCENT, -1) ?: -1
-                state?.let { info ->
+                if (batchIds.size > 1 && tracked.isNotEmpty()) {
+                    Text("PDF batch: $batchComplete/${batchIds.size} saved · " +
+                        "$batchFailed failed/cancelled · " +
+                        (batchIds.size - batchComplete - batchFailed).coerceAtLeast(0) +
+                        " waiting or running")
+                }
+                val phase = displayState?.progress?.getString(NooirPdfExportWorker.PHASE).orEmpty()
+                val percent = displayState?.progress?.getInt(NooirPdfExportWorker.PERCENT, -1) ?: -1
+                displayState?.let { info ->
                     Text(when (info.state) {
                         WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Failed: " + info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty() else extension.uppercase() + " conversion complete"
                         WorkInfo.State.FAILED -> "Failed: " +
                             info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty()
                         WorkInfo.State.CANCELLED -> "Canceled"
+                        WorkInfo.State.BLOCKED -> "Waiting for previous PDF to finish"
                         else -> phase.ifBlank { "Queued" }
                     })
                 }
