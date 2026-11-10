@@ -137,6 +137,61 @@ jobs:
             $zip.Dispose()
           }
           Write-Host 'Packaged Windows JVM converted original local PNG to EPUB 2 successfully'
+      - name: Smoke test all five formats from packaged Windows JVM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'package/output/MihonNooir-Preview'
+          $runtime = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          $sample = Join-Path $env:RUNNER_TEMP 'mihonnooir-smoke-pages'
+          if (!(Test-Path $runtime) -or !(Test-Path $jar) -or !(Test-Path (Join-Path $sample '001.png'))) {
+            throw 'Packaged JVM, app or original PNG fixture missing'
+          }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $cases = @(
+            @{ Format = 'XTC'; Ext = 'xtc' },
+            @{ Format = 'XTCH'; Ext = 'xtch' },
+            @{ Format = 'EPUB2'; Ext = 'epub' },
+            @{ Format = 'EPUB'; Ext = 'epub' },
+            @{ Format = 'CBZ'; Ext = 'cbz' }
+          )
+          foreach ($case in $cases) {
+            $format = $case.Format
+            $output = Join-Path $env:RUNNER_TEMP ("nooir-packaged-" + $format + "." + $case.Ext)
+            if (Test-Path $output) { throw "Unexpected existing test output for $format" }
+            & $runtime '-Djava.awt.headless=true' '-cp' $jar 'dev.nooir.desktop.NooirDesktopCli' '--input' $sample '--output' $output '--format' $format '--device' 'X4' '--title' 'Original CI fixture'
+            if ($LASTEXITCODE -ne 0) { throw "Packaged $format conversion failed: $LASTEXITCODE" }
+            if (!(Test-Path $output) -or (Get-Item $output).Length -le 100) {
+              throw "Packaged $format conversion produced no meaningful output"
+            }
+            if ($format -eq 'XTC' -or $format -eq 'XTCH') {
+              $bytes = [System.IO.File]::ReadAllBytes($output)
+              if ([System.Text.Encoding]::ASCII.GetString($bytes, 0, 3) -ne 'XTC') {
+                throw "Packaged $format has invalid XTC container signature"
+              }
+              if ([BitConverter]::ToUInt16($bytes, 6) -ne 1) {
+                throw "Packaged $format has wrong page count"
+              }
+            } else {
+              $zip = [System.IO.Compression.ZipFile]::OpenRead($output)
+              try {
+                $names = @($zip.Entries | ForEach-Object { $_.FullName })
+                if ($format -eq 'CBZ') {
+                  if ($names -notcontains 'ComicInfo.xml') { throw 'Packaged CBZ has no ComicInfo.xml' }
+                } else {
+                  if ($names[0] -ne 'mimetype' -or $names -notcontains 'OEBPS/package.opf') {
+                    throw "Packaged $format EPUB has invalid container structure"
+                  }
+                  $nav = if ($format -eq 'EPUB2') { 'OEBPS/toc.ncx' } else { 'OEBPS/nav.xhtml' }
+                  if ($names -notcontains $nav) { throw "Packaged $format has no expected navigation document" }
+                }
+              } finally {
+                $zip.Dispose()
+              }
+            }
+            Write-Host "PASS: bundled Windows runtime generated a valid $format output from original PNG"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned
