@@ -8,6 +8,7 @@ import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import android.provider.DocumentsContract
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -26,6 +27,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
     companion object {
         const val PDF = "pdf_document_uri"
         const val SAVE_URI = "pdf_epub_save_uri"
+        const val SAVE_TREE = "pdf_output_folder_uri"
         const val HOST = "pdf_host"
         const val FOLDER = "pdf_folder"
         const val MODE = "pdf_mode"
@@ -54,6 +56,8 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         val pdfUri = inputData.getString(PDF)?.let(Uri::parse)
             ?: return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, "Select a PDF first"))
         val save = inputData.getString(SAVE_URI)?.let(Uri::parse)
+        val saveTree = inputData.getString(SAVE_TREE)?.let(Uri::parse)
+        require(save == null || saveTree == null) { "Select one PDF save destination" }
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
         val epubFormat = if (inputData.getString(EPUB_FORMAT) == "EPUB2")
@@ -68,7 +72,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         val extension = xtcFormat?.extension ?: "epub"
         val mode = if (inputData.getString(MODE) == "ORIGINAL_PAGES")
             NooirPdfToEpub.Mode.ORIGINAL_PAGES else NooirPdfToEpub.Mode.MIXED
-        if (save == null && (host.isBlank() || !folder.startsWith("/") || folder.contains(".."))) {
+        if (save == null && saveTree == null && (host.isBlank() || !folder.startsWith("/") || folder.contains(".."))) {
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, "Invalid XTEink address or folder"))
         }
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(
@@ -81,16 +85,18 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
         var name = "Converted PDF"
         try {
             withContext(Dispatchers.IO) {
-                if (save == null) NooirUpload.checkConnected(host)
+                if (save == null && saveTree == null) NooirUpload.checkConnected(host)
                 val cursor = applicationContext.contentResolver.query(pdfUri,
                     arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                 cursor?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
                 val desiredName = inputData.getString(OUTPUT_NAME).orEmpty()
                     .ifBlank { name.substringBeforeLast('.', name) }
                 val outputName = NooirDestinationGuard.filename(desiredName, extension)
-                if (save == null) {
+                if (save == null && saveTree == null) {
                     setProgressAsync(Data.Builder().putString(PHASE, "Checking existing XTEink filenames").build())
                     NooirDestinationGuard.requireOnReader(host, folder, outputName)
+                } else if (saveTree != null) {
+                    NooirDestinationGuard.requireInPhoneFolder(applicationContext, saveTree, outputName)
                 }
                 val incoming = applicationContext.contentResolver.openInputStream(pdfUri)
                     ?: error("Cannot open PDF")
@@ -98,13 +104,21 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                     inputFile.outputStream().use { output ->
                         val buffer = ByteArray(32 * 1024)
                         var size = 0L
+                        var nextDiskCheck = 0L
                         while (true) {
                             if (isStopped) throw CancellationException("PDF conversion cancelled")
                             val n = input.read(buffer)
                             if (n < 0) break
                             size += n
-                            require(size <= 100L * 1024 * 1024) {
-                                "PDF is larger than 100 MiB experimental limit"
+                            // Source is copied to app-private disk, not kept in
+                            // WorkManager Data or as a giant in-memory ByteArray.
+                            // Stop only on actual storage exhaustion, not a
+                            // preset input size or page count.
+                            if (size >= nextDiskCheck) {
+                                require(applicationContext.cacheDir.usableSpace >= 96L * 1024 * 1024) {
+                                    "Insufficient phone storage for PDF input, output and scratch files"
+                                }
+                                nextDiskCheck = size + 4L * 1024 * 1024
                             }
                             output.write(buffer, 0, n)
                         }
@@ -142,7 +156,41 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                     if (save != null) {
                         applicationContext.contentResolver.openOutputStream(save, "w")?.use { dest ->
                             convertedFile.inputStream().use { it.copyTo(dest, 32 * 1024) }
-                        } ?: error("Could not save EPUB file")
+                        } ?: error("Could not save converted PDF file")
+                    } else if (saveTree != null) {
+                        val resolver = applicationContext.contentResolver
+                        NooirDestinationGuard.requireInPhoneFolder(applicationContext, saveTree, outputName)
+                        val parent = DocumentsContract.buildDocumentUriUsingTree(
+                            saveTree, DocumentsContract.getTreeDocumentId(saveTree))
+                        val out = DocumentsContract.createDocument(resolver, parent,
+                            if (xtcFormat == null) "application/epub+zip" else "application/octet-stream",
+                            outputName) ?: error("Could not create output in selected folder")
+                        try {
+                            // SAF providers may auto-rename on a collision; do not
+                            // silently export under an unexpected filename.
+                            val actual = resolver.query(out,
+                                arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                                null, null, null)?.use { c ->
+                                if (c.moveToFirst()) c.getString(0) else null
+                            } ?: error("Cannot verify saved PDF conversion filename")
+                            require(actual == outputName) {
+                                "Destination changed the filename; refusing to overwrite or rename '$outputName'"
+                            }
+                            resolver.openOutputStream(out, "w")?.use { dest ->
+                                convertedFile.inputStream().use { input ->
+                                    val buffer = ByteArray(32 * 1024)
+                                    while (true) {
+                                        if (isStopped) throw CancellationException("PDF save cancelled")
+                                        val count = input.read(buffer)
+                                        if (count < 0) break
+                                        dest.write(buffer, 0, count)
+                                    }
+                                }
+                            } ?: error("Could not save PDF conversion")
+                        } catch (error: Exception) {
+                            runCatching { DocumentsContract.deleteDocument(resolver, out) }
+                            throw error
+                        }
                     } else {
                         manager.notify(notificationId, notice("MangaNooir · PDF to EPUB", "Sending to XTEink"))
                         NooirUpload.upload(convertedFile, host, folder, onProgress = { sent, total ->
@@ -158,7 +206,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                 applicationContext, NooirTransferWorker.CHANNEL_ID,
             ).setSmallIcon(android.R.drawable.stat_sys_upload_done)
                 .setContentTitle("MangaNooir · PDF converted")
-                .setContentText(if (save == null) "Confirmed by XTEink" else extension.uppercase() + " saved to phone")
+                .setContentText(if (save == null && saveTree == null) "Confirmed by XTEink" else extension.uppercase() + " saved to phone")
                 .setAutoCancel(true).build())
             return Result.success()
         } catch (e: CancellationException) {
