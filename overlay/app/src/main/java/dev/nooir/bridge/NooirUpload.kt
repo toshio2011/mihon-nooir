@@ -43,10 +43,12 @@ object NooirUpload {
             }
         }
         val safeName = sanitizeFileName(filenameOverride?.takeIf { it.isNotBlank() } ?: filename)
-        NooirDestinationGuard.requireOnReader(deviceHost, destination, safeName)
+        // A known oversized file should receive the advisory before making
+        // any network request to the ESP32 reader.
         if (length != null && length!! > MAX_SAFE_UPLOAD_BYTES) {
             error(XteinkTransferPolicy.adviseIfTooLarge(length!!) ?: "Unexpected file-size error")
         }
+        NooirDestinationGuard.requireOnReader(deviceHost, destination, safeName)
         if (length == null || length!! < 0L) {
             // Some SAF/cloud providers omit SIZE. Nooir doesn't reliably support
             // chunked uploads, so spool only these uncommon inputs with a hard cap.
@@ -98,10 +100,10 @@ object NooirUpload {
         onProgress: (Long, Long) -> Unit,
         open: () -> InputStream,
     ): String {
-        NooirDestinationGuard.requireOnReader(deviceHost, destination, filename)
         require(fileLength in 1..MAX_SAFE_UPLOAD_BYTES) {
             XteinkTransferPolicy.adviseIfTooLarge(fileLength) ?: "Empty file cannot be transferred to XTEINK"
         }
+        NooirDestinationGuard.requireOnReader(deviceHost, destination, filename)
         require(destination.startsWith("/") && !destination.contains("..")) { "Invalid destination folder" }
         val uri = URI("http://" + deviceHost.trim())
         require(uri.scheme == "http" && uri.host != null && uri.port == -1 &&
