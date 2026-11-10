@@ -1,0 +1,70 @@
+name: QA Android 16 upgrade using existing verified signed candidate
+# One-shot isolated QA: reuse the same certified APK; do not re-sign/build/release.
+# This workflow is intentionally limited to the QA branch and retained artifact
+# from signing run 42736987697 (expires 2026-11-17).
+on:
+  push:
+    branches: [qa/android-v1.0.18-upgrade-reuse-signed]
+    paths:
+      - '.github/workflows/verify-signed-upgrade-reuse.yml'
+      - '.github/scripts/verify-signed-upgrade.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-upgrade:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact QA source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guard against app-source mismatch with signed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          # All runtime app source must match the cert-verified run, while the
+          # emulator test script may have new diagnostics and assertions.
+          git diff --exit-code dbadbf77c8c96923c6eb96a105bb1def4123edc8 HEAD -- \
+            config/version.txt overlay/ tools/
+          test "$(tr -d '\r\n' < config/version.txt)" = '1.0.18'
+          bash -n .github/scripts/verify-signed-upgrade.sh
+          python3 -m unittest discover -s tests -p test_android_upgrade_shell.py -v
+      - name: Download already-verified production-key-signed APKs and public baseline
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p candidate-v1.0.18 official-v1.0.17
+          # The signer and certificate-to-official-v1.0.17 checks PASSED in
+          # the source run's release job. No new keys or rebuilt APKs here.
+          gh run download 42736987697 --repo "$GH_REPO" \
+            --name mihonnooir-v1.0.18-signed-upgrade-candidate \
+            --dir candidate-v1.0.18
+          (cd candidate-v1.0.18 && sha256sum -c SHA256SUMS.txt)
+          gh release download v1.0.17 --repo "$GH_REPO" \
+            --pattern app-x86_64-foss.apk --dir official-v1.0.17
+          test -s official-v1.0.17/app-x86_64-foss.apk
+          test -s candidate-v1.0.18/app-x86_64-foss.apk
+      - name: Configure KVM for Android emulator
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify direct official v1.0.17 to signed v1.0.18 Android 16 upgrade
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/scripts/verify-signed-upgrade.sh
