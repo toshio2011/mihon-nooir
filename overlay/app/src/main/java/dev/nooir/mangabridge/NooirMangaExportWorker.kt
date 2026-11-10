@@ -279,7 +279,7 @@ class NooirMangaExportWorker(context: Context, params: WorkerParameters) : Corou
             throw e
         } catch (e: Exception) {
             val error = e.message ?: "Manga export failed"
-            val transferTooLarge = output.isEmpty() &&
+            val transferTooLarge = inputData.getString("output_uri").isNullOrEmpty() &&
                 error.contains("too large for XTEINK Wi-Fi transfer", ignoreCase = true)
             manager.notify(notificationId, notif(
                 (if (transferTooLarge) "Transfer too large: " else "Export failed: ") +
