@@ -68,6 +68,14 @@ object MangaNooirDesktop {
 }
 
 internal object DesktopUiModel {
+    fun offlineReadyChoices(count: Int): List<String> {
+        require(count in 1..OfflineChapterSaver.MAX_BATCH) { "No successfully saved offline chapters" }
+        // Only a single chapter can be opened without making the user choose
+        // another one. Never start another source request or reader implicitly.
+        return if (count == 1) listOf("Read now", "Open library", "Close")
+        else listOf("Open library", "Close")
+    }
+
     fun selectedChapterIds(chapters: List<SuwayomiChapter>): List<Int> {
         require(chapters.isNotEmpty()) { "Select at least one chapter" }
         require(chapters.size <= 500) { "Export up to 500 chapters per batch" }
@@ -695,10 +703,19 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 }
             }
         }, { files ->
-            JOptionPane.showMessageDialog(this,
-                "Saved ${files.size} offline chapter(s). They are available in Local library.",
-                "MihonNooir", JOptionPane.INFORMATION_MESSAGE)
-            LocalLibraryScreen.open()
+            status.text = "Saved ${files.size} offline chapter(s). Available without Suwayomi."
+            val choices = DesktopUiModel.offlineReadyChoices(files.size)
+            val action = JOptionPane.showOptionDialog(this,
+                "Saved ${files.size} downloaded chapter(s) to your local CBZ library.\\n" +
+                    "You can read them offline without connecting to Suwayomi.",
+                "Offline manga ready", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.INFORMATION_MESSAGE, null, choices.toTypedArray(), choices.first())
+            when (choices.getOrNull(action)) {
+                "Read now" -> LocalComicReader.open(files.single(), this)
+                "Open library" -> LocalLibraryScreen.open()
+                // Choosing Close or dismissing the dialog preserves the saved
+                // CBZ and library records. Nothing is auto-launched or deleted.
+            }
         })
     }
 
