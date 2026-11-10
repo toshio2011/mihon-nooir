@@ -213,10 +213,13 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
             throw e
         } catch (e: Exception) {
             val message = e.message.orEmpty().ifBlank { "PDF conversion failed" }
+            val oversizedTransfer = save == null && saveTree == null &&
+                message.contains("too large for XTEINK Wi-Fi transfer", ignoreCase = true)
             manager.notify(notificationId, NotificationCompat.Builder(
                 applicationContext, NooirTransferWorker.CHANNEL_ID,
             ).setSmallIcon(android.R.drawable.stat_notify_error)
-                .setContentTitle("MangaNooir · PDF conversion failed")
+                .setContentTitle(if (oversizedTransfer) "MangaNooir · XTEINK transfer too large"
+                    else "MangaNooir · PDF conversion failed")
                 .setContentText(message.take(100)).setAutoCancel(true).build())
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, message))
         } finally { inputFile.delete() }
