@@ -14,7 +14,7 @@ package_uid() {
   awk -F= '/^[[:space:]]*userId=[0-9]+[[:space:]]*$/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "$1"
 }
 check_package() {
-  local ver="$1" dest="$2"
+  local ver="$1" name="$2" dest="$3"
   # Capture output to a file first. With pipefail, grep -q on the live
   # dumpsys stream can terminate early and turn success into SIGPIPE (141).
   adb shell pm path "$PKG" > "$temp/$dest.paths"
