@@ -6,7 +6,7 @@ fun main() {
     check(XteinkTransferPolicy.adviseIfTooLarge(max) == null)
     val oversized = checkNotNull(XteinkTransferPolicy.adviseIfTooLarge(max + 1))
     check("too large" in oversized)
-    check("save and read the full converted book on your phone" in oversized)
+    check("save the full converted file to your phone" in oversized)
     check("smaller volumes" in oversized)
     check("180 MiB" in oversized)
     check(runCatching { XteinkTransferPolicy.adviseIfTooLarge(-1) }.isFailure)
