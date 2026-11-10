@@ -70,5 +70,5 @@ if [[ -z "$after_uid" || "$after_uid" != "$before_uid" ]]; then
   exit 1
 fi
 
-echo "PASS: official v1.0.17 upgraded in place to v1.0.18; package UID preserved ($after_uid)"
+echo "PASS: Android upgraded signed official v1.0.17 to v1.0.18 in-place and retained UID $after_uid"
 echo 'Real-library migration and browser download UX still require physical device QA.'
