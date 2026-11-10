@@ -51,6 +51,16 @@ fun main() {
         SuwayomiChapter(20, "Chapter 1", 1.0, 5, true),
     )
     check(DesktopUiModel.selectedChapterIds(chapters) == listOf(20, 12, 40))
+    // After a local CBZ copy, the user explicitly chooses whether to read,
+    // open the bookshelf, or close. No implicit server call or launch.
+    check(DesktopUiModel.offlineReadyChoices(1) ==
+        listOf("Read now", "Open library", "Close"))
+    check(DesktopUiModel.offlineReadyChoices(2) ==
+        listOf("Open library", "Close"))
+    check(DesktopUiModel.offlineReadyChoices(20) ==
+        listOf("Open library", "Close"))
+    check(runCatching { DesktopUiModel.offlineReadyChoices(0) }.isFailure)
+    check(runCatching { DesktopUiModel.offlineReadyChoices(21) }.isFailure)
     check(runCatching { DesktopUiModel.selectedChapterIds(emptyList()) }.isFailure)
     check(runCatching { DesktopUiModel.selectedChapterIds(chapters + chapters.first()) }.isFailure)
     check(DesktopUiModel.suggestedFile("Manga: Chapter/1", ExportFormat.EPUB2) == "Manga_ Chapter_1.epub")
