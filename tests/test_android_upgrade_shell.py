@@ -41,6 +41,11 @@ class SignedUpgradeShellTest(unittest.TestCase):
                 if args[:3] == ["shell", "pm", "path"]:
                     print("package:/data/app/~~synthetic/base.apk")
                     sys.exit(0)
+                if args[:5] == ["shell", "pm", "list", "packages", "-U"]:
+                    is_new = state.read_text() == "new"
+                    uid = os.environ.get("NOOIR_MOCK_AFTER_UID", "10157") if is_new else "10157"
+                    print(f"package:dev.nooir.mihontrial.foss uid:{uid}")
+                    sys.exit(0)
                 if args[:3] == ["shell", "dumpsys", "package"]:
                     is_new = state.read_text() == "new"
                     version = os.environ.get("NOOIR_MOCK_AFTER_VERSION", "1.0.18") if is_new else "1.0.17"
@@ -48,7 +53,6 @@ class SignedUpgradeShellTest(unittest.TestCase):
                     uid = os.environ.get("NOOIR_MOCK_AFTER_UID", "10157") if is_new else "10157"
                     print(f"  versionCode={code} minSdk=26 targetSdk=36")
                     print(f"  versionName={version}")
-                    print(f"    userId={uid}")
                     sys.exit(0)
                 print(f"Unexpected mock adb: {args}", file=sys.stderr)
                 sys.exit(55)
