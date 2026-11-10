@@ -66,9 +66,13 @@ object NooirPdfToEpub {
                     val name = operands[0] as COSName
                     val image = resources?.getXObject(name) as? PDImageXObject
                     if (image != null && pictures.size >= 30) {
-                        // Protect illustration-heavy PDF pages: the per-page
-                        // extraction budget is not permission to silently drop
-                        // image 31+. Preserve the whole source page instead.
+                        // Never silently omit image 31+: fall back to a full
+                        // rendering of this original PDF page.
+                        hadImageErrors = true
+                    } else if (image != null &&
+                        image.width.toLong() * image.height.toLong() > 25_000_000L) {
+                        // Inspect PDF image headers before requesting a huge
+                        // Bitmap from PDFBox; preserve the source page instead.
                         hadImageErrors = true
                     } else if (image != null) {
                         val ctm = graphicsState.currentTransformationMatrix
@@ -113,8 +117,10 @@ object NooirPdfToEpub {
 
     private fun renderPage(renderer: PdfRenderer, index: Int): ByteArray {
         renderer.openPage(index).use { page ->
+            require(page.width > 0 && page.height > 0) { "Invalid PDF page dimensions" }
+            // Never force a minimum scale that can allocate a gigantic
+            // bitmap for unusually large physical PDF page dimensions.
             val factor = min(2f, min(1600f / page.width, 2200f / page.height))
-                .coerceAtLeast(0.3f)
             val width = max(1, (page.width * factor).toInt())
             val height = max(1, (page.height * factor).toInt())
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
