@@ -26,7 +26,8 @@ class SignedUpgradeShellTest(unittest.TestCase):
             bin_dir.mkdir()
             adb = bin_dir / "adb"
             adb.write_text(textwrap.dedent(
-                """#!/usr/bin/env python3
+                """
+                #!/usr/bin/env python3
                 import os, pathlib, sys
                 args = sys.argv[1:]
                 state = pathlib.Path(os.environ["NOOIR_MOCK_ADB_STATE"])
