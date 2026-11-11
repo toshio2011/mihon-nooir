@@ -25,7 +25,8 @@ adb shell am instrument -w -r \
   | tee android-pdf-long-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=converts1001PageOriginalPdfWithoutTruncation' android-pdf-long-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=mixedModeKeepsBlankAndVectorPages' android-pdf-long-instrumentation.txt
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 2
-grep -Fxq 'OK (2 tests)' android-pdf-long-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=mixedTextLayerKeeps257SelectablePagesInOrder' android-pdf-long-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 3
+grep -Fxq 'OK (3 tests)' android-pdf-long-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-pdf-long-instrumentation.txt
-echo 'PASS: Android preserved 1,001 original PDF pages and five MIXED-mode blank/vector pages'
+echo 'PASS: Android preserved 1,001 original pages, five blank/vector pages, and 257 text-layer pages in order'

@@ -10,6 +10,8 @@ import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.cos.COSBase
 import com.tom_roush.pdfbox.cos.COSName
 import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.PDPage
+import com.tom_roush.pdfbox.pdmodel.PDPageTree
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.contentstream.operator.Operator
 import com.tom_roush.pdfbox.text.PDFTextStripper
@@ -42,13 +44,32 @@ object NooirPdfToEpub {
         val vectorMarks: Int, val hadImageErrors: Boolean)
 
     /** One PDF page's positioned text/image blocks, using the native PDF text layer. */
-    private class PageCollector(private val pageWidth: Float, private val pageHeight: Float) : PDFTextStripper() {
+    private class PageCollector(
+        private val pageWidth: Float, private val pageHeight: Float,
+        private val selectedPage: PDPage,
+    ) : PDFTextStripper() {
         val lines = mutableListOf<PdfReflowLines.Line>()
         val pictures = mutableListOf<PlacedImage>()
         var vectorMarks: Int = 0
         var hadImageErrors = false
 
-        init { sortByPosition = true }
+        init {
+            sortByPosition = true
+            // PDFTextStripper resets its private currentPageNo to 0 for each
+            // writeText() call. This override processes just selectedPage and
+            // therefore intentionally uses zero-based page admission.
+            startPage = 0
+            endPage = 0
+        }
+
+        override fun processPages(pages: PDPageTree) {
+            // Default PDFBox loops over the entire document page tree even
+            // when startPage/endPage select one page. Calling that separately
+            // N times was O(N^2). We already have the selected PDPage from a
+            // single sequential page iterator, so extract directly here.
+            // A blank page is preserved by the normal image fallback.
+            if (selectedPage.hasContents()) processPage(selectedPage)
+        }
 
         override fun writeString(text: String, positions: MutableList<TextPosition>) {
             val clean = text.trim()
@@ -186,9 +207,8 @@ object NooirPdfToEpub {
                             onPage(index + 1, total, "Inspecting text and figures")
                             val page = pageIterator?.next()
                             val text = if (page != null) runCatching {
-                                val collector = PageCollector(page.cropBox.width, page.cropBox.height)
-                                collector.startPage = index + 1
-                                collector.endPage = index + 1
+                                val collector = PageCollector(
+                                    page.cropBox.width, page.cropBox.height, page)
                                 collector.getText(book)
                                 Content(collector.lines.toList(), collector.pictures.toList(),
                                     collector.vectorMarks, collector.hadImageErrors)
