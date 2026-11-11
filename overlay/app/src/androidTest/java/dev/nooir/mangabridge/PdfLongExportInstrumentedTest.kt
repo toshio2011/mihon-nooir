@@ -3,12 +3,6 @@ package dev.nooir.mangabridge
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import com.tom_roush.pdfbox.pdmodel.PDPage
-import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
-import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
-import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.nooir.bridge.ReflowEpubFormat
@@ -131,23 +125,28 @@ class PdfLongExportInstrumentedTest {
         val folder = File(context.cacheDir, "nooir-pdf-text-" + System.nanoTime())
         assertTrue(folder.mkdirs())
         try {
-            PDFBoxResourceLoader.init(context.applicationContext)
             val source = File(folder, "text-257.pdf")
-            PDDocument().use { book ->
-                for (n in 1..257) {
-                    val page = PDPage(PDRectangle.LETTER)
-                    book.addPage(page)
-                    PDPageContentStream(book, page).use { content ->
-                        content.beginText()
-                        content.setFont(PDType1Font.HELVETICA, 11f)
-                        content.newLineAtOffset(36f, 740f)
-                        content.showText("PX" + n.toString().padStart(4, '0') +
-                            " This PDF page contains real selectable text for reliable large book conversion.")
-                        content.endText()
-                    }
+            // Generate the test PDF with Android's own PDF writer. The minified
+            // FOSS app need not keep PDFBox's public document-authoring APIs
+            // solely for an independently compiled instrumentation test.
+            val book = PdfDocument()
+            try {
+                val pen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    textSize = 12f
                 }
-                book.save(source)
-            }
+                for (n in 1..257) {
+                    val page = book.startPage(
+                        PdfDocument.PageInfo.Builder(400, 550, n).create())
+                    page.canvas.drawColor(Color.WHITE)
+                    page.canvas.drawText(
+                        "PX" + n.toString().padStart(4, '0') +
+                            " This PDF page contains real selectable text for reliable conversion.",
+                        18f, 48f, pen)
+                    book.finishPage(page)
+                }
+                source.outputStream().use { book.writeTo(it) }
+            } finally { book.close() }
             assertTrue(source.length() > 0L)
             val result = File(folder, "text-257.epub")
             var lastPage = 0
