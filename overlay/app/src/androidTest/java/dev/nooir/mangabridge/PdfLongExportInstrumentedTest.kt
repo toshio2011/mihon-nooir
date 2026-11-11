@@ -304,4 +304,66 @@ class PdfLongExportInstrumentedTest {
             }
         } finally { folder.deleteRecursively() }
     }
+
+    @Test fun mixedTextWithEmbeddedIllustrationRemainsReflowable() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = File(context.cacheDir, "nooir-pdf-illustration-" + System.nanoTime())
+        assertTrue(folder.mkdirs())
+        try {
+            // Android-authored PDF: selectable paragraph plus a separate 96 px
+            // bitmap on the same page. This tests the MIXED interleaving path,
+            // not merely preservation through the original-page fallback.
+            val source = File(folder, "illustrated-text.pdf")
+            val pdf = PdfDocument()
+            try {
+                val page = pdf.startPage(PdfDocument.PageInfo.Builder(440, 560, 1).create())
+                page.canvas.drawColor(Color.WHITE)
+                val pen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    textSize = 11f
+                }
+                page.canvas.drawText(
+                    "ILLUSTRATED_TEXT_0001 This page has selectable narrative text and a separate figure.",
+                    18f, 45f, pen)
+                val illustration = android.graphics.Bitmap.createBitmap(
+                    96, 96, android.graphics.Bitmap.Config.ARGB_8888)
+                try {
+                    val canvas = android.graphics.Canvas(illustration)
+                    canvas.drawColor(Color.WHITE)
+                    val art = Paint().apply { color = Color.BLACK; strokeWidth = 5f }
+                    canvas.drawLine(8f, 8f, 88f, 88f, art)
+                    canvas.drawLine(8f, 88f, 88f, 8f, art)
+                    page.canvas.drawBitmap(illustration, 18f, 110f, null)
+                } finally { illustration.recycle() }
+                pdf.finishPage(page)
+                source.outputStream().use { pdf.writeTo(it) }
+            } finally { pdf.close() }
+
+            val output = File(folder, "illustrated-text.epub")
+            var textConverts = 0
+            var imageFallbacks = 0
+            NooirPdfToEpub.convert(context, source, output,
+                mode = NooirPdfToEpub.Mode.MIXED,
+                epubFormat = ReflowEpubFormat.EPUB3,
+                onPage = { _, _, stage ->
+                    if (stage == "Converting real text and illustrations") textConverts++
+                    if (stage == "Preserving complex/scanned page as image") imageFallbacks++
+                })
+            assertEquals("Illustrated text page was flattened", 1, textConverts)
+            assertEquals("Mixed page unexpectedly fell back to raster", 0, imageFallbacks)
+            ZipFile(output).use { archive ->
+                val xhtml = archive.entries().asSequence()
+                    .filter { it.name.startsWith("OEBPS/text/") && it.name.endsWith(".xhtml") }
+                    .joinToString("\n") {
+                        archive.getInputStream(it).bufferedReader().use { reader -> reader.readText() }
+                    }
+                assertTrue("Real PDF text lost", xhtml.contains("ILLUSTRATED_TEXT_0001"))
+                assertTrue("Figure placement lost", xhtml.contains("Illustration on PDF page 1"))
+                val images = archive.entries().asSequence().count {
+                    it.name.startsWith("OEBPS/images/") && it.name.endsWith(".jpg")
+                }
+                assertTrue("Embedded image missing from EPUB", images >= 1)
+            }
+        } finally { folder.deleteRecursively() }
+    }
 }
