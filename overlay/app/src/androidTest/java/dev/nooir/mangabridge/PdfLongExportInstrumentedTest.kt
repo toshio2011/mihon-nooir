@@ -241,4 +241,67 @@ class PdfLongExportInstrumentedTest {
             created.forEach { runCatching { resolver.delete(it, null, null) } }
         }
     }
+
+    @Test fun mixedTextLayerPreserves2001PagesWithoutTruncation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = File(context.cacheDir, "nooir-pdf-2001-" + System.nanoTime())
+        assertTrue(folder.mkdirs())
+        try {
+            // >2,000 real Android-authored, selectable-text PDF pages. Unlike
+            // the tiny original-layout fixture, this exercises PDFBox's
+            // per-page text extraction over a long page tree.
+            val source = File(folder, "selectable-2001.pdf")
+            val pdf = PdfDocument()
+            try {
+                val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    textSize = 10f
+                }
+                for (n in 1..2001) {
+                    val page = pdf.startPage(
+                        PdfDocument.PageInfo.Builder(440, 560, n).create())
+                    page.canvas.drawColor(Color.WHITE)
+                    page.canvas.drawText(
+                        "LONG" + n.toString().padStart(4, '0') +
+                            " Each PDF page keeps selectable words and original reading order.",
+                        18f, 48f, ink)
+                    pdf.finishPage(page)
+                }
+                source.outputStream().use { pdf.writeTo(it) }
+            } finally { pdf.close() }
+            assertTrue(source.length() > 0L)
+
+            val output = File(folder, "long-text.epub")
+            var visited = 0
+            var textPages = 0
+            var imageFallbacks = 0
+            val start = android.os.SystemClock.elapsedRealtime()
+            NooirPdfToEpub.convert(context, source, output,
+                mode = NooirPdfToEpub.Mode.MIXED,
+                epubFormat = ReflowEpubFormat.EPUB3,
+                onPage = { page, total, stage ->
+                    assertEquals(2001, total)
+                    visited = maxOf(visited, page)
+                    if (stage == "Converting real text and illustrations") textPages++
+                    if (stage == "Preserving complex/scanned page as image") imageFallbacks++
+                })
+            val elapsed = android.os.SystemClock.elapsedRealtime() - start
+            println("PDF_2001_SELECTABLE_TEXT_CONVERSION_MS=" + elapsed)
+            assertEquals("Long PDF was truncated", 2001, visited)
+            assertEquals("Selectable text became page images", 2001, textPages)
+            assertEquals("Unexpected image fallback", 0, imageFallbacks)
+            ZipFile(output).use { zip ->
+                val xhtml = zip.entries().asSequence()
+                    .filter { it.name.startsWith("OEBPS/text/") && it.name.endsWith(".xhtml") }
+                    .joinToString("\n") { zip.getInputStream(it).bufferedReader().use { r -> r.readText() } }
+                var last = -1
+                for (n in 1..2001) {
+                    val marker = "LONG" + n.toString().padStart(4, '0')
+                    val next = xhtml.indexOf(marker, last + 1)
+                    assertTrue("Missing or out-of-order long PDF page " + n, next > last)
+                    last = next
+                }
+            }
+        } finally { folder.deleteRecursively() }
+    }
 }
