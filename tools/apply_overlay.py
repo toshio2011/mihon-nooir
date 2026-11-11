@@ -46,7 +46,14 @@ r8_rules.write_text(r8_rules.read_text() +
     "-keep class dev.nooir.mangabridge.AndroidPageSource { *; }\n" +
     "-keep class dev.nooir.mangabridge.PanelDiagnosticArchive { *; }\n" +
     "-keep class dev.nooir.mangabridge.PanelDiagnosticArchive$* { *; }\n" +
-    "-keep class dev.nooir.bridge.QuantizedPage { *; }\n")
+    "-keep class dev.nooir.bridge.QuantizedPage { *; }\n" +
+    "# Independently compiled 1,001-page PDF instrumentation calls the\n" +
+    "# Kotlin object singleton, nested Mode enum and EPUB format enum.\n" +
+    "# R8 otherwise removes NooirPdfToEpub.INSTANCE from the FOSS app APK,\n" +
+    "# producing NoSuchFieldError before any PDF page can be processed.\n" +
+    "-keep class dev.nooir.mangabridge.NooirPdfToEpub { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirPdfToEpub$Mode { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowEpubFormat { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
