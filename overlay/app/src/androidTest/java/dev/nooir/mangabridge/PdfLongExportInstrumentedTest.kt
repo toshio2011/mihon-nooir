@@ -3,6 +3,9 @@ package dev.nooir.mangabridge
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import android.content.ContentValues
+import android.net.Uri
+import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.nooir.bridge.ReflowEpubFormat
@@ -11,7 +14,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.util.concurrent.CancellationException
 import java.util.zip.ZipFile
 
 /**
@@ -178,5 +183,62 @@ class PdfLongExportInstrumentedTest {
                 }
             }
         } finally { folder.deleteRecursively() }
+    }
+
+    @Test fun phoneSaveToAndroidDownloadsAndCancelWithoutDeleting() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val resolver = context.contentResolver
+        val created = mutableListOf<Uri>()
+        fun createDownload(): Uri {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME,
+                    "nooir-pdf-save-qa-" + System.nanoTime() + ".epub")
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/epub+zip")
+                // Keep synthetic test artifacts private until deleted.
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("Emulator MediaStore Downloads provider refused a test document")
+            created += uri
+            return uri
+        }
+        val payload = ByteArray(96 * 1024 + 17) { ((it * 13) % 251).toByte() }
+        try {
+            // Test an actual Android ContentResolver provider stream, rather
+            // than only a ByteArrayOutputStream. We create/delete our own test
+            // documents; no real user's chosen SAF file is accessed.
+            val completeUri = createDownload()
+            resolver.openOutputStream(completeUri, "w")!!.use { dest ->
+                assertEquals(payload.size.toLong(), PdfSaveCopy.copy(
+                    ByteArrayInputStream(payload), dest, payload.size.toLong()) { false })
+            }
+            val complete = resolver.openInputStream(completeUri)!!.use { it.readBytes() }
+            assertTrue("Provider changed saved EPUB bytes", complete.contentEquals(payload))
+
+            // Cancellation during a copy must propagate, leave only a prefix
+            // in the user-selected URI and NEVER delete that URI itself.
+            val partialUri = createDownload()
+            var stopped = false
+            val trigger = object : ByteArrayInputStream(payload) {
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    val n = super.read(b, off, len)
+                    if (n > 0) stopped = true
+                    return n
+                }
+            }
+            val error = runCatching {
+                resolver.openOutputStream(partialUri, "w")!!.use { dest ->
+                    PdfSaveCopy.copy(trigger, dest, payload.size.toLong()) { stopped }
+                }
+            }.exceptionOrNull()
+            assertTrue("Interrupted save did not report cancellation", error is CancellationException)
+            val partial = resolver.openInputStream(partialUri)!!.use { it.readBytes() }
+            assertTrue("Provider did not retain the partial file", partial.size in 1 until payload.size)
+            assertTrue("Partial bytes changed", partial.contentEquals(payload.copyOf(partial.size)))
+        } finally {
+            // The test owns these newly inserted MediaStore URIs.
+            // This deletion does NOT occur in the production CreateDocument path.
+            created.forEach { runCatching { resolver.delete(it, null, null) } }
+        }
     }
 }
