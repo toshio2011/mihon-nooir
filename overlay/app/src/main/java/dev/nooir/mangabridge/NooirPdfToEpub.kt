@@ -178,10 +178,14 @@ object NooirPdfToEpub {
                                 pendingBody.setLength(0)
                             }
                         }
+                        // Avoid slow indexed PDFBox page lookups on 1000+ page books.
+                        // Original-page mode only uses PdfRenderer, not PDFBox page metadata.
+                        // MIXED walks the page tree lazily; its per-page text scan remains to be profiled.
+                        val pageIterator = if (mode == Mode.MIXED) book.pages.iterator() else null
                         for (index in 0 until total) {
                             onPage(index + 1, total, "Inspecting text and figures")
-                            val page = book.getPage(index)
-                            val text = if (mode == Mode.MIXED) runCatching {
+                            val page = pageIterator?.next()
+                            val text = if (page != null) runCatching {
                                 val collector = PageCollector(page.cropBox.width, page.cropBox.height)
                                 collector.startPage = index + 1
                                 collector.endPage = index + 1
@@ -189,7 +193,7 @@ object NooirPdfToEpub {
                                 Content(collector.lines.toList(), collector.pictures.toList(),
                                     collector.vectorMarks, collector.hadImageErrors)
                             }.getOrNull() else null
-                            val paragraphs = if (text != null) PdfReflowLines.paragraphs(
+                            val paragraphs = if (text != null && page != null) PdfReflowLines.paragraphs(
                                 text.lines, page.cropBox.width, page.cropBox.height,
                                 text.pictures.filter { it.spansTextColumn }.map {
                                     PdfReflowLines.FigureBand(it.y, it.bottom)

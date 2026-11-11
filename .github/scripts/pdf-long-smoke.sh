@@ -24,7 +24,8 @@ adb shell am instrument -w -r \
   dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
   | tee android-pdf-long-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=converts1001PageOriginalPdfWithoutTruncation' android-pdf-long-instrumentation.txt
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 1
-grep -Fxq 'OK (1 test)' android-pdf-long-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=mixedModeKeepsBlankAndVectorPages' android-pdf-long-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 2
+grep -Fxq 'OK (2 tests)' android-pdf-long-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-pdf-long-instrumentation.txt
-echo 'PASS: Android generated and converted an original 1,001-page PDF without silently dropping pages'
+echo 'PASS: Android preserved 1,001 original PDF pages and five MIXED-mode blank/vector pages'

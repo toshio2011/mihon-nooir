@@ -72,4 +72,51 @@ class PdfLongExportInstrumentedTest {
             folder.deleteRecursively()
         }
     }
+
+    @Test fun mixedModeKeepsBlankAndVectorPages() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = File(context.cacheDir, "nooir-pdf-mixed-" + System.nanoTime())
+        assertTrue(folder.mkdirs())
+        try {
+            val source = File(folder, "mixed.pdf")
+            val book = PdfDocument()
+            try {
+                val pen = Paint().apply { color = Color.BLACK; strokeWidth = 2f }
+                for (n in 1..5) {
+                    val page = book.startPage(PdfDocument.PageInfo.Builder(120, 160, n).create())
+                    page.canvas.drawColor(Color.WHITE)
+                    if (n % 2 == 1) page.canvas.drawLine(10f, 12f, 110f, 148f, pen)
+                    book.finishPage(page)
+                }
+                source.outputStream().use { book.writeTo(it) }
+            } finally { book.close() }
+
+            val result = File(folder, "mixed.epub")
+            var lastPage = 0
+            NooirPdfToEpub.convert(context, source, result,
+                mode = NooirPdfToEpub.Mode.MIXED,
+                epubFormat = ReflowEpubFormat.EPUB3,
+                onPage = { page, total, _ ->
+                    assertEquals(5, total)
+                    lastPage = maxOf(lastPage, page)
+                })
+            assertEquals(5, lastPage)
+            ZipFile(result).use { archive ->
+                val entries = archive.entries().asSequence().toList()
+                assertEquals(5, entries.count {
+                    it.name.startsWith("OEBPS/text/") && it.name.endsWith(".xhtml")
+                })
+                assertEquals(5, entries.count {
+                    it.name.startsWith("OEBPS/images/") && it.name.endsWith(".jpg")
+                })
+                for (n in 1..5) {
+                    val name = "OEBPS/text/s" + n.toString().padStart(5, '0') + ".xhtml"
+                    val entry = archive.getEntry(name)
+                    assertNotNull("Missing page " + n, entry)
+                    val markup = archive.getInputStream(entry).bufferedReader().use { it.readText() }
+                    assertTrue("Lost PDF page " + n, markup.contains("PDF page " + n + " (image content)"))
+                }
+            }
+        } finally { folder.deleteRecursively() }
+    }
 }
