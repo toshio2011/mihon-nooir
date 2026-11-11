@@ -28,7 +28,8 @@ grep -Fq 'INSTRUMENTATION_STATUS: test=mixedModeKeepsBlankAndVectorPages' androi
 grep -Fq 'INSTRUMENTATION_STATUS: test=mixedTextLayerKeeps257SelectablePagesInOrder' android-pdf-long-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=phoneSaveToAndroidDownloadsAndCancelWithoutDeleting' android-pdf-long-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=mixedTextLayerPreserves2001PagesWithoutTruncation' android-pdf-long-instrumentation.txt
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 5
-grep -Fxq 'OK (5 tests)' android-pdf-long-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=mixedTextWithEmbeddedIllustrationRemainsReflowable' android-pdf-long-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 6
+grep -Fxq 'OK (6 tests)' android-pdf-long-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-pdf-long-instrumentation.txt
-echo 'PASS: Android 1,001 original pages, 257 and 2,001 text pages, blank/vector and MediaStore cancellation regressions'
+echo 'PASS: Android 1,001 original, 257 and 2,001 text pages, mixed embedded figure, blank/vector and MediaStore cancellation tests'
