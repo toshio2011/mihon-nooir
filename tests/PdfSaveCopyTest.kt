@@ -2,6 +2,8 @@ import dev.nooir.mangabridge.PdfSaveCopy
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.concurrent.CancellationException
 
 fun main() {
@@ -47,5 +49,32 @@ fun main() {
         PdfSaveCopy.copy(ByteArrayInputStream(bytes), failedProvider, bytes.size.toLong()) { false }
     }.exceptionOrNull() is IOException)
 
-    println("PASS: full phone copy, cancellation, truncation and SAF provider write failure")
+    // Phone saves are not limited by the 180 MiB XTEINK Wi-Fi policy.
+    // Generate >180 MiB lazily with a constant-size buffer, without allocating
+    // a huge test PDF or claiming the phone has unlimited physical storage.
+    val largeBytes = 181L * 1024 * 1024
+    val generated = object : InputStream() {
+        var remaining = largeBytes
+        override fun read(): Int {
+            if (remaining <= 0L) return -1
+            remaining--
+            return 42
+        }
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (remaining <= 0L) return -1
+            val count = minOf(remaining, len.toLong()).toInt()
+            java.util.Arrays.fill(b, off, off + count, 42.toByte())
+            remaining -= count
+            return count
+        }
+    }
+    val sink = object : OutputStream() {
+        var written = 0L
+        override fun write(b: Int) { written++ }
+        override fun write(b: ByteArray, off: Int, len: Int) { written += len }
+    }
+    check(PdfSaveCopy.copy(generated, sink, largeBytes) { false } == largeBytes)
+    check(sink.written == largeBytes)
+
+    println("PASS: full phone copy, cancellation, truncation, provider failure, and streaming >180 MiB")
 }
