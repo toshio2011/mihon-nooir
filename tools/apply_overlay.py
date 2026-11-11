@@ -53,7 +53,10 @@ r8_rules.write_text(r8_rules.read_text() +
     "# producing NoSuchFieldError before any PDF page can be processed.\n" +
     "-keep class dev.nooir.mangabridge.NooirPdfToEpub { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirPdfToEpub$Mode { *; }\n" +
-    "-keep class dev.nooir.bridge.ReflowEpubFormat { *; }\n")
+    "-keep class dev.nooir.bridge.ReflowEpubFormat { *; }\n" +
+    "# The synthetic Android MediaStore test also invokes the independently\n" +
+    "# compiled PdfSaveCopy singleton. Preserve its INSTANCE and copy signature.\n" +
+    "-keep class dev.nooir.mangabridge.PdfSaveCopy { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
