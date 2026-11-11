@@ -154,8 +154,14 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                         }
                     }
                     if (save != null) {
+                        // CreateDocument returns a user-chosen URI. Never delete it
+                        // automatically: the provider may own pre-existing data.
+                        // Detect interruption and incomplete copies before success.
+                        setProgressAsync(Data.Builder().putString(PHASE, "Saving converted book to phone").build())
                         applicationContext.contentResolver.openOutputStream(save, "w")?.use { dest ->
-                            convertedFile.inputStream().use { it.copyTo(dest, 32 * 1024) }
+                            convertedFile.inputStream().use { source ->
+                                PdfSaveCopy.copy(source, dest, convertedFile.length()) { isStopped }
+                            }
                         } ?: error("Could not save converted PDF file")
                     } else if (saveTree != null) {
                         val resolver = applicationContext.contentResolver
@@ -178,13 +184,7 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                             }
                             resolver.openOutputStream(out, "w")?.use { dest ->
                                 convertedFile.inputStream().use { input ->
-                                    val buffer = ByteArray(32 * 1024)
-                                    while (true) {
-                                        if (isStopped) throw CancellationException("PDF save cancelled")
-                                        val count = input.read(buffer)
-                                        if (count < 0) break
-                                        dest.write(buffer, 0, count)
-                                    }
+                                    PdfSaveCopy.copy(input, dest, convertedFile.length()) { isStopped }
                                 }
                             } ?: error("Could not save PDF conversion")
                         } catch (error: Exception) {

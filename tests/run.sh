@@ -175,6 +175,12 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/PdfBatchPlan.kt \
   tests/PdfBatchPlanTest.kt -include-runtime -d "$tmp/pdf-batch-plan.jar"
 java -jar "$tmp/pdf-batch-plan.jar"
 
+# Verify bounded, cancellable and length-checked local SAF copy behavior.
+# No e-reader transfer-size limit or Android dependency in this path.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/PdfSaveCopy.kt \
+  tests/PdfSaveCopyTest.kt -include-runtime -d "$tmp/pdf-save-copy.jar"
+java -jar "$tmp/pdf-save-copy.jar"
+
 # Shared phone-vs-XTEINK size policy: only the upload is bounded.
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/XteinkTransferPolicy.kt \
   tests/XteinkTransferPolicyTest.kt -include-runtime -d "$tmp/xteink-transfer-advisory.jar"

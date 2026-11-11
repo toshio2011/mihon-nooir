@@ -318,7 +318,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                         WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Failed: " + info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty() else extension.uppercase() + " conversion complete"
                         WorkInfo.State.FAILED -> "Failed: " +
                             info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty()
-                        WorkInfo.State.CANCELLED -> "Canceled"
+                        WorkInfo.State.CANCELLED -> "Canceled. If Save to phone was interrupted, check for an incomplete output file."
                         WorkInfo.State.BLOCKED -> "Waiting for previous PDF to finish"
                         else -> phase.ifBlank { "Queued" }
                     })
