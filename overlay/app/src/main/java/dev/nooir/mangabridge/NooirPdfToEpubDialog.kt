@@ -161,7 +161,9 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     else files.size.toString() + " PDFs selected: " + names.take(3).joinToString(", ") +
                         (if (files.size > 3) "…" else "")
                 outputName = names.first().substringBeforeLast('.', names.first())
-                bookTitle = if (files.size == 1) outputName else ""
+                // Keep file naming separate from the optional display-title override.
+                // Blank allows PDF metadata to win; the filename remains a fallback.
+                bookTitle = ""
                 bookAuthor = ""
                 selectionError = ""
                 queuedSummary = ""
@@ -240,7 +242,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 }
                 Text(fileName)
                 if (documents.size > 1) {
-                    Text("Batch: each PDF keeps its own metadata and gets a distinct filename. Select an output folder to save locally; you can queue more batches.")
+                    Text("Batch: each PDF gets a distinct filename. EPUB reads PDF title/author metadata when available; XTC/XTCH use filename-based titles. Select a folder to save locally; you can queue more batches.")
                 } else {
                     OutlinedTextField(value = bookTitle, onValueChange = { bookTitle = it.take(192) },
                         label = { Text("Book title (optional)") }, singleLine = true,
