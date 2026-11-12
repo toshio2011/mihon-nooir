@@ -24,6 +24,7 @@ object NooirPdfToXtc {
     fun convert(
         source: File, output: File, format: XtcFormat, device: String,
         title: String, author: String,
+        checkCancelled: () -> Unit = {},
         onPage: (Int, Int) -> Unit = { _, _ -> },
     ): Int {
         require(source.isFile && source.length() > 0L) { "Missing PDF input" }
@@ -35,9 +36,10 @@ object NooirPdfToXtc {
         ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
             PdfRenderer(fd).use { pdf ->
                 val count = pdf.pageCount
-                require(count in 1..600) { "PDF must have 1–600 pages" }
+                require(count in 1..65535) { "XTC/XTCH format stores at most 65535 pages" }
                 val pages = sequence {
                     for (index in 0 until count) {
+                        checkCancelled()
                         pdf.openPage(index).use { page ->
                             val w = profile.width
                             val h = profile.height
@@ -51,6 +53,7 @@ object NooirPdfToXtc {
                                         (h - page.height * scale) / 2f)
                                 }
                                 page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                checkCancelled()
                                 val pixels = IntArray(w * h)
                                 bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
                                 val gray = ByteArray(pixels.size) { i ->
@@ -70,8 +73,17 @@ object NooirPdfToXtc {
                         metadata = BookMetadata(title = title, author = author, coverPage = 0),
                         chapters = listOf(BookChapter("PDF", 0, count - 1)),
                         direction = ReadingDirection.LEFT_TO_RIGHT,
-                        onPageEncoded = { onPage(it, count) })
+                        checkOutputCancelled = checkCancelled,
+                        onPageEncoded = { page ->
+                        checkCancelled()
+                        require((output.parentFile ?: source.parentFile).usableSpace >=
+                            64L * 1024 * 1024) {
+                            "Device storage is running low; clear space and retry PDF conversion"
+                        }
+                        onPage(page, count)
+                    })
                 }
+                checkCancelled()
                 return count
             }
         }

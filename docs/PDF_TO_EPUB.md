@@ -1,5 +1,8 @@
 # PDF → EPUB with real text and illustrations (experimental)
 
+> **November 10, 2026 development draft:** [PR #82](https://github.com/toshio2011/mihon-nooir/pull/82) proposes removing the old 600-page/100 MiB input/300 MiB output cutoffs and adding multi-PDF selection with a serial conversion queue. The documentation below contains historical limitations for older releases. **Nothing in PR #82 is in the official Android v1.0.17 release yet.** Do not claim unlimited physical storage, or guaranteed handling of every PDF.
+
+
 > **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
 
 This feature targets the **mixed-content novel** use case: extract **real, selectable/resizable text** from a PDF, while preserving diagrams, floor plans and pictures near their original paragraphs where possible. Think of a mystery novel with text above and below floor-plan drawings, rather than turning the entire book into page screenshots.

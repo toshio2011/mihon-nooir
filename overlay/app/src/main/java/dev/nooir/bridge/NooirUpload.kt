@@ -24,7 +24,7 @@ object NooirUpload {
      * The receiver determines whether it can display/open the file.
      */
     /** Conservative default for the ESP32 HTTP/SD path: don't start giant single-file transfers. */
-    private const val MAX_SAFE_UPLOAD_BYTES = 180L * 1024 * 1024
+    private const val MAX_SAFE_UPLOAD_BYTES = XteinkTransferPolicy.MAX_UPLOAD_BYTES
 
     fun uploadDocument(
         context: Context, document: Uri, deviceHost: String, destination: String = "/Books",
@@ -43,10 +43,12 @@ object NooirUpload {
             }
         }
         val safeName = sanitizeFileName(filenameOverride?.takeIf { it.isNotBlank() } ?: filename)
-        NooirDestinationGuard.requireOnReader(deviceHost, destination, safeName)
+        // A known oversized file should receive the advisory before making
+        // any network request to the ESP32 reader.
         if (length != null && length!! > MAX_SAFE_UPLOAD_BYTES) {
-            error("File is over 180 MB. Split it into smaller files for reliable XTEink transfer.")
+            error(XteinkTransferPolicy.adviseIfTooLarge(length!!) ?: "Unexpected file-size error")
         }
+        NooirDestinationGuard.requireOnReader(deviceHost, destination, safeName)
         if (length == null || length!! < 0L) {
             // Some SAF/cloud providers omit SIZE. Nooir doesn't reliably support
             // chunked uploads, so spool only these uncommon inputs with a hard cap.
@@ -61,7 +63,7 @@ object NooirUpload {
                             if (n < 0) break
                             count += n
                             require(count <= MAX_SAFE_UPLOAD_BYTES) {
-                                "Cloud file exceeds 180 MB safe transfer limit"
+                                XteinkTransferPolicy.adviseIfTooLarge(count) ?: "Unexpected transfer-size error"
                             }
                             output.write(buffer, 0, n)
                         }
@@ -98,10 +100,10 @@ object NooirUpload {
         onProgress: (Long, Long) -> Unit,
         open: () -> InputStream,
     ): String {
-        NooirDestinationGuard.requireOnReader(deviceHost, destination, filename)
         require(fileLength in 1..MAX_SAFE_UPLOAD_BYTES) {
-            "File is over 180 MB. Split it into smaller files before sending to XTEink."
+            XteinkTransferPolicy.adviseIfTooLarge(fileLength) ?: "Empty file cannot be transferred to XTEINK"
         }
+        NooirDestinationGuard.requireOnReader(deviceHost, destination, filename)
         require(destination.startsWith("/") && !destination.contains("..")) { "Invalid destination folder" }
         val uri = URI("http://" + deviceHost.trim())
         require(uri.scheme == "http" && uri.host != null && uri.port == -1 &&
@@ -222,7 +224,9 @@ object NooirUpload {
         filenameOverride: String? = null,
     ): String {
         require(file.isFile && file.length() > 0) { "Missing export file" }
-        require(file.length() <= MAX_SAFE_UPLOAD_BYTES) { "Manga is over 180 MB; export fewer chapters per file." }
+        require(file.length() <= MAX_SAFE_UPLOAD_BYTES) {
+            XteinkTransferPolicy.adviseIfTooLarge(file.length()) ?: "Unexpected transfer-size error"
+        }
         val outputName = sanitizeFileName(filenameOverride?.takeIf { it.isNotBlank() } ?: file.name)
         require(outputName.matches(Regex("[A-Za-z0-9_.() -]{1,160}\\.(xtc|xtch|epub|cbz)", RegexOption.IGNORE_CASE))) {
             "Unsupported export filename"

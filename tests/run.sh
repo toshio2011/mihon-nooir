@@ -162,3 +162,26 @@ java -jar "$tmp/panel-crop.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelSafeSlicePlanner.kt} \
   tests/PanelSafeSlicePlannerTest.kt -include-runtime -d "$tmp/panel-safe-corridors.jar"
 java -jar "$tmp/panel-safe-corridors.jar"
+
+# Long PDF-to-EPUB container regression. Synthetic original sections only:
+# proves that both EPUB versions can store well over 600 source pages.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt \
+  tests/PdfLargeReflowTest.kt -include-runtime -d "$tmp/pdf-long-epub.jar"
+java -Djava.awt.headless=true -jar "$tmp/pdf-long-epub.jar"
+
+# Many PDFs are separate, serial jobs with collision-safe names; this bound
+# is per picker selection and never a page-count limit.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/PdfBatchPlan.kt \
+  tests/PdfBatchPlanTest.kt -include-runtime -d "$tmp/pdf-batch-plan.jar"
+java -jar "$tmp/pdf-batch-plan.jar"
+
+# Verify bounded, cancellable and length-checked local SAF copy behavior.
+# No e-reader transfer-size limit or Android dependency in this path.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/PdfSaveCopy.kt \
+  tests/PdfSaveCopyTest.kt -include-runtime -d "$tmp/pdf-save-copy.jar"
+java -jar "$tmp/pdf-save-copy.jar"
+
+# Shared phone-vs-XTEINK size policy: only the upload is bounded.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/XteinkTransferPolicy.kt \
+  tests/XteinkTransferPolicyTest.kt -include-runtime -d "$tmp/xteink-transfer-advisory.jar"
+java -jar "$tmp/xteink-transfer-advisory.jar"

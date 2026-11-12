@@ -6,9 +6,12 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.cos.COSBase
 import com.tom_roush.pdfbox.cos.COSName
 import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.PDPage
+import com.tom_roush.pdfbox.pdmodel.PDPageTree
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.contentstream.operator.Operator
 import com.tom_roush.pdfbox.text.PDFTextStripper
@@ -41,13 +44,32 @@ object NooirPdfToEpub {
         val vectorMarks: Int, val hadImageErrors: Boolean)
 
     /** One PDF page's positioned text/image blocks, using the native PDF text layer. */
-    private class PageCollector(private val pageWidth: Float, private val pageHeight: Float) : PDFTextStripper() {
+    private class PageCollector(
+        private val pageWidth: Float, private val pageHeight: Float,
+        private val selectedPage: PDPage,
+    ) : PDFTextStripper() {
         val lines = mutableListOf<PdfReflowLines.Line>()
         val pictures = mutableListOf<PlacedImage>()
         var vectorMarks: Int = 0
         var hadImageErrors = false
 
-        init { sortByPosition = true }
+        init {
+            sortByPosition = true
+            // PDFTextStripper resets its private currentPageNo to 0 for each
+            // writeText() call. This override processes just selectedPage and
+            // therefore intentionally uses zero-based page admission.
+            startPage = 0
+            endPage = 0
+        }
+
+        override fun processPages(pages: PDPageTree) {
+            // Default PDFBox loops over the entire document page tree even
+            // when startPage/endPage select one page. Calling that separately
+            // N times was O(N^2). We already have the selected PDPage from a
+            // single sequential page iterator, so extract directly here.
+            // A blank page is preserved by the normal image fallback.
+            if (selectedPage.hasContents()) processPage(selectedPage)
+        }
 
         override fun writeString(text: String, positions: MutableList<TextPosition>) {
             val clean = text.trim()
@@ -64,7 +86,16 @@ object NooirPdfToEpub {
                 try {
                     val name = operands[0] as COSName
                     val image = resources?.getXObject(name) as? PDImageXObject
-                    if (image != null && pictures.size < 30) {
+                    if (image != null && pictures.size >= 30) {
+                        // Never silently omit image 31+: fall back to a full
+                        // rendering of this original PDF page.
+                        hadImageErrors = true
+                    } else if (image != null &&
+                        image.width.toLong() * image.height.toLong() > 25_000_000L) {
+                        // Inspect PDF image headers before requesting a huge
+                        // Bitmap from PDFBox; preserve the source page instead.
+                        hadImageErrors = true
+                    } else if (image != null) {
                         val ctm = graphicsState.currentTransformationMatrix
                         val top = (pageHeight - ctm.translateY - abs(ctm.scaleY)).coerceAtLeast(0f)
                         val bitmap = image.image
@@ -107,8 +138,10 @@ object NooirPdfToEpub {
 
     private fun renderPage(renderer: PdfRenderer, index: Int): ByteArray {
         renderer.openPage(index).use { page ->
+            require(page.width > 0 && page.height > 0) { "Invalid PDF page dimensions" }
+            // Never force a minimum scale that can allocate a gigantic
+            // bitmap for unusually large physical PDF page dimensions.
             val factor = min(2f, min(1600f / page.width, 2200f / page.height))
-                .coerceAtLeast(0.3f)
             val width = max(1, (page.width * factor).toInt())
             val height = max(1, (page.height * factor).toInt())
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -129,14 +162,17 @@ object NooirPdfToEpub {
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ) {
-        require(pdf.isFile && pdf.length() in 1..(100L * 1024 * 1024)) {
-            "PDF must be between 1 byte and 100 MiB for experimental conversion"
-        }
+        require(pdf.isFile && pdf.length() > 0L) { "Missing or empty PDF input" }
         PDFBoxResourceLoader.init(context.applicationContext)
-        PDDocument.load(pdf).use { book ->
+        // Keep the PDF scratch streams off the Java heap for long documents.
+        // There is no arbitrary PDF file/page-count cutoff; physical storage
+        // and metadata/reader limits are enforced separately.
+        val scratch = MemoryUsageSetting.setupMixed(16L * 1024 * 1024)
+            .setTempDir(context.cacheDir)
+        PDDocument.load(pdf, scratch).use { book ->
             require(!book.isEncrypted) { "Password-protected PDFs aren't supported yet" }
             val total = book.numberOfPages
-            require(total in 1..600) { "PDF page count must be between 1 and 600" }
+            require(total > 0) { "PDF has no pages" }
             val info = book.documentInformation
             val title = titleOverride?.trim()?.takeIf { it.isNotBlank() }
                 ?: info.title?.takeIf { it.isNotBlank() }
@@ -163,18 +199,21 @@ object NooirPdfToEpub {
                                 pendingBody.setLength(0)
                             }
                         }
+                        // Avoid slow indexed PDFBox page lookups on 1000+ page books.
+                        // Original-page mode only uses PdfRenderer, not PDFBox page metadata.
+                        // MIXED walks the page tree lazily; its per-page text scan remains to be profiled.
+                        val pageIterator = if (mode == Mode.MIXED) book.pages.iterator() else null
                         for (index in 0 until total) {
                             onPage(index + 1, total, "Inspecting text and figures")
-                            val page = book.getPage(index)
-                            val text = if (mode == Mode.MIXED) runCatching {
-                                val collector = PageCollector(page.cropBox.width, page.cropBox.height)
-                                collector.startPage = index + 1
-                                collector.endPage = index + 1
+                            val page = pageIterator?.next()
+                            val text = if (page != null) runCatching {
+                                val collector = PageCollector(
+                                    page.cropBox.width, page.cropBox.height, page)
                                 collector.getText(book)
                                 Content(collector.lines.toList(), collector.pictures.toList(),
                                     collector.vectorMarks, collector.hadImageErrors)
                             }.getOrNull() else null
-                            val paragraphs = if (text != null) PdfReflowLines.paragraphs(
+                            val paragraphs = if (text != null && page != null) PdfReflowLines.paragraphs(
                                 text.lines, page.cropBox.width, page.cropBox.height,
                                 text.pictures.filter { it.spansTextColumn }.map {
                                     PdfReflowLines.FigureBand(it.y, it.bottom)
@@ -229,8 +268,11 @@ object NooirPdfToEpub {
                                 // unbounded XHTML section on a small Android device.
                                 if (pendingBody.length > 300_000) finishSection()
                             }
-                            require(output.length() < 300L * 1024 * 1024) {
-                                "Generated EPUB is larger than 300 MiB; split the PDF into smaller sections"
+                            // The EPUB ZIP is streamed to disk. Keep a real free-space
+                            // reserve rather than rejecting an otherwise valid
+                            // 1000+ page book at a fixed output byte limit.
+                            require(output.absoluteFile.parentFile.usableSpace >= 64L * 1024 * 1024) {
+                                "Device storage is running low; clear space and retry the PDF export"
                             }
                             onPage(index + 1, total, "Added to EPUB")
                         }
