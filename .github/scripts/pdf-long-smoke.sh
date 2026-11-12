@@ -29,7 +29,8 @@ grep -Fq 'INSTRUMENTATION_STATUS: test=mixedTextLayerKeeps257SelectablePagesInOr
 grep -Fq 'INSTRUMENTATION_STATUS: test=phoneSaveToAndroidDownloadsAndCancelWithoutDeleting' android-pdf-long-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=mixedTextLayerPreserves2001PagesWithoutTruncation' android-pdf-long-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=mixedTextWithEmbeddedIllustrationRemainsReflowable' android-pdf-long-instrumentation.txt
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 6
-grep -Fxq 'OK (6 tests)' android-pdf-long-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=pdfXtcAndXtchHaveValid17PageTablesOnX3AndX4' android-pdf-long-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-pdf-long-instrumentation.txt)" -eq 7
+grep -Fxq 'OK (7 tests)' android-pdf-long-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-pdf-long-instrumentation.txt
-echo 'PASS: Android 1,001 original, 257 and 2,001 text pages, mixed embedded figure, blank/vector and MediaStore cancellation tests'
+echo 'PASS: Android 1,001 original, 257/2,001 text pages, mixed figure, MediaStore cancellation, X3/X4 XTC/XTCH page tables'
