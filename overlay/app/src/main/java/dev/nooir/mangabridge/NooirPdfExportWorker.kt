@@ -133,7 +133,10 @@ class NooirPdfExportWorker(context: Context, params: WorkerParameters) : Corouti
                     if (xtcFormat != null) {
                         NooirPdfToXtc.convert(inputFile, convertedFile, xtcFormat, device,
                             inputData.getString(BOOK_TITLE).orEmpty().ifBlank { desiredName },
-                            inputData.getString(BOOK_AUTHOR).orEmpty()) { page, total ->
+                            inputData.getString(BOOK_AUTHOR).orEmpty(),
+                            checkCancelled = {
+                                if (isStopped) throw CancellationException("PDF conversion cancelled")
+                            }) { page, total ->
                             if (isStopped) throw CancellationException("PDF conversion cancelled")
                             val percent = page * 100 / total.coerceAtLeast(1)
                             val info = "PDF page " + page + "/" + total + " · " + extension.uppercase()
