@@ -113,7 +113,15 @@ jobs:
           version_code=$(python3 -c 'import sys; a,b,c=map(int,sys.argv[1].split(".")); print(a*1000000+b*10000+c)' "$version")
           for apk in "${apks[@]}"; do
             unzip -tq "$apk" >/dev/null
-            "$tools_dir/apksigner" verify --verbose --print-certs "$apk"
+            signer=$("$tools_dir/apksigner" verify --verbose --print-certs "$apk")
+            printf '%s\n' "$signer"
+            # This PR/CI workflow intentionally produces Android Debug APKs.
+            # A valid signature alone does NOT make these artifacts safe updates
+            # for the published, persistent-key-signed Android application.
+            if ! grep -Fq 'CN=Android Debug' <<< "$signer"; then
+              echo 'Unexpected non-debug signer in diagnostic CI; use the separate owner-approved release signing workflow' >&2
+              exit 1
+            fi
             badging=$("$tools_dir/aapt" dump badging "$apk")
             grep -Fq "name='dev.nooir.mihontrial.foss'" <<< "$badging"
             grep -Fq "versionCode='$version_code'" <<< "$badging"
@@ -136,6 +144,9 @@ jobs:
             echo "Verified single-app identity and signature: $(basename "$apk")"
           done
           (cd upstream/app/build/outputs/apk/foss && sha256sum ./*.apk > SHA256SUMS.txt)
+          echo '::warning title=Diagnostic Android Debug APKs::Artifacts are debug-signed and MUST NOT be installed as upgrades to the official v1.0.17 app. Keep the installed app and library; a separately verified stable-signed build is required.'
+          echo '### Diagnostic APKs only — not signed update candidates' >> "$GITHUB_STEP_SUMMARY"
+          echo 'These APKs have an Android Debug signing certificate. Do **not** install over the published stable-signed MihonNooir; never uninstall the current app to resolve a signature conflict. An owner-approved candidate using the existing release signing identity is required for in-place testing.' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload verified APKs and checksums
         uses: actions/upload-artifact@v4
         with:
