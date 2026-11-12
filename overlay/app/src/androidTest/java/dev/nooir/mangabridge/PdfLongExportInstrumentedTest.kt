@@ -473,7 +473,11 @@ class PdfLongExportInstrumentedTest {
                     checkCancelled = {
                         if (completedPages == 17) {
                             outputCopyChecks++
-                            if (outputCopyChecks == 2) {
+                            // The seventeenth onPageEncoded callback performs
+                            // one post-encode stop check. The next check happens
+                            // before the first 64 KiB spool write; the third
+                            // check is deliberately after that first chunk.
+                            if (outputCopyChecks == 3) {
                                 throw CancellationException("Synthetic PDF XTCH output cancellation")
                             }
                         }
@@ -484,7 +488,7 @@ class PdfLongExportInstrumentedTest {
             }.exceptionOrNull()
             assertTrue("Final XTCH spool copy did not honor stop", cancelled is CancellationException)
             assertEquals("Cancelled before pages were fully encoded", 17, completedPages)
-            assertTrue("No final-spool stop checks", outputCopyChecks >= 2)
+            assertEquals("Expected cancellation between final-spool chunks", 3, outputCopyChecks)
             assertTrue("Expected partial output from interrupted write", cancelledOutput.length() > 0L)
             assertTrue("Interrupted output unexpectedly complete",
                 cancelledOutput.length() < File(folder, "X4-xtch").length())
