@@ -460,6 +460,35 @@ class PdfLongExportInstrumentedTest {
                     }
                 }
             }
+
+            // Cancel only after all 17 pages have been encoded, while the
+            // final XTCH book bytes are copied from the temporary spool.
+            // The calling Worker owns removal of the incomplete final file.
+            var completedPages = 0
+            var outputCopyChecks = 0
+            val cancelledOutput = File(folder, "cancelled-X4.xtch")
+            val cancelled = runCatching {
+                NooirPdfToXtc.convert(source, cancelledOutput, XtcFormat.XTCH,
+                    "X4", "Cancel final spool", "",
+                    checkCancelled = {
+                        if (completedPages == 17) {
+                            outputCopyChecks++
+                            if (outputCopyChecks == 2) {
+                                throw CancellationException("Synthetic PDF XTCH output cancellation")
+                            }
+                        }
+                    }) { page, total ->
+                    assertEquals(17, total)
+                    completedPages = page
+                }
+            }.exceptionOrNull()
+            assertTrue("Final XTCH spool copy did not honor stop", cancelled is CancellationException)
+            assertEquals("Cancelled before pages were fully encoded", 17, completedPages)
+            assertTrue("No final-spool stop checks", outputCopyChecks >= 2)
+            assertTrue("Expected partial output from interrupted write", cancelledOutput.length() > 0L)
+            assertTrue("Interrupted output unexpectedly complete",
+                cancelledOutput.length() < File(folder, "X4-xtch").length())
+            // Production worker deletes convertedFile in finally, not the test.
         } finally { folder.deleteRecursively() }
     }
 }
