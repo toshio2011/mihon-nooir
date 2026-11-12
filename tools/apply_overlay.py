@@ -56,7 +56,11 @@ r8_rules.write_text(r8_rules.read_text() +
     "-keep class dev.nooir.bridge.ReflowEpubFormat { *; }\n" +
     "# The synthetic Android MediaStore test also invokes the independently\n" +
     "# compiled PdfSaveCopy singleton. Preserve its INSTANCE and copy signature.\n" +
-    "-keep class dev.nooir.mangabridge.PdfSaveCopy { *; }\n")
+    "-keep class dev.nooir.mangabridge.PdfSaveCopy { *; }\n" +
+    "# The PDF-to-XTC/XTCH Android instrumentation invokes these separately\n" +
+    "# compiled public entrypoints against the minified FOSS app APK.\n" +
+    "-keep class dev.nooir.mangabridge.NooirPdfToXtc { *; }\n" +
+    "-keep class dev.nooir.bridge.XtcFormat { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
