@@ -9,6 +9,7 @@ import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.nooir.bridge.ReflowEpubFormat
+import dev.nooir.bridge.XtcFormat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -16,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.RandomAccessFile
 import java.util.concurrent.CancellationException
 import java.util.zip.ZipFile
 
@@ -363,6 +365,100 @@ class PdfLongExportInstrumentedTest {
                     it.name.startsWith("OEBPS/images/") && it.name.endsWith(".jpg")
                 }
                 assertTrue("Embedded image missing from EPUB", images >= 1)
+            }
+        } finally { folder.deleteRecursively() }
+    }
+
+    @Test fun pdfXtcAndXtchHaveValid17PageTablesOnX3AndX4() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = File(context.cacheDir, "nooir-pdf-xtc-qa-" + System.nanoTime())
+        assertTrue(folder.mkdirs())
+        try {
+            val source = File(folder, "pages-17.pdf")
+            val book = PdfDocument()
+            try {
+                val pen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    strokeWidth = 3f
+                }
+                for (n in 1..17) {
+                    val page = book.startPage(
+                        PdfDocument.PageInfo.Builder(120, 160, n).create())
+                    page.canvas.drawColor(Color.WHITE)
+                    page.canvas.drawLine(5f, n.toFloat(), 115f, 155f, pen)
+                    book.finishPage(page)
+                }
+                source.outputStream().use { book.writeTo(it) }
+            } finally { book.close() }
+
+            fun uint16(b: ByteArray, at: Int): Int =
+                (b[at].toInt() and 255) or ((b[at + 1].toInt() and 255) shl 8)
+            fun uint32(b: ByteArray, at: Int): Long =
+                (0..3).fold(0L) { value, i ->
+                    value or ((b[at + i].toLong() and 255) shl (8 * i))
+                }
+            fun uint64(b: ByteArray, at: Int): Long =
+                (0..7).fold(0L) { value, i ->
+                    value or ((b[at + i].toLong() and 255) shl (8 * i))
+                }
+
+            for ((device, width, height) in listOf(
+                Triple("X3", 528, 792), Triple("X4", 480, 800))) {
+                for (format in listOf(XtcFormat.XTC, XtcFormat.XTCH)) {
+                    val output = File(folder, "$device-${format.extension}")
+                    var last = 0
+                    val count = NooirPdfToXtc.convert(source, output, format,
+                        device, "Synthetic 17-page PDF", "Nooir QA") { page, total ->
+                        assertEquals(17, total)
+                        last = maxOf(last, page)
+                    }
+                    assertEquals("PDF page count changed", 17, count)
+                    assertEquals("PDF XTC/XTCH conversion was truncated", 17, last)
+                    RandomAccessFile(output, "r").use { file ->
+                        val header = ByteArray(56)
+                        file.readFully(header)
+                        val magic = if (format == XtcFormat.XTC)
+                            byteArrayOf(88, 84, 67, 0) else byteArrayOf(88, 84, 67, 72)
+                        assertTrue("Incorrect book format header", header.copyOfRange(0, 4)
+                            .contentEquals(magic))
+                        assertEquals("Missing pages from binary header", 17, uint16(header, 6))
+                        assertEquals("Incorrect PDF reading direction", 0, header[8].toInt())
+                        val table = uint64(header, 24)
+                        val contentStart = uint64(header, 32)
+                        assertEquals("Unexpected chapter/metadata table",
+                            56L + 256 + 96, table)
+                        assertEquals("Incorrect page index start", table + 17 * 16L,
+                            contentStart)
+                        assertTrue("Missing XTC/XTCH page data", file.length() > contentStart)
+                        val expectedImageMagic = if (format == XtcFormat.XTC)
+                            byteArrayOf(88, 84, 71, 0) else byteArrayOf(88, 84, 72, 0)
+                        val bitmapBytes = if (format == XtcFormat.XTC)
+                            ((width + 7) / 8) * height else 2 * width * ((height + 7) / 8)
+                        var end = contentStart
+                        for (index in 0 until 17) {
+                            file.seek(table + index * 16L)
+                            val entry = ByteArray(16)
+                            file.readFully(entry)
+                            val offset = uint64(entry, 0)
+                            val length = uint32(entry, 8)
+                            assertEquals("Unexpected XTC/XTCH page offset at $index", end, offset)
+                            assertEquals("Page width at $index", width, uint16(entry, 12))
+                            assertEquals("Page height at $index", height, uint16(entry, 14))
+                            assertEquals("Page encoded bytes at $index",
+                                (22 + bitmapBytes).toLong(), length)
+                            file.seek(offset)
+                            val imageHeader = ByteArray(22)
+                            file.readFully(imageHeader)
+                            assertTrue("Incorrect page image magic at $index",
+                                imageHeader.copyOfRange(0, 4).contentEquals(expectedImageMagic))
+                            assertEquals(width, uint16(imageHeader, 4))
+                            assertEquals(height, uint16(imageHeader, 6))
+                            assertEquals(bitmapBytes.toLong(), uint32(imageHeader, 10))
+                            end = offset + length
+                        }
+                        assertEquals("Unexpected binary trailing bytes", end, file.length())
+                    }
+                }
             }
         } finally { folder.deleteRecursively() }
     }
