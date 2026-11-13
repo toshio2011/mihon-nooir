@@ -9,6 +9,7 @@ on:
       - 'tests/DesktopGuiModelTest.kt'
       - 'tests/DesktopPanelExportTest.kt'
       - 'tests/PanelDetectionCoreTest.kt'
+      - 'tests/DesktopWebpSmokeTest.kt'
       - 'tests/run.sh'
       - 'tests/run_windows_full.sh'
       - '.github/workflows/desktop-preview.yml'
@@ -22,6 +23,7 @@ on:
       - 'tests/DesktopGuiModelTest.kt'
       - 'tests/DesktopPanelExportTest.kt'
       - 'tests/PanelDetectionCoreTest.kt'
+      - 'tests/DesktopWebpSmokeTest.kt'
       - 'tests/run.sh'
       - 'tests/run_windows_full.sh'
       - '.github/workflows/desktop-preview.yml'
@@ -76,6 +78,27 @@ jobs:
             overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
             desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
+      - name: Bundle pinned pure-Java WebP decoder in the standalone Windows JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Libraries are resolved at BUILD time, not on user machines.
+          # No Android/firmware source or dependency is touched.
+          mvn -B -ntp -f desktop/webp-runtime.pom \
+            org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies \
+            -DincludeScope=runtime -DoutputDirectory="$PWD/build/desktop/lib"
+          for name in imageio-webp imageio-core imageio-metadata common-lang common-io common-image; do
+            test -s "build/desktop/lib/$name-3.15.3.jar" ||
+              { echo "Missing pinned WebP runtime: $name" >&2; exit 1; }
+          done
+          # Java's JAR manifest Class-Path is also honored by jpackage's
+          # launcher; this keeps the existing Kotlin JAR and CLI entry points.
+          classpath=$(find build/desktop/lib -maxdepth 1 -name '*.jar' -printf 'lib/%f\n' |
+            LC_ALL=C sort | paste -sd ' ' -)
+          printf 'Manifest-Version: 1\nClass-Path: %s\n' "$classpath" > build/desktop/webp-manifest.mf
+          jar ufm build/desktop/mihonnooir-desktop-preview.jar build/desktop/webp-manifest.mf
+          unzip -p build/desktop/mihonnooir-desktop-preview.jar META-INF/MANIFEST.MF |
+            grep -q 'Class-Path:'
       - name: Verify headless UI model and Suwayomi mock integration
         shell: bash
         env:
@@ -97,7 +120,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-desktop-preview-jvm
-          path: build/desktop/mihonnooir-desktop-preview.jar
+          path: |
+            build/desktop/mihonnooir-desktop-preview.jar
+            build/desktop/lib/*.jar
           if-no-files-found: error
           retention-days: 14
   windows-app-image:
@@ -132,6 +157,7 @@ jobs:
           if (!(Test-Path "$app/app")) { throw 'Packaged application files missing' }
           if (!(Test-Path "$app/runtime")) { throw 'Bundled Java runtime missing' }
           if (!(Test-Path "$app/runtime/bin/java.exe")) { throw 'Bundled Java launcher missing for managed Suwayomi backend' }
+          if (!(Test-Path "$app/app/lib/imageio-webp-3.15.3.jar")) { throw 'WebP decoder missing from Windows app image' }
           Compress-Archive -Path $app -DestinationPath package/MihonNooir-Windows-Preview.zip -CompressionLevel Optimal
           if (!(Test-Path package/MihonNooir-Windows-Preview.zip)) { throw 'Windows archive missing' }
           $hash = (Get-FileHash -Algorithm SHA256 'package/MihonNooir-Windows-Preview.zip').Hash.ToLowerInvariant()
@@ -233,6 +259,30 @@ jobs:
             }
             Write-Host "PASS: bundled Windows runtime generated a valid $format output from original PNG"
           }
+      - name: Smoke test an original WebP CBZ using packaged Windows runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression
+          $app = 'package/output/MihonNooir-Preview'
+          $runtime = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          # Small original synthetic 64x96 WebP, no third-party scans.
+          $bytes = [Convert]::FromBase64String('UklGRn4AAABXRUJQVlA4IHIAAADwBQCdASpAAGAAPj0ai0OiIaEWBAAgA8S0gAIYz/EAUpzk2fD0PaNPZCMdhtTUJcjqh1tXLad8AAD+/ERBoP/4n8f/lYAAH7/qR//7X//+l1wP4Txi3GqiQHj/J/4g/7A+f/5X6d4yy2UYWMz/xergAAA=')
+          $inputZip = Join-Path $env:RUNNER_TEMP 'nooir-webp-smoke.cbz'
+          $zip = [IO.Compression.ZipFile]::Open($inputZip, [IO.Compression.ZipArchiveMode]::Create)
+          try {
+            $entry = $zip.CreateEntry('001.webp')
+            $stream = $entry.Open()
+            try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+          } finally { $zip.Dispose() }
+          $out = Join-Path $env:RUNNER_TEMP 'nooir-packaged-webp.xtch'
+          & $runtime '-Djava.awt.headless=true' '-cp' $jar 'dev.nooir.desktop.NooirDesktopCli' '--input' $inputZip '--output' $out '--format' 'XTCH' '--device' 'X4'
+          if ($LASTEXITCODE -ne 0) { throw "Bundled Windows runtime cannot decode WebP CBZ: $LASTEXITCODE" }
+          if (!(Test-Path $out)) { throw 'WebP CBZ produced no XTCH output' }
+          $result = [IO.File]::ReadAllBytes($out)
+          if ([BitConverter]::ToUInt16($result, 6) -ne 1) { throw 'WebP CBZ output did not contain one page' }
+          Write-Host 'PASS: packaged Java runtime opened original WebP CBZ and wrote XTCH'
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned
