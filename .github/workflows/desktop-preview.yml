@@ -46,11 +46,17 @@ jobs:
           changed=$(git diff --name-only "origin/$base...HEAD")
           # The visual integration may use shared core from the Android base,
           # but must not modify Android files relative to that base.
-          if printf '%s\n' "$changed" | grep -E '^(overlay/|tools/|config/|tests/run\.sh$|\.github/workflows/(build-apk|release-apk|verify-v1\.0\.18-signing)\.yml$)'; then
-            echo "STOP: Windows PR modifies protected Android paths" >&2
+          # A single approved, platform-neutral panel geometry file may
+          # differ from the Android experiment base. All other overlay/UI,
+          # signing, updater and build/test entry points remain protected.
+          protected=$(printf '%s\n' "$changed" |
+            grep -E '^(overlay/|tools/|config/|tests/run\.sh$|\.github/workflows/(build-apk|release-apk|verify-v1\.0\.18-signing)\.yml$)' |
+            grep -v -F -x 'overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' || true)
+          if [ -n "$protected" ]; then
+            printf 'STOP: protected Android paths changed:\n%s\n' "$protected" >&2
             exit 1
           fi
-          echo 'PASS: no Android production source, overlay, or build-test changes'
+          echo 'PASS: only the approved shared panel detector differs; other protected Android paths untouched'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
