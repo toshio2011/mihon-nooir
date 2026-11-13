@@ -15,6 +15,16 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.k
   tests/XtcBookPreviewTest.kt -include-runtime -d "$tmp/xtc-preview.jar"
 java -jar "$tmp/xtc-preview.jar"
 
+# Rendering choices share a bounded-memory core and must keep legacy output.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} \
+  tests/GrayscaleModesTest.kt -include-runtime -d "$tmp/render-modes.jar"
+java -jar "$tmp/render-modes.jar"
+
+# Opt-in context peek duplicates neighboring art only around known panel borders.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelContextPeek.kt} \
+  tests/PanelContextPeekTest.kt -include-runtime -d "$tmp/panel-peek.jar"
+java -jar "$tmp/panel-peek.jar"
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/XtcCodec.kt tests/XtcExtendedMetadataTest.kt -include-runtime -d "$tmp/xtc-metadata.jar"
 java -jar "$tmp/xtc-metadata.jar"
 
