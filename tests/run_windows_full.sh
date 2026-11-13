@@ -5,6 +5,13 @@ cd "$(dirname "$0")/.."
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# Inspect native binary page tables and pixels from finished XTC/XTCH outputs,
+# with the same experimental decoder used by Android. No display required.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/XtcCodec.kt \
+  desktop/ui/XtcBookPreview.kt tests/WindowsXtcBinaryPreviewTest.kt \
+  -include-runtime -d "$tmp/windows-binary-preview.jar"
+java -Djava.awt.headless=true -jar "$tmp/windows-binary-preview.jar"
+
 # Windows full-app project: headless GUI model tests against exactly the
 # current Android v1.0.17 shared renderer and conversion settings.
 kotlinc desktop/storage/DesktopDataHome.kt \
