@@ -7,15 +7,15 @@ trap 'rm -rf "$tmp"' EXIT
 
 # Inspect native binary page tables and pixels from finished XTC/XTCH outputs,
 # with the same experimental decoder used by Android. No display required.
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/XtcCodec.kt \
-  desktop/ui/XtcBookPreview.kt tests/WindowsXtcBinaryPreviewTest.kt \
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt} \
+  tests/WindowsXtcBinaryPreviewTest.kt \
   -include-runtime -d "$tmp/windows-binary-preview.jar"
 java -Djava.awt.headless=true -jar "$tmp/windows-binary-preview.jar"
 
 # Windows full-app project: headless GUI model tests against exactly the
 # current Android v1.0.17 shared renderer and conversion settings.
 kotlinc desktop/storage/DesktopDataHome.kt \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt tests/WindowsOfflineJourneyTest.kt \
