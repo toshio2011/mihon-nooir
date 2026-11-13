@@ -21,6 +21,7 @@ import dev.nooir.bridge.PanelWhitespaceCrop
 import dev.nooir.bridge.PanelSafeSlicePlanner
 import dev.nooir.bridge.PanelFitSlice
 import dev.nooir.bridge.PanelReadableSliceRefiner
+import dev.nooir.bridge.PanelContextPeek
 import dev.nooir.bridge.PageRegion
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -449,18 +450,30 @@ class AndroidPageSource(private val context: Context) {
                 },
             )
         } else plannedSlices
+        // Context peek is a post-detector framing option, NOT another cutter.
+        // It can duplicate a small neighboring edge only when all output slices
+        // still correspond one-to-one to verified, non-sparse source panels.
+        // Never apply to rows, protected fragments, covers or uncertain fallbacks.
+        val framedSlices = if (options.contextPeekPercent > 0 &&
+            options.panelMode == "PANEL_BY_PANEL" && panels != null &&
+            panels.size >= 2 && slices.size == panels.size &&
+            panels.none { it.preserveWhole } && options.layout != "WEBTOON") {
+            val expanded = PanelContextPeek.expand(
+                slices.map { it.region }, src.width, src.height, options.contextPeekPercent)
+            slices.mapIndexed { index, view -> view.copy(region = expanded[index]) }
+        } else slices
         // A source-page overview precedes any multi-frame result, including panels,
         // landscape overlap, spreads and webtoon slices. Never duplicate single frames.
         // Render the overview in portrait to preserve the full composition.
-        val outputSlices = if (options.showFullPageBeforeSplits && slices.size > 1) {
-            listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + slices
-        } else slices
+        val outputSlices = if (options.showFullPageBeforeSplits && framedSlices.size > 1) {
+            listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + framedSlices
+        } else framedSlices
         // Capture the exact source-to-output mapping *before* yielding frames.
         // ZIP failures never change the actual e-reader conversion.
-        debug?.finish(src, options, slices, outputSlices, rawInput)
+        debug?.finish(src, options, framedSlices, outputSlices, rawInput)
         // Render one frame at a time, with per-panel orientation only in Auto Fit.
         for ((sliceIndex, slice) in outputSlices.withIndex()) {
-            val isOverview = options.showFullPageBeforeSplits && slices.size > 1 && sliceIndex == 0
+            val isOverview = options.showFullPageBeforeSplits && framedSlices.size > 1 && sliceIndex == 0
             val initial = slice.region
             val landscape = if (isOverview) false else if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
