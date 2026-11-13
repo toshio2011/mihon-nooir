@@ -753,6 +753,85 @@ object PanelDetectionCore {
         return ordered
     }
 
+    /**
+     * Preserve a carefully supported *illustrated promotional montage* rather
+     * than exporting its bold headline as multiple giant-letter reading pages.
+     *
+     * This is deliberately OCR-free. It requires all of: a landscape image,
+     * substantial ink in the upper illustrated montage, >=3 separated long
+     * vertical panel rules, an unbroken pale separator in the lower quarter,
+     * and a large high-contrast graphic footer. No single feature is enough.
+     *
+     * The safe failure mode is retaining the *entire original page*. This runs
+     * only in Panel-by-Panel, leaving explicit Row-by-Row untouched.
+     * Tuned against independently authored fixtures; proprietary scans are
+     * intentionally absent from the repository.
+     */
+    internal fun isIllustratedPromotionalBanner(
+        width: Int, height: Int, grayscale: ByteArray,
+    ): Boolean {
+        if (width < 320 || height < 250 ||
+            width.toLong() * 100L < height.toLong() * 116L ||
+            grayscale.size != width * height) return false
+        fun black(x: Int, y: Int) =
+            (grayscale[y * width + x].toInt() and 255) < 140
+
+        fun blackFraction(firstPercent: Int, lastPercent: Int): Double {
+            var dark = 0
+            var count = 0
+            val y0 = height * firstPercent / 100
+            val y1 = height * lastPercent / 100
+            for (y in y0 until y1 step 2)
+                for (x in 0 until width step 2) {
+                    count++
+                    if (black(x, y)) dark++
+                }
+            return if (count == 0) 0.0 else dark.toDouble() / count
+        }
+        // Guard against ordinary text pages, sparse covers and mostly empty art.
+        if (blackFraction(12, 70) < 0.20 ||
+            blackFraction(81, 94) < 0.29) return false
+
+        // Real promotional spreads keep the giant lower title physically
+        // separate from the illustrated panels, not simply a speech bubble.
+        var longestPaleRun = 0
+        var paleRun = 0
+        val stride = maxOf(1, width / 300)
+        for (y in height * 69 / 100 until height * 84 / 100) {
+            var dark = 0
+            var samples = 0
+            for (x in 0 until width step stride) {
+                samples++
+                if (black(x, y)) dark++
+            }
+            paleRun = if (samples > 0 && dark.toDouble() / samples < 0.018)
+                paleRun + 1 else 0
+            longestPaleRun = maxOf(longestPaleRun, paleRun)
+        }
+        if (longestPaleRun.toLong() * 100 < height.toLong() * 2) return false
+
+        // Three separated, near-full-height ink rails distinguish a framed
+        // character montage from a headline on a single ordinary illustration.
+        val y0 = height * 12 / 100
+        val y1 = height * 70 / 100
+        var lastQualifiedX = -width
+        var rails = 0
+        for (x in width * 5 / 100 until width * 95 / 100) {
+            var dark = 0
+            var samples = 0
+            for (y in y0 until y1 step 3) {
+                samples++
+                if (black(x, y)) dark++
+            }
+            if (samples > 0 && dark * 100 >= samples * 70) {
+                if (x - lastQualifiedX > maxOf(3, width / 100)) rails++
+                lastQualifiedX = x
+                if (rails >= 3) return true
+            }
+        }
+        return false
+    }
+
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
         trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
@@ -772,6 +851,13 @@ object PanelDetectionCore {
                 "repeated text-like horizontal bands; do not fragment prose into comic panels"))
             return PanelPlan(listOf(whole), false,
                 "text-dominant source kept intact", preserveSingleFrame = true)
+        }
+        if (isIllustratedPromotionalBanner(width, height, grayscale)) {
+            trace?.invoke(PanelDebugEvent("page", whole, "keep",
+                "framed illustrated montage with an oversized lower title banner"))
+            return PanelPlan(listOf(whole), false,
+                "promotional montage and graphic headline kept together",
+                preserveSingleFrame = true)
         }
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
         val detector = Detector(width, height, grayscale, trace)
