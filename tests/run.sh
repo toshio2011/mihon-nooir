@@ -9,6 +9,12 @@ java -jar "$tmp/preflight.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} tests/CoreSmokeTest.kt -include-runtime -d "$tmp/smoke.jar"
 java -jar "$tmp/smoke.jar"
 
+# Decode the finished XTC/XTCH bytes rather than trusting source-page
+# quantization previews. Test packed 1-bit and 2-bit exact round trips.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt} \
+  tests/XtcBookPreviewTest.kt -include-runtime -d "$tmp/xtc-preview.jar"
+java -jar "$tmp/xtc-preview.jar"
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/XtcCodec.kt tests/XtcExtendedMetadataTest.kt -include-runtime -d "$tmp/xtc-metadata.jar"
 java -jar "$tmp/xtc-metadata.jar"
 
