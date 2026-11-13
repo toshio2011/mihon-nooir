@@ -74,6 +74,30 @@ private fun slantedPanelFixture(): BufferedImage {
     return image
 }
 
+private fun promotionalMontageGrid(): BufferedImage {
+    val image = BufferedImage(600, 475, BufferedImage.TYPE_INT_RGB)
+    val g = image.createGraphics()
+    try {
+        g.color = java.awt.Color.WHITE
+        g.fillRect(0, 0, 600, 475)
+        // Independent, wholly synthetic character montage and large footer.
+        // No copyrighted manga, title strings, image or diagnostics in Git.
+        for (column in 0..3) {
+            val x = 30 + column * 136
+            g.color = java.awt.Color(10, 10, 10)
+            g.drawRect(x, 52, 123, 293)
+            g.color = java.awt.Color(25, 25, 25)
+            g.fillOval(x + 19, 95, 86, 85)
+            g.color = java.awt.Color(40, 40, 40)
+            g.fillRect(x + 16, 210, 91, 120)
+        }
+        g.color = java.awt.Color(8, 8, 8)
+        for (letter in 0..6)
+            g.fillRect(130 + letter * 57, 395, 46, 53)
+    } finally { g.dispose() }
+    return image
+}
+
 private fun u16(bytes: ByteArray, at: Int) =
     (bytes[at].toInt() and 255) or ((bytes[at + 1].toInt() and 255) shl 8)
 
@@ -105,6 +129,26 @@ fun main() {
         // The Windows converter must honor the same independent row mode
         // as Android. Internal white columns must NOT split a horizontal row.
         val rowOptions = panelOptions.copy(panelMode = "ROW_BY_ROW")
+        // A four-character promotional montage over a bold decorative footer
+        // must remain ONE intact screen. Never turn its letters into enlarged
+        // reading frames, even with Overview and Auto Fit enabled.
+        val promoInput = File(root, "promotional-layout").apply { mkdirs() }
+        check(ImageIO.write(promotionalMontageGrid(), "png", File(promoInput, "01.png")))
+        val promoOptions = panelOptions.copy(
+            panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT",
+            keepChapterFirstPageWhole = false, showFullPageBeforeSplits = true,
+        )
+        for (format in listOf("XTC", "XTCH")) {
+            val result = File(root, "promo-guard.$"+"{format.lowercase()}")
+            NooirDesktopCli.main(arrayOf(
+                "--input", promoInput.absolutePath, "--output", result.absolutePath,
+                "--format", format, "--device", "X4",
+                "--options-token", promoOptions.token(),
+            ))
+            check(u16(result.readBytes(), 6) == 1) {
+                "Framed promotional illustration plus graphic title must stay one $"+"format page"
+            }
+        }
         // The same optional first-page and overview flags used by Android
         // must affect real Windows output, not just roundtrip in settings.
         val wholeOutput = File(root, "whole-intact.xtc")
