@@ -111,6 +111,18 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
             Text("Detect individual manga panels. Uncertain boundaries preserve the page rather than guess.")
         }
         if (options.panelMode == "PANEL_BY_PANEL") {
+            Text("Context Peek · " + if (options.contextPeekPercent == 0) "Off" else "${options.contextPeekPercent}%")
+            Slider(
+                value = options.contextPeekPercent.toFloat(),
+                onValueChange = {
+                    onChange(options.copy(preset = "Custom", contextPeekPercent = it.toInt()))
+                },
+                valueRange = 0f..8f,
+                steps = 7,
+            )
+            Text("Optional. Shows a small edge of a neighboring confidently detected panel. " +
+                "Repeats pixels rather than cutting artwork; does not affect Row by Row, " +
+                "chapter-openers, uncertain pages or protected single-panel artwork.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switch(checked = options.panelDiagnostics, onCheckedChange = {
                     onChange(options.copy(preset = "Custom", panelDiagnostics = it))
