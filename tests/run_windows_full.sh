@@ -12,6 +12,16 @@ kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.k
   -include-runtime -d "$tmp/windows-binary-preview.jar"
 java -Djava.awt.headless=true -jar "$tmp/windows-binary-preview.jar"
 
+# Truly exported XTC + XTCH pages are reopened from disk for all four modes.
+# Synthetic contact sheets are retained in CI as visual-review artifacts.
+kotlinc \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  desktop/cli/*.kt tests/DesktopVisualRenderingPreviewTest.kt \
+  -include-runtime -d "$tmp/windows-rendered-visual-qa.jar"
+java -Djava.awt.headless=true -cp "$tmp/windows-rendered-visual-qa.jar" DesktopVisualRenderingPreviewTestKt
+
+
 # Windows full-app project: headless GUI model tests against exactly the
 # current Android v1.0.17 shared renderer and conversion settings.
 kotlinc desktop/storage/DesktopDataHome.kt \
