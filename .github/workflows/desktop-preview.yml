@@ -38,10 +38,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main
-          changed=$(git diff --name-only origin/main...HEAD)
-          # Windows integration may use shared Kotlin core, but must not
-          # overwrite current Android source, signing/build scripts or tests.
+          # This cross-platform visual experiment is based on the Android
+          # preview PR. Keep Android changes from that base completely intact;
+          # the standalone Windows PR retains its own strict main comparison.
+          base="${{ github.event.pull_request.base.ref || 'main' }}"
+          git fetch --no-tags origin "refs/heads/$base:refs/remotes/origin/$base"
+          changed=$(git diff --name-only "origin/$base...HEAD")
+          # The visual integration may use shared core from the Android base,
+          # but must not modify Android files relative to that base.
           if printf '%s\n' "$changed" | grep -E '^(overlay/|tools/|config/|tests/run\.sh$|\.github/workflows/(build-apk|release-apk|verify-v1\.0\.18-signing)\.yml$)'; then
             echo "STOP: Windows PR modifies protected Android paths" >&2
             exit 1
@@ -58,7 +62,7 @@ jobs:
           command -v kotlinc
           mkdir -p build/desktop
           kotlinc \
-            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
             overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
             desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
