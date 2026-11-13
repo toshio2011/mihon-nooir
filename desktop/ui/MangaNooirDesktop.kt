@@ -113,6 +113,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val conversionSettings = JButton("Conversion settings")
     private val localImport = JButton("Convert local folder / CBZ")
     private val localReader = JButton("Read local comic")
+    private val inspectBinary = JButton("Inspect XTC / XTCH output")
     private val localLibrary = JButton("Local library")
     private val startServer = JButton("Start local Suwayomi")
     private val getServer = JButton("Download & start Suwayomi")
@@ -155,7 +156,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 add(startServer); add(stopServer)
             }, BorderLayout.NORTH)
             add(JPanel(FlowLayout(FlowLayout.LEFT, 10, 6)).apply {
-                add(localLibrary); add(localImport); add(localReader); add(getServer)
+                add(localLibrary); add(localImport); add(localReader); add(inspectBinary); add(getServer)
             }, BorderLayout.SOUTH)
         }
         add(header, BorderLayout.NORTH)
@@ -240,8 +241,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
-            conversionSettings, localImport, localReader, localLibrary,
+            conversionSettings, localImport, localReader, localLibrary, inspectBinary,
             startServer, stopServer, getServer)
+        inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
         }
