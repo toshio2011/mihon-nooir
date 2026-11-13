@@ -68,10 +68,22 @@ jobs:
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
       - name: Verify headless UI model and Suwayomi mock integration
         shell: bash
+        env:
+          NOOIR_OUTPUT_DIR: tests/generated
         run: |
           set -euo pipefail
           bash tests/run.sh
           bash tests/run_windows_full.sh
+      - name: Upload synthetic rendering comparison for human inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-visual-four-modes-xtc-xtch
+          path: |
+            tests/generated/Nooir_Visual_4Modes_XTC_XTCH.png
+            tests/generated/Nooir_Visual_Source_Synthetic.png
+          if-no-files-found: warn
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-desktop-preview-jvm
