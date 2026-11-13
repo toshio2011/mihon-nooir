@@ -14,6 +14,48 @@ import java.util.zip.ZipFile
 import javax.imageio.ImageIO
 
 /**
+ * Decode only after inspecting image dimensions with ImageIO's metadata reader.
+ *
+ * Calling ImageIO.read() and checking dimensions afterwards can allocate huge
+ * pixel buffers for a tiny, malicious PNG/JPEG/WebP/CBZ entry. Both Windows
+ * conversion and reading share this bounded decoding path; Android's source
+ * and converter algorithms are not changed.
+ */
+internal object DesktopImageDecoder {
+    fun decode(bytes: ByteArray, maxPixels: Long = 25_000_000L): BufferedImage {
+        require(bytes.isNotEmpty() && maxPixels in 1L..25_000_000L) {
+            "Invalid image data or desktop pixel budget"
+        }
+        val imageInput = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
+            ?: error("Cannot inspect the page image")
+        imageInput.use { stream ->
+            val readers = ImageIO.getImageReaders(stream)
+            require(readers.hasNext()) { "Unsupported image codec" }
+            val decoder = readers.next()
+            try {
+                decoder.setInput(stream, false, true)
+                val width = decoder.getWidth(0)
+                val height = decoder.getHeight(0)
+                require(width > 0 && height > 0 &&
+                    width.toLong() * height.toLong() <= maxPixels) {
+                    "Image dimensions exceed safe desktop pixel limit"
+                }
+                val image = decoder.read(0)
+                    ?: error("Cannot decode the requested image")
+                require(image.width > 0 && image.height > 0 &&
+                    image.width.toLong() * image.height.toLong() <= maxPixels) {
+                    image.flush()
+                    "Decoded image exceeds safe desktop pixel limit"
+                }
+                return image
+            } finally {
+                decoder.dispose()
+            }
+        }
+    }
+}
+
+/**
  * JVM/Windows feasibility CLI. Compiles against the EXACT Kotlin codec, page planner,
  * grayscale PNG writer, presets and options model used by MangaNooir Android.
  * Not yet a desktop GUI or a Suwayomi downloader.
@@ -164,11 +206,7 @@ object NooirDesktopCli {
     private fun decode(open: () -> InputStream): BufferedImage {
         val bytes = open().use { input -> input.readNBytes(MAX_IMAGE_BYTES + 1) }
         require(bytes.isNotEmpty() && bytes.size <= MAX_IMAGE_BYTES) { "Invalid or oversized image" }
-        val img = ImageIO.read(ByteArrayInputStream(bytes)) ?: error("Unsupported image codec")
-        require(img.width > 0 && img.height > 0 && img.width.toLong() * img.height <= MAX_IMAGE_PIXELS) {
-            "Image dimensions exceed safe desktop preview limit"
-        }
-        return img
+        return DesktopImageDecoder.decode(bytes, MAX_IMAGE_PIXELS)
     }
 
     private fun trimWhite(src: BufferedImage, region: PageRegion): PageRegion {
@@ -311,14 +349,7 @@ object NooirDesktopCli {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
-        val framedSlices = if (options.contextPeekPercent > 0 &&
-            options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" &&
-            panels != null && panels.size >= 2 && slices.size == panels.size) {
-            val framed = PanelContextPeek.expand(
-                slices.map { it.region }, src.width, src.height, options.contextPeekPercent)
-            slices.mapIndexed { index, view -> view.copy(region = framed[index]) }
-        } else slices
-        for (slice in framedSlices) {
+        for (slice in slices) {
             val region = slice.region
             val landscape = if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
@@ -360,9 +391,13 @@ object NooirDesktopCli {
                 val lum = (((rgb ushr 16) and 255) * 299 + ((rgb ushr 8) and 255) * 587 + (rgb and 255) * 114) / 1000
                 gray[y * frameWidth + x] = (128f + (lum - 128f) * boost).toInt().coerceIn(0, 255).toByte()
             }
-            val quantized = GrayscaleConverter.quantize(
-                frameWidth, frameHeight, gray, depth, options.renderAlgorithm, options.dither
-            )
+            val quantized = if (options.dither) GrayscaleConverter.dither(frameWidth, frameHeight, gray, depth)
+            else {
+                val max = if (depth == 1) 1 else 3
+                QuantizedPage(frameWidth, frameHeight, ByteArray(gray.size) { i ->
+                    (((gray[i].toInt() and 255) * max + 127) / 255).toByte()
+                }, depth)
+            }
             val color = if (options.epubColor) ByteArrayOutputStream().use {
                 check(ImageIO.write(frame, "png", it))
                 it.toByteArray()
