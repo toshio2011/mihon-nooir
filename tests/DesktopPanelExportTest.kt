@@ -139,14 +139,14 @@ fun main() {
             keepChapterFirstPageWhole = false, showFullPageBeforeSplits = true,
         )
         for (format in listOf("XTC", "XTCH")) {
-            val result = File(root, "promo-guard.$"+"{format.lowercase()}")
+            val result = File(root, "promo-guard-" + format.lowercase() + "." + format.lowercase())
             NooirDesktopCli.main(arrayOf(
                 "--input", promoInput.absolutePath, "--output", result.absolutePath,
                 "--format", format, "--device", "X4",
                 "--options-token", promoOptions.token(),
             ))
             check(u16(result.readBytes(), 6) == 1) {
-                "Framed promotional illustration plus graphic title must stay one $"+"format page"
+                "Framed promotional illustration plus graphic title must stay one " + format + " page"
             }
         }
         // The same optional first-page and overview flags used by Android
