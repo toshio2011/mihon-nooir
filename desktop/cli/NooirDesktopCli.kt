@@ -311,7 +311,14 @@ object NooirDesktopCli {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
-        for (slice in slices) {
+        val framedSlices = if (options.contextPeekPercent > 0 &&
+            options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" &&
+            panels != null && panels.size >= 2 && slices.size == panels.size) {
+            val framed = PanelContextPeek.expand(
+                slices.map { it.region }, src.width, src.height, options.contextPeekPercent)
+            slices.mapIndexed { index, view -> view.copy(region = framed[index]) }
+        } else slices
+        for (slice in framedSlices) {
             val region = slice.region
             val landscape = if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
