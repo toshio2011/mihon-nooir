@@ -519,14 +519,9 @@ class AndroidPageSource(private val context: Context) {
                     check(rendered.compress(Bitmap.CompressFormat.PNG, 100, buffer)) { "Color PNG encoding failed" }
                     buffer.toByteArray()
                 } else null
-                val quantized = if (options.dither) GrayscaleConverter.dither(frameWidth, frameHeight, gray, depth)
-                else {
-                    val highest = if (depth == 1) 1 else 3
-                    val levels = ByteArray(gray.size) { i ->
-                        (((gray[i].toInt() and 255) * highest + 127) / 255).toByte()
-                    }
-                    QuantizedPage(frameWidth, frameHeight, levels, depth)
-                }
+                val quantized = GrayscaleConverter.quantize(
+                    frameWidth, frameHeight, gray, depth, options.renderAlgorithm, options.dither
+                )
                 yield(if (colorPng == null) quantized else quantized.copy(colorPng = colorPng))
             } finally { rendered.recycle() }
         }
