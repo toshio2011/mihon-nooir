@@ -23,7 +23,21 @@ internal object DesktopConversionDialog {
         val crop = JCheckBox("Crop white margins")
         val split = JCheckBox("Split double-page spreads")
         val rtl = JCheckBox("Right-to-left reading")
-        val dither = JCheckBox("Dither grayscale")
+        val renderMode = JComboBox(arrayOf(
+            "LEGACY", "FLOYD_STEINBERG", "ATKINSON", "BAYER_8X8", "THRESHOLD"
+        ))
+        val renderHelp = JLabel("")
+        val contextPeek = JSpinner(SpinnerNumberModel(0, 0, 8, 1))
+        var selectedSettings = original
+        fun renderExplanation() {
+            renderHelp.text = when (renderMode.selectedItem) {
+                "ATKINSON" -> "Clean whites / line art; may lose subtle gray"
+                "BAYER_8X8" -> "Ordered dot patterns; grid may be visible"
+                "THRESHOLD" -> "Crisp flat ink; gradients can band"
+                "FLOYD_STEINBERG" -> "Smooth shading; may look grainy"
+                else -> "Keep the prior Floyd/threshold choice"
+            }
+        }
         val clockwise = JCheckBox("Rotate landscape clockwise")
         val cover = JCheckBox("Include manga cover")
         val missingCover = JCheckBox("Allow export without available cover")
@@ -37,6 +51,7 @@ internal object DesktopConversionDialog {
         fun populate(o: MangaConversionOptions) {
             if (updating) return
             updating = true
+            selectedSettings = o
             preset.selectedItem = o.preset.takeIf { it in listOf("Manga", "Manhwa", "Manhua") } ?: "Custom"
             layout.selectedItem = o.layout
             orientation.selectedItem = o.orientation
@@ -46,7 +61,10 @@ internal object DesktopConversionDialog {
             crop.isSelected = o.cropWhiteMargins
             split.isSelected = o.splitSpreads
             rtl.isSelected = o.rightToLeft
-            dither.isSelected = o.dither
+            renderMode.selectedItem = o.renderAlgorithm
+            contextPeek.value = o.contextPeekPercent
+            contextPeek.isEnabled = o.panelMode == "PANEL_BY_PANEL"
+            renderExplanation()
             clockwise.isSelected = o.landscapeClockwise
             cover.isSelected = o.includeCover
             missingCover.isSelected = o.allowMissingCover
@@ -69,7 +87,9 @@ internal object DesktopConversionDialog {
             if (!updating && panelMode.selectedItem == "OFF" && orientation.selectedItem == "AUTO_FIT") {
                 orientation.selectedItem = "PORTRAIT"
             }
+            contextPeek.isEnabled = panelMode.selectedItem == "PANEL_BY_PANEL"
         }
+        renderMode.addActionListener { if (!updating) renderExplanation() }
         val panel = JPanel(GridLayout(0, 2, 10, 5)).apply {
             add(JLabel("Preset")); add(preset)
             add(JLabel("Page layout")); add(layout)
@@ -79,7 +99,10 @@ internal object DesktopConversionDialog {
             add(JLabel("Long-strip overlap %")); add(overlap)
             add(JLabel("EPUB pages per XHTML (0 = chapter)")); add(pagesPerXhtml)
             add(crop); add(split)
-            add(rtl); add(dither)
+            add(rtl); add(JLabel("Rendering below: applies to gray e-ink"))
+            add(JLabel("Dithering / rendering")); add(renderMode)
+            add(JLabel("Rendering difference")); add(renderHelp)
+            add(JLabel("Context Peek % (Panel by Panel)")); add(contextPeek)
             add(clockwise); add(cover)
             add(missingCover); add(color)
             add(showOverview); add(keepChapterFirstWhole)
@@ -96,7 +119,14 @@ internal object DesktopConversionDialog {
             splitSpreads = split.isSelected,
             rightToLeft = rtl.isSelected,
             contrast = contrast.value as Int,
-            dither = dither.isSelected,
+            dither = when (renderMode.selectedItem as String) {
+                "LEGACY" -> selectedSettings.dither
+                "THRESHOLD" -> false
+                else -> true
+            },
+            renderAlgorithm = renderMode.selectedItem as String,
+            contextPeekPercent = if (panelMode.selectedItem == "PANEL_BY_PANEL")
+                contextPeek.value as Int else 0,
             orientation = (orientation.selectedItem as String).takeUnless {
                 it == "AUTO_FIT" && panelMode.selectedItem == "OFF"
             } ?: "PORTRAIT",
