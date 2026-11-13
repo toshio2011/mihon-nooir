@@ -10,6 +10,8 @@ on:
       - 'tests/DesktopPanelExportTest.kt'
       - 'tests/PanelDetectionCoreTest.kt'
       - 'tests/DesktopWebpSmokeTest.kt'
+      - 'desktop/webp-runtime.pom'
+      - 'desktop/webp-runtime.sha256'
       - 'tests/run.sh'
       - 'tests/run_windows_full.sh'
       - '.github/workflows/desktop-preview.yml'
@@ -24,6 +26,8 @@ on:
       - 'tests/DesktopPanelExportTest.kt'
       - 'tests/PanelDetectionCoreTest.kt'
       - 'tests/DesktopWebpSmokeTest.kt'
+      - 'desktop/webp-runtime.pom'
+      - 'desktop/webp-runtime.sha256'
       - 'tests/run.sh'
       - 'tests/run_windows_full.sh'
       - '.github/workflows/desktop-preview.yml'
@@ -91,6 +95,9 @@ jobs:
             test -s "build/desktop/lib/$name-3.15.3.jar" ||
               { echo "Missing pinned WebP runtime: $name" >&2; exit 1; }
           done
+          # Lock the actual resolved JAR bytes, not only Maven coordinates.
+          # Fail closed on a modified/transient artifact or unreviewed update.
+          sha256sum -c desktop/webp-runtime.sha256
           # Java's JAR manifest Class-Path is also honored by jpackage's
           # launcher; this keeps the existing Kotlin JAR and CLI entry points.
           classpath=$(find build/desktop/lib -maxdepth 1 -name '*.jar' -printf 'lib/%f\n' |
