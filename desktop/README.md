@@ -259,3 +259,30 @@ Replace example IDs with IDs returned by your own server. `--mode latest` is ava
 Once chapter IDs are displayed, the existing `SuwayomiToNooir --mode export --chapters ...` command converts the chosen chapters with the **same Android-compatible conversion writers**.
 
 **Still pending:** test against a real released Suwayomi instance and user-approved source; a graphical source browser, cover grid, chapter selection UI, download manager, local server lifecycle and packaged Windows app. Automated fake-server tests verify request shapes, signed IDs, pagination, search escaping, explicit refresh, error handling and CLI output, but do not prove that all third-party extensions work.
+
+
+## Experimental direct WebP CBZ input (Windows PR #85, not released)
+
+The Windows preview's existing image-folder/CBZ reader and conversion CLI
+previously accepted `.webp` extensions but failed at decode time because a
+stock JDK ImageIO installation does not include a WebP reader.
+
+The isolated Windows workflow now attempts to bundle the **pure Java,
+BSD-licensed [TwelveMonkeys ImageIO WebP reader](https://github.com/haraldk/TwelveMonkeys)**
+(version `3.15.3`, declared in `desktop/webp-runtime.pom`). Build-time
+Maven dependencies live in `lib/` beside the preview's application JAR,
+and the JAR's manifest points to them; no plugin download occurs at runtime.
+This dependency is **Windows/JVM-only**: no Android Gradle/firmware dependency
+or existing manga converter algorithm is modified.
+
+The end-to-end checks include original *synthetic* lossy VP8 and lossless
+VP8L pages in a CBZ; actual CBZ reader decoding, bounded dimension checks,
+XTC/XTCH conversion, reopening saved books, and corrupt-input cleanup. The
+packaged Windows runtime is checked separately so a host-only ImageIO plugin
+cannot be mistaken for a deliverable feature. The existing **25 MiB encoded
+image / 25 million decoded pixel** preflight limits still apply.
+
+This is an unmerged experiment. Real user WebP CBZs, animated WebP,
+high-memory stress, app GUI click-through and Windows install/launch behavior
+must be verified before approval. Do not ship this experiment as a public
+update or replace the existing Android v1.0.17 app.
