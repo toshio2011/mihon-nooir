@@ -28,9 +28,15 @@ kotlinc desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
-  tests/DesktopGuiModelTest.kt tests/WindowsOfflineJourneyTest.kt \
+  tests/DesktopGuiModelTest.kt tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+# Test the actual bundled pure-Java reader and the existing bounded source
+# paths, using original synthetic VP8 + VP8L in a CBZ. Missing dependencies,
+# corrupt images and partial-output promotion must fail CI.
+test -s build/desktop/lib/imageio-webp-3.15.3.jar
+java -Djava.awt.headless=true \
+  -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" DesktopWebpSmokeTestKt
 # Full Windows user journey: opt-in source request → separate offline CBZ copy →
 # persisted bookshelf/reader → EPUB2 and XTC without a running server.
 java --add-modules jdk.httpserver -Djava.awt.headless=true \
