@@ -162,3 +162,11 @@ java -jar "$tmp/panel-crop.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelSafeSlicePlanner.kt} \
   tests/PanelSafeSlicePlannerTest.kt -include-runtime -d "$tmp/panel-safe-corridors.jar"
 java -jar "$tmp/panel-safe-corridors.jar"
+
+# Regression: the in-app updater must select a compatible Android APK
+# regardless of GitHub asset ordering; do not accidentally choose x86_64 on ARM.
+kotlinc \
+  overlay/data/src/main/java/tachiyomi/data/release/NooirReleaseApkSelector.kt \
+  tests/UpdaterAssetSelectionTest.kt \
+  -include-runtime -d "$tmp/updater-assets.jar"
+java -jar "$tmp/updater-assets.jar"
