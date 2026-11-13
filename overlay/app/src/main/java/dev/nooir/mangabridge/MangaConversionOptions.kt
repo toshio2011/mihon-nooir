@@ -253,11 +253,34 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
             onValueChange = { onChange(options.copy(preset = "Custom", contrast = it.toInt())) },
             valueRange = 0f..100f,
         )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Floyd–Steinberg dithering")
-            Switch(checked = options.dither,
-                onCheckedChange = { onChange(options.copy(preset = "Custom", dither = it)) })
+        Text("E-ink rendering style")
+        val activeRendering = if (options.renderAlgorithm == "LEGACY") {
+            if (options.dither) "FLOYD_STEINBERG" else "THRESHOLD"
+        } else options.renderAlgorithm
+        listOf(
+            "FLOYD_STEINBERG" to "Floyd–Steinberg",
+            "ATKINSON" to "Atkinson",
+            "BAYER_8X8" to "Bayer 8×8",
+            "THRESHOLD" to "Threshold",
+        ).forEach { (algorithm, label) ->
+            FilterChip(
+                selected = activeRendering == algorithm,
+                onClick = {
+                    onChange(options.copy(
+                        preset = "Custom", renderAlgorithm = algorithm,
+                        dither = algorithm != "THRESHOLD"
+                    ))
+                },
+                label = { Text(label) }
+            )
         }
+        Text(when (activeRendering) {
+            "ATKINSON" -> "Atkinson: cleaner white areas and sharper lettering; some soft tones may disappear."
+            "BAYER_8X8" -> "Bayer 8×8: regular, consistent dot patterns for manga screentones; can show a visible grid."
+            "THRESHOLD" -> "Threshold: pure black or gray level without dither texture; smooth gradients may band."
+            else -> "Floyd–Steinberg: our original default. Smooth shading, but textured areas may look grainy."
+        })
+        Text("Preview an original page, then inspect the saved XTC/XTCH file to compare real output. Color EPUB/CBZ content retains its source color when enabled.")
         }
         Text("Changes apply to the next conversion. Open the first-page preview in the export dialog to inspect rendered crops. Landscape preserves XTC panel dimensions and rotates its content; EPUB/CBZ use a wider page.")
     }
