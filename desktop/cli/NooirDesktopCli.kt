@@ -106,14 +106,22 @@ object NooirDesktopCli {
                     val h = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
                     val depth = if (format == ExportFormat.XTC) 1 else 2
                     val pages = sequence {
+                        var lastNonCoverChapter: String? = null
                         for (entry in sources) {
+                            val firstInChapter = !entry.cover && entry.chapter != lastNonCoverChapter
+                            if (!entry.cover) lastNonCoverChapter = entry.chapter
                             val img = decode(entry.open)
-                            val coverOpts = options.copy(
+                            val wholePageOpts = options.copy(
                                 layout = "PAGED", cropWhiteMargins = false,
                                 splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
-                                panelMode = "OFF",
+                                panelMode = "OFF", showFullPageBeforeSplits = false,
+                                contextPeekPercent = 0,
                             )
-                            val opts = if (entry.cover) coverOpts else options
+                            val opts = when {
+                                entry.cover -> wholePageOpts
+                                firstInChapter && options.keepChapterFirstPageWhole -> wholePageOpts
+                                else -> options
+                            }
                             for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
                                 yield(Rendered(entry.chapter, entry.cover, frame))
                             }
@@ -358,7 +366,14 @@ object NooirDesktopCli {
                 slices.map { it.region }, src.width, src.height, options.contextPeekPercent)
             slices.mapIndexed { index, view -> view.copy(region = expanded[index]) }
         } else slices
-        for (slice in framedSlices) {
+        // Windows honors the shared option: insert one intact overview before
+        // multiple rendered views, never before an already-unsplit page.
+        val addOverview = options.showFullPageBeforeSplits && framedSlices.size > 1
+        val displaySlices = if (addOverview)
+            listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + framedSlices
+        else framedSlices
+        for ((sliceIndex, slice) in displaySlices.withIndex()) {
+            val isOverview = addOverview && sliceIndex == 0
             val region = slice.region
             val landscape = if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
@@ -367,7 +382,8 @@ object NooirDesktopCli {
             val vw = if (rotate) frameHeight else frameWidth
             val vh = if (rotate) frameWidth else frameHeight
             // Already trimmed detected panels retain their safety padding.
-            val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, region) else region
+            val r = if (options.cropWhiteMargins && panels == null && !isOverview)
+                trimWhite(src, region) else region
             val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)
             val dh = (r.height * scale).toInt().coerceIn(1, vh)
