@@ -753,6 +753,100 @@ object PanelDetectionCore {
         return ordered
     }
 
+    /**
+     * Preserve a carefully supported *illustrated promotional montage* rather
+     * than exporting its bold headline as multiple giant-letter reading pages.
+     *
+     * This is deliberately OCR-free. It requires all of: a landscape image,
+     * substantial ink in the upper illustrated montage, >=3 separated long
+     * vertical panel rules, an unbroken pale separator in the lower quarter,
+     * and a large high-contrast graphic footer. No single feature is enough.
+     *
+     * The safe failure mode is retaining the *entire original page*. This runs
+     * only in Panel-by-Panel, leaving explicit Row-by-Row untouched.
+     * Tuned against independently authored fixtures; proprietary scans are
+     * intentionally absent from the repository.
+     */
+    internal fun isIllustratedPromotionalBanner(
+        width: Int, height: Int, grayscale: ByteArray,
+    ): Boolean {
+        if (width < 320 || height < 250 ||
+            width.toLong() * 100L < height.toLong() * 116L ||
+            grayscale.size != width * height) return false
+        fun black(x: Int, y: Int) =
+            (grayscale[y * width + x].toInt() and 255) < 140
+
+        fun blackFraction(firstPercent: Int, lastPercent: Int): Double {
+            var dark = 0
+            var count = 0
+            val y0 = height * firstPercent / 100
+            val y1 = height * lastPercent / 100
+            for (y in y0 until y1 step 2)
+                for (x in 0 until width step 2) {
+                    count++
+                    if (black(x, y)) dark++
+                }
+            return if (count == 0) 0.0 else dark.toDouble() / count
+        }
+        // Guard against ordinary text pages, sparse covers and mostly empty art.
+        if (blackFraction(12, 70) < 0.20 ||
+            blackFraction(81, 94) < 0.29) return false
+
+        // Real promotional spreads keep the giant lower title physically
+        // separate from the illustrated panels, not simply a speech bubble.
+        var longestPaleRun = 0
+        var paleRun = 0
+        val stride = maxOf(1, width / 300)
+        for (y in height * 69 / 100 until height * 84 / 100) {
+            var dark = 0
+            var samples = 0
+            for (x in 0 until width step stride) {
+                samples++
+                if (black(x, y)) dark++
+            }
+            paleRun = if (samples > 0 && dark.toDouble() / samples < 0.018)
+                paleRun + 1 else 0
+            longestPaleRun = maxOf(longestPaleRun, paleRun)
+        }
+        if (longestPaleRun.toLong() * 100 < height.toLong() * 2) return false
+
+        // Three separated, near-full-height ink rails distinguish a framed
+        // character montage from a headline on a single ordinary illustration.
+        val y0 = height * 12 / 100
+        val y1 = height * 70 / 100
+        var lastQualifiedX = -width
+        var rails = 0
+        for (x in width * 5 / 100 until width * 95 / 100) {
+            var dark = 0
+            var samples = 0
+            for (y in y0 until y1 step 3) {
+                samples++
+                if (black(x, y)) dark++
+            }
+            if (samples > 0 && dark * 100 >= samples * 70) {
+                if (x - lastQualifiedX > maxOf(3, width / 100)) rails++
+                lastQualifiedX = x
+                if (rails >= 3) return true
+            }
+        }
+        return false
+    }
+
+    /** Testable geometry contract; production calls this only after the
+     * constrained three-tier, final-row column-recovery admission above.
+     * Public regressions use wholly original grayscale drawings.
+     */
+    internal fun recoverSingleStackedColumnForTest(
+        width: Int, height: Int, grayscale: ByteArray,
+        tier: PageRegion, recovered: List<PageRegion>, maximum: Int = 3,
+    ): List<PageRegion>? {
+        require(width > 0 && height > 0 &&
+            width.toLong() * height <= MAX_THUMB_PIXELS &&
+            grayscale.size == width * height)
+        return Detector(width, height, grayscale)
+            .recoverSingleStackedColumn(tier, recovered, maximum)
+    }
+
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
         trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
@@ -772,6 +866,13 @@ object PanelDetectionCore {
                 "repeated text-like horizontal bands; do not fragment prose into comic panels"))
             return PanelPlan(listOf(whole), false,
                 "text-dominant source kept intact", preserveSingleFrame = true)
+        }
+        if (isIllustratedPromotionalBanner(width, height, grayscale)) {
+            trace?.invoke(PanelDebugEvent("page", whole, "keep",
+                "framed illustrated montage with an oversized lower title banner"))
+            return PanelPlan(listOf(whole), false,
+                "promotional montage and graphic headline kept together",
+                preserveSingleFrame = true)
         }
         // Wide strips can contain multiple framed panels; let the same guarded gutter detector decide.
         val detector = Detector(width, height, grayscale, trace)
@@ -897,17 +998,37 @@ object PanelDetectionCore {
                 // region and be rejected as a whole. Only *after* that rejection,
                 // retry independent vertical seams inside this exact row. A
                 // failed retry leaves the existing grouped-row fallback intact.
-                val recovered = rowDetector.retryRejectedRowColumns(
+                val recoveredColumns = rowDetector.retryRejectedRowColumns(
                     row, available, rightToLeft,
-                ) ?: rowDetector.recoverDarkGutter(row, horizontal = false)?.let { axis ->
+                )
+                val recovered = recoveredColumns ?: rowDetector.recoverDarkGutter(
+                    row, horizontal = false)?.let { axis ->
                     val left = row.copy(right = axis)
                     val right = row.copy(left = axis)
                     if (rightToLeft) listOf(right, left) else listOf(left, right)
                 }
                 if (recovered != null) {
+                    // In a three-tier comic, the last tier may contain a
+                    // tall right panel and TWO cleanly stacked left panels.
+                    // If recursive segmentation was rejected, the validated
+                    // column fallback normally preserves the whole left side.
+                    // Retry ONLY one strict, full-column horizontal WHITE
+                    // gutter; don't relax the general detector or Row by Row.
+                    // No result is changed unless we can prove both children
+                    // are substantial, illustrated and cover the old column.
+                    val refined = if (recoveredColumns != null &&
+                        rows.size == 3 && index == rows.lastIndex &&
+                        recoveredRows == 0 && output.size >= 4) {
+                        rowDetector.recoverSingleStackedColumn(
+                            row, recoveredColumns, available)
+                    } else null
+                    val accepted = refined ?: recovered
                     trace?.invoke(PanelDebugEvent("tier", row, "recover",
-                        "accepted ${recovered.size} substantial columns in reading order"))
-                    output.addAll(recovered)
+                        "accepted ${accepted.size} substantial panels in reading order"))
+                    if (refined != null) trace?.invoke(PanelDebugEvent(
+                        "nested-row", row, "accept",
+                        "one independently validated horizontal seam in recovered column"))
+                    output.addAll(accepted)
                     recoveredRows++
                 } else {
                     trace?.invoke(PanelDebugEvent("tier", row, "keep",
@@ -1940,6 +2061,52 @@ object PanelDetectionCore {
             // cropping or dropping source pixels. Reading order is per-row.
             return columns.takeIf { it.size in 2..maximum }?.let {
                 if (rightToLeft) it.reversed() else it
+            }
+        }
+
+        /**
+         * One additional STRICT split inside exactly one recovered column.
+         * Constraining this to a two-column, full-coverage tier prevents a
+         * vague headline, odd staggered page or uncertain multipanel result
+         * from turning into extra zoom frames. Called only for the terminal
+         * tier after the normal recursive tree has failed.
+         *
+         * The already-proven clean white-gutter detector vetoes any dark
+         * speech balloon/art stroke crossing the proposed divider. This
+         * never changes row order, discards pixels, or affects Row by Row.
+         */
+        fun recoverSingleStackedColumn(
+            tier: PageRegion, recovered: List<PageRegion>, maximum: Int,
+        ): List<PageRegion>? {
+            if (maximum < 3 || recovered.size != 2 ||
+                tier.width < 320 || tier.height < 200) return null
+            val leftToRight = recovered.sortedBy { it.left }
+            if (leftToRight[0].left != tier.left ||
+                leftToRight[1].right != tier.right ||
+                leftToRight[0].right != leftToRight[1].left ||
+                recovered.any { it.top != tier.top || it.bottom != tier.bottom ||
+                    it.width.toLong() * 100 < tier.width.toLong() * 28 }) return null
+
+            val candidates = recovered.map { column ->
+                val axis = bestGutter(column, horizontal = true)
+                if (axis == null) null
+                else {
+                    val upper = column.copy(bottom = axis)
+                    val lower = column.copy(top = axis)
+                    if (upper.height.toLong() * 100 < column.height.toLong() * 28 ||
+                        lower.height.toLong() * 100 < column.height.toLong() * 28 ||
+                        !hasContent(upper) || !hasContent(lower) ||
+                        isSparseRow(upper) || isSparseRow(lower) ||
+                        isLikelyBorderFragment(upper) ||
+                        isLikelyBorderFragment(lower)) null
+                    else listOf(upper, lower)
+                }
+            }
+            // Exactly ONE stacked illustrated column; if both appear
+            // divisible, the geometry is not independently conclusive.
+            if (candidates.count { it != null } != 1) return null
+            return recovered.flatMapIndexed { i, column ->
+                candidates[i] ?: listOf(column)
             }
         }
 

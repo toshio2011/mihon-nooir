@@ -23,6 +23,61 @@ private fun coveredExactly(regions: List<PageRegion>, w: Int, h: Int) {
 }
 
 fun main() {
+    // A fully synthetic approximation of the Conan-011 geometry:
+    // three original tiers; the bottom one has a full-height right comic
+    // panel and two independently illustrated, stacked LEFT panels.
+    // The actual private scan is never included in the repository.
+    val stackedW = 587
+    val stackedH = 900
+    val stackedGray = ByteArray(stackedW * stackedH) { 255.toByte() }
+    val tier = PageRegion(0, 556, stackedW, stackedH)
+    val right = PageRegion(297, 556, stackedW, stackedH)
+    val left = PageRegion(0, 556, 297, stackedH)
+    draw(stackedGray, stackedW, 12, 564, 284, 681, 75)
+    draw(stackedGray, stackedW, 12, 704, 284, 890, 90)
+    draw(stackedGray, stackedW, 311, 564, 575, 890, 110)
+    val rtlColumns = listOf(right, left)
+    val expected = listOf(right,
+        PageRegion(0, 556, 297, 692), PageRegion(0, 692, 297, 900))
+    val stacked = PanelDetectionCore.recoverSingleStackedColumnForTest(
+        stackedW, stackedH, stackedGray, tier, rtlColumns)
+    check(stacked == expected) {
+        "Strict clean nested seam must preserve all three views in RTL: $stacked"
+    }
+    check(stacked.sumOf { it.width.toLong() * it.height } ==
+        tier.width.toLong() * tier.height)
+    check(PanelDetectionCore.recoverSingleStackedColumnForTest(
+        stackedW, stackedH, stackedGray, tier, listOf(left, right)) ==
+        expected.drop(1) + expected.first()) {
+        "LTR must keep the upper then lower left panels before right column"
+    }
+    check(PanelDetectionCore.recoverSingleStackedColumnForTest(
+        stackedW, stackedH, stackedGray, tier, rtlColumns, maximum = 2) == null) {
+        "Recovery must respect the remaining panel budget"
+    }
+    // Never infer a cut through a speech balloon, thin art bridge, or an
+    // otherwise contiguous panel. No overlap is a substitute for a proven seam.
+    val bridged = stackedGray.copyOf()
+    draw(bridged, stackedW, 90, 681, 175, 704, 45)
+    check(PanelDetectionCore.recoverSingleStackedColumnForTest(
+        stackedW, stackedH, bridged, tier, rtlColumns) == null) {
+        "Ink crossing the only candidate gutter must veto nested splitting"
+    }
+    // Two plausible stacked columns are ambiguous. This opt-in recovery
+    // refuses to invent a mixed reading order across both columns.
+    val bothStacked = stackedGray.copyOf()
+    draw(bothStacked, stackedW, 311, 682, 575, 703, 255)
+    check(PanelDetectionCore.recoverSingleStackedColumnForTest(
+        stackedW, stackedH, bothStacked, tier, rtlColumns) == null) {
+        "Only one recovered column may have an independently proven seam"
+    }
+    val unframed = stackedGray.copyOf()
+    draw(unframed, stackedW, 12, 681, 284, 704, 95)
+    check(PanelDetectionCore.recoverSingleStackedColumnForTest(
+        stackedW, stackedH, unframed, tier, rtlColumns) == null) {
+        "Continuous illustrated column must not be subdivided"
+    }
+
     // A. Substantive illustrated columns plus a 42px terminal, ruled,
     // very-low-ink footer. No standalone two-frame footer is permitted.
     // Keep ALL those bottom pixels by attaching to the full-width previous

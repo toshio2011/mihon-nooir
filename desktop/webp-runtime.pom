@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>dev.nooir</groupId>
+  <artifactId>desktop-webp-runtime</artifactId>
+  <version>0.0.0-experimental</version>
+  <packaging>pom</packaging>
+  <!-- Windows/JVM ONLY. No Android Gradle or firmware dependencies. -->
+  <!-- TwelveMonkeys WebP ImageIO reader is pure Java and BSD-licensed. -->
+  <!-- Pin all transitive dependencies to the same audited release line. -->
+  <properties>
+    <twelvemonkeys.version>3.15.3</twelvemonkeys.version>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>com.twelvemonkeys.imageio</groupId>
+      <artifactId>imageio-webp</artifactId>
+      <version>${twelvemonkeys.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
+</project>

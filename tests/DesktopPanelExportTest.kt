@@ -74,8 +74,47 @@ private fun slantedPanelFixture(): BufferedImage {
     return image
 }
 
+private fun promotionalMontageGrid(): BufferedImage {
+    val image = BufferedImage(600, 475, BufferedImage.TYPE_INT_RGB)
+    val g = image.createGraphics()
+    try {
+        g.color = java.awt.Color.WHITE
+        g.fillRect(0, 0, 600, 475)
+        // Independent, wholly synthetic character montage and large footer.
+        // No copyrighted manga, title strings, image or diagnostics in Git.
+        for (column in 0..3) {
+            val x = 30 + column * 136
+            g.color = java.awt.Color(10, 10, 10)
+            g.drawRect(x, 52, 123, 293)
+            g.color = java.awt.Color(25, 25, 25)
+            g.fillOval(x + 19, 95, 86, 85)
+            g.color = java.awt.Color(40, 40, 40)
+            g.fillRect(x + 16, 210, 91, 120)
+        }
+        g.color = java.awt.Color(8, 8, 8)
+        for (letter in 0..6)
+            g.fillRect(130 + letter * 57, 395, 46, 53)
+    } finally { g.dispose() }
+    return image
+}
+
 private fun u16(bytes: ByteArray, at: Int) =
     (bytes[at].toInt() and 255) or ((bytes[at + 1].toInt() and 255) shl 8)
+
+// Compare the actual packed first XTC screen, not just the total page count.
+private fun firstXtcPixels(file: File): ByteArray {
+    val bytes = file.readBytes()
+    fun u64(at: Int) = (0..7).fold(0L) { value, i ->
+        value or ((bytes[at + i].toLong() and 255L) shl (i * 8))
+    }
+    val index = u64(24).toInt()
+    val start = u64(index).toInt()
+    val length = (0..3).fold(0) { value, i ->
+        value or ((bytes[index + 8 + i].toInt() and 255) shl (i * 8))
+    }
+    check(length > 22 && start >= 0 && start.toLong() + length <= bytes.size)
+    return bytes.copyOfRange(start + 22, start + length)
+}
 
 fun main() {
     val root = Files.createTempDirectory("manganooir-panel-export-").toFile()
@@ -85,10 +124,77 @@ fun main() {
         val panelOptions = MangaConversionOptions(
             panelMode = "PANEL_BY_PANEL", includeCover = false,
             cropWhiteMargins = true, layout = "PAGED", dither = false,
+            keepChapterFirstPageWhole = false,
         )
         // The Windows converter must honor the same independent row mode
         // as Android. Internal white columns must NOT split a horizontal row.
         val rowOptions = panelOptions.copy(panelMode = "ROW_BY_ROW")
+        // A four-character promotional montage over a bold decorative footer
+        // must remain ONE intact screen. Never turn its letters into enlarged
+        // reading frames, even with Overview and Auto Fit enabled.
+        val promoInput = File(root, "promotional-layout").apply { mkdirs() }
+        check(ImageIO.write(promotionalMontageGrid(), "png", File(promoInput, "01.png")))
+        val promoOptions = panelOptions.copy(
+            panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT",
+            keepChapterFirstPageWhole = false, showFullPageBeforeSplits = true,
+        )
+        for (format in listOf("XTC", "XTCH")) {
+            val result = File(root, "promo-guard-" + format.lowercase() + "." + format.lowercase())
+            NooirDesktopCli.main(arrayOf(
+                "--input", promoInput.absolutePath, "--output", result.absolutePath,
+                "--format", format, "--device", "X4",
+                "--options-token", promoOptions.token(),
+            ))
+            check(u16(result.readBytes(), 6) == 1) {
+                "Framed promotional illustration plus graphic title must stay one " + format + " page"
+            }
+        }
+        // The same optional first-page and overview flags used by Android
+        // must affect real Windows output, not just roundtrip in settings.
+        val wholeOutput = File(root, "whole-intact.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", input.absolutePath, "--output", wholeOutput.absolutePath,
+            "--format", "XTC", "--device", "X4",
+            "--options-token", panelOptions.copy(panelMode = "OFF",
+                cropWhiteMargins = false, splitSpreads = false).token(),
+        ))
+        check(u16(wholeOutput.readBytes(), 6) == 1)
+        val overviewOutput = File(root, "overview.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", input.absolutePath, "--output", overviewOutput.absolutePath,
+            "--format", "XTC", "--device", "X4",
+            "--options-token", panelOptions.copy(showFullPageBeforeSplits = true).token(),
+        ))
+        check(u16(overviewOutput.readBytes(), 6) == 7) {
+            "Explicit full-page overview must precede six safely detected panels"
+        }
+        check(firstXtcPixels(overviewOutput).contentEquals(firstXtcPixels(wholeOutput))) {
+            "Overview must preserve original whole-page pixels"
+        }
+        val rowOverview = File(root, "row-overview.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", input.absolutePath, "--output", rowOverview.absolutePath,
+            "--format", "XTC", "--device", "X4",
+            "--options-token", rowOptions.copy(showFullPageBeforeSplits = true).token(),
+        ))
+        check(u16(rowOverview.readBytes(), 6) == 4) {
+            "Explicit row-only overview must add one screen, not extra row cuts"
+        }
+        val chapterInput = File(root, "chapter-first").apply { mkdirs() }
+        check(ImageIO.write(panelGrid(), "png", File(chapterInput, "01.png")))
+        check(ImageIO.write(panelGrid(), "png", File(chapterInput, "02.png")))
+        val chapterOutput = File(root, "chapter-first.xtc")
+        NooirDesktopCli.main(arrayOf(
+            "--input", chapterInput.absolutePath, "--output", chapterOutput.absolutePath,
+            "--format", "XTC", "--device", "X4",
+            "--options-token", panelOptions.copy(keepChapterFirstPageWhole = true).token(),
+        ))
+        check(u16(chapterOutput.readBytes(), 6) == 7) {
+            "First page in a chapter must stay whole; second may yield six panels"
+        }
+        check(firstXtcPixels(chapterOutput).contentEquals(firstXtcPixels(wholeOutput))) {
+            "Keep-chapter-first must retain the intact opening page"
+        }
         val rowOutput = File(root, "rows.xtc")
         NooirDesktopCli.main(arrayOf(
             "--input", input.absolutePath, "--output", rowOutput.absolutePath,
