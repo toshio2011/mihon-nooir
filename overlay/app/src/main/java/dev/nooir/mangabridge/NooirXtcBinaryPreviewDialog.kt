@@ -1,5 +1,6 @@
 package dev.nooir.mangabridge
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -31,9 +32,39 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.nooir.bridge.XtcBookPreview
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
+
+/**
+ * Copy a user-selected SAF document to the caller-owned temporary file.
+ * Do not impose an arbitrary page count or file size: streaming copy keeps
+ * heap bounded, and cancellation is checked on every 64 KiB block.
+ *
+ * The caller MUST delete the temp file when its Compose producer is cancelled.
+ */
+internal suspend fun copyNooirXtcPreviewDocument(context: Context, uri: Uri, file: File) {
+    val coroutine = currentCoroutineContext()
+    val input = context.contentResolver.openInputStream(uri)
+        ?: error("Cannot read selected output file")
+    input.use { source ->
+        file.outputStream().use { target ->
+            val bytes = ByteArray(64 * 1024)
+            while (true) {
+                coroutine.ensureActive()
+                val count = source.read(bytes)
+                if (count < 0) break
+                if (count > 0) target.write(bytes, 0, count)
+            }
+            coroutine.ensureActive()
+        }
+    }
+}
 
 /**
  * Inspect pages from an already-saved, encoded XTC/XTCH output.
@@ -57,25 +88,32 @@ fun NooirXtcBinaryPreviewDialog(onDismiss: () -> Unit) {
     val local by produceState<Result<File>?>(initialValue = null, picked) {
         value = null
         val uri = picked ?: return@produceState
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val file = File.createTempFile("nooir-xtc-inspect-", ".bin", context.cacheDir)
-                try {
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        file.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
-                    } ?: error("Cannot read selected output file")
-                    file
-                } catch (e: Throwable) {
-                    file.delete()
-                    throw e
-                }
+        var temporary: File? = null
+        try {
+            withContext(Dispatchers.IO) {
+                val staging = File.createTempFile("nooir-xtc-inspect-", ".bin", context.cacheDir)
+                // Assign before any cancellable read: cancellation on return
+                // from Dispatchers.IO must still clean up this same file.
+                temporary = staging
+                copyNooirXtcPreviewDocument(context, uri, staging)
+            }
+            value = Result.success(checkNotNull(temporary))
+            // Keep ownership while the file is displayed. A finished producer
+            // previously leaked the file if the picker/dialog closed between
+            // copy completion and DisposableEffect(file) installation.
+            awaitCancellation()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            value = Result.failure(error)
+        } finally {
+            // Guaranteed on success, I/O failure, picker change and dismissal.
+            withContext(NonCancellable + Dispatchers.IO) {
+                temporary?.delete()
             }
         }
     }
     val file = local?.getOrNull()
-    DisposableEffect(file) {
-        onDispose { file?.delete() }
-    }
     val book = remember(file) { file?.let { runCatching { XtcBookPreview(it) } } }
     val inspector = book?.getOrNull()
     val shown by produceState<Result<Bitmap>?>(initialValue = null, file, pageIndex) {
