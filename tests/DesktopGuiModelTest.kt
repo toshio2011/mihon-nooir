@@ -1,6 +1,7 @@
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
+import dev.nooir.desktop.ui.DesktopXtcPreviewSizing
 import dev.nooir.desktop.ui.LocalComicPages
 import dev.nooir.desktop.ui.LatestPageLoadGate
 import dev.nooir.desktop.ui.DesktopReadingLayout
@@ -44,6 +45,53 @@ fun main() {
     decodeGate.close()
     check(decodeGate.submit(8) == null)
     check(decodeGate.completed() == null) { "Closed reader must not restart decoding" }
+
+
+    // Headless acceptance for a laptop-sized real saved-page viewer. Fit is a
+    // display-only transform; 1:1 must keep native dimensions and pixel values.
+    check(DesktopXtcPreviewSizing.dialogSize(java.awt.Dimension(1366, 768)) ==
+        java.awt.Dimension(710, 672))
+    check(DesktopXtcPreviewSizing.dialogSize(java.awt.Dimension(1280, 640)) ==
+        java.awt.Dimension(710, 544))
+    check(DesktopXtcPreviewSizing.displaySize(480, 800, 300, 500, true) ==
+        java.awt.Dimension(300, 500))
+    check(DesktopXtcPreviewSizing.displaySize(528, 792, 264, 396, true) ==
+        java.awt.Dimension(264, 396))
+    check(DesktopXtcPreviewSizing.displaySize(800, 480, 400, 240, true) ==
+        java.awt.Dimension(400, 240))
+    check(DesktopXtcPreviewSizing.displaySize(160, 240, 600, 800, true) ==
+        java.awt.Dimension(160, 240)) { "Fit must not enlarge the saved pixels" }
+    check(DesktopXtcPreviewSizing.displaySize(480, 800, 300, 500, false) ==
+        java.awt.Dimension(480, 800)) { "1:1 mode must retain native pixels" }
+    check(DesktopXtcPreviewSizing.displaySize(480, 800, 0, 0, true) ==
+        java.awt.Dimension(480, 800)) { "Unrealized viewport must not shrink to 1 px" }
+    check(runCatching {
+        DesktopXtcPreviewSizing.displaySize(0, 800, 300, 500, true)
+    }.isFailure)
+    val palette = setOf(0, 85, 170, 255)
+    val originalPixels = BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB)
+    for (y in 0 until 8) for (x in 0 until 8) {
+        val tone = ((x / 2 + y / 2) % 4) * 85
+        originalPixels.setRGB(x, y, Color(tone, tone, tone).rgb)
+    }
+    check(DesktopXtcPreviewSizing.nearestNeighbor(
+        originalPixels, java.awt.Dimension(8, 8)) === originalPixels) {
+        "1:1 view must return original buffer"
+    }
+    val smallPixels = DesktopXtcPreviewSizing.nearestNeighbor(
+        originalPixels, java.awt.Dimension(4, 4))
+    check(smallPixels.width == 4 && smallPixels.height == 4)
+    for (y in 0 until 4) for (x in 0 until 4) {
+        val rgb = smallPixels.getRGB(x, y)
+        val r = (rgb ushr 16) and 255
+        val g = (rgb ushr 8) and 255
+        val b = rgb and 255
+        check(r == g && g == b && r in palette) {
+            "Fitted binary preview must not invent intermediate grayscale tones"
+        }
+    }
+    smallPixels.flush()
+    originalPixels.flush()
 
     val chapters = listOf(
         SuwayomiChapter(40, "Chapter 10", 10.0, 1, true),
