@@ -93,6 +93,42 @@ fun main() {
         check(!reloaded.panelDiagnostics)
     }
     check(MangaConversionOptions.fromToken(null).panelMode == "OFF")
+
+    // The Windows settings dialog serializes through the Android/shared model
+    // before the desktop CLI runs. Preserve every 1-/2-bit rendering choice
+    // and the opt-in peek exactly; old settings must still default to OFF.
+    for (algorithm in listOf("LEGACY", "FLOYD_STEINBERG", "ATKINSON", "BAYER_8X8", "THRESHOLD")) {
+        for (peek in listOf(0, 1, 8)) {
+            val selected = MangaConversionOptions(
+                preset = "Custom", panelMode = "PANEL_BY_PANEL",
+                orientation = "AUTO_FIT",
+                renderAlgorithm = algorithm,
+                dither = algorithm != "THRESHOLD",
+                contextPeekPercent = peek,
+            )
+            val parsed = MangaConversionOptions.fromToken(selected.token())
+            check(parsed.renderAlgorithm == algorithm)
+            check(parsed.contextPeekPercent == peek)
+            check(parsed.panelMode == "PANEL_BY_PANEL")
+            check(parsed.orientation == "AUTO_FIT")
+            val args = LocalLibraryPresentation.exportArgs(
+                File(System.getProperty("java.io.tmpdir"), "preview-source.cbz"),
+                File(System.getProperty("java.io.tmpdir"), "preview-output.xtch"),
+                ExportFormat.XTCH, "X4", selected)
+            val passed = args.toList().chunked(2).associate { it[0] to it[1] }
+            val actual = MangaConversionOptions.fromToken(passed["--options-token"])
+            check(actual.renderAlgorithm == algorithm && actual.contextPeekPercent == peek) {
+                "Windows rendering and Context Peek lost during CLI argument forwarding"
+            }
+        }
+    }
+    val legacySeven = MangaConversionOptions.fromToken("Manga|PAGED|false|true|true|50|true")
+    check(legacySeven.renderAlgorithm == "LEGACY" && legacySeven.contextPeekPercent == 0)
+    val clampedPeek = MangaConversionOptions(
+        panelMode = "PANEL_BY_PANEL", contextPeekPercent = 8
+    ).token().split("|").toMutableList().apply { this[21] = "999" }.joinToString("|")
+    check(MangaConversionOptions.fromToken(clampedPeek).contextPeekPercent == 8)
+
     // Single page, manga-like cover, two-page spread, odd final page and RTL
     // visual placement must all be deterministic and never skip a page.
     val layout = DesktopReadingLayout
