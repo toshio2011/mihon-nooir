@@ -28,7 +28,7 @@ adb install -r "$test_apk"
 adb shell pm list instrumentation | tee android-panel-instrumentation-packages.txt
 adb logcat -c
 
-echo "Running both Android panel diagnostics and footer-render tests"
+echo "Running Android panel diagnostics, footer-render and saved XTC/XTCH SAF tests"
 adb shell am instrument -w -r \
   -e class dev.nooir.mangabridge.PanelDiagnosticArchiveInstrumentedTest \
   dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
@@ -39,12 +39,13 @@ adb shell am instrument -w -r \
 # introducing the second instrumentation test.
 for required in \
   realAndroidCbzZipAndRenderParity \
-  shortRuledFooterStaysOneFrameThroughAndroidRender
+  shortRuledFooterStaysOneFrameThroughAndroidRender \
+  savedBinaryPreviewReadsActualSafBytes
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" diagnostic-instrumentation.txt
 done
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.txt)" -eq 2
-grep -Fxq 'OK (2 tests)' diagnostic-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.txt)" -eq 3
+grep -Fxq 'OK (3 tests)' diagnostic-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
