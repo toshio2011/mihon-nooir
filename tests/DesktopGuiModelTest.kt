@@ -111,15 +111,6 @@ fun main() {
             check(parsed.contextPeekPercent == peek)
             check(parsed.panelMode == "PANEL_BY_PANEL")
             check(parsed.orientation == "AUTO_FIT")
-            val args = LocalLibraryPresentation.exportArgs(
-                File(System.getProperty("java.io.tmpdir"), "preview-source.cbz"),
-                File(System.getProperty("java.io.tmpdir"), "preview-output.xtch"),
-                ExportFormat.XTCH, "X4", selected)
-            val passed = args.toList().chunked(2).associate { it[0] to it[1] }
-            val actual = MangaConversionOptions.fromToken(passed["--options-token"])
-            check(actual.renderAlgorithm == algorithm && actual.contextPeekPercent == peek) {
-                "Windows rendering and Context Peek lost during CLI argument forwarding"
-            }
         }
     }
     val legacySeven = MangaConversionOptions.fromToken("Manga|PAGED|false|true|true|50|true")
@@ -307,6 +298,19 @@ fun main() {
         check(exportFlags["--device"] == "X4")
         check(exportFlags["--format"] == "XTCH")
         val roundTrip = MangaConversionOptions.fromToken(exportFlags["--options-token"])
+        // Forward non-default rendering and Context Peek with a REAL
+        // existing local archive, not a missing/unverified file path.
+        val panelOptions = MangaConversionOptions(
+            panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT",
+            renderAlgorithm = "BAYER_8X8", contextPeekPercent = 8)
+        val panelArgs = LocalLibraryPresentation.exportArgs(
+            zip, File(folder, "panel.xtch"), ExportFormat.XTCH, "X4", panelOptions)
+        val panelFlags = panelArgs.toList().chunked(2).associate { it[0] to it[1] }
+        val panelToken = MangaConversionOptions.fromToken(panelFlags["--options-token"])
+        check(panelToken.panelMode == "PANEL_BY_PANEL" &&
+            panelToken.renderAlgorithm == "BAYER_8X8" && panelToken.contextPeekPercent == 8) {
+            "Windows rendering and Context Peek lost during CLI argument forwarding"
+        }
         check(roundTrip.panelMode == "ROW_BY_ROW")
         check(roundTrip.orientation == "AUTO_FIT")
         check(roundTrip.showFullPageBeforeSplits)
