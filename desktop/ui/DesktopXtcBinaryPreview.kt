@@ -6,9 +6,16 @@ import java.awt.Component
 import java.awt.Dialog
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Graphics2D
+import java.awt.RenderingHints
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.awt.image.BufferedImage
 import javax.swing.ImageIcon
 import javax.swing.JButton
+import javax.swing.JCheckBox
 import javax.swing.JDialog
 import javax.swing.JFileChooser
 import javax.swing.JLabel
@@ -21,9 +28,57 @@ import javax.swing.SwingWorker
 import javax.swing.filechooser.FileNameExtensionFilter
 
 /**
- * Read an existing finished XTC/XTCH book without converting or uploading it.
- * The stored planes are decoded one page at a time off the Swing event thread.
- * This is not the old CBZ reader or Android's pre-encode first-page preview.
+ * Pure viewport math and palette-preserving display-only scaling.
+ * 1:1 mode never touches saved pixels. Fit mode never enlarges small
+ * artwork or interpolates new gray levels into an XTC/XTCH page.
+ */
+internal object DesktopXtcPreviewSizing {
+    fun dialogSize(screen: Dimension): Dimension {
+        require(screen.width > 0 && screen.height > 0)
+        return Dimension(
+            minOf(710, (screen.width - 48).coerceAtLeast(1)),
+            minOf(900, (screen.height - 96).coerceAtLeast(1)),
+        )
+    }
+
+    fun displaySize(
+        nativeWidth: Int, nativeHeight: Int,
+        viewportWidth: Int, viewportHeight: Int, fit: Boolean,
+    ): Dimension {
+        require(nativeWidth > 0 && nativeHeight > 0)
+        if (!fit || viewportWidth <= 0 || viewportHeight <= 0) {
+            return Dimension(nativeWidth, nativeHeight)
+        }
+        val factor = minOf(
+            1.0,
+            viewportWidth.toDouble() / nativeWidth,
+            viewportHeight.toDouble() / nativeHeight,
+        )
+        return Dimension(
+            (nativeWidth * factor).toInt().coerceAtLeast(1),
+            (nativeHeight * factor).toInt().coerceAtLeast(1),
+        )
+    }
+
+    fun nearestNeighbor(source: BufferedImage, size: Dimension): BufferedImage {
+        require(size.width > 0 && size.height > 0)
+        if (source.width == size.width && source.height == size.height) return source
+        val target = BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_RGB)
+        val g: Graphics2D = target.createGraphics()
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR)
+            g.drawImage(source, 0, 0, size.width, size.height, null)
+        } finally {
+            g.dispose()
+        }
+        return target
+    }
+}
+
+/**
+ * Inspect finished XTC/XTCH pages without re-encoding or uploading the book.
+ * The existing first-page conversion preview is a separate workflow.
  */
 internal object DesktopXtcBinaryPreview {
     fun open(parent: Component) {
@@ -42,26 +97,70 @@ internal object DesktopXtcBinaryPreview {
         val dialog = JDialog(SwingUtilities.getWindowAncestor(parent),
             "Saved ${inspector.format} — actual output pixels", Dialog.ModalityType.MODELESS)
         dialog.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
-        dialog.minimumSize = Dimension(550, 480)
-        dialog.setSize(710, 900)
+        val bounds = parent.graphicsConfiguration?.bounds
+            ?: dialog.graphicsConfiguration.bounds
+        val initialSize = DesktopXtcPreviewSizing.dialogSize(bounds.size)
+        dialog.minimumSize = Dimension(minOf(550, initialSize.width), minOf(480, initialSize.height))
+        dialog.size = initialSize
         dialog.setLocationRelativeTo(parent)
+
         var pageIndex = 0
         var generation = 0
+        var worker: SwingWorker<BufferedImage, Unit>? = null
+        var nativeFrame: BufferedImage? = null
+        var displayFrame: BufferedImage? = null
+        var displayedSize: Dimension? = null
+
         val preview = JLabel("Reading saved binary page…", SwingConstants.CENTER)
-        val details = JLabel("")
+        val scroll = JScrollPane(preview)
+        val details = JLabel("", SwingConstants.CENTER)
         val prev = JButton("Previous")
         val next = JButton("Next")
+        val fit = JCheckBox("Fit to window (display only)", true)
+
+        fun clearFrames() {
+            preview.icon = null
+            if (displayFrame != null && displayFrame !== nativeFrame) displayFrame?.flush()
+            nativeFrame?.flush()
+            displayFrame = null
+            nativeFrame = null
+            displayedSize = null
+        }
+        fun showFrame() {
+            val frame = nativeFrame ?: return
+            val size = DesktopXtcPreviewSizing.displaySize(
+                frame.width, frame.height,
+                (scroll.viewport.extentSize.width - 8).coerceAtLeast(1),
+                (scroll.viewport.extentSize.height - 8).coerceAtLeast(1),
+                fit.isSelected,
+            )
+            if (size == displayedSize && preview.icon != null) return
+            val shown = DesktopXtcPreviewSizing.nearestNeighbor(frame, size)
+            preview.icon = ImageIcon(shown)
+            preview.text = ""
+            if (displayFrame != null && displayFrame !== frame && displayFrame !== shown) {
+                displayFrame?.flush()
+            }
+            displayFrame = shown
+            displayedSize = size
+            details.text = "${inspector.format} · page ${pageIndex + 1} / ${inspector.pageCount}" +
+                " · saved ${frame.width} × ${frame.height} px" +
+                (if (fit.isSelected) " · fitted display" else " · 1:1 pixels")
+        }
         fun loadPage() {
             val thisGeneration = ++generation
+            worker?.cancel(true)
+            worker = null
+            clearFrames()
             val requestedIndex = pageIndex
             prev.isEnabled = requestedIndex > 0
             next.isEnabled = requestedIndex + 1 < inspector.pageCount
-            details.text = "${inspector.format} · page ${requestedIndex + 1} / ${inspector.pageCount} · saved binary pixels"
-            preview.text = "Decoding page ${requestedIndex + 1}…"
-            preview.icon = null
-            object : SwingWorker<BufferedImage, Unit>() {
+            details.text = "${inspector.format} · page ${requestedIndex + 1} / ${inspector.pageCount}"
+            preview.text = "Decoding saved page ${requestedIndex + 1}…"
+            val task = object : SwingWorker<BufferedImage, Unit>() {
                 override fun doInBackground(): BufferedImage {
                     val page = inspector.page(requestedIndex)
+                    if (isCancelled) throw java.util.concurrent.CancellationException()
                     val image = BufferedImage(page.width, page.height, BufferedImage.TYPE_INT_RGB)
                     val pixels = IntArray(page.levels.size) { i ->
                         val brightness = (page.levels[i].toInt() and 255) *
@@ -72,29 +171,45 @@ internal object DesktopXtcBinaryPreview {
                     return image
                 }
                 override fun done() {
-                    if (!dialog.isDisplayable || generation != thisGeneration) return
+                    if (!dialog.isDisplayable || generation != thisGeneration || isCancelled) return
                     try {
-                        val frame = get()
-                        preview.icon = ImageIcon(frame)
-                        preview.text = ""
-                        details.text += " · ${frame.width} × ${frame.height} native"
+                        nativeFrame = get()
+                        showFrame()
                     } catch (e: Exception) {
                         preview.icon = null
                         preview.text = "Page cannot be decoded; source file unchanged"
                         details.text += " · " + (e.cause?.message ?: e.message ?: "Invalid data").take(100)
                     }
                 }
-            }.execute()
+            }
+            worker = task
+            task.execute()
         }
+
         prev.addActionListener { if (pageIndex > 0) { pageIndex--; loadPage() } }
         next.addActionListener {
             if (pageIndex + 1 < inspector.pageCount) { pageIndex++; loadPage() }
         }
-        val controls = JPanel(FlowLayout(FlowLayout.CENTER)).apply {
-            add(prev); add(details); add(next)
-        }
-        dialog.add(JScrollPane(preview), BorderLayout.CENTER)
-        dialog.add(controls, BorderLayout.SOUTH)
+        fit.addActionListener { showFrame() }
+        scroll.viewport.addComponentListener(object : ComponentAdapter() {
+            override fun componentResized(e: ComponentEvent) {
+                if (fit.isSelected) showFrame()
+            }
+        })
+        dialog.addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent) {
+                ++generation
+                worker?.cancel(true)
+                worker = null
+                clearFrames()
+            }
+        })
+
+        dialog.add(details, BorderLayout.NORTH)
+        dialog.add(scroll, BorderLayout.CENTER)
+        dialog.add(JPanel(FlowLayout(FlowLayout.CENTER)).apply {
+            add(prev); add(fit); add(next)
+        }, BorderLayout.SOUTH)
         dialog.isVisible = true
         loadPage()
     }
