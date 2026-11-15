@@ -62,17 +62,20 @@ jobs:
           changed=$(git diff --name-only "origin/$base...HEAD")
           # The visual integration may use shared core from the Android base,
           # but must not modify Android files relative to that base.
-          # A single approved, platform-neutral panel geometry file may
-          # differ from the Android experiment base. All other overlay/UI,
-          # signing, updater and build/test entry points remain protected.
+          # Narrow allowlist only for THIS draft integration's shared panel
+          # core, saved-binary Android preview temp-file lifecycle, and its
+          # dedicated instrumentation. Every other Android/UI/release path
+          # must match the PR #83 source baseline exactly.
           protected=$(printf '%s\n' "$changed" |
             grep -E '^(overlay/|tools/|config/|tests/run\.sh$|\.github/workflows/(build-apk|release-apk|verify-v1\.0\.18-signing)\.yml$)' |
-            grep -v -F -x 'overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' || true)
+            grep -v -F -x -e 'overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' \
+                         -e 'overlay/app/src/main/java/dev/nooir/mangabridge/NooirXtcBinaryPreviewDialog.kt' \
+                         -e 'overlay/app/src/androidTest/java/dev/nooir/mangabridge/PanelDiagnosticArchiveInstrumentedTest.kt' || true)
           if [ -n "$protected" ]; then
             printf 'STOP: protected Android paths changed:\n%s\n' "$protected" >&2
             exit 1
           fi
-          echo 'PASS: only the approved shared panel detector differs; other protected Android paths untouched'
+          echo 'PASS: only approved shared detector, binary-preview lifecycle and Android instrumentation differ; protected release paths untouched'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
