@@ -110,6 +110,7 @@ internal object DesktopXtcBinaryPreview {
         var nativeFrame: BufferedImage? = null
         var displayFrame: BufferedImage? = null
         var displayedSize: Dimension? = null
+        var displayedFit: Boolean? = null
 
         val preview = JLabel("Reading saved binary page…", SwingConstants.CENTER)
         val scroll = JScrollPane(preview)
@@ -125,6 +126,7 @@ internal object DesktopXtcBinaryPreview {
             displayFrame = null
             nativeFrame = null
             displayedSize = null
+            displayedFit = null
         }
         fun showFrame() {
             val frame = nativeFrame ?: return
@@ -134,7 +136,7 @@ internal object DesktopXtcBinaryPreview {
                 (scroll.viewport.extentSize.height - 8).coerceAtLeast(1),
                 fit.isSelected,
             )
-            if (size == displayedSize && preview.icon != null) return
+            if (size == displayedSize && displayedFit == fit.isSelected && preview.icon != null) return
             val shown = DesktopXtcPreviewSizing.nearestNeighbor(frame, size)
             preview.icon = ImageIcon(shown)
             preview.text = ""
@@ -143,6 +145,7 @@ internal object DesktopXtcBinaryPreview {
             }
             displayFrame = shown
             displayedSize = size
+            displayedFit = fit.isSelected
             details.text = "${inspector.format} · page ${pageIndex + 1} / ${inspector.pageCount}" +
                 " · saved ${frame.width} × ${frame.height} px" +
                 (if (fit.isSelected) " · fitted display" else " · 1:1 pixels")
