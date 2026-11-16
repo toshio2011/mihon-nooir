@@ -7,6 +7,7 @@ on:
       - 'overlay/app/src/main/java/dev/nooir/bridge/**'
       - 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt'
       - 'tests/WindowsXtcBinaryPreviewTest.kt'
+      - 'tests/DesktopXtcViewerSwingSmokeTest.kt'
       - 'tests/DesktopVisualRenderingPreviewTest.kt'
       - 'tests/ConanPanelRegressionTest.kt'
       - 'tests/DesktopGuiModelTest.kt'
@@ -26,6 +27,7 @@ on:
       - 'overlay/app/src/main/java/dev/nooir/bridge/**'
       - 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt'
       - 'tests/WindowsXtcBinaryPreviewTest.kt'
+      - 'tests/DesktopXtcViewerSwingSmokeTest.kt'
       - 'tests/DesktopVisualRenderingPreviewTest.kt'
       - 'tests/ConanPanelRegressionTest.kt'
       - 'tests/DesktopGuiModelTest.kt'
@@ -124,7 +126,13 @@ jobs:
         run: |
           set -euo pipefail
           bash tests/run.sh
-          bash tests/run_windows_full.sh
+          # Exercise a live Swing JDialog under a virtual display on Linux CI.
+          # Actual Windows app packaging retains a separate Windows runner.
+          if ! command -v xvfb-run >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y xvfb
+          fi
+          NOOIR_DESKTOP_GUI_SMOKE=1 bash tests/run_windows_full.sh
       - name: Upload synthetic rendering comparison for human inspection
         if: always()
         uses: actions/upload-artifact@v4
