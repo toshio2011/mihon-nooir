@@ -1,0 +1,173 @@
+name: MihonNooir isolated Android QA (side-by-side only)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-side-by-side-qa.yml'
+      - '.github/scripts/prepare-side-by-side-qa.py'
+      - 'overlay/**'
+      - 'tools/apply_overlay.py'
+      - 'tools/secure_android_installers.py'
+      - 'config/**'
+permissions:
+  contents: read
+concurrency:
+  group: mihonnooir-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa-apk:
+    # No release key/secrets; never alter the public Android application ID.
+    if: ${{ github.repository == 'toshio2011/mihon-nooir' && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'integration/visual-preview-android-windows-20261113' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check QA script and pinned public version
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .github/scripts/prepare-side-by-side-qa.py
+          test "$(tr -d '\r\n' < config/version.txt)" = "1.0.17"
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Read upstream SHA pin
+        id: pin
+        run: echo "sha=$(cat config/mihon-upstream.sha)" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Mihon upstream
+        uses: actions/checkout@v4
+        with:
+          repository: mihonapp/mihon
+          ref: ${{ steps.pin.outputs.sha }}
+          path: upstream
+      - name: Apply normal integration and remove Android package-install privileges
+        run: |
+          set -euo pipefail
+          python3 tools/apply_overlay.py upstream
+          python3 tools/secure_android_installers.py upstream
+      - name: Create isolated package ID and distinguishable QA app label
+        run: python3 .github/scripts/prepare-side-by-side-qa.py upstream
+      - name: Assemble debug-signed QA-specific FOSS APKs
+        working-directory: upstream
+        # Deliberately no MIHON_GITHUB_RELEASE and no persistent signing secrets.
+        run: bash ./gradlew :app:assembleFoss -Pdist=foss -Pinclude-telemetry=false --no-daemon --stacktrace
+      - name: Fail closed unless all QA variants are isolated and debug signed
+        shell: bash
+        run: |
+          set -euo pipefail
+          path=upstream/app/build/outputs/apk/foss
+          test -s "$path/app-universal-foss.apk"
+          test -s "$path/app-arm64-v8a-foss.apk"
+          test "$(find "$path" -maxdepth 1 -type f -name '*-foss.apk' | wc -l)" -eq 5
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          aapt="$build_tools/aapt"
+          apksigner="$build_tools/apksigner"
+          test -x "$aapt" && test -x "$apksigner"
+          for apk in "$path"/*-foss.apk; do
+            unzip -tq "$apk" >/dev/null
+            badging=$("$aapt" dump badging "$apk")
+            grep -Fq "name='dev.nooir.mihontrial.foss.qa'" <<< "$badging"
+            grep -Fq "versionName='1.0.17-qa'" <<< "$badging"
+            grep -Fq "application-label:'MihonNooir QA'" <<< "$badging"
+            signature=$("$apksigner" verify --verbose --print-certs "$apk")
+            grep -Fq 'CN=Android Debug' <<< "$signature"
+            permissions=$("$aapt" dump permissions "$apk")
+            for forbidden in REQUEST_INSTALL_PACKAGES REQUEST_DELETE_PACKAGES UPDATE_PACKAGES_WITHOUT_USER_ACTION; do
+              if grep -Fq "android.permission.$forbidden" <<< "$permissions"; then
+                echo "QA includes forbidden installer capability: $forbidden" >&2
+                exit 1
+              fi
+            done
+            manifest=$("$aapt" dump xmltree "$apk" AndroidManifest.xml)
+            grep -Fq 'dev.nooir.mihontrial.foss.qa.provider' <<< "$manifest"
+            if grep -Fq '"dev.nooir.mihontrial.foss.provider"' <<< "$manifest"; then
+              echo 'QA manifest still contains the official app provider authority' >&2
+              exit 1
+            fi
+            echo "Verified isolated debug tester: $(basename "$apk")"
+          done
+      - name: Stage explicitly non-upgrade QA APKs and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qa-artifact
+          cp upstream/app/build/outputs/apk/foss/app-arm64-v8a-foss.apk qa-artifact/MihonNooir-QA-arm64-v8a.apk
+          cp upstream/app/build/outputs/apk/foss/app-universal-foss.apk qa-artifact/MihonNooir-QA-universal.apk
+          (
+            cd qa-artifact
+            sha256sum MihonNooir-QA-*.apk > SHA256SUMS.txt
+          )
+          {
+            echo "Experimental side-by-side MihonNooir QA"
+            echo "Source commit: $GITHUB_SHA"
+            echo "Package: dev.nooir.mihontrial.foss.qa"
+            echo "Version: 1.0.17-qa"
+            echo "Signer: Android Debug (not compatible with official app updates)"
+            echo "Official v1.0.17: dev.nooir.mihontrial.foss (MUST stay installed)"
+            echo "No migration or shared application data. Test copies of books only."
+            echo "No automatic update or release; DO NOT uninstall public MihonNooir."
+          } > qa-artifact/READ_ME_FIRST.txt
+      - name: Upload only the verified side-by-side QA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-android-qa-side-by-side-debug
+          path: qa-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+
+  qa-side-by-side-emulator:
+    needs: qa-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-android-qa-side-by-side-debug
+          path: qa-artifact
+      - name: Verify QA package bytes and download published official v1.0.17
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          (cd qa-artifact && sha256sum -c SHA256SUMS.txt)
+          mkdir -p official
+          gh release download v1.0.17 --repo "$GH_REPO" \
+            --pattern 'app-universal-foss.apk' --pattern 'SHA256SUMS.txt' --dir official
+          test -s official/app-universal-foss.apk
+          (
+            cd official
+            grep -F '  app-universal-foss.apk' SHA256SUMS.txt | sha256sum -c -
+          )
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          "$build_tools/aapt" dump badging official/app-universal-foss.apk |
+            grep -F "name='dev.nooir.mihontrial.foss'"
+      - name: Enable KVM for emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Prove official and QA apps install with separate package IDs and UIDs
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/scripts/check-side-by-side-qa.sh
+      - name: Retain side-by-side installation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-qa-dual-install-emulator-evidence
+          path: |
+            qa-emulator-install.txt
+            qa-emulator-launch.txt
+            qa-emulator-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
