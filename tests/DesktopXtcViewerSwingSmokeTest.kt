@@ -103,6 +103,7 @@ fun main() {
                         onSwingThread { dialog.dispose() }
                         check(!onSwingThread { dialog.isDisplayable })
                     }
+                    verifyCorruptBookError(parent, folder, device, format)
                 } finally {
                     onSwingThread { parent.dispose() }
                 }
@@ -111,9 +112,69 @@ fun main() {
                 }
             }
         }
-        println("PASS: real Swing X3/X4 XTC/XTCH saved-book dialog, fit, native, navigation, resize, close")
+        println("PASS: real Swing X3/X4 XTC/XTCH viewer, fit, native, navigation, resize, close, corrupt-file warning")
     } finally {
         folder.deleteRecursively()
+    }
+}
+
+/**
+ * The production viewer must reject a corrupt saved XTC/XTCH file using a
+ * visible modal error, without opening a reader or changing source bytes.
+ * Dismiss the modal from a non-EDT test thread.
+ */
+private fun verifyCorruptBookError(
+    parent: JFrame, folder: java.io.File, device: String, format: XtcFormat,
+) {
+    val broken = folder.resolve("damaged-$device.${format.extension}")
+    val bytes = byteArrayOf(0x58, 0x54, 0x43, 0)
+    broken.writeBytes(bytes)
+    val completed = AtomicReference<Boolean?>(null)
+    val failure = AtomicReference<Throwable?>()
+    SwingUtilities.invokeLater {
+        try {
+            check(DesktopXtcBinaryPreview.showSavedBook(parent, broken) == null) {
+                "Corrupt binary must not open a page reader"
+            }
+            completed.set(true)
+        } catch (e: Throwable) {
+            failure.set(e)
+            completed.set(false)
+        }
+    }
+    val deadline = System.nanoTime() + 10_000_000_000L
+    var dismissed = false
+    try {
+        while (System.nanoTime() < deadline) {
+            val warning = onSwingThread {
+                java.awt.Window.getWindows().filterIsInstance<JDialog>()
+                    .firstOrNull { it.isShowing && it.title == "Binary book preview" }
+            }
+            if (warning != null) {
+                val errorShown = onSwingThread {
+                    descendants(warning).filterIsInstance<JLabel>().any {
+                        it.text.contains("Cannot read saved XTC/XTCH book:")
+                    }
+                }
+                check(errorShown) { "Corrupt source did not show the expected error" }
+                onSwingThread { warning.dispose() }
+                dismissed = true
+                break
+            }
+            failure.get()?.let { throw it }
+            Thread.sleep(30)
+        }
+        check(dismissed) { "Timed out waiting for corrupt-file warning: $device $format" }
+        while (System.nanoTime() < deadline && completed.get() == null) Thread.sleep(30)
+        failure.get()?.let { throw it }
+        check(completed.get() == true) { "Corrupt-file handler failed to return cleanly" }
+        check(broken.readBytes().contentEquals(bytes)) { "Damaged source was modified" }
+    } finally {
+        onSwingThread {
+            java.awt.Window.getWindows().filterIsInstance<JDialog>()
+                .filter { it.isShowing && it.title == "Binary book preview" }
+                .forEach { it.dispose() }
+        }
     }
 }
 
