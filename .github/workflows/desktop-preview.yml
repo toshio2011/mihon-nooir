@@ -67,14 +67,16 @@ jobs:
           # Narrow allowlist only for THIS draft integration's shared panel
           # core, minified-test ABI keep rules in tools/apply_overlay.py,
           # saved-binary Android preview temp-file lifecycle, and its
-          # dedicated instrumentation. Every other Android/UI/release path
+          # dedicated instrumentation, plus the PR #85-only long PDF
+          # emulator CI trigger (build-apk.yml). Every other Android/UI/release path
           # must match the PR #83 source baseline exactly.
           protected=$(printf '%s\n' "$changed" |
             grep -E '^(overlay/|tools/|config/|tests/run\.sh$|\.github/workflows/(build-apk|release-apk|verify-v1\.0\.18-signing)\.yml$)' |
             grep -v -F -x -e 'overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' \
                          -e 'overlay/app/src/main/java/dev/nooir/mangabridge/NooirXtcBinaryPreviewDialog.kt' \
                          -e 'overlay/app/src/androidTest/java/dev/nooir/mangabridge/PanelDiagnosticArchiveInstrumentedTest.kt' \
-                         -e 'tools/apply_overlay.py' || true)
+                         -e 'tools/apply_overlay.py' \
+                         -e '.github/workflows/build-apk.yml' || true)
           if [ -n "$protected" ]; then
             printf 'STOP: protected Android paths changed:\n%s\n' "$protected" >&2
             exit 1
