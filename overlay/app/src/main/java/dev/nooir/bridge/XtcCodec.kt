@@ -102,6 +102,9 @@ object XtcCodec {
         direction: ReadingDirection = ReadingDirection.RIGHT_TO_LEFT,
         onPageEncoded: ((Int) -> Unit)? = null,
         extendedMetadataJson: String? = null,
+        // Optional cooperative stop check while copying the encoded disk
+        // spool into the final book. Existing non-PDF callers are unchanged.
+        checkOutputCancelled: (() -> Unit)? = null,
     ): XtcWriteResult {
         require(spoolDirectory.isDirectory || spoolDirectory.mkdirs()) { "Cannot create spool directory" }
         val temp = File.createTempFile("nooir-pages-", ".bin", spoolDirectory)
@@ -178,7 +181,16 @@ object XtcCodec {
                 output.write(entry)
                 pos += size
             }
-            BufferedInputStream(FileInputStream(temp)).use { input -> input.copyTo(output, 64 * 1024) }
+            BufferedInputStream(FileInputStream(temp)).use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    checkOutputCancelled?.invoke()
+                    val copied = input.read(buffer)
+                    if (copied < 0) break
+                    output.write(buffer, 0, copied)
+                }
+            }
+            checkOutputCancelled?.invoke()
             // Optional trailer: JSON payload, 8-byte magic, uint32 LE payload size.
             var trailerBytes = 0L
             if (extendedMetadataJson != null) {

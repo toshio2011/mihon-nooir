@@ -45,6 +45,10 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
     val workManager = remember { WorkManager.getInstance(context) }
     var document by remember { mutableStateOf<Uri?>(null) }
+    var documents by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var selectedNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectionError by remember { mutableStateOf("") }
+    var queuedSummary by remember { mutableStateOf("") }
     var fileName by remember { mutableStateOf("No PDF selected") }
     var outputName by remember { mutableStateOf("Converted-PDF") }
     var bookTitle by remember { mutableStateOf("") }
@@ -60,46 +64,111 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
         })
     }
     var state by remember { mutableStateOf<WorkInfo?>(null) }
+    var batchIds by remember {
+        mutableStateOf(prefs.getString("last_pdf_batch_work_ids", "").orEmpty()
+            .split(',').mapNotNull { raw -> runCatching { UUID.fromString(raw) }.getOrNull() }.toSet())
+    }
+    var batchInfos by remember { mutableStateOf<List<WorkInfo>>(emptyList()) }
     LaunchedEffect(workId) {
         workId?.let { key -> workManager.getWorkInfoByIdFlow(key).collect { state = it } }
     }
-
-    fun enqueue(saveUri: Uri?) {
-        val input = document ?: return
-        prefs.edit().putString("host", host.trim()).putString("destination", folder.trim()).apply()
-        val job = OneTimeWorkRequestBuilder<NooirPdfExportWorker>()
-            .setInputData(workDataOf(
-                NooirPdfExportWorker.PDF to input.toString(),
-                NooirPdfExportWorker.SAVE_URI to saveUri?.toString(),
-                NooirPdfExportWorker.HOST to host.trim(),
-                NooirPdfExportWorker.FOLDER to folder.trim(),
-                NooirPdfExportWorker.MODE to mode,
-                NooirPdfExportWorker.EPUB_FORMAT to outputFormat,
-                NooirPdfExportWorker.OUTPUT_FORMAT to outputFormat,
-                NooirPdfExportWorker.DEVICE to device,
-                NooirPdfExportWorker.OUTPUT_NAME to outputName.trim(),
-                NooirPdfExportWorker.BOOK_TITLE to bookTitle.trim(),
-                NooirPdfExportWorker.BOOK_AUTHOR to bookAuthor.trim(),
-            )).build()
-        workManager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, job)
-        workId = job.id
-        prefs.edit().putString(NooirPdfExportWorker.LAST_WORK, job.id.toString()).apply()
+    LaunchedEffect(batchIds) {
+        if (batchIds.isEmpty()) {
+            batchInfos = emptyList()
+        } else {
+            workManager.getWorkInfosForUniqueWorkFlow(NooirDeviceWorkQueue.NAME).collect { jobs ->
+                batchInfos = jobs.filter { it.id in batchIds }
+            }
+        }
     }
 
-    val choosePdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            document = uri
+    fun enqueue(saveUri: Uri?, saveTree: Uri? = null) {
+        val inputs = documents.ifEmpty { listOfNotNull(document) }
+        if (inputs.isEmpty()) return
+        try {
+            require(saveUri == null || (saveTree == null && inputs.size == 1)) {
+                "Multiple PDFs require one destination folder, not one shared output file"
+            }
+            val stems = if (inputs.size == 1) listOf(outputName.trim())
+                else PdfBatchPlan.outputStems(selectedNames)
+            require(stems.size == inputs.size && stems.all { it.isNotBlank() })
+            prefs.edit().putString("host", host.trim()).putString("destination", folder.trim()).apply()
+            val requests = inputs.mapIndexed { index, uri ->
+                OneTimeWorkRequestBuilder<NooirPdfExportWorker>()
+                    .setInputData(workDataOf(
+                        NooirPdfExportWorker.PDF to uri.toString(),
+                        NooirPdfExportWorker.SAVE_URI to saveUri?.toString(),
+                        NooirPdfExportWorker.SAVE_TREE to saveTree?.toString(),
+                        NooirPdfExportWorker.HOST to host.trim(),
+                        NooirPdfExportWorker.FOLDER to folder.trim(),
+                        NooirPdfExportWorker.MODE to mode,
+                        NooirPdfExportWorker.EPUB_FORMAT to outputFormat,
+                        NooirPdfExportWorker.OUTPUT_FORMAT to outputFormat,
+                        NooirPdfExportWorker.DEVICE to device,
+                        NooirPdfExportWorker.OUTPUT_NAME to stems[index],
+                        NooirPdfExportWorker.BOOK_TITLE to (if (inputs.size == 1) bookTitle.trim() else ""),
+                        NooirPdfExportWorker.BOOK_AUTHOR to (if (inputs.size == 1) bookAuthor.trim() else ""),
+                    )).build()
+            }
+            // Create one persisted serial WorkManager continuation, never
+            // simultaneous PDFBox loads or competing XTEink uploads.
+            var continuation = workManager.beginUniqueWork(
+                NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, requests.first())
+            for (next in requests.drop(1)) continuation = continuation.then(next)
+            continuation.enqueue()
+            workId = requests.last().id
+            batchInfos = emptyList()
+            batchIds = requests.map { it.id }.toSet()
+            prefs.edit()
+                .putString(NooirPdfExportWorker.LAST_WORK, workId.toString())
+                .putString("last_pdf_batch_work_ids", requests.joinToString(",") { it.id.toString() })
+                .apply()
+            queuedSummary = "Queued " + requests.size + " PDF(s) in order. Each produces its own " +
+                (if (outputFormat == "EPUB2" || outputFormat == "EPUB3") "EPUB" else outputFormat) +
+                " book; see Nooir Tools → Activity Queue for individual progress."
+            selectionError = ""
+        } catch (e: Exception) {
+            selectionError = e.message ?: "Unable to queue selected PDFs"
+        }
+    }
+
+    val choosePdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { files ->
+        if (files.isNotEmpty()) {
             try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: SecurityException) { }
-            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-                if (it.moveToFirst()) {
-                    fileName = it.getString(0) ?: "Selected PDF"
-                    outputName = fileName.substringBeforeLast('.', fileName)
-                    bookTitle = outputName
-                    bookAuthor = ""
+                require(files.size <= PdfBatchPlan.MAX_SELECTION) {
+                    "Select up to " + PdfBatchPlan.MAX_SELECTION + " PDFs per batch; queue more batches afterward"
                 }
+                val names = files.map { uri ->
+                    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME),
+                        null, null, null)?.use {
+                        if (it.moveToFirst()) it.getString(0) else null
+                    } ?: (uri.lastPathSegment ?: "PDF")
+                }
+                PdfBatchPlan.outputStems(names)
+                files.forEach { uri ->
+                    try {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    } catch (_: SecurityException) {
+                        // A provider may offer temporary access only; workers
+                        // report if that access expires before processing.
+                    }
+                }
+                documents = files
+                selectedNames = names
+                document = files.first()
+                fileName = if (files.size == 1) names.first()
+                    else files.size.toString() + " PDFs selected: " + names.take(3).joinToString(", ") +
+                        (if (files.size > 3) "…" else "")
+                outputName = names.first().substringBeforeLast('.', names.first())
+                // Keep file naming separate from the optional display-title override.
+                // Blank allows PDF metadata to win; the filename remains a fallback.
+                bookTitle = ""
+                bookAuthor = ""
+                selectionError = ""
+                queuedSummary = ""
+            } catch (e: Exception) {
+                selectionError = e.message ?: "Cannot inspect selected PDF files"
             }
         }
     }
@@ -111,6 +180,17 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             ) } catch (_: SecurityException) { }
             enqueue(uri)
+        }
+    }
+    val saveFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                enqueue(null, saveTree = tree)
+            } catch (e: SecurityException) {
+                selectionError = "Cannot keep access to selected output folder: " + e.message
+            }
         }
     }
     val binaryFormat = outputFormat == "XTC" || outputFormat == "XTCH"
@@ -134,7 +214,20 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
             enqueue(uri)
         }
     }
-    val busy = state?.state == WorkInfo.State.ENQUEUED || state?.state == WorkInfo.State.RUNNING
+    val tracked = batchInfos
+    val activeStates = setOf(WorkInfo.State.BLOCKED, WorkInfo.State.ENQUEUED, WorkInfo.State.RUNNING)
+    val busy = tracked.any { it.state in activeStates } ||
+        (tracked.isEmpty() && state?.state in activeStates)
+    val displayState = tracked.firstOrNull { it.state == WorkInfo.State.RUNNING }
+        ?: tracked.firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+        ?: tracked.firstOrNull { it.state == WorkInfo.State.BLOCKED }
+        ?: tracked.firstOrNull { NooirDeviceWorkQueue.hasFailed(it) }
+        ?: tracked.lastOrNull()
+        ?: state
+    val batchComplete = tracked.count { it.state == WorkInfo.State.SUCCEEDED &&
+        !NooirDeviceWorkQueue.hasFailed(it) }
+    val batchFailed = tracked.count { NooirDeviceWorkQueue.hasFailed(it) ||
+        it.state == WorkInfo.State.CANCELLED }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("PDF to e-reader") },
@@ -143,20 +236,26 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Choose reflowable EPUB 2/3 (selectable text where available) or XTC/XTCH (rasterized PDF pages for e-ink).")
+                Text("Choose one or more PDFs. Each becomes a separate EPUB 2/3 or XTC/XTCH book, processed in order. Large PDFs are supported while storage permits.")
                 Button(onClick = { choosePdf.launch(arrayOf("application/pdf")) }) {
-                    Text("Choose PDF from phone")
+                    Text("Choose PDF file(s) from phone")
                 }
                 Text(fileName)
-                OutlinedTextField(value = bookTitle, onValueChange = { bookTitle = it.take(192) },
-                    label = { Text("Book title (optional)") }, singleLine = true,
-                    supportingText = { Text("Visible book title; leave blank to use the PDF metadata or filename.") })
-                OutlinedTextField(value = bookAuthor, onValueChange = { bookAuthor = it.take(128) },
-                    label = { Text("Author or pen name (optional)") }, singleLine = true,
-                    supportingText = { Text("Overrides the PDF author metadata if supplied.") })
-                OutlinedTextField(value = outputName, onValueChange = { outputName = it.take(70) },
-                    label = { Text("Output filename (without extension)") }, singleLine = true,
-                    supportingText = { Text("Rename before conversion if the name already exists on XTEink.") })
+                if (documents.size > 1) {
+                    Text("Batch: each PDF gets a distinct filename. EPUB reads PDF title/author metadata when available; XTC/XTCH use filename-based titles. Select a folder to save locally; you can queue more batches.")
+                } else {
+                    OutlinedTextField(value = bookTitle, onValueChange = { bookTitle = it.take(192) },
+                        label = { Text("Book title (optional)") }, singleLine = true,
+                        supportingText = { Text("Visible book title; leave blank to use PDF metadata.") })
+                    OutlinedTextField(value = bookAuthor, onValueChange = { bookAuthor = it.take(128) },
+                        label = { Text("Author or pen name (optional)") }, singleLine = true,
+                        supportingText = { Text("Overrides the PDF author metadata if supplied.") })
+                    OutlinedTextField(value = outputName, onValueChange = { outputName = it.take(70) },
+                        label = { Text("Output filename (without extension)") }, singleLine = true,
+                        supportingText = { Text("An existing output filename is never overwritten.") })
+                }
+                if (selectionError.isNotBlank()) Text("Selection error: " + selectionError)
+                if (queuedSummary.isNotBlank()) Text(queuedSummary)
                 Text("Output format")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = outputFormat == "EPUB2",
@@ -194,21 +293,35 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     label = { Text("XTEink IP or hostname") }, singleLine = true)
                 OutlinedTextField(value = folder, onValueChange = { folder = it },
                     label = { Text("XTEink destination folder") }, singleLine = true)
-                Button(enabled = document != null && !busy && outputName.isNotBlank() && validFormat, onClick = {
-                    if (binaryFormat) saveBinary.launch(NooirDestinationGuard.filename(outputName, extension))
+                Button(enabled = document != null && !busy &&
+                    (documents.size > 1 || outputName.isNotBlank()) && validFormat, onClick = {
+                    if (documents.size > 1) saveFolder.launch(null)
+                    else if (binaryFormat) saveBinary.launch(NooirDestinationGuard.filename(outputName, extension))
                     else saveEpub.launch(NooirDestinationGuard.filename(outputName, "epub"))
-                }) { Text("Convert PDF & save " + extension.uppercase() + " to phone") }
-                Button(enabled = document != null && !busy && outputName.isNotBlank() && validFormat && host.isNotBlank() &&
+                }) { Text(if (documents.size > 1) "Convert all PDFs & save separate " +
+                    extension.uppercase() + " files to folder" else
+                    "Convert PDF & save " + extension.uppercase() + " to phone") }
+                Button(enabled = document != null && !busy &&
+                    (documents.size > 1 || outputName.isNotBlank()) && validFormat && host.isNotBlank() &&
                     folder.startsWith("/") && !folder.contains(".."),
-                    onClick = { enqueue(null) }) { Text("Convert PDF & send " + extension.uppercase() + " to XTEink") }
-                val phase = state?.progress?.getString(NooirPdfExportWorker.PHASE).orEmpty()
-                val percent = state?.progress?.getInt(NooirPdfExportWorker.PERCENT, -1) ?: -1
-                state?.let { info ->
+                    onClick = { enqueue(null) }) { Text(if (documents.size > 1)
+                    "Convert all PDFs & send separately to XTEink" else
+                    "Convert PDF & send " + extension.uppercase() + " to XTEink") }
+                if (batchIds.size > 1 && tracked.isNotEmpty()) {
+                    Text("PDF batch: $batchComplete/${batchIds.size} saved · " +
+                        "$batchFailed failed/cancelled · " +
+                        (batchIds.size - batchComplete - batchFailed).coerceAtLeast(0) +
+                        " waiting or running")
+                }
+                val phase = displayState?.progress?.getString(NooirPdfExportWorker.PHASE).orEmpty()
+                val percent = displayState?.progress?.getInt(NooirPdfExportWorker.PERCENT, -1) ?: -1
+                displayState?.let { info ->
                     Text(when (info.state) {
                         WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(info)) "Failed: " + info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty() else extension.uppercase() + " conversion complete"
                         WorkInfo.State.FAILED -> "Failed: " +
                             info.outputData.getString(NooirPdfExportWorker.ERROR).orEmpty()
-                        WorkInfo.State.CANCELLED -> "Canceled"
+                        WorkInfo.State.CANCELLED -> "Canceled. If Save to phone was interrupted, check for an incomplete output file."
+                        WorkInfo.State.BLOCKED -> "Waiting for previous PDF to finish"
                         else -> phase.ifBlank { "Queued" }
                     })
                 }
@@ -218,7 +331,7 @@ fun NooirPdfToEpubDialog(onDismiss: () -> Unit) {
                     ) else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Text("Cancel requests are managed in Nooir Tools → Activity Queue; whole-queue cancellation requires confirmation.")
                 }
-                Text("No AI, OCR service, or paid API. Complex layouts, multi-column documents and vector drawings may need image fallback. Protected PDFs are not yet supported. Experimental 100 MiB / 600-page limit.")
+                Text("No AI or OCR service. PDF conversion processes pages progressively and stops on low storage or real EPUB/XTC format limits—not a fixed 600-page cutoff. Huge PDFs may take time or fail on complex images; protected PDFs remain unsupported.")
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },

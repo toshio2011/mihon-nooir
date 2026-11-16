@@ -2,6 +2,7 @@ package dev.nooir.bridge
 
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.CancellationException
 
 private fun le16(b: ByteArray, i: Int): Int = (b[i].toInt() and 255) or ((b[i+1].toInt() and 255) shl 8)
 private fun le64(b: ByteArray, i: Int): Long = (0..7).fold(0L) { a,j -> a or ((b[i+j].toLong() and 255) shl (8*j)) }
@@ -64,5 +65,35 @@ fun main() {
     val white = ByteArray(480*800) { 255.toByte() }
     val q = GrayscaleConverter.dither(480,800,white,1)
     check(q.levels.all { it == 1.toByte() })
-    println("All XTC/XTCH codec and dithering smoke tests passed")
+    // Final spool copy can be large even though each individual page is
+    // encoded one at a time. Cancellation must be checked between 64 KiB
+    // writes, must not publish a complete book, and must delete temp spools.
+    val qaSpool = File(work, "nooir-xtc-spool-qa-" + System.nanoTime())
+    check(qaSpool.mkdirs())
+    try {
+        val big = QuantizedPage(480, 800, ByteArray(480 * 800) { 1 }, 1)
+        val partial = ByteArrayOutputStream()
+        var copyChecks = 0
+        val cancelled = runCatching {
+            XtcCodec.write(XtcFormat.XTC, sequenceOf(big, big), partial, qaSpool,
+                checkOutputCancelled = {
+                    copyChecks++
+                    if (copyChecks == 2) throw CancellationException("cancel during XTC output copy")
+                })
+        }.exceptionOrNull()
+        check(cancelled is CancellationException)
+        check(copyChecks == 2)
+        check(partial.size() > 56 + 2 * 16)
+        check(qaSpool.listFiles()?.isEmpty() == true)
+
+        val complete = ByteArrayOutputStream()
+        var successfulCopyChecks = 0
+        val saved = XtcCodec.write(XtcFormat.XTC, sequenceOf(big, big),
+            complete, qaSpool, checkOutputCancelled = { successfulCopyChecks++ })
+        check(saved.pageCount == 2)
+        check(saved.fileBytes == complete.size().toLong())
+        check(successfulCopyChecks >= 2)
+        check(qaSpool.listFiles()?.isEmpty() == true)
+    } finally { qaSpool.deleteRecursively() }
+    println("All XTC/XTCH codec, dithering and cancellable final-spool copy tests passed")
 }
