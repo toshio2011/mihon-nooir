@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Guard Android v1.0.17 source against desktop integration regressions
+      - name: Guard Android integration against unintended source changes
         shell: bash
         run: |
           set -euo pipefail
@@ -76,7 +76,11 @@ jobs:
                          -e 'overlay/app/src/main/java/dev/nooir/mangabridge/NooirXtcBinaryPreviewDialog.kt' \
                          -e 'overlay/app/src/androidTest/java/dev/nooir/mangabridge/PanelDiagnosticArchiveInstrumentedTest.kt' \
                          -e 'tools/apply_overlay.py' \
-                         -e '.github/workflows/build-apk.yml' || true)
+                         -e '.github/workflows/build-apk.yml' \
+                         -e 'config/version.txt' \
+                         -e 'tests/run.sh' \
+                         -e 'overlay/data/src/main/java/tachiyomi/data/release/NooirReleaseApkSelector.kt' \
+                         -e '.github/workflows/verify-v1.0.18-signing.yml' || true)
           if [ -n "$protected" ]; then
             printf 'STOP: protected Android paths changed:\n%s\n' "$protected" >&2
             exit 1
