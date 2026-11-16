@@ -47,6 +47,14 @@ r8_rules.write_text(r8_rules.read_text() +
     "-keep class dev.nooir.mangabridge.PanelDiagnosticArchive { *; }\n" +
     "-keep class dev.nooir.mangabridge.PanelDiagnosticArchive$* { *; }\n" +
     "-keep class dev.nooir.bridge.QuantizedPage { *; }\n" +
+    "# Independently compiled Android saved-book preview tests reference the\n" +
+    "# writer singleton, constructor/defaults and real binary decoder. R8\n" +
+    "# can remove their public entrypoints from the minified FOSS APK even\n" +
+    "# when normal production paths have been inlined. Keep only these APIs.\n" +
+    "-keep class dev.nooir.bridge.XtcCodec { *; }\n" +
+    "-keep class dev.nooir.bridge.XtcBookPreview { *; }\n" +
+    "-keep class dev.nooir.bridge.BookMetadata { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirXtcBinaryPreviewDialogKt { *; }\n" +
     "# Independently compiled 1,001-page PDF instrumentation calls the\n" +
     "# Kotlin object singleton, nested Mode enum and EPUB format enum.\n" +
     "# R8 otherwise removes NooirPdfToEpub.INSTANCE from the FOSS app APK,\n" +

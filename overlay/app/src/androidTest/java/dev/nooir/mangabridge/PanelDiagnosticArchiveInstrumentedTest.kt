@@ -140,6 +140,85 @@ class PanelDiagnosticArchiveInstrumentedTest {
         } finally { temp.deleteRecursively() }
     }
 
+    /**
+     * This is a real Android ContentResolver stream and the actual saved-file
+     * decoder, NOT the older pre-encode bitmap preview. The UI picker itself
+     * still needs separate manual/device acceptance.
+     */
+    @Test fun savedBinaryPreviewReadsActualSafBytes() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = scratch(context, "xtc-saf-preview")
+        try {
+            for ((device, dimensions) in listOf("X4" to (480 to 800), "X3" to (528 to 792))) {
+                val (width, height) = dimensions
+                for (format in dev.nooir.bridge.XtcFormat.entries) {
+                    val count = if (format == dev.nooir.bridge.XtcFormat.XTC) 2 else 4
+                    val samples = (0..2).map { index ->
+                        dev.nooir.bridge.QuantizedPage(
+                            width, height, ByteArray(width * height) { pixel ->
+                                val x = pixel % width
+                                val y = pixel / width
+                                ((x / 31 + y / 47 + index) % count).toByte()
+                            }, format.depth)
+                    }
+                    val source = File(folder, "source-$device.${format.extension}")
+                    source.outputStream().use { stream ->
+                        dev.nooir.bridge.XtcCodec.write(
+                            format, samples.asSequence(), stream, folder,
+                            dev.nooir.bridge.BookMetadata("Android SAF synthetic test")
+                        )
+                    }
+                    val bytesBefore = source.readBytes()
+                    val temporary = File(folder, "inspected-$device.${format.extension}")
+                    try {
+                        kotlinx.coroutines.runBlocking {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                copyNooirXtcPreviewDocument(context, Uri.fromFile(source), temporary)
+                            }
+                        }
+                        assertArrayEquals("SAF copy must retain exact on-disk bytes",
+                            bytesBefore, temporary.readBytes())
+                        val reader = dev.nooir.bridge.XtcBookPreview(temporary)
+                        assertEquals(format, reader.format)
+                        assertEquals(3, reader.pageCount)
+                        for (index in listOf(2, 0, 1, 2)) {
+                            val decoded = reader.page(index)
+                            assertEquals(width, decoded.width)
+                            assertEquals(height, decoded.height)
+                            assertEquals(format.depth, decoded.depth)
+                            assertArrayEquals("Saved $device $format page $index",
+                                samples[index].levels, decoded.levels)
+                        }
+                        assertTrue(runCatching { reader.page(3) }.isFailure)
+                        assertTrue(runCatching { reader.page(-1) }.isFailure)
+                        val corrupt = File(folder, "broken-$device.${format.extension}")
+                        corrupt.writeBytes(bytesBefore.copyOf(30))
+                        try {
+                            assertTrue("Truncated completed file must be rejected",
+                                runCatching { dev.nooir.bridge.XtcBookPreview(corrupt) }.isFailure)
+                        } finally { corrupt.delete() }
+                    } finally {
+                        temporary.delete()
+                    }
+                    assertArrayEquals("Preview must not change selected source",
+                        bytesBefore, source.readBytes())
+                }
+            }
+            val missing = File(folder, "does-not-exist.xtc")
+            val failedTarget = File(folder, "failed-copy.bin")
+            try {
+                assertTrue(runCatching {
+                    kotlinx.coroutines.runBlocking {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            copyNooirXtcPreviewDocument(context, Uri.fromFile(missing), failedTarget)
+                        }
+                    }
+                }.isFailure)
+            } finally { failedTarget.delete() }
+            assertFalse("Read-only SAF inspection cannot create a missing source", missing.exists())
+        } finally { folder.deleteRecursively() }
+    }
+
     @Test fun realAndroidCbzZipAndRenderParity() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val temp = scratch(context, "cbz")

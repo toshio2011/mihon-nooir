@@ -14,6 +14,48 @@ import java.util.zip.ZipFile
 import javax.imageio.ImageIO
 
 /**
+ * Decode only after inspecting image dimensions with ImageIO's metadata reader.
+ *
+ * Calling ImageIO.read() and checking dimensions afterwards can allocate huge
+ * pixel buffers for a tiny, malicious PNG/JPEG/WebP/CBZ entry. Both Windows
+ * conversion and reading share this bounded decoding path; Android's source
+ * and converter algorithms are not changed.
+ */
+internal object DesktopImageDecoder {
+    fun decode(bytes: ByteArray, maxPixels: Long = 25_000_000L): BufferedImage {
+        require(bytes.isNotEmpty() && maxPixels in 1L..25_000_000L) {
+            "Invalid image data or desktop pixel budget"
+        }
+        val imageInput = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
+            ?: error("Cannot inspect the page image")
+        imageInput.use { stream ->
+            val readers = ImageIO.getImageReaders(stream)
+            require(readers.hasNext()) { "Unsupported image codec" }
+            val decoder = readers.next()
+            try {
+                decoder.setInput(stream, false, true)
+                val width = decoder.getWidth(0)
+                val height = decoder.getHeight(0)
+                require(width > 0 && height > 0 &&
+                    width.toLong() * height.toLong() <= maxPixels) {
+                    "Image dimensions exceed safe desktop pixel limit"
+                }
+                val image = decoder.read(0)
+                    ?: error("Cannot decode the requested image")
+                require(image.width > 0 && image.height > 0 &&
+                    image.width.toLong() * image.height.toLong() <= maxPixels) {
+                    image.flush()
+                    "Decoded image exceeds safe desktop pixel limit"
+                }
+                return image
+            } finally {
+                decoder.dispose()
+            }
+        }
+    }
+}
+
+/**
  * JVM/Windows feasibility CLI. Compiles against the EXACT Kotlin codec, page planner,
  * grayscale PNG writer, presets and options model used by MangaNooir Android.
  * Not yet a desktop GUI or a Suwayomi downloader.
@@ -64,14 +106,22 @@ object NooirDesktopCli {
                     val h = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
                     val depth = if (format == ExportFormat.XTC) 1 else 2
                     val pages = sequence {
+                        var lastNonCoverChapter: String? = null
                         for (entry in sources) {
+                            val firstInChapter = !entry.cover && entry.chapter != lastNonCoverChapter
+                            if (!entry.cover) lastNonCoverChapter = entry.chapter
                             val img = decode(entry.open)
-                            val coverOpts = options.copy(
+                            val wholePageOpts = options.copy(
                                 layout = "PAGED", cropWhiteMargins = false,
                                 splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
-                                panelMode = "OFF",
+                                panelMode = "OFF", showFullPageBeforeSplits = false,
+                                contextPeekPercent = 0,
                             )
-                            val opts = if (entry.cover) coverOpts else options
+                            val opts = when {
+                                entry.cover -> wholePageOpts
+                                firstInChapter && options.keepChapterFirstPageWhole -> wholePageOpts
+                                else -> options
+                            }
                             for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
                                 yield(Rendered(entry.chapter, entry.cover, frame))
                             }
@@ -164,11 +214,7 @@ object NooirDesktopCli {
     private fun decode(open: () -> InputStream): BufferedImage {
         val bytes = open().use { input -> input.readNBytes(MAX_IMAGE_BYTES + 1) }
         require(bytes.isNotEmpty() && bytes.size <= MAX_IMAGE_BYTES) { "Invalid or oversized image" }
-        val img = ImageIO.read(ByteArrayInputStream(bytes)) ?: error("Unsupported image codec")
-        require(img.width > 0 && img.height > 0 && img.width.toLong() * img.height <= MAX_IMAGE_PIXELS) {
-            "Image dimensions exceed safe desktop preview limit"
-        }
-        return img
+        return DesktopImageDecoder.decode(bytes, MAX_IMAGE_PIXELS)
     }
 
     private fun trimWhite(src: BufferedImage, region: PageRegion): PageRegion {
@@ -311,14 +357,23 @@ object NooirDesktopCli {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
+        // Shared opt-in framing: expand only confirmed, separate panels.
+        // Never create a new cut or change default conversion output.
         val framedSlices = if (options.contextPeekPercent > 0 &&
             options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" &&
             panels != null && panels.size >= 2 && slices.size == panels.size) {
-            val framed = PanelContextPeek.expand(
+            val expanded = PanelContextPeek.expand(
                 slices.map { it.region }, src.width, src.height, options.contextPeekPercent)
-            slices.mapIndexed { index, view -> view.copy(region = framed[index]) }
+            slices.mapIndexed { index, view -> view.copy(region = expanded[index]) }
         } else slices
-        for (slice in framedSlices) {
+        // Windows honors the shared option: insert one intact overview before
+        // multiple rendered views, never before an already-unsplit page.
+        val addOverview = options.showFullPageBeforeSplits && framedSlices.size > 1
+        val displaySlices = if (addOverview)
+            listOf(PanelFitSlice(PageRegion(0, 0, src.width, src.height), false)) + framedSlices
+        else framedSlices
+        for ((sliceIndex, slice) in displaySlices.withIndex()) {
+            val isOverview = addOverview && sliceIndex == 0
             val region = slice.region
             val landscape = if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
@@ -327,7 +382,8 @@ object NooirDesktopCli {
             val vw = if (rotate) frameHeight else frameWidth
             val vh = if (rotate) frameWidth else frameHeight
             // Already trimmed detected panels retain their safety padding.
-            val r = if (options.cropWhiteMargins && panels == null) trimWhite(src, region) else region
+            val r = if (options.cropWhiteMargins && panels == null && !isOverview)
+                trimWhite(src, region) else region
             val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)
             val dh = (r.height * scale).toInt().coerceIn(1, vh)

@@ -1,6 +1,34 @@
 import dev.nooir.bridge.PageRegion
 import dev.nooir.bridge.PanelDetectionCore
 
+private fun promotionalMontageFixture(): Triple<Int, Int, ByteArray> {
+    val w = 600
+    val h = 475
+    val pixels = ByteArray(w * h) { 255.toByte() }
+    fun fill(x0: Int, y0: Int, x1: Int, y1: Int, shade: Int) {
+        for (y in y0 until y1)
+            for (x in x0 until x1)
+                pixels[y * w + x] = shade.toByte()
+    }
+    // Original synthetic art: four long framed illustrated columns above an
+    // uninterrupted white separator and a large, bold decorative footer.
+    for (column in 0..3) {
+        val x = 30 + column * 136
+        fill(x, 52, x + 124, 54, 10)
+        fill(x, 343, x + 124, 346, 10)
+        fill(x, 52, x + 2, 346, 10)
+        fill(x + 122, 52, x + 124, 346, 10)
+        fill(x + 19, 95, x + 105, 180, 25)
+        fill(x + 16, 210, x + 107, 330, 40)
+        fill(x + 46, 119, x + 61, 135, 255)
+    }
+    for (letter in 0..6) {
+        val x = 130 + letter * 57
+        fill(x, 395, x + 46, 448, 8)
+    }
+    return Triple(w, h, pixels)
+}
+
 private fun grid(): Triple<Int, Int, ByteArray> {
     val w = 300
     val h = 420
@@ -21,6 +49,47 @@ private fun centerGray(pixels: ByteArray, width: Int, region: PageRegion): Int {
     return pixels[y * width + x].toInt() and 255
 }
 fun main() {
+    val (promoWidth, promoHeight, promoPixels) = promotionalMontageFixture()
+    check(PanelDetectionCore.isIllustratedPromotionalBanner(
+        promoWidth, promoHeight, promoPixels
+    )) { "Four framed columns plus a separate large graphic footer must be protected" }
+    for (rtlMode in listOf(true, false)) {
+        val promo = PanelDetectionCore.detect(
+            promoWidth, promoHeight, promoPixels, rtlMode
+        )
+        check(!promo.usedFullPageFallback && promo.preserveSingleFrame &&
+            promo.regions == listOf(PageRegion(0, 0, promoWidth, promoHeight))) {
+            "Promotional montage must remain one full original page: $promo"
+        }
+    }
+    // The same four-column image WITHOUT a bold graphic footer must remain
+    // eligible for ordinary panel detection. The banner rule is not a generic
+    // landscape / multi-panel veto.
+    val noBanner = promoPixels.copyOf()
+    for (y in 385 until 455)
+        for (x in 0 until promoWidth)
+            noBanner[y * promoWidth + x] = 255.toByte()
+    check(!PanelDetectionCore.isIllustratedPromotionalBanner(
+        promoWidth, promoHeight, noBanner
+    )) { "Ordinary four-panel manga without a footer must not trigger" }
+    // A non-illustrated cover or isolated large lettering also cannot trigger.
+    val noIllustration = promoPixels.copyOf()
+    for (y in 0 until 350)
+        for (x in 0 until promoWidth)
+            noIllustration[y * promoWidth + x] = 255.toByte()
+    check(!PanelDetectionCore.isIllustratedPromotionalBanner(
+        promoWidth, promoHeight, noIllustration
+    )) { "Title-only cover must not masquerade as four framed illustrations" }
+    // A real dark continuation through the separator is not the isolated
+    // graphic headline layout. Never strip away continuous scene artwork.
+    val noSeparator = promoPixels.copyOf()
+    for (y in 350 until 390)
+        for (x in 0 until promoWidth)
+            noSeparator[y * promoWidth + x] = 85.toByte()
+    check(!PanelDetectionCore.isIllustratedPromotionalBanner(
+        promoWidth, promoHeight, noSeparator
+    )) { "Illustrated continuation must not be classified as isolated footer" }
+
     val (width, height, image) = grid()
     val rtl = PanelDetectionCore.detect(width, height, image, true)
     check(!rtl.usedFullPageFallback) { "Clean 2x3 panel grid should be detected: ${rtl.reason}" }
