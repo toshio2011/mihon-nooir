@@ -28,9 +28,20 @@ kotlinc desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
-  tests/DesktopGuiModelTest.kt tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt \
+  tests/DesktopGuiModelTest.kt tests/DesktopXtcViewerSwingSmokeTest.kt \
+  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+# Real Swing dialog acceptance using a virtual display. This exercises actual
+# rendered saved-book pages, navigation, resize, fit and 1:1, without touching
+# an installed Windows app. Off by default for developer headless terminals.
+if [ "${NOOIR_DESKTOP_GUI_SMOKE:-0}" = "1" ]; then
+  command -v xvfb-run >/dev/null ||
+    { echo "Xvfb unavailable for real desktop UI smoke" >&2; exit 1; }
+  xvfb-run -a -s "-screen 0 1366x768x24" \
+    java -Djava.awt.headless=false -cp "$tmp/windows-full-gui-tests.jar" \
+    dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt
+fi
 # Test the actual bundled pure-Java reader and the existing bounded source
 # paths, using original synthetic VP8 + VP8L in a CBZ. Missing dependencies,
 # corrupt images and partial-output promotion must fail CI.
