@@ -201,3 +201,11 @@ java -jar "$tmp/pdf-save-copy.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/XteinkTransferPolicy.kt \
   tests/XteinkTransferPolicyTest.kt -include-runtime -d "$tmp/xteink-transfer-advisory.jar"
 java -jar "$tmp/xteink-transfer-advisory.jar"
+
+# Regression: the in-app updater must select a compatible Android APK
+# regardless of GitHub asset ordering; do not accidentally choose x86_64 on ARM.
+kotlinc \
+  overlay/data/src/main/java/tachiyomi/data/release/NooirReleaseApkSelector.kt \
+  tests/UpdaterAssetSelectionTest.kt \
+  -include-runtime -d "$tmp/updater-assets.jar"
+java -jar "$tmp/updater-assets.jar"
