@@ -140,7 +140,8 @@ jobs:
           test -s official/app-universal-foss.apk
           (
             cd official
-            grep -F '  app-universal-foss.apk' SHA256SUMS.txt | sha256sum -c -
+            # sha256sum on ./filename preserves the ./ prefix in official release manifest.
+            grep -F 'app-universal-foss.apk' SHA256SUMS.txt | sha256sum -c -
           )
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           "$build_tools/aapt" dump badging official/app-universal-foss.apk |
