@@ -9,6 +9,22 @@ java -jar "$tmp/preflight.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} tests/CoreSmokeTest.kt -include-runtime -d "$tmp/smoke.jar"
 java -jar "$tmp/smoke.jar"
 
+# Decode the finished XTC/XTCH bytes rather than trusting source-page
+# quantization previews. Test packed 1-bit and 2-bit exact round trips.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt} \
+  tests/XtcBookPreviewTest.kt -include-runtime -d "$tmp/xtc-preview.jar"
+java -jar "$tmp/xtc-preview.jar"
+
+# Rendering choices share a bounded-memory core and must keep legacy output.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} \
+  tests/GrayscaleModesTest.kt -include-runtime -d "$tmp/render-modes.jar"
+java -jar "$tmp/render-modes.jar"
+
+# Opt-in context peek duplicates neighboring art only around known panel borders.
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{PageSlicePlanner.kt,PanelContextPeek.kt} \
+  tests/PanelContextPeekTest.kt -include-runtime -d "$tmp/panel-peek.jar"
+java -jar "$tmp/panel-peek.jar"
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/XtcCodec.kt tests/XtcExtendedMetadataTest.kt -include-runtime -d "$tmp/xtc-metadata.jar"
 java -jar "$tmp/xtc-metadata.jar"
 
@@ -40,7 +56,7 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsC
 java -jar "$tmp/options-parity.jar"
 
 kotlinc \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt tests/DesktopCliTest.kt \
   -include-runtime -d "$tmp/desktop-cli-tests.jar"
@@ -49,7 +65,7 @@ java -Djava.awt.headless=true -cp "$tmp/desktop-cli-tests.jar" DesktopCliTestKt
 # D0: exercise a mock Suwayomi v2.4.2366 GraphQL/CBZ server and export its
 # downloaded chapter images with the exact Android-compatible writers.
 kotlinc \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt \
   desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt,SuwayomiToNooir.kt} \
@@ -142,7 +158,7 @@ java -jar "$tmp/panel-phase-b.jar"
 
 # Panel export integration: actual generated files for XTC, XTCH, EPUB2/3 and CBZ.
 kotlinc \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/NooirDesktopCli.kt tests/DesktopPanelExportTest.kt \
   -include-runtime -d "$tmp/desktop-panel-tests.jar"

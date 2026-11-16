@@ -19,14 +19,14 @@ fun main() {
     check(MangaConversionOptions.fromToken(custom.token()) == custom)
     val panel = custom.copy(panelMode = "PANEL_BY_PANEL")
     check(MangaConversionOptions.fromToken(panel.token()) == panel)
-    check(panel.token().split("|").size == 20)
+    check(panel.token().split("|").size == 22)
     val autoFit = panel.copy(orientation = "AUTO_FIT")
     check(MangaConversionOptions.fromToken(autoFit.token()) == autoFit)
-    check(autoFit.token().split("|").size == 20) { "Auto Fit must retain the diagnostic job flag" }
+    check(autoFit.token().split("|").size == 22) { "New modes must preserve existing diagnostic flags" }
     check(MangaConversionOptions.fromToken(custom.token()).orientation == "LANDSCAPE")
     val debug = panel.copy(panelDiagnostics = true)
     check(MangaConversionOptions.fromToken(debug.token()) == debug)
-    check(!MangaConversionOptions.fromToken(debug.token().substringBeforeLast("|")).panelDiagnostics)
+    check(!MangaConversionOptions.fromToken(debug.token().split("|").take(19).joinToString("|")).panelDiagnostics)
     check(!MangaConversionOptions.fromToken(defaults.token().substringBeforeLast("|")).panelDiagnostics)
 
     check(MangaConversionOptions.fromToken(custom.token().substringBeforeLast("|")).keepChapterFirstPageWhole)
@@ -54,5 +54,24 @@ fun main() {
     check(invalid.contrast == 100 && invalid.overlapPercent == 50)
     check(invalid.epubPagesPerXhtml == 999)
     check(invalid.landscapeClockwise && invalid.includeCover && !invalid.epubColor)
-    println("Shared Android/desktop conversion settings parity and legacy migration passed")
+    // Existing 20-field jobs migrate with their EXACT prior Floyd/threshold
+    // behavior; no output may change until a user selects a new algorithm.
+    val legacyTwenty = panel.token().split("|").take(20).joinToString("|")
+    val old = MangaConversionOptions.fromToken(legacyTwenty)
+    check(old.panelMode == "PANEL_BY_PANEL")
+    check(old.renderAlgorithm == "LEGACY" && old.contextPeekPercent == 0)
+    check(old.dither == panel.dither)
+    val algorithms = listOf("FLOYD_STEINBERG", "ATKINSON", "BAYER_8X8", "THRESHOLD")
+    for (mode in algorithms) {
+        val v = panel.copy(renderAlgorithm = mode, contextPeekPercent = 6)
+        check(MangaConversionOptions.fromToken(v.token()) == v)
+        val legacyTwentyOne = v.token().split("|").take(21).joinToString("|")
+        val restored = MangaConversionOptions.fromToken(legacyTwentyOne)
+        check(restored.renderAlgorithm == mode && restored.contextPeekPercent == 0)
+    }
+    check(MangaConversionOptions.fromToken(panel.copy(
+        contextPeekPercent = 99).token()).contextPeekPercent == 8)
+    check(MangaConversionOptions.fromToken(panel.copy(
+        renderAlgorithm = "INVALID").token()).renderAlgorithm == "LEGACY")
+    println("Shared Android/desktop conversion settings parity, rendering and legacy migration passed")
 }

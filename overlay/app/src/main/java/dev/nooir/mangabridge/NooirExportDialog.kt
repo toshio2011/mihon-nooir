@@ -65,6 +65,7 @@ fun NooirExportDialog(
     var outputName by remember(mangaTitle) { mutableStateOf(mangaTitle) }
     var showAdvanced by remember { mutableStateOf(false) }
     var showPreview by remember { mutableStateOf(false) }
+    var showActualBinaryPreview by remember { mutableStateOf(false) }
     var previewIndex by remember { mutableStateOf(0) }
     var chosenPreviewUri by remember { mutableStateOf<Uri?>(null) }
     var previewFrameLimit by remember { mutableStateOf(24) }
@@ -174,6 +175,10 @@ fun NooirExportDialog(
                         ". Stored privately; no automatic sharing or upload.")
                 }
                 if (diagnosticsSaveStatus.isNotBlank()) Text(diagnosticsSaveStatus)
+                TextButton(onClick = { showActualBinaryPreview = true }) {
+                    Text("Inspect an exported XTC / XTCH file")
+                }
+                Text("The existing live preview shows the intended first-page conversion. Inspect exported file verifies the actual saved 1-bit/2-bit page data.")
                 TextButton(onClick = { previewPicker.launch(arrayOf("image/*", "application/zip", "application/x-cbz", "application/vnd.comicbook+zip")) }) {
                     Text("Choose manga image or CBZ for preview")
                 }
@@ -291,4 +296,7 @@ fun NooirExportDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+    if (showActualBinaryPreview) {
+        NooirXtcBinaryPreviewDialog(onDismiss = { showActualBinaryPreview = false })
+    }
 }

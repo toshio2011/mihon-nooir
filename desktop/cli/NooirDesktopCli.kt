@@ -311,7 +311,14 @@ object NooirDesktopCli {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
-        for (slice in slices) {
+        val framedSlices = if (options.contextPeekPercent > 0 &&
+            options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" &&
+            panels != null && panels.size >= 2 && slices.size == panels.size) {
+            val framed = PanelContextPeek.expand(
+                slices.map { it.region }, src.width, src.height, options.contextPeekPercent)
+            slices.mapIndexed { index, view -> view.copy(region = framed[index]) }
+        } else slices
+        for (slice in framedSlices) {
             val region = slice.region
             val landscape = if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
@@ -353,13 +360,9 @@ object NooirDesktopCli {
                 val lum = (((rgb ushr 16) and 255) * 299 + ((rgb ushr 8) and 255) * 587 + (rgb and 255) * 114) / 1000
                 gray[y * frameWidth + x] = (128f + (lum - 128f) * boost).toInt().coerceIn(0, 255).toByte()
             }
-            val quantized = if (options.dither) GrayscaleConverter.dither(frameWidth, frameHeight, gray, depth)
-            else {
-                val max = if (depth == 1) 1 else 3
-                QuantizedPage(frameWidth, frameHeight, ByteArray(gray.size) { i ->
-                    (((gray[i].toInt() and 255) * max + 127) / 255).toByte()
-                }, depth)
-            }
+            val quantized = GrayscaleConverter.quantize(
+                frameWidth, frameHeight, gray, depth, options.renderAlgorithm, options.dither
+            )
             val color = if (options.epubColor) ByteArrayOutputStream().use {
                 check(ImageIO.write(frame, "png", it))
                 it.toByteArray()
