@@ -13,6 +13,7 @@ import java.awt.event.ComponentEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.awt.image.BufferedImage
+import java.io.File
 import javax.swing.ImageIcon
 import javax.swing.JButton
 import javax.swing.JCheckBox
@@ -87,12 +88,20 @@ internal object DesktopXtcBinaryPreview {
             fileFilter = FileNameExtensionFilter("XTC and XTCH e-ink books", "xtc", "xtch")
         }
         if (chooser.showOpenDialog(parent) != JFileChooser.APPROVE_OPTION) return
-        val selected = chooser.selectedFile
+        showSavedBook(parent, chooser.selectedFile)
+    }
+
+    /**
+     * Open the same real saved-file viewer without invoking a system chooser.
+     * Exposed only within the module for desktop GUI automation; the toolbar
+     * still uses [open] and the regular chooser.
+     */
+    internal fun showSavedBook(parent: Component, selected: File): JDialog? {
         val inspector = runCatching { XtcBookPreview(selected) }.getOrElse {
             JOptionPane.showMessageDialog(parent,
                 "Cannot read saved XTC/XTCH book: " + (it.message ?: "Invalid header"),
                 "Binary book preview", JOptionPane.ERROR_MESSAGE)
-            return
+            return null
         }
         val dialog = JDialog(SwingUtilities.getWindowAncestor(parent),
             "Saved ${inspector.format} — actual output pixels", Dialog.ModalityType.MODELESS)
@@ -215,5 +224,6 @@ internal object DesktopXtcBinaryPreview {
         }, BorderLayout.SOUTH)
         dialog.isVisible = true
         loadPage()
+        return dialog
     }
 }
