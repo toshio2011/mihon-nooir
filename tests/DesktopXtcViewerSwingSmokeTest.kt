@@ -54,9 +54,11 @@ fun main() {
                             descendants(dialog).filterIsInstance<JLabel>()
                         }
                         val details = labels.first { it.text.startsWith(format.name + " · page") }
+                        val scroll = onSwingThread {
+                            descendants(dialog).filterIsInstance<JScrollPane>().first()
+                        }
                         val preview = onSwingThread {
-                            descendants(dialog).filterIsInstance<JScrollPane>()
-                                .first().viewport.view as JLabel
+                            scroll.viewport.view as JLabel
                         }
                         val buttons = onSwingThread {
                             descendants(dialog).filterIsInstance<JButton>()
@@ -73,6 +75,7 @@ fun main() {
                             dialog.validate()
                         }
                         awaitPage(dialog, details, preview, 1, "fitted display")
+                        awaitFitInsideViewport(scroll, preview)
                         check(onSwingThread { (preview.icon as ImageIcon).iconHeight < height }) {
                             "Saved page did not fit reduced window: $device $format"
                         }
@@ -133,6 +136,30 @@ private fun awaitPage(
     }
     val state = onSwingThread { details.text + " / icon=" + (preview.icon != null) }
     error("Timed out waiting for saved page $page ($mode): $state")
+}
+
+/**
+ * Check actual post-resize rendered pixels, not only a stale label from the
+ * previous window size. The viewport event must have reached the viewer.
+ */
+private fun awaitFitInsideViewport(scroll: JScrollPane, preview: JLabel) {
+    val deadline = System.nanoTime() + 10_000_000_000L
+    while (System.nanoTime() < deadline) {
+        val passed = onSwingThread {
+            val extent = scroll.viewport.extentSize
+            val icon = preview.icon as? ImageIcon
+            icon != null && extent.width > 50 && extent.height > 50 &&
+                icon.iconWidth <= (extent.width - 8).coerceAtLeast(1) &&
+                icon.iconHeight <= (extent.height - 8).coerceAtLeast(1)
+        }
+        if (passed) return
+        Thread.sleep(30)
+    }
+    val sizes = onSwingThread {
+        "viewport=" + scroll.viewport.extentSize + " icon=" +
+            (preview.icon as? ImageIcon)?.let { Dimension(it.iconWidth, it.iconHeight) }
+    }
+    error("Fit-to-window failed after dialog resize: $sizes")
 }
 
 private fun <T> onSwingThread(block: () -> T): T {
