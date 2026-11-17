@@ -29,9 +29,10 @@ kotlinc desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt tests/DesktopXtcViewerSwingSmokeTest.kt \
-  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt \
+  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopConversionQueueTestKt
 # Real Swing dialog acceptance using a virtual display. This exercises actual
 # rendered saved-book pages, navigation, resize, fit and 1:1, without touching
 # an installed Windows app. Off by default for developer headless terminals.
