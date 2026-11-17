@@ -16,3 +16,9 @@ Baseline: public Android v1.0.18, commit `d6d12701427d5339859c2cd0201e12db5c6810
 This strengthens automated desktop QA, not physical Windows acceptance. Hosted Windows runners may lack a display or effective scale overrides; the job deliberately fails if prerequisites are not met. No fake passes, production installer, signing, or release. Remaining: real-machine library/offline/download journey and manual DPI/keyboard/file picker checks; Windows PDF/EPUB import; direct device transfer; installer/update review.
 
 Do not merge this draft or publish Windows until reviewed. Public Android v1.0.18 release and Folio Nooir firmware stay unchanged.
+
+## Follow-up: small-screen library and reader
+
+The preceding exact-head Windows run [#44049702682](https://github.com/toshio2011/mihon-nooir/actions/runs/44049702682) passed all jobs. Logs recorded actual Java2D transforms 1.0, 1.25, 1.5 on Windows Server 2025, each with full X3/X4 saved-book viewer acceptance. [Unsigned verified preview artifact](https://github.com/toshio2011/mihon-nooir/actions/runs/44049702682/artifacts/14314390044), expiry December 1, 2026.
+
+Next change caps initial library/reader frames to the available logical work area and keeps complete toolbar rows horizontally scrollable rather than clipping actions. New actual Swing offline-library acceptance seeds a four-page synthetic CBZ in an empty opt-in isolated CI root, checks search/cover, reads and bookmarks page two, closes/reopens library and reader, verifies persisted page/entry/bookmark and unchanged source bytes, checks window bounds and scrollable controls. Native file chooser, cross-process re-launch, physical DPI and other screens are still manual/open. New exact-head tests are pending; prior green results do not prove this follow-up.

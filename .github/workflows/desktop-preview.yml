@@ -351,7 +351,7 @@ jobs:
           Write-Host 'PASS: packaged Java runtime opened original WebP CBZ and wrote XTCH'
       - name: Exercise real saved-book Swing viewer on the packaged Windows runtime
         shell: pwsh
-        timeout-minutes: 6
+        timeout-minutes: 10
         run: |
           $ErrorActionPreference = 'Stop'
           $app = 'package/output/MihonNooir-Preview'
@@ -366,8 +366,16 @@ jobs:
           $classpath = "$jar;$qa"
           foreach ($scale in @('1.0','1.25','1.5')) {
             Write-Host "Windows packaged Swing acceptance at requested Java2D scale $scale"
-            & $runtime '-Djava.awt.headless=false' "-Dsun.java2d.uiScale=$scale" "-Dnooir.test.expectedUiScale=$scale" '-cp' $classpath 'dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt'
-            if ($LASTEXITCODE -ne 0) { throw "Packaged Windows GUI smoke failed at scale $scale ($LASTEXITCODE)" }
+            $qaHome = Join-Path $env:RUNNER_TEMP ('nooir-gui-qa-' + [guid]::NewGuid().ToString())
+            $previousHome = $env:MIHONNOOIR_DATA_DIR
+            try {
+              $env:MIHONNOOIR_DATA_DIR = $qaHome
+              & $runtime '-Djava.awt.headless=false' '-Dnooir.test.offlineLibrary=true' "-Dsun.java2d.uiScale=$scale" "-Dnooir.test.expectedUiScale=$scale" '-cp' $classpath 'dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt'
+              if ($LASTEXITCODE -ne 0) { throw "Packaged Windows GUI smoke failed at scale $scale ($LASTEXITCODE)" }
+            } finally {
+              $env:MIHONNOOIR_DATA_DIR = $previousHome
+              if (Test-Path -LiteralPath $qaHome) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
+            }
           }
           Write-Host 'PASS: packaged Windows runtime saved-book viewer at 100/125/150% requested Java2D scales'
       - uses: actions/upload-artifact@v4

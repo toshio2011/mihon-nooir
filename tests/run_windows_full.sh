@@ -38,8 +38,8 @@ java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiMo
 if [ "${NOOIR_DESKTOP_GUI_SMOKE:-0}" = "1" ]; then
   command -v xvfb-run >/dev/null ||
     { echo "Xvfb unavailable for real desktop UI smoke" >&2; exit 1; }
-  xvfb-run -a -s "-screen 0 1366x768x24" \
-    java -Djava.awt.headless=false -cp "$tmp/windows-full-gui-tests.jar" \
+  MIHONNOOIR_DATA_DIR="$tmp/gui-library-isolated" xvfb-run -a -s "-screen 0 1366x768x24" \
+    java -Djava.awt.headless=false -Dnooir.test.offlineLibrary=true -cp "$tmp/windows-full-gui-tests.jar" \
     dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt
 fi
 # Test the actual bundled pure-Java reader and the existing bounded source
