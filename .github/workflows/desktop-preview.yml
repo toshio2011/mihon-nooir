@@ -62,6 +62,17 @@ jobs:
           base="${{ github.event.pull_request.base.ref || 'main' }}"
           git fetch --no-tags origin "refs/heads/$base:refs/remotes/origin/$base"
           changed=$(git diff --name-only "origin/$base...HEAD")
+          # Windows-only follow-ups after the integrated Android v1.0.18 release
+          # must never change Android/shared production source or its release CI.
+          if [[ "${GITHUB_HEAD_REF:-}" == windows/* ]]; then
+            unexpected=$(printf '%s\n' "$changed" |
+              grep -v -E '^(desktop/|docs/WINDOWS[^/]*\.md$|tests/(Windows[^/]*\.kt|Desktop[^/]*\.kt|run_windows_full\.sh)$|\.github/workflows/desktop-preview\.yml$|$)' || true)
+            if [[ -n "$unexpected" ]]; then
+              printf 'STOP: Windows-only branch changed non-desktop paths:\n%s\n' "$unexpected" >&2
+              exit 1
+            fi
+            echo 'PASS: Windows-only branch modifies only desktop, dedicated desktop tests/docs and Windows CI'
+          fi
           # The visual integration may use shared core from the Android base,
           # but must not modify Android files relative to that base.
           # Narrow allowlist only for THIS draft integration's shared panel
@@ -139,6 +150,25 @@ jobs:
             sudo apt-get install -y xvfb
           fi
           NOOIR_DESKTOP_GUI_SMOKE=1 bash tests/run_windows_full.sh
+      - name: Compile standalone GUI acceptance test against the production desktop JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep test bytecode OUT of the distributable app. Friend paths let the
+          # test inspect the same internal dialog API used by the production toolbar.
+          app="$PWD/build/desktop/mihonnooir-desktop-preview.jar"
+          mkdir -p build/windows-gui-qa
+          kotlinc -classpath "$app" -Xfriend-paths="$app" \
+            tests/DesktopXtcViewerSwingSmokeTest.kt \
+            -d build/windows-gui-qa/viewer-smoke.jar
+          test -s build/windows-gui-qa/viewer-smoke.jar
+      - name: Retain GUI acceptance test separately from distributable code
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: build/windows-gui-qa/viewer-smoke.jar
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload synthetic rendering comparison for human inspection
         if: always()
         uses: actions/upload-artifact@v4
@@ -170,6 +200,10 @@ jobs:
         with:
           name: mihonnooir-desktop-preview-jvm
           path: package/input
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: package/qa
       - name: Create bundled-runtime Windows application
         shell: pwsh
         run: |
@@ -315,6 +349,110 @@ jobs:
           $result = [IO.File]::ReadAllBytes($out)
           if ([BitConverter]::ToUInt16($result, 6) -ne 1) { throw 'WebP CBZ output did not contain one page' }
           Write-Host 'PASS: packaged Java runtime opened original WebP CBZ and wrote XTCH'
+      - name: Launch the real packaged Windows EXE without a backend
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Enumerate native top-level Swing windows by owning PID. The .NET
+          # MainWindowHandle heuristic can pick an unrelated hidden JVM window.
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Text;
+          using System.Collections.Generic;
+          using System.Runtime.InteropServices;
+          public static class NooirWindowProbe {
+            private delegate bool EnumProc(IntPtr hwnd, IntPtr data);
+            [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc callback, IntPtr data);
+            [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int length);
+            [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+            [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
+            public static IntPtr Find(int[] owned, string title) {
+              IntPtr result = IntPtr.Zero;
+              var ids = new HashSet<int>(owned);
+              EnumWindows((hwnd, data) => {
+                uint pid; GetWindowThreadProcessId(hwnd, out pid);
+                if (!ids.Contains((int)pid)) return true;
+                var text = new StringBuilder(1024);
+                GetWindowText(hwnd, text, text.Capacity);
+                bool visible = IsWindowVisible(hwnd);
+                Console.WriteLine("Owned window pid=" + pid + " visible=" + visible + " title=" + text);
+                if (visible && text.ToString() == title) { result = hwnd; return false; }
+                return true;
+              }, IntPtr.Zero);
+              return result;
+            }
+            public static bool Close(IntPtr hwnd) { return PostMessage(hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero); }
+          }
+          '@
+          $exe = (Resolve-Path 'package/output/MihonNooir-Preview/MihonNooir-Preview.exe').Path
+          $qaHome = Join-Path $env:RUNNER_TEMP ('nooir-launcher-' + [guid]::NewGuid().ToString())
+          $oldHome = $env:MIHONNOOIR_DATA_DIR
+          $process = $null
+          try {
+            $env:MIHONNOOIR_DATA_DIR = $qaHome
+            $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+            $deadline = [DateTime]::UtcNow.AddSeconds(45)
+            $handle = [IntPtr]::Zero
+            while ([DateTime]::UtcNow -lt $deadline) {
+              $process.Refresh()
+              if ($process.HasExited) { throw "Launcher exited before its window appeared: $($process.ExitCode)" }
+              # A native launcher can host the JVM itself or start a child.
+              # Only inspect the freshly started process and its direct children.
+              $ownedIds = @([int]$process.Id)
+              $ownedIds += @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($process.Id)" | ForEach-Object { [int]$_.ProcessId })
+              $handle = [NooirWindowProbe]::Find([int[]]$ownedIds, 'MihonNooir — Windows development')
+              if ($handle -ne [IntPtr]::Zero) { break }
+              Start-Sleep -Milliseconds 500
+            }
+            if ($handle -eq [IntPtr]::Zero) {
+              Write-Host "Owned launcher PID: $($process.Id), .NET title: $($process.MainWindowTitle)"
+              throw 'No visible expected native window owned by the packaged launcher was found'
+            }
+            Write-Host 'PASS: actual Windows launcher owns visible MihonNooir main window'
+            if (![NooirWindowProbe]::Close($handle)) { throw 'WM_CLOSE to owned window failed' }
+            if (!$process.WaitForExit(15000)) { throw 'Owned launcher failed to exit after normal close' }
+            if ($process.ExitCode -ne 0) { throw "Launcher exited with $($process.ExitCode)" }
+            Write-Host 'PASS: actual packaged Windows EXE launched and closed normally'
+          } finally {
+            if ($null -ne $process) {
+              $process.Refresh()
+              if (!$process.HasExited) { $process.Kill($true); $process.WaitForExit(5000) | Out-Null }
+              $process.Dispose()
+            }
+            $env:MIHONNOOIR_DATA_DIR = $oldHome
+            if (Test-Path -LiteralPath $qaHome) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
+          }
+      - name: Exercise real saved-book Swing viewer on the packaged Windows runtime
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'package/output/MihonNooir-Preview'
+          $runtime = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          $qa = 'package/qa/viewer-smoke.jar'
+          if (!(Test-Path $runtime) -or !(Test-Path $jar) -or !(Test-Path $qa)) {
+            throw 'Production packaged runtime, JAR or separate GUI QA JAR missing'
+          }
+          # These are Java2D scale overrides on a hosted Windows runner, not
+          # physical multi-monitor/DPI acceptance or manual click-through.
+          $classpath = "$jar;$qa"
+          foreach ($scale in @('1.0','1.25','1.5')) {
+            Write-Host "Windows packaged Swing acceptance at requested Java2D scale $scale"
+            $qaHome = Join-Path $env:RUNNER_TEMP ('nooir-gui-qa-' + [guid]::NewGuid().ToString())
+            $previousHome = $env:MIHONNOOIR_DATA_DIR
+            try {
+              $env:MIHONNOOIR_DATA_DIR = $qaHome
+              & $runtime '-Djava.awt.headless=false' '-Dnooir.test.offlineLibrary=true' "-Dsun.java2d.uiScale=$scale" "-Dnooir.test.expectedUiScale=$scale" '-cp' $classpath 'dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt'
+              if ($LASTEXITCODE -ne 0) { throw "Packaged Windows GUI smoke failed at scale $scale ($LASTEXITCODE)" }
+            } finally {
+              $env:MIHONNOOIR_DATA_DIR = $previousHome
+              if (Test-Path -LiteralPath $qaHome) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
+            }
+          }
+          Write-Host 'PASS: packaged Windows runtime saved-book viewer at 100/125/150% requested Java2D scales'
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned

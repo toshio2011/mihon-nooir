@@ -8,7 +8,19 @@ import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
 import java.awt.GraphicsEnvironment
+import java.awt.Rectangle
+import java.awt.Window
+import java.awt.Color
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.file.Files
+import java.security.MessageDigest
+import java.util.prefs.Preferences
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import javax.imageio.ImageIO
+import dev.nooir.desktop.storage.DesktopDataHome
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.ImageIcon
 import javax.swing.JButton
@@ -16,12 +28,26 @@ import javax.swing.JCheckBox
 import javax.swing.JDialog
 import javax.swing.JFrame
 import javax.swing.JLabel
+import javax.swing.JList
+import javax.swing.JTextField
+import javax.swing.JTabbedPane
 import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 
-/** Real Swing dialog acceptance under Xvfb, never run in headless mode. */
+/** Real Swing dialog acceptance on a display-capable JVM (Xvfb or Windows), never headless. */
 fun main() {
-    check(!GraphicsEnvironment.isHeadless()) { "Use a virtual display (xvfb-run)" }
+    check(!GraphicsEnvironment.isHeadless()) { "A display-capable JVM is required (Xvfb or Windows desktop)" }
+    val screen = GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration
+    val scale = screen.defaultTransform
+    println("GUI environment: " + System.getProperty("os.name") +
+        " logical screen=" + screen.bounds + " transform=" + scale)
+    System.getProperty("nooir.test.expectedUiScale")?.let { value ->
+        val expected = value.toDouble()
+        check(kotlin.math.abs(scale.scaleX - expected) <= 0.05 &&
+            kotlin.math.abs(scale.scaleY - expected) <= 0.05) {
+            "Requested Java2D UI scale $expected not active: $scale"
+        }
+    }
     val folder = Files.createTempDirectory("nooir-saved-book-swing-").toFile()
     try {
         for ((device, dims) in listOf("X4" to (480 to 800), "X3" to (528 to 792))) {
@@ -113,6 +139,7 @@ fun main() {
             }
         }
         println("PASS: real Swing X3/X4 XTC/XTCH viewer, fit, native, navigation, resize, close, corrupt-file warning")
+        if (System.getProperty("nooir.test.offlineLibrary") == "true") verifyOfflineLibrary(folder)
     } finally {
         folder.deleteRecursively()
     }
@@ -232,4 +259,189 @@ private fun <T> onSwingThread(block: () -> T): T {
     }
     failure.get()?.let { throw it }
     return result.get()
+}
+
+
+/** Exercise the actual local bookshelf and reader on a display-capable packaged JVM. */
+private fun verifyOfflineLibrary(folder: File) {
+    val explicitRoot = System.getenv(DesktopDataHome.ENV_NAME)
+    check(!explicitRoot.isNullOrBlank()) { "Offline GUI QA requires an isolated data directory" }
+    val root = DesktopDataHome.root().toFile()
+    check(!root.exists() || (root.isDirectory && root.list()?.isEmpty() == true)) {
+        "Offline GUI QA refuses to write to an existing nonempty data directory"
+    }
+    val comic = folder.resolve("Original-GUI-Fixture.cbz")
+    ZipOutputStream(comic.outputStream()).use { zip ->
+        for (page in 1..4) {
+            val image = BufferedImage(96, 144, BufferedImage.TYPE_INT_RGB)
+            val graphics = image.createGraphics()
+            try {
+                graphics.color = Color.WHITE
+                graphics.fillRect(0, 0, 96, 144)
+                graphics.color = Color.BLACK
+                graphics.fillRect(page * 4, 10, 50, 20 + page * 12)
+            } finally { graphics.dispose() }
+            val bytes = ByteArrayOutputStream()
+            check(ImageIO.write(image, "png", bytes))
+            image.flush()
+            zip.putNextEntry(ZipEntry("page-$page.png"))
+            zip.write(bytes.toByteArray())
+            zip.closeEntry()
+        }
+    }
+    val original = comic.readBytes()
+    val prefs = Preferences.userRoot().node("dev/nooir/mihonnooir/reader")
+    val keys = listOf("layout-rtl", "layout-two-page", "layout-webtoon", "layout-first-alone")
+    val beforePrefs = keys.associateWith { prefs.get(it, null) }
+    val positionKey = MessageDigest.getInstance("SHA-256")
+        .digest(comic.canonicalPath.toByteArray(Charsets.UTF_8))
+        .take(24).joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
+    try {
+        prefs.putBoolean("layout-rtl", true)
+        prefs.putBoolean("layout-two-page", false)
+        prefs.putBoolean("layout-webtoon", false)
+        prefs.putBoolean("layout-first-alone", true)
+        // Seed the local index with original art. This tests the real read
+        // UI, not native file chooser interaction, which remains manual QA.
+        LocalLibraryStore().add(comic)
+        // Launch through the exact production main function, including its
+        // look and feel and offline startup. Do not contact Suwayomi.
+        MangaNooirDesktop.main(emptyArray())
+        val main = awaitFrame("MihonNooir — Windows development")
+        verifyFitsWorkArea(main)
+        awaitUi("offline main startup without backend") {
+            descendants(main).filterIsInstance<JLabel>().any {
+                it.text.startsWith("Offline ready")
+            }
+        }
+        val tabs = onSwingThread {
+            descendants(main).filterIsInstance<JTabbedPane>().singleOrNull()
+        }
+        if (onSwingThread { main.width < 1100 }) {
+            checkNotNull(tabs) { "Compact main layout requires tabs" }
+            check(onSwingThread {
+                (0 until tabs.tabCount).map { tabs.getTitleAt(it) } ==
+                    listOf("Sources", "Browse", "Chapters")
+            })
+            onSwingThread { tabs.selectedIndex = 1 }
+        } else {
+            check(tabs == null) { "Wide main layout should keep the three panes" }
+        }
+        verifyToolbarReachable(findButton(main, "Search"))
+        if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
+        verifyToolbarReachable(findButton(main, "Download requests"))
+        verifyToolbarReachable(findButton(main, "Inspect XTC / XTCH output"))
+        val libraryButton = findButton(main, "Local library")
+        verifyToolbarReachable(libraryButton)
+        onSwingThread { libraryButton.doClick() }
+        val library = awaitFrame("MihonNooir — My local library")
+        verifyFitsWorkArea(library)
+        val list = onSwingThread {
+            descendants(library).filterIsInstance<JList<*>>().single()
+        }
+        val search = onSwingThread {
+            descendants(library).filterIsInstance<JTextField>().single()
+        }
+        val read = findButton(library, "Read selected")
+        val continueButton = findButton(library, "Continue last downloaded manga")
+        verifyToolbarReachable(continueButton)
+        onSwingThread { search.text = "no matching book" }
+        awaitUi("filter hides nonmatching books") { list.model.size == 0 && !read.isEnabled }
+        onSwingThread { search.text = "original-gui" }
+        awaitUi("filter finds saved comic") { list.model.size == 1 }
+        onSwingThread { list.selectedIndex = 0 }
+        awaitUi("offline cover and reader selection") {
+            read.isEnabled && descendants(library).filterIsInstance<JLabel>()
+                .any { it.icon is ImageIcon }
+        }
+
+        onSwingThread { read.doClick() }
+        val reader = awaitFrame("MihonNooir Reader — " + comic.name)
+        verifyFitsWorkArea(reader)
+        awaitReaderPage(reader, 1)
+        val next = findButton(reader, "Next")
+        onSwingThread { next.doClick() }
+        awaitReaderPage(reader, 2)
+        val bookmark = findButton(reader, "Bookmark page")
+        verifyToolbarReachable(bookmark)
+        onSwingThread { bookmark.doClick() }
+        awaitUi("bookmark button updates") { bookmark.text == "Remove bookmark" }
+        check(ReaderBookmarkStore().list(comic).map { it.pageIndex } == listOf(1))
+        check(LocalLibraryStore().books().single().lastOpenedAt > 0)
+
+        onSwingThread { reader.dispose(); library.dispose() }
+        onSwingThread { libraryButton.doClick() }
+        val reopenedLibrary = awaitFrame("MihonNooir — My local library")
+        val reopenedList = onSwingThread {
+            descendants(reopenedLibrary).filterIsInstance<JList<*>>().single()
+        }
+        awaitUi("persisted library entry") { reopenedList.model.size == 1 }
+        onSwingThread { reopenedList.selectedIndex = 0 }
+        onSwingThread { findButton(reopenedLibrary, "Read selected").doClick() }
+        val reopened = awaitFrame("MihonNooir Reader — " + comic.name)
+        awaitReaderPage(reopened, 2)
+        check(onSwingThread {
+            descendants(reopened).filterIsInstance<JButton>().any { it.text == "Remove bookmark" }
+        }) { "Saved bookmark did not survive reopening the reader" }
+        check(comic.readBytes().contentEquals(original)) { "Offline reader changed original CBZ bytes" }
+        println("PASS: packaged offline main startup, compact/wide layout, library filter, cover, reader page turn, bookmark, reopen/resume and source unchanged; windows/toolbar accessible")
+    } finally {
+        onSwingThread {
+            Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() }
+        }
+        beforePrefs.forEach { (key, value) ->
+            if (value == null) prefs.remove(key) else prefs.put(key, value)
+        }
+        prefs.remove(positionKey)
+        prefs.flush()
+    }
+}
+
+private fun awaitFrame(title: String): JFrame {
+    awaitUi("open frame $title") {
+        Window.getWindows().filterIsInstance<JFrame>().any { it.isShowing && it.title == title }
+    }
+    return onSwingThread {
+        Window.getWindows().filterIsInstance<JFrame>().first { it.isShowing && it.title == title }
+    }
+}
+
+private fun findButton(frame: JFrame, title: String): JButton =
+    onSwingThread { descendants(frame).filterIsInstance<JButton>().first { it.text == title } }
+
+private fun verifyFitsWorkArea(frame: JFrame) {
+    awaitUi("window fits the available logical screen") {
+        GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.contains(frame.bounds)
+    }
+}
+
+private fun verifyToolbarReachable(button: JButton) {
+    val scroll = onSwingThread {
+        SwingUtilities.getAncestorOfClass(JScrollPane::class.java, button) as? JScrollPane
+            ?: error("Toolbar control has no scrollable row: " + button.text)
+    }
+    onSwingThread {
+        button.scrollRectToVisible(Rectangle(0, 0, button.width, button.height))
+    }
+    awaitUi("toolbar control can scroll fully into view: " + button.text) {
+        val bounds = SwingUtilities.convertRectangle(button.parent, button.bounds, scroll.viewport.view)
+        scroll.viewport.viewRect.contains(bounds)
+    }
+}
+
+private fun awaitReaderPage(frame: JFrame, page: Int) {
+    awaitUi("reader decoded page $page") {
+        descendants(frame).filterIsInstance<JLabel>().any {
+            it.text.startsWith("Page $page / 4")
+        }
+    }
+}
+
+private fun awaitUi(label: String, condition: () -> Boolean) {
+    val deadline = System.nanoTime() + 10_000_000_000L
+    while (System.nanoTime() < deadline) {
+        if (onSwingThread(condition)) return
+        Thread.sleep(30)
+    }
+    error("Timed out: $label")
 }

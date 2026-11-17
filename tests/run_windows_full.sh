@@ -29,17 +29,18 @@ kotlinc desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt tests/DesktopXtcViewerSwingSmokeTest.kt \
-  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt \
+  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopConversionQueueTestKt
 # Real Swing dialog acceptance using a virtual display. This exercises actual
 # rendered saved-book pages, navigation, resize, fit and 1:1, without touching
 # an installed Windows app. Off by default for developer headless terminals.
 if [ "${NOOIR_DESKTOP_GUI_SMOKE:-0}" = "1" ]; then
   command -v xvfb-run >/dev/null ||
     { echo "Xvfb unavailable for real desktop UI smoke" >&2; exit 1; }
-  xvfb-run -a -s "-screen 0 1366x768x24" \
-    java -Djava.awt.headless=false -cp "$tmp/windows-full-gui-tests.jar" \
+  MIHONNOOIR_DATA_DIR="$tmp/gui-library-isolated" xvfb-run -a -s "-screen 0 1366x768x24" \
+    java -Djava.awt.headless=false -Dnooir.test.offlineLibrary=true -cp "$tmp/windows-full-gui-tests.jar" \
     dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt
 fi
 # Test the actual bundled pure-Java reader and the existing bounded source
