@@ -101,14 +101,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Download checksum-pinned Windows-only Apache PDFBox
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/desktop/lib
+          curl --fail --location --retry 2 --max-time 180 \
+            https://downloads.apache.org/pdfbox/3.0.8/pdfbox-app-3.0.8.jar \
+            --output build/desktop/lib/pdfbox-app-3.0.8.jar
+          sha512sum -c desktop/pdfbox-runtime.sha512
       - name: Compile portable desktop UI and shared Android conversion core
         shell: bash
         run: |
           set -euo pipefail
           command -v kotlinc
           mkdir -p build/desktop
-          kotlinc \
-            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,XteinkTransferPolicy.kt} \
+          kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" \
+            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt} \
             overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
             desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
@@ -224,6 +233,7 @@ jobs:
           if (!(Test-Path "$app/runtime")) { throw 'Bundled Java runtime missing' }
           if (!(Test-Path "$app/runtime/bin/java.exe")) { throw 'Bundled Java launcher missing for managed Suwayomi backend' }
           if (!(Test-Path "$app/app/lib/imageio-webp-3.15.3.jar")) { throw 'WebP decoder missing from Windows app image' }
+          if (!(Test-Path "$app/app/lib/pdfbox-app-3.0.8.jar")) { throw 'PDFBox missing from Windows app image' }
           Compress-Archive -Path $app -DestinationPath package/MihonNooir-Windows-Preview.zip -CompressionLevel Optimal
           if (!(Test-Path package/MihonNooir-Windows-Preview.zip)) { throw 'Windows archive missing' }
           $hash = (Get-FileHash -Algorithm SHA256 'package/MihonNooir-Windows-Preview.zip').Hash.ToLowerInvariant()
