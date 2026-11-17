@@ -62,6 +62,17 @@ jobs:
           base="${{ github.event.pull_request.base.ref || 'main' }}"
           git fetch --no-tags origin "refs/heads/$base:refs/remotes/origin/$base"
           changed=$(git diff --name-only "origin/$base...HEAD")
+          # Windows-only follow-ups after the integrated Android v1.0.18 release
+          # must never change Android/shared production source or its release CI.
+          if [[ "$GITHUB_HEAD_REF" == windows/* ]]; then
+            unexpected=$(printf '%s\n' "$changed" |
+              grep -v -E '^(desktop/|docs/WINDOWS[^/]*\.md$|tests/(Windows[^/]*\.kt|Desktop[^/]*\.kt|run_windows_full\.sh)$|\.github/workflows/desktop-preview\.yml$|$)' || true)
+            if [[ -n "$unexpected" ]]; then
+              printf 'STOP: Windows-only branch changed non-desktop paths:\n%s\n' "$unexpected" >&2
+              exit 1
+            fi
+            echo 'PASS: Windows-only branch modifies only desktop, dedicated desktop tests/docs and Windows CI'
+          fi
           # The visual integration may use shared core from the Android base,
           # but must not modify Android files relative to that base.
           # Narrow allowlist only for THIS draft integration's shared panel
@@ -139,6 +150,25 @@ jobs:
             sudo apt-get install -y xvfb
           fi
           NOOIR_DESKTOP_GUI_SMOKE=1 bash tests/run_windows_full.sh
+      - name: Compile standalone GUI acceptance test against the production desktop JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep test bytecode OUT of the distributable app. Friend paths let the
+          # test inspect the same internal dialog API used by the production toolbar.
+          app="$PWD/build/desktop/mihonnooir-desktop-preview.jar"
+          mkdir -p build/windows-gui-qa
+          kotlinc -classpath "$app" -Xfriend-paths="$app" \
+            tests/DesktopXtcViewerSwingSmokeTest.kt \
+            -d build/windows-gui-qa/viewer-smoke.jar
+          test -s build/windows-gui-qa/viewer-smoke.jar
+      - name: Retain GUI acceptance test separately from distributable code
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: build/windows-gui-qa/viewer-smoke.jar
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload synthetic rendering comparison for human inspection
         if: always()
         uses: actions/upload-artifact@v4
@@ -170,6 +200,10 @@ jobs:
         with:
           name: mihonnooir-desktop-preview-jvm
           path: package/input
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: package/qa
       - name: Create bundled-runtime Windows application
         shell: pwsh
         run: |
@@ -315,6 +349,27 @@ jobs:
           $result = [IO.File]::ReadAllBytes($out)
           if ([BitConverter]::ToUInt16($result, 6) -ne 1) { throw 'WebP CBZ output did not contain one page' }
           Write-Host 'PASS: packaged Java runtime opened original WebP CBZ and wrote XTCH'
+      - name: Exercise real saved-book Swing viewer on the packaged Windows runtime
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'package/output/MihonNooir-Preview'
+          $runtime = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          $qa = 'package/qa/viewer-smoke.jar'
+          if (!(Test-Path $runtime) -or !(Test-Path $jar) -or !(Test-Path $qa)) {
+            throw 'Production packaged runtime, JAR or separate GUI QA JAR missing'
+          }
+          # These are Java2D scale overrides on a hosted Windows runner, not
+          # physical multi-monitor/DPI acceptance or manual click-through.
+          $classpath = "$jar;$qa"
+          foreach ($scale in @('1.0','1.25','1.5')) {
+            Write-Host "Windows packaged Swing acceptance at requested Java2D scale $scale"
+            & $runtime '-Djava.awt.headless=false' "-Dsun.java2d.uiScale=$scale" "-Dnooir.test.expectedUiScale=$scale" '-cp' $classpath 'dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt'
+            if ($LASTEXITCODE -ne 0) { throw "Packaged Windows GUI smoke failed at scale $scale ($LASTEXITCODE)" }
+          }
+          Write-Host 'PASS: packaged Windows runtime saved-book viewer at 100/125/150% requested Java2D scales'
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned

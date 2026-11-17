@@ -19,9 +19,20 @@ import javax.swing.JLabel
 import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 
-/** Real Swing dialog acceptance under Xvfb, never run in headless mode. */
+/** Real Swing dialog acceptance on a display-capable JVM (Xvfb or Windows), never headless. */
 fun main() {
-    check(!GraphicsEnvironment.isHeadless()) { "Use a virtual display (xvfb-run)" }
+    check(!GraphicsEnvironment.isHeadless()) { "A display-capable JVM is required (Xvfb or Windows desktop)" }
+    val screen = GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration
+    val scale = screen.defaultTransform
+    println("GUI environment: " + System.getProperty("os.name") +
+        " logical screen=" + screen.bounds + " transform=" + scale)
+    System.getProperty("nooir.test.expectedUiScale")?.let { value ->
+        val expected = value.toDouble()
+        check(kotlin.math.abs(scale.scaleX - expected) <= 0.05 &&
+            kotlin.math.abs(scale.scaleY - expected) <= 0.05) {
+            "Requested Java2D UI scale $expected not active: $scale"
+        }
+    }
     val folder = Files.createTempDirectory("nooir-saved-book-swing-").toFile()
     try {
         for ((device, dims) in listOf("X4" to (480 to 800), "X3" to (528 to 792))) {
