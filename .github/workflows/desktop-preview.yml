@@ -115,6 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           command -v kotlinc
+          grep -Fxq '    const val CURRENT_VERSION = "'"$(cat desktop/windows-version.txt)"'"' desktop/ui/DesktopWindowsUpdates.kt
           mkdir -p build/desktop
           kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" \
             overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt} \
@@ -199,8 +200,9 @@ jobs:
   windows-app-image:
     needs: build-jvm
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -225,7 +227,8 @@ jobs:
           & "$env:JAVA_HOME/bin/jlink.exe" --add-modules ALL-MODULE-PATH --output package/full-runtime --strip-debug --no-man-pages --no-header-files
           if ($LASTEXITCODE -ne 0) { throw "jlink failed: $LASTEXITCODE" }
           if (!(Test-Path 'package/full-runtime/bin/java.exe')) { throw 'Explicit runtime is missing java.exe' }
-          jpackage --type app-image --name MihonNooir-Preview --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --runtime-image package/full-runtime --dest package/output --java-options '-Dfile.encoding=UTF-8'
+          $version = (Get-Content desktop/windows-version.txt -Raw).Trim()
+          jpackage --type app-image --name MihonNooir-Preview --app-version $version --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --runtime-image package/full-runtime --dest package/output --java-options '-Dfile.encoding=UTF-8'
           if ($LASTEXITCODE -ne 0) { throw "jpackage failed: $LASTEXITCODE" }
           $app = 'package/output/MihonNooir-Preview'
           if (!(Test-Path "$app/MihonNooir-Preview.exe")) { throw 'Windows launcher missing from app image' }
@@ -363,77 +366,7 @@ jobs:
         shell: pwsh
         timeout-minutes: 3
         run: |
-          $ErrorActionPreference = 'Stop'
-          # Enumerate native top-level Swing windows by owning PID. The .NET
-          # MainWindowHandle heuristic can pick an unrelated hidden JVM window.
-          Add-Type -TypeDefinition @'
-          using System;
-          using System.Text;
-          using System.Collections.Generic;
-          using System.Runtime.InteropServices;
-          public static class NooirWindowProbe {
-            private delegate bool EnumProc(IntPtr hwnd, IntPtr data);
-            [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc callback, IntPtr data);
-            [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
-            [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int length);
-            [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
-            [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
-            public static IntPtr Find(int[] owned, string title) {
-              IntPtr result = IntPtr.Zero;
-              var ids = new HashSet<int>(owned);
-              EnumWindows((hwnd, data) => {
-                uint pid; GetWindowThreadProcessId(hwnd, out pid);
-                if (!ids.Contains((int)pid)) return true;
-                var text = new StringBuilder(1024);
-                GetWindowText(hwnd, text, text.Capacity);
-                bool visible = IsWindowVisible(hwnd);
-                Console.WriteLine("Owned window pid=" + pid + " visible=" + visible + " title=" + text);
-                if (visible && text.ToString() == title) { result = hwnd; return false; }
-                return true;
-              }, IntPtr.Zero);
-              return result;
-            }
-            public static bool Close(IntPtr hwnd) { return PostMessage(hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero); }
-          }
-          '@
-          $exe = (Resolve-Path 'package/output/MihonNooir-Preview/MihonNooir-Preview.exe').Path
-          $qaHome = Join-Path $env:RUNNER_TEMP ('nooir-launcher-' + [guid]::NewGuid().ToString())
-          $oldHome = $env:MIHONNOOIR_DATA_DIR
-          $process = $null
-          try {
-            $env:MIHONNOOIR_DATA_DIR = $qaHome
-            $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
-            $deadline = [DateTime]::UtcNow.AddSeconds(45)
-            $handle = [IntPtr]::Zero
-            while ([DateTime]::UtcNow -lt $deadline) {
-              $process.Refresh()
-              if ($process.HasExited) { throw "Launcher exited before its window appeared: $($process.ExitCode)" }
-              # A native launcher can host the JVM itself or start a child.
-              # Only inspect the freshly started process and its direct children.
-              $ownedIds = @([int]$process.Id)
-              $ownedIds += @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($process.Id)" | ForEach-Object { [int]$_.ProcessId })
-              $handle = [NooirWindowProbe]::Find([int[]]$ownedIds, 'MihonNooir — Windows development')
-              if ($handle -ne [IntPtr]::Zero) { break }
-              Start-Sleep -Milliseconds 500
-            }
-            if ($handle -eq [IntPtr]::Zero) {
-              Write-Host "Owned launcher PID: $($process.Id), .NET title: $($process.MainWindowTitle)"
-              throw 'No visible expected native window owned by the packaged launcher was found'
-            }
-            Write-Host 'PASS: actual Windows launcher owns visible MihonNooir main window'
-            if (![NooirWindowProbe]::Close($handle)) { throw 'WM_CLOSE to owned window failed' }
-            if (!$process.WaitForExit(15000)) { throw 'Owned launcher failed to exit after normal close' }
-            if ($process.ExitCode -ne 0) { throw "Launcher exited with $($process.ExitCode)" }
-            Write-Host 'PASS: actual packaged Windows EXE launched and closed normally'
-          } finally {
-            if ($null -ne $process) {
-              $process.Refresh()
-              if (!$process.HasExited) { $process.Kill($true); $process.WaitForExit(5000) | Out-Null }
-              $process.Dispose()
-            }
-            $env:MIHONNOOIR_DATA_DIR = $oldHome
-            if (Test-Path -LiteralPath $qaHome) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
-          }
+          & ./desktop/windows/verify-launcher.ps1 -ExePath 'package/output/MihonNooir-Preview/MihonNooir-Preview.exe'
       - name: Exercise real saved-book Swing viewer on the packaged Windows runtime
         shell: pwsh
         timeout-minutes: 10
@@ -463,12 +396,78 @@ jobs:
             }
           }
           Write-Host 'PASS: packaged Windows runtime saved-book viewer at 100/125/150% requested Java2D scales'
+      - name: Create versioned unsigned per-user MSI from verified application image
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content desktop/windows-version.txt -Raw).Trim()
+          $wix = if ($env:WIX) { Join-Path $env:WIX 'bin' } else { "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin" }
+          if (Test-Path (Join-Path $wix 'candle.exe')) { $env:PATH = "$wix;$env:PATH" }
+          Get-Command candle.exe -ErrorAction Stop | Out-Null
+          Get-Command light.exe -ErrorAction Stop | Out-Null
+          New-Item -ItemType Directory -Force package/installer | Out-Null
+          jpackage --type msi --name MihonNooir-Preview --app-version $version --app-image package/output/MihonNooir-Preview --dest package/installer --vendor MihonNooir --win-per-user-install --win-menu --win-shortcut --win-upgrade-uuid '8441c7aa-d895-4f1d-bd3b-c99ee8eb5872'
+          if ($LASTEXITCODE -ne 0) { throw "MSI packaging failed: $LASTEXITCODE" }
+          $msi = @(Get-ChildItem package/installer -Filter *.msi)
+          if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
+          $releaseName = "MihonNooir-Windows-$version-x64"
+          Move-Item -LiteralPath $msi[0].FullName -Destination "package/$releaseName.msi"
+          Copy-Item -LiteralPath package/MihonNooir-Windows-Preview.zip -Destination "package/$releaseName.zip"
+          Get-AuthenticodeSignature "package/$releaseName.msi" | Format-List Status,StatusMessage
+          $lines = foreach ($ext in @('msi','zip')) {
+            $name = "$releaseName.$ext"
+            $hash = (Get-FileHash -Algorithm SHA256 "package/$name").Hash.ToLowerInvariant()
+            "$hash  $name"
+          }
+          Set-Content -Path package/SHA256SUMS-windows.txt -Encoding ascii -Value $lines
+      - name: Install, launch and uninstall the MSI in the disposable CI Windows account
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content desktop/windows-version.txt -Raw).Trim()
+          $msi = (Resolve-Path "package/MihonNooir-Windows-$version-x64.msi").Path
+          $installed = Join-Path $env:LOCALAPPDATA 'MihonNooir-Preview'
+          if (Test-Path -LiteralPath $installed) { throw 'Unexpected pre-existing install; refusing to modify it' }
+          $data = Join-Path $env:RUNNER_TEMP ('nooir-msi-data-' + [guid]::NewGuid().ToString())
+          New-Item -ItemType Directory $data | Out-Null
+          $sentinel = Join-Path $data 'keep.txt'
+          Set-Content -LiteralPath $sentinel -Value 'preserve original user data'
+          $old = $env:MIHONNOOIR_DATA_DIR
+          $didInstall = $false
+          try {
+            $env:MIHONNOOIR_DATA_DIR = $data
+            $log1 = Join-Path $env:RUNNER_TEMP 'nooir-msi-install.log'
+            $p = Start-Process msiexec.exe -ArgumentList @('/i',('"' + $msi + '"'),'/qn','/norestart','/l*v',('"' + $log1 + '"')) -PassThru -Wait
+            if ($p.ExitCode -ne 0) { Get-Content $log1 -Tail 60; throw "Install failed: $($p.ExitCode)" }
+            $didInstall = $true
+            $exe = Join-Path $installed 'MihonNooir-Preview.exe'
+            if (!(Test-Path -LiteralPath $exe)) { throw "Expected per-user installed launcher missing at $exe" }
+            & ./desktop/windows/verify-launcher.ps1 -ExePath $exe
+            if ((Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve original user data') { throw 'Data sentinel modified during install/launch' }
+            Write-Host 'PASS: MSI installed application with bundled runtime and real launcher'
+          } finally {
+            $env:MIHONNOOIR_DATA_DIR = $old
+            if ($didInstall) {
+              $log2 = Join-Path $env:RUNNER_TEMP 'nooir-msi-uninstall.log'
+              $p = Start-Process msiexec.exe -ArgumentList @('/x',('"' + $msi + '"'),'/qn','/norestart','/l*v',('"' + $log2 + '"')) -PassThru -Wait
+              if ($p.ExitCode -ne 0) { Get-Content $log2 -Tail 60; throw "Uninstall failed: $($p.ExitCode)" }
+            }
+            if ((Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve original user data') { throw 'Data sentinel changed on uninstall' }
+            if ($didInstall -and (Test-Path -LiteralPath (Join-Path $installed 'MihonNooir-Preview.exe'))) { throw 'Uninstall left launcher installed' }
+            Remove-Item -LiteralPath $data -Recurse -Force
+          }
+          Write-Host 'PASS: exact MSI uninstalled, separate data sentinel retained'
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned
           path: |
             package/MihonNooir-Windows-Preview.zip
             package/MihonNooir-Windows-Preview.zip.sha256
+            package/MihonNooir-Windows-*-x64.msi
+            package/MihonNooir-Windows-*-x64.zip
+            package/SHA256SUMS-windows.txt
           if-no-files-found: error
           retention-days: 14
 

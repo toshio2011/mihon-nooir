@@ -119,6 +119,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val conversionJobs = JButton("Conversion jobs")
     private val sendReader = JButton("Send to XTEINK")
     private val documentImport = JButton("Import PDF / EPUB")
+    private val checkWindowsUpdates = JButton("Windows updates")
     private val startServer = JButton("Start local Suwayomi")
     private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
@@ -162,7 +163,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             }), BorderLayout.NORTH)
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
                 add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library)
-                add(startServer); add(stopServer); add(getServer)
+                add(startServer); add(stopServer); add(getServer); add(checkWindowsUpdates)
             }), BorderLayout.SOUTH)
         }
         add(header, BorderLayout.NORTH)
@@ -264,7 +265,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             next, previous, selected, onlyDownloaded, clear, refresh, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
             conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, inspectBinary, sendReader,
-            startServer, stopServer, getServer)
+            startServer, stopServer, getServer, checkWindowsUpdates)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { options = it }
@@ -311,6 +312,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         conversionJobs.addActionListener { DesktopConversionQueueScreen.open() }
         sendReader.addActionListener { DesktopReaderTransferScreen.open(this) }
         documentImport.addActionListener { DesktopDocumentImportScreen.open(this) }
+        checkWindowsUpdates.addActionListener { DesktopWindowsUpdateScreen.open(this) }
         setPaging()
         stopServer.isEnabled = false
         // Do not connect automatically on startup: a local-library-only user

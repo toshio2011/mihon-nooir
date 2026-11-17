@@ -31,12 +31,13 @@ kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" desktop/storage
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt tests/DesktopXtcViewerSwingSmokeTest.kt \
-  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopReaderTransferTest.kt tests/DesktopDocumentImportTest.kt \
+  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopReaderTransferTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWindowsUpdatesTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopConversionQueueTestKt
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopReaderTransferTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopDocumentImportTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopWindowsUpdatesTestKt
 # Real Swing dialog acceptance using a virtual display. This exercises actual
 # rendered saved-book pages, navigation, resize, fit and 1:1, without touching
 # an installed Windows app. Off by default for developer headless terminals.
