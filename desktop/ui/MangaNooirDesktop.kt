@@ -117,6 +117,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val inspectBinary = JButton("Inspect XTC / XTCH output")
     private val localLibrary = JButton("Local library")
     private val conversionJobs = JButton("Conversion jobs")
+    private val sendReader = JButton("Send to XTEINK")
     private val startServer = JButton("Start local Suwayomi")
     private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
@@ -156,7 +157,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         val connect = JButton("Connect / reload sources")
         val header = JPanel(BorderLayout()).apply {
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
-                add(localLibrary); add(localReader); add(localImport); add(conversionJobs); add(inspectBinary)
+                add(localLibrary); add(localReader); add(localImport); add(conversionJobs); add(inspectBinary); add(sendReader)
             }), BorderLayout.NORTH)
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
                 add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library)
@@ -261,7 +262,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
-            conversionSettings, localImport, localReader, localLibrary, conversionJobs, inspectBinary,
+            conversionSettings, localImport, localReader, localLibrary, conversionJobs, inspectBinary, sendReader,
             startServer, stopServer, getServer)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
@@ -307,6 +308,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
         conversionJobs.addActionListener { DesktopConversionQueueScreen.open() }
+        sendReader.addActionListener { DesktopReaderTransferScreen.open(this) }
         setPaging()
         stopServer.isEnabled = false
         // Do not connect automatically on startup: a local-library-only user
