@@ -64,7 +64,7 @@ jobs:
           changed=$(git diff --name-only "origin/$base...HEAD")
           # Windows-only follow-ups after the integrated Android v1.0.18 release
           # must never change Android/shared production source or its release CI.
-          if [[ "$GITHUB_HEAD_REF" == windows/* ]]; then
+          if [[ "${GITHUB_HEAD_REF:-}" == windows/* ]]; then
             unexpected=$(printf '%s\n' "$changed" |
               grep -v -E '^(desktop/|docs/WINDOWS[^/]*\.md$|tests/(Windows[^/]*\.kt|Desktop[^/]*\.kt|run_windows_full\.sh)$|\.github/workflows/desktop-preview\.yml$|$)' || true)
             if [[ -n "$unexpected" ]]; then
