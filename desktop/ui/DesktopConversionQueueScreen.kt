@@ -24,7 +24,7 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
     private val queue = DesktopConversionQueue()
     private val model = DefaultListModel<DesktopConversionJob>()
     private val list = JList(model)
-    private val addFiles = JButton("Add local comics")
+    private val addFiles = JButton("Add local books")
     private val run = JButton("Run / recover")
     private val pause = JButton("Pause after current")
     private val retry = JButton("Retry selected")
@@ -109,7 +109,7 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
     }
     private fun choose() {
         val input = JFileChooser().apply {
-            dialogTitle = "Choose image folders / CBZ / ZIP comics"
+            dialogTitle = "Choose image folders, CBZ/ZIP, PDF or image EPUB"
             fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
             isMultiSelectionEnabled = true
         }
@@ -119,6 +119,12 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
         val device = JComboBox(NooirDeviceProfiles.builtins.map { it.id }.toTypedArray())
         val settings = JPanel(GridLayout(0, 2, 6, 6)).apply {
             add(JLabel("Format")); add(format); add(JLabel("Device")); add(device)
+        }
+        if (files.any { it.isFile && it.extension.equals("pdf", true) }) {
+            settings.add(JLabel("PDF batch: original pages only")); settings.add(JLabel("No manga panel slicing or text companion"))
+        }
+        if (files.any { it.isFile && it.extension.equals("epub", true) }) {
+            settings.add(JLabel("EPUB: image-only")); settings.add(JLabel("Prose/protected books will fail safely"))
         }
         if (JOptionPane.showConfirmDialog(this, settings, "Batch output",
                 JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return
