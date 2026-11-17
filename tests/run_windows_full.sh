@@ -34,7 +34,7 @@ kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" desktop/storage
   tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopReaderTransferTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWindowsUpdatesTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
-java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopConversionQueueTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopConversionQueueTestKt
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopReaderTransferTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopDocumentImportTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopWindowsUpdatesTestKt

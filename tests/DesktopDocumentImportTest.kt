@@ -96,6 +96,21 @@ fun main() {
         val rejected=root.resolve("prose.xtc")
         check(runCatching { DesktopImageEpubImport.export(comic("prose.epub",true),rejected,ExportFormat.XTC,device,comicOpts) }.isFailure)
         check(!rejected.exists() && original.readBytes().contentEquals(sourceBytes))
+        val dest=root.resolve("batch").apply { mkdir() }
+        val queueRoot=root.resolve("queue-state").toPath()
+        val queue=DesktopConversionQueue(queueRoot)
+        check(queue.enqueue(listOf(pdf, original, root.resolve("prose.epub")),
+            dest,ExportFormat.XTC,"X4",comicOpts)==3)
+        check(dest.list()?.isEmpty() == true)
+        val reloaded=DesktopConversionQueue(queueRoot)
+        reloaded.runPending({ false })
+        check(reloaded.list().map { it.state } == listOf(
+            ConversionJobState.COMPLETED, ConversionJobState.COMPLETED, ConversionJobState.FAILED))
+        check(XtcBookPreview(dest.resolve("original.xtc")).pageCount==2)
+        check(XtcBookPreview(dest.resolve("comic.xtc")).pageCount==2)
+        check(!dest.resolve("prose.xtc").exists())
+        check(original.readBytes().contentEquals(sourceBytes))
         println("PASS: Windows PDF all formats, selectable companion text, 1001 pages, cancel cleanup, EPUB spine order and prose refusal")
+        println("PASS: mixed PDF/image EPUB durable queue, continued after unsupported EPUB, actual output and no accidental overwrite")
     } finally { root.deleteRecursively() }
 }

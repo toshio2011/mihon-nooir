@@ -118,8 +118,8 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             .map { it.output.lowercase(java.util.Locale.ROOT) }.toMutableSet()
         val added = inputs.map { selected ->
             val source = selected.canonicalFile
-            require(source.isDirectory || source.isFile && source.extension.lowercase() in setOf("zip", "cbz")) {
-                "Choose an image folder or CBZ/ZIP comic"
+            require(source.isDirectory || source.isFile && source.extension.lowercase() in setOf("zip", "cbz", "pdf", "epub")) {
+                "Choose an image folder, CBZ/ZIP, PDF or image-based EPUB"
             }
             val output = File(directory, DesktopUiModel.suggestedFile(source.nameWithoutExtension, format)).canonicalFile
             require(output.parentFile == directory && source != output && !output.exists()) {
@@ -195,7 +195,19 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
                     progress(job)
                     try {
                         require(!File(job.output).exists()) { "Destination already exists; no overwrite" }
-                        NooirDesktopCli.main(job.args())
+                        val input = File(job.input)
+                        val output = File(job.output)
+                        val options = MangaConversionOptions.fromToken(job.token)
+                        // PDFs intentionally preserve original pages in a batch;
+                        // the optional text companion remains an explicit
+                        // single-document workflow. No manga slicing on PDFs.
+                        when {
+                            input.isFile && input.extension.equals("pdf", true) ->
+                                DesktopPdfImport.export(input, output, job.format, job.device, options)
+                            input.isFile && input.extension.equals("epub", true) ->
+                                DesktopImageEpubImport.export(input, output, job.format, job.device, options)
+                            else -> NooirDesktopCli.main(job.args())
+                        }
                         check(File(job.output).isFile && File(job.output).length() > 0L)
                     } catch (e: Exception) {
                         change(job.id, setOf(ConversionJobState.RUNNING), ConversionJobState.FAILED,
