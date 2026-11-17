@@ -30,6 +30,7 @@ import javax.swing.JFrame
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JTextField
+import javax.swing.JTabbedPane
 import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 
@@ -303,7 +304,36 @@ private fun verifyOfflineLibrary(folder: File) {
         // Seed the local index with original art. This tests the real read
         // UI, not native file chooser interaction, which remains manual QA.
         LocalLibraryStore().add(comic)
-        onSwingThread { LocalLibraryScreen.open() }
+        // Launch through the exact production main function, including its
+        // look and feel and offline startup. Do not contact Suwayomi.
+        MangaNooirDesktop.main(emptyArray())
+        val main = awaitFrame("MihonNooir — Windows development")
+        verifyFitsWorkArea(main)
+        awaitUi("offline main startup without backend") {
+            descendants(main).filterIsInstance<JLabel>().any {
+                it.text.startsWith("Offline ready")
+            }
+        }
+        val tabs = onSwingThread {
+            descendants(main).filterIsInstance<JTabbedPane>().singleOrNull()
+        }
+        if (onSwingThread { main.width < 1100 }) {
+            checkNotNull(tabs) { "Compact main layout requires tabs" }
+            check(onSwingThread {
+                (0 until tabs.tabCount).map { tabs.getTitleAt(it) } ==
+                    listOf("Sources", "Browse", "Chapters")
+            })
+            onSwingThread { tabs.selectedIndex = 1 }
+        } else {
+            check(tabs == null) { "Wide main layout should keep the three panes" }
+        }
+        verifyToolbarReachable(findButton(main, "Search"))
+        if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
+        verifyToolbarReachable(findButton(main, "Download requests"))
+        verifyToolbarReachable(findButton(main, "Inspect XTC / XTCH output"))
+        val libraryButton = findButton(main, "Local library")
+        verifyToolbarReachable(libraryButton)
+        onSwingThread { libraryButton.doClick() }
         val library = awaitFrame("MihonNooir — My local library")
         verifyFitsWorkArea(library)
         val list = onSwingThread {
@@ -340,7 +370,7 @@ private fun verifyOfflineLibrary(folder: File) {
         check(LocalLibraryStore().books().single().lastOpenedAt > 0)
 
         onSwingThread { reader.dispose(); library.dispose() }
-        onSwingThread { LocalLibraryScreen.open() }
+        onSwingThread { libraryButton.doClick() }
         val reopenedLibrary = awaitFrame("MihonNooir — My local library")
         val reopenedList = onSwingThread {
             descendants(reopenedLibrary).filterIsInstance<JList<*>>().single()
@@ -354,7 +384,7 @@ private fun verifyOfflineLibrary(folder: File) {
             descendants(reopened).filterIsInstance<JButton>().any { it.text == "Remove bookmark" }
         }) { "Saved bookmark did not survive reopening the reader" }
         check(comic.readBytes().contentEquals(original)) { "Offline reader changed original CBZ bytes" }
-        println("PASS: packaged offline library filter, cover, reader page turn, bookmark, reopen/resume and source unchanged; windows/toolbar accessible")
+        println("PASS: packaged offline main startup, compact/wide layout, library filter, cover, reader page turn, bookmark, reopen/resume and source unchanged; windows/toolbar accessible")
     } finally {
         onSwingThread {
             Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() }

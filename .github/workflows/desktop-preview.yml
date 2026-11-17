@@ -349,6 +349,45 @@ jobs:
           $result = [IO.File]::ReadAllBytes($out)
           if ([BitConverter]::ToUInt16($result, 6) -ne 1) { throw 'WebP CBZ output did not contain one page' }
           Write-Host 'PASS: packaged Java runtime opened original WebP CBZ and wrote XTCH'
+      - name: Launch the real packaged Windows EXE without a backend
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path 'package/output/MihonNooir-Preview/MihonNooir-Preview.exe').Path
+          $qaHome = Join-Path $env:RUNNER_TEMP ('nooir-launcher-' + [guid]::NewGuid().ToString())
+          $oldHome = $env:MIHONNOOIR_DATA_DIR
+          $process = $null
+          try {
+            $env:MIHONNOOIR_DATA_DIR = $qaHome
+            # Start a fresh, owned launcher process; do not reuse a user app.
+            $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+            $deadline = [DateTime]::UtcNow.AddSeconds(45)
+            $seen = $false
+            while ([DateTime]::UtcNow -lt $deadline) {
+              $process.Refresh()
+              if ($process.HasExited) { throw "Launcher exited before its window appeared: $($process.ExitCode)" }
+              if ($process.MainWindowHandle -ne 0 -and $process.MainWindowTitle -like 'MihonNooir*Windows development*') {
+                $seen = $true
+                break
+              }
+              Start-Sleep -Milliseconds 250
+            }
+            if (!$seen) { throw 'Packaged launcher did not show its expected main window' }
+            Write-Host "PASS: actual Windows launcher displayed $($process.MainWindowTitle)"
+            if (!$process.CloseMainWindow()) { throw 'Could not request clean close of owned launcher window' }
+            if (!$process.WaitForExit(15000)) { throw 'Owned launcher failed to exit after normal close' }
+            if ($process.ExitCode -ne 0) { throw "Launcher exited with $($process.ExitCode)" }
+            Write-Host 'PASS: actual packaged Windows EXE launched and closed normally'
+          } finally {
+            if ($null -ne $process) {
+              $process.Refresh()
+              if (!$process.HasExited) { $process.Kill(); $process.WaitForExit(5000) | Out-Null }
+              $process.Dispose()
+            }
+            $env:MIHONNOOIR_DATA_DIR = $oldHome
+            if (Test-Path -LiteralPath $qaHome) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
+          }
       - name: Exercise real saved-book Swing viewer on the packaged Windows runtime
         shell: pwsh
         timeout-minutes: 10
