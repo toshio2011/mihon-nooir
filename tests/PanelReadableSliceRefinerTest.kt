@@ -29,6 +29,7 @@ private fun preservesAll(before: List<PanelFitSlice>, after: List<PanelFitSlice>
 fun main() {
     configurableZoom()
     contentAwareZoom()
+    naturalTiersBeforeOverlap()
     // Exact X4-equivalent FINAL fitted minimum size, not source pixels.
     val narrow = view(390,0,410,700)
     val measure = PanelReadableSliceRefiner.fittedMinimumX4Pixels(
@@ -294,4 +295,47 @@ private fun contentAwareZoom() {
     val portrait=items.map { it.copy(landscape=false) }
     check(PanelReadableSliceRefiner.refineRows(portrait,600,1400,480,800,quiet,true,50)==portrait)
     println("PASS: bounded quiet-band zoom, exact overlap/coverage, shared mode parity, noisy/center/protected fallback")
+}
+
+private fun naturalTiersBeforeOverlap() {
+    val items = listOf(view(0,0,600,1050,true),view(0,1050,600,1400,true))
+    val p = items.first().region
+    val dense: (Int, Int) -> Boolean = { x,y ->
+        x in 65..535 && y in 45..1330 && (x+y)%7<4
+    }
+    // Two independent gutters with long boundary rails, not a white patch
+    // in an illustration. No source pixels are cropped or duplicated.
+    val framed: (Int,Int)->Boolean = { x,y ->
+        when {
+            y in 331..369 || y in 681..719 -> false
+            y in listOf(330,370,680,720) -> x in 30..570
+            else -> dense(x,y)
+        }
+    }
+    val rows=PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,framed,false,50)
+    check(rows.size==4 && rows.last()==items.last()) { "Two missed gutters must recover three natural tiers: $rows" }
+    val parts=rows.take(3).map { it.region }
+    check(parts.first().top==p.top && parts.last().bottom==p.bottom)
+    check(parts.all { it.left==p.left && it.right==p.right })
+    check(parts.zipWithNext().all { (a,b)->a.bottom==b.top })
+    check(parts[0].bottom in 340..360 && parts[1].bottom in 690..710)
+    check(PanelReadableSliceRefiner.coversSourceRow(p,parts))
+    val panels=PanelReadableSliceRefiner.refine(items,600,1400,480,800,framed,
+        autoFit=false,requireZoomGain=true,minimumScreenFillPercent=50)
+    check(panels==rows)
+    // White gaps without independent framing must not be treated as
+    // actual panel boundaries; retain the original overlapping strategy.
+    val unframed: (Int,Int)->Boolean = { x,y ->
+        y !in 331..369 && y !in 681..719 && dense(x,y)
+    }
+    val overlap=PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,unframed,false,50)
+    check(overlap.size==3 && overlap[0].region.bottom-overlap[1].region.top==126)
+    check(PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,framed,false,50,
+        protectedRegions=listOf(p))==items)
+    check(PanelReadableSliceRefiner.refine(items,600,1400,480,800,framed,
+        autoFit=false,requireZoomGain=true,enlargeOversizedSplits=false)==items)
+    // Normal three readable horizontal rows stay exactly three.
+    val normal=listOf(view(0,0,600,450,true),view(0,450,600,900,true),view(0,900,600,1400,true))
+    check(PanelReadableSliceRefiner.refineRows(normal,600,1400,480,800,dense,false,50)==normal)
+    println("PASS: natural tiers before overlap, exact coverage/order, row/panel parity and fallback")
 }

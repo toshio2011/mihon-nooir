@@ -1,0 +1,5 @@
+# Natural splitting before overlapping enlargement — 2026-11-19
+
+Stacked on draft #100. Independent Xalibre-inspired natural-gutter recovery for eligible oversized Row and Panel fallback regions. Existing Panel inner recovery remains first. Row mode stays horizontal. A full-resolution ink-free gutter and bilateral boundary rails are required; try up to two verified horizontal cuts, retaining exact coverage and requiring each output to improve scale by at least 5%. If uncertain, retain #100's content-aware 12% overlap fallback. Existing protected-region, screen-fill, geometry and enablement checks stay unchanged.
+
+New synthetic tests: two natural gutters, exact coverage, unchanged normal rows, Row/Panel parity, no-rail overlap fallback, protected art and disabled option. Exact-head Android/Windows CI and actual manga visual acceptance pending. This pass is horizontal only, not a new general detector: initial no-row recovery, additional Panel-specific vertical/irregular recovery and non-full-width oversized panels are not implemented here. No changes to stable release, main, firmware or signing. Do not merge or publish without owner approval.

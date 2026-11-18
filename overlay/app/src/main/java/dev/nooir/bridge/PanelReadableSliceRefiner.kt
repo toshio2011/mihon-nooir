@@ -276,7 +276,7 @@ object PanelReadableSliceRefiner {
             }
 
             val halves = if (requireZoomGain)
-                readableOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+                naturalThenOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
             else overlapHalves(view, portraitWidth, portraitHeight, autoFit)
             if (halves == null) result.add(view) else result.addAll(halves)
         }
@@ -304,10 +304,98 @@ object PanelReadableSliceRefiner {
                 result.add(view)
                 continue
             }
-            val halves = readableOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
-            if (halves != null) result.addAll(halves) else result.add(view)
+            val halves = naturalThenOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+            if (halves != null && result.size + halves.size + input.size - index - 1 <= MAX_VIEWS)
+                result.addAll(halves) else result.add(view)
         }
         return result
+    }
+
+    /**
+     * Second chance for missed horizontal tiers, before overlapping zoom.
+     * Only existing eligible oversized regions reach this path. A pale
+     * band alone is NOT enough: require framing evidence on both sides.
+     * Retain exact source coverage, reading order, and actual enlargement.
+     */
+    private fun naturalThenOverlap(view: PanelFitSlice, w: Int, h: Int,
+        autoFit: Boolean, inkAt: (Int, Int) -> Boolean): List<PanelFitSlice>? =
+        recoverNaturalTiers(view, w, h, autoFit, inkAt)
+            ?: readableOverlap(view, w, h, autoFit, inkAt)
+
+    private fun recoverNaturalTiers(view: PanelFitSlice, w: Int, h: Int,
+        autoFit: Boolean, inkAt: (Int, Int) -> Boolean): List<PanelFitSlice>? {
+        val p = view.region
+        if (p.width < 120 || p.height < 160) return null
+        val minHeight = maxOf(24, (p.height.toLong() * 18 / 100).toInt())
+        val dy = maxOf(1, p.height / 320)
+        val dx = maxOf(1, ((p.width.toLong() + 159) / 160).toInt())
+        val band = (p.height / 200).coerceIn(2, 6)
+        val railReach = (p.height / 25).coerceIn(8, 48)
+        fun sampledFraction(y: Int): Double {
+            var count = 0
+            var ink = 0
+            for (x in p.left until p.right step dx) {
+                count++
+                if (inkAt(x, y)) ink++
+            }
+            return ink.toDouble() / count
+        }
+        val candidates = mutableListOf<Int>()
+        var start = -1
+        var last = -1
+        fun finish() {
+            if (start >= 0 && last - start >= band * 2)
+                candidates.add(start + (last - start) / 2)
+            start = -1
+        }
+        for (y in p.top + minHeight..p.bottom - minHeight step dy) {
+            if (sampledFraction(y) == 0.0) {
+                if (start < 0) start = y
+                last = y
+            } else finish()
+        }
+        finish()
+        fun verified(y: Int): Boolean {
+            if (y - railReach < p.top || y + railReach >= p.bottom) return false
+            // A natural cut must have a fully clear core at original
+            // resolution, including side margins. Unlike overlap, no ink
+            // crossing this seam is accepted.
+            for (yy in y - band..y + band)
+                for (x in p.left until p.right)
+                    if (inkAt(x, yy)) return false
+            fun rail(yy: Int): Boolean {
+                if (sampledFraction(yy) < 0.70) return false
+                var ink = 0
+                for (x in p.left until p.right) if (inkAt(x, yy)) ink++
+                return ink.toLong() * 100 >= p.width.toLong() * 70
+            }
+            val upper = (y - railReach until y - band).firstOrNull { sampledFraction(it) >= 0.70 }
+            val lower = (y + band + 1..y + railReach).firstOrNull { sampledFraction(it) >= 0.70 }
+            if (upper == null || lower == null) return false
+            return rail(upper) && rail(lower)
+        }
+        val mid = p.top + p.height / 2
+        val cuts = candidates.sortedWith(compareBy<Int> { kotlin.math.abs(it - mid) }.thenBy { it })
+            .take(8).filter { verified(it) }
+        fun plan(seams: List<Int>): List<PanelFitSlice>? {
+            val edges = listOf(p.top) + seams.sorted() + listOf(p.bottom)
+            if (edges.zipWithNext().any { (a, b) -> b - a < minHeight }) return null
+            val parts = edges.zipWithNext().map { (a, b) ->
+                val r = p.copy(top = a, bottom = b)
+                PanelFitSlice(r, if (autoFit) PanelAutoFit.landscapeForMaximumFill(r, w, h)
+                    else view.landscape)
+            }
+            return parts.takeIf { coversSourceRow(p, it.map { v -> v.region }) &&
+                hasZoomGain(view, it, w, h, inkAt) }
+        }
+        // Prefer recovering two distinct gutters (three natural tiers).
+        // Otherwise try one gutter; if none work, preserve overlap fallback.
+        for (i in cuts.indices) {
+            for (j in i + 1 until cuts.size)
+                plan(listOf(cuts[i], cuts[j]))?.let { return it }
+        }
+        for (cut in cuts) plan(listOf(cut))?.let { return it }
+        return null
     }
 
     /**
