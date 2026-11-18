@@ -168,8 +168,8 @@ jobs:
           # test inspect the same internal dialog API used by the production toolbar.
           app="$PWD/build/desktop/mihonnooir-desktop-preview.jar"
           mkdir -p build/windows-gui-qa
-          kotlinc -classpath "$app" -Xfriend-paths="$app" \
-            tests/DesktopXtcViewerSwingSmokeTest.kt \
+          kotlinc -classpath "$app:$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" -Xfriend-paths="$app" \
+            tests/DesktopXtcViewerSwingSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopInstalledDataTest.kt \
             -d build/windows-gui-qa/viewer-smoke.jar
           test -s build/windows-gui-qa/viewer-smoke.jar
       - name: Retain GUI acceptance test separately from distributable code
@@ -396,6 +396,21 @@ jobs:
             }
           }
           Write-Host 'PASS: packaged Windows runtime saved-book viewer at 100/125/150% requested Java2D scales'
+      - name: Test document import and persistent jobs against the packaged Windows runtime
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'package/output/MihonNooir-Preview'
+          $java = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          $qa = 'package/qa/viewer-smoke.jar'
+          $cp = "$jar;$qa"
+          foreach ($test in @('DesktopConversionQueueTestKt','DesktopDocumentImportTestKt')) {
+            & $java '-Djava.awt.headless=true' '-cp' $cp "dev.nooir.desktop.ui.$test"
+            if ($LASTEXITCODE -ne 0) { throw "Packaged Windows $test failed ($LASTEXITCODE)" }
+          }
+          Write-Host 'PASS: packaged Windows runtime document and persistent queue regression'
       - name: Create versioned unsigned per-user MSI from verified application image
         shell: pwsh
         timeout-minutes: 10
@@ -421,44 +436,11 @@ jobs:
             "$hash  $name"
           }
           Set-Content -Path package/SHA256SUMS-windows.txt -Encoding ascii -Value $lines
-      - name: Install, launch and uninstall the MSI in the disposable CI Windows account
+      - name: Exercise MSI synthetic version upgrade and actual user-state survival
         shell: pwsh
-        timeout-minutes: 8
+        timeout-minutes: 18
         run: |
-          $ErrorActionPreference = 'Stop'
-          $version = (Get-Content desktop/windows-version.txt -Raw).Trim()
-          $msi = (Resolve-Path "package/MihonNooir-Windows-$version-x64.msi").Path
-          $installed = Join-Path $env:LOCALAPPDATA 'MihonNooir-Preview'
-          if (Test-Path -LiteralPath $installed) { throw 'Unexpected pre-existing install; refusing to modify it' }
-          $data = Join-Path $env:RUNNER_TEMP ('nooir-msi-data-' + [guid]::NewGuid().ToString())
-          New-Item -ItemType Directory $data | Out-Null
-          $sentinel = Join-Path $data 'keep.txt'
-          Set-Content -LiteralPath $sentinel -Value 'preserve original user data'
-          $old = $env:MIHONNOOIR_DATA_DIR
-          $didInstall = $false
-          try {
-            $env:MIHONNOOIR_DATA_DIR = $data
-            $log1 = Join-Path $env:RUNNER_TEMP 'nooir-msi-install.log'
-            $p = Start-Process msiexec.exe -ArgumentList @('/i',('"' + $msi + '"'),'/qn','/norestart','/l*v',('"' + $log1 + '"')) -PassThru -Wait
-            if ($p.ExitCode -ne 0) { Get-Content $log1 -Tail 60; throw "Install failed: $($p.ExitCode)" }
-            $didInstall = $true
-            $exe = Join-Path $installed 'MihonNooir-Preview.exe'
-            if (!(Test-Path -LiteralPath $exe)) { throw "Expected per-user installed launcher missing at $exe" }
-            & ./desktop/windows/verify-launcher.ps1 -ExePath $exe
-            if ((Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve original user data') { throw 'Data sentinel modified during install/launch' }
-            Write-Host 'PASS: MSI installed application with bundled runtime and real launcher'
-          } finally {
-            $env:MIHONNOOIR_DATA_DIR = $old
-            if ($didInstall) {
-              $log2 = Join-Path $env:RUNNER_TEMP 'nooir-msi-uninstall.log'
-              $p = Start-Process msiexec.exe -ArgumentList @('/x',('"' + $msi + '"'),'/qn','/norestart','/l*v',('"' + $log2 + '"')) -PassThru -Wait
-              if ($p.ExitCode -ne 0) { Get-Content $log2 -Tail 60; throw "Uninstall failed: $($p.ExitCode)" }
-            }
-            if ((Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve original user data') { throw 'Data sentinel changed on uninstall' }
-            if ($didInstall -and (Test-Path -LiteralPath (Join-Path $installed 'MihonNooir-Preview.exe'))) { throw 'Uninstall left launcher installed' }
-            Remove-Item -LiteralPath $data -Recurse -Force
-          }
-          Write-Host 'PASS: exact MSI uninstalled, separate data sentinel retained'
+          & ./desktop/windows/verify-installed-data.ps1 -PackageRoot 'package' -QaJar 'package/qa/viewer-smoke.jar'
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned
