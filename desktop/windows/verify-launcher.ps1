@@ -1,8 +1,8 @@
-param([Parameter(Mandatory=$true)][string]$ExePath)
+param([Parameter(Mandatory=$true)][string]$ExePath, [string]$ExistingQaDataDir)
 $ErrorActionPreference = 'Stop'
 # Enumerate native top-level Swing windows by owning PID. The .NET
 # MainWindowHandle heuristic can pick an unrelated hidden JVM window.
-Add-Type -TypeDefinition @'
+if (-not ('NooirWindowProbe' -as [type])) { Add-Type -TypeDefinition @'
 using System;
 using System.Text;
 using System.Collections.Generic;
@@ -31,9 +31,21 @@ public static class NooirWindowProbe {
   }
   public static bool Close(IntPtr hwnd) { return PostMessage(hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero); }
 }
-'@
+'@ 
+}
 $exe = (Resolve-Path -LiteralPath $ExePath).Path
-$qaHome = Join-Path $env:RUNNER_TEMP ('nooir-launcher-' + [guid]::NewGuid().ToString())
+$ownsData = [string]::IsNullOrWhiteSpace($ExistingQaDataDir)
+$qaHome = if ($ownsData) {
+  Join-Path $env:RUNNER_TEMP ('nooir-launcher-' + [guid]::NewGuid().ToString())
+} else {
+  $candidate = (Resolve-Path -LiteralPath $ExistingQaDataDir).Path
+  $runner = (Resolve-Path -LiteralPath $env:RUNNER_TEMP).Path.TrimEnd('\') + '\'
+  if (!$candidate.StartsWith($runner,[StringComparison]::OrdinalIgnoreCase) -or
+      !(Test-Path -LiteralPath $candidate -PathType Container)) {
+    throw 'Existing QA data must be a dedicated runner temp directory'
+  }
+  $candidate
+}
 $oldHome = $env:MIHONNOOIR_DATA_DIR
 $process = $null
 try {
@@ -68,5 +80,5 @@ try {
     $process.Dispose()
   }
   $env:MIHONNOOIR_DATA_DIR = $oldHome
-  if (Test-Path -LiteralPath $qaHome) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
+  if ($ownsData -and (Test-Path -LiteralPath $qaHome)) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
 }
