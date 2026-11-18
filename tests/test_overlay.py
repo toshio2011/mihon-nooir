@@ -9,6 +9,10 @@ class TestOverlay(unittest.TestCase):
             root=Path(temp); app=root/'app'; app.mkdir()
             (app/'build.gradle.kts').write_text('    namespace = "eu.kanade.tachiyomi"\napplicationId = "app.mihon"\nversionCode = 39\nversionName = "0.21.3"\ndependencies {\n    testImplementation(libs.bundles.test)\n}\n')
             (app/'proguard-rules.pro').write_text('# existing Mihon R8 rules\n')
+            (root/'gradle').mkdir()
+            catalog = root/'gradle/libs.versions.toml'
+            catalog.write_text('[versions]\nconscrypt = "2.8.0"\nokhttp = "5.5.1"\n[libraries]\nconscrypt = { module = "org.conscrypt:conscrypt-android", version.ref = "conscrypt" }\n')
+            original_catalog = catalog.read_text()
             manga=root/'app/src/main/java/eu/kanade/tachiyomi/ui/manga'
             manga.mkdir(parents=True)
             (manga/'MangaViewModel.kt').write_text('import android.content.Context\nimport eu.kanade.tachiyomi.data.download.DownloadManager\n    private val downloadManager: DownloadManager,\n    val snackbarHostState: SnackbarHostState = SnackbarHostState()\n')
@@ -98,6 +102,7 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
                 onClick = onOpenInBrowser,
 """)
             subprocess.run(['python3',str(ROOT/'tools/apply_overlay.py'),str(root)],check=True,text=True)
+            self.assertEqual(catalog.read_text(), original_catalog.replace('conscrypt = "2.8.0"','conscrypt = "2.9.0"'))
             gradle_text = (app/'build.gradle.kts').read_text()
             self.assertIn('testBuildType = "foss"', gradle_text)
             self.assertIn('androidTestImplementation(libs.androidx.test.junit)', gradle_text)
