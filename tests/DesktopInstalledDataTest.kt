@@ -21,8 +21,13 @@ fun main(args: Array<String>) {
     val library=LocalLibraryStore()
     val bookmarks=ReaderBookmarkStore()
     val jobs=DesktopConversionQueue()
+    val settings=DesktopConversionSettingsStore()
+    val preferred=MangaConversionOptions.preset("Manga").copy(preset="Custom", panelMode="ROW_BY_ROW",
+        orientation="AUTO_FIT", minimumScreenFillPercent=65, enlargeOversizedSplits=false, renderAlgorithm="ATKINSON")
     if(args[0]=="seed") {
         check(!comic.exists() && !out.exists() && library.books().isEmpty() && jobs.list().isEmpty())
+        check(!Files.exists(root.resolve(DesktopConversionSettingsStore.FILE_NAME)))
+        settings.save(preferred)
         comic.mkdir();out.mkdir()
         val image=BufferedImage(48,72,BufferedImage.TYPE_INT_RGB)
         try {
@@ -38,6 +43,7 @@ fun main(args: Array<String>) {
         jobs.runPending({false})
         check(jobs.enqueue(listOf(comic),out,ExportFormat.XTCH,"X4",options)==1)
     }
+    check(settings.load()==preferred) { "Installed settings must persist through upgrade/reinstall" }
     val entry=library.books().single()
     check(entry.available && entry.file.canonicalFile==comic.canonicalFile && entry.lastOpenedAt==123456L)
     val mark=bookmarks.list(comic).single()
@@ -48,5 +54,5 @@ fun main(args: Array<String>) {
     check(completed.isFile && XtcBookPreview(completed).pageCount==2)
     check(!File(list[1].output).exists())
     check(comic.resolve("001.png").isFile && comic.resolve("002.png").isFile)
-    println("PASS: installed-runtime " + args[0] + " library, bookmark, completed export and pending conversion persisted")
+    println("PASS: installed-runtime " + args[0] + " library, bookmark, completed export and pending conversion persisted; conversion preferences retained")
 }
