@@ -255,6 +255,23 @@ fun main() {
     check(tallPlan.regions.any { it.height >= tallH * 9 / 10 }) {
         "Row-first must preserve the full-height panel"
     }
+    // Exercise both physical layouts and both reading directions. The tall
+    // column must remain one region; no overlap or missing source pixels.
+    for (mirror in listOf(false,true)) for (rtlMode in listOf(false,true)) {
+        val pixels = if (mirror) ByteArray(tall.size) { i ->
+            tall[(i / tallW) * tallW + tallW - 1 - i % tallW]
+        } else tall
+        val plan = PanelDetectionCore.detect(tallW,tallH,pixels,rtlMode)
+        check(!plan.usedFullPageFallback && plan.regions.size==3)
+        val c=plan.regions.single { it.top==0 && it.bottom==tallH }
+        val others=plan.regions.filter { it!=c }
+        check(others[0].top==0 && others[1].bottom==tallH)
+        val cFirst = mirror==rtlMode
+        check((plan.regions.first()==c)==cFirst)
+        for (y in 0 until tallH) for (x in 0 until tallW) {
+            check(plan.regions.count { x in it.left until it.right && y in it.top until it.bottom }==1)
+        }
+    }
     // Thin row seam with a tiny interruption from a panel border.
     val interruptedW = 300
     val interruptedH = 280
