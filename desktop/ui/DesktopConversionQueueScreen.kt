@@ -14,13 +14,13 @@ import javax.swing.*
 
 internal object DesktopConversionQueueScreen {
     private var window: ConversionQueueWindow? = null
-    fun open() {
-        window?.takeIf { it.isDisplayable }?.let { it.toFront(); return }
-        window = ConversionQueueWindow().apply { isVisible = true }
+    fun open(defaults: () -> MangaConversionOptions) {
+        window?.takeIf { it.isDisplayable }?.let { it.defaults = defaults; it.toFront(); return }
+        window = ConversionQueueWindow(defaults).apply { isVisible = true }
     }
 }
 
-private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jobs") {
+private class ConversionQueueWindow(var defaults: () -> MangaConversionOptions) : JFrame("MihonNooir — Local conversion jobs") {
     private val queue = DesktopConversionQueue()
     private val model = DefaultListModel<DesktopConversionJob>()
     private val list = JList(model)
@@ -128,7 +128,7 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
         }
         if (JOptionPane.showConfirmDialog(this, settings, "Batch output",
                 JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return
-        val options = DesktopConversionDialog.show(this, MangaConversionOptions.preset("Manga")) ?: return
+        val options = DesktopConversionDialog.show(this, defaults().copy(allowMissingCover=false,skipUnavailableChapters=false,panelDiagnostics=false)) ?: return
         val destination = JFileChooser().apply {
             dialogTitle = "Choose an existing output directory"
             fileSelectionMode = JFileChooser.DIRECTORIES_ONLY

@@ -124,7 +124,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
     private val managedServer = SuwayomiProcessManager()
-    private var options = MangaConversionOptions.preset("Manga")
+    private val preferences = DesktopConversionPreferences()
+    private val loadedPreferences = preferences.load()
+    private var options = loadedPreferences.options
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
     private val library = JButton("My library")
@@ -268,7 +270,16 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             startServer, stopServer, getServer, checkWindowsUpdates)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
-            DesktopConversionDialog.show(this, options)?.let { options = it }
+            DesktopConversionDialog.show(this, options)?.let { accepted ->
+                options = accepted
+                try {
+                    preferences.save(accepted)
+                    status.text = "Conversion defaults saved"
+                } catch (e: Exception) {
+                    status.text = "Conversion settings active for this session only"
+                    showError("Could not save conversion defaults. Your choices remain active for this session.")
+                }
+            }
         }
         connect.addActionListener { loadSources() }
         startServer.addActionListener { startManagedServer() }
@@ -309,12 +320,13 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         localImport.addActionListener { exportLocal() }
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
-        conversionJobs.addActionListener { DesktopConversionQueueScreen.open() }
+        conversionJobs.addActionListener { DesktopConversionQueueScreen.open { options } }
         sendReader.addActionListener { DesktopReaderTransferScreen.open(this) }
-        documentImport.addActionListener { DesktopDocumentImportScreen.open(this) }
+        documentImport.addActionListener { DesktopDocumentImportScreen.open(this, options) }
         checkWindowsUpdates.addActionListener { DesktopWindowsUpdateScreen.open(this) }
         setPaging()
         stopServer.isEnabled = false
+        loadedPreferences.warning?.let { status.text = "Offline ready — " + it }
         // Do not connect automatically on startup: a local-library-only user
         // must be able to open and read manga with no server or network.
         // The explicit Connect / reload sources button starts online browsing.

@@ -404,8 +404,9 @@ private fun verifyOfflineLibrary(folder: File) {
 private fun verifyConversionSettings(main: JFrame) {
     val button = findButton(main, "Conversion settings")
     verifyToolbarReachable(button)
-    fun open(): JDialog {
-        onSwingThread { SwingUtilities.invokeLater { button.doClick() } }
+    fun open(owner: JFrame = main): JDialog {
+        val settingsButton = findButton(owner, "Conversion settings")
+        onSwingThread { SwingUtilities.invokeLater { settingsButton.doClick() } }
         awaitUi("conversion settings modal") {
             Window.getWindows().filterIsInstance<JDialog>().any {
                 it.isShowing && it.title == "MihonNooir conversion settings"
@@ -466,7 +467,26 @@ private fun verifyConversionSettings(main: JFrame) {
     check(onSwingThread { toggle(reopened).isSelected &&
         (control(reopened,"Minimum screen fill %") as JSpinner).value == 65 })
     finish(reopened,"Cancel")
+    val accepted = DesktopConversionPreferences().load()
+    check(accepted.warning == null && accepted.options.minimumScreenFillPercent == 65 &&
+        accepted.options.enlargeOversizedSplits && accepted.options.panelMode == "ROW_BY_ROW")
+    MangaNooirDesktop.main(emptyArray())
+    awaitUi("second main window reloads preferences") {
+        Window.getWindows().filterIsInstance<JFrame>().any { it !== main &&
+            it.isShowing && it.title == main.title }
+    }
+    val fresh = onSwingThread { Window.getWindows().filterIsInstance<JFrame>()
+        .first { it !== main && it.isShowing && it.title == main.title } }
+    try {
+        val restored = open(fresh)
+        check(onSwingThread { toggle(restored).isSelected &&
+            (control(restored,"Minimum screen fill %") as JSpinner).value == 65 &&
+            (control(restored,"Page extraction") as JComboBox<*>).selectedItem == "ROW_BY_ROW" })
+        finish(restored,"Cancel")
+    } finally { onSwingThread { fresh.dispose() } }
+    check(DesktopConversionPreferences().load() == accepted)
     println("PASS: native scrollable conversion settings, oversized toggle/threshold, typed value commit and cancel rollback")
+    println("PASS: saved conversion defaults loaded into a new main window; cancel did not change saved data")
 }
 
 private fun awaitFrame(title: String): JFrame {

@@ -21,7 +21,13 @@ fun main(args: Array<String>) {
     val library=LocalLibraryStore()
     val bookmarks=ReaderBookmarkStore()
     val jobs=DesktopConversionQueue()
+    val preferences=DesktopConversionPreferences()
+    val savedOptions=MangaConversionOptions.preset("Manhua").copy(
+        preset="Custom",panelMode="ROW_BY_ROW",orientation="AUTO_FIT",
+        enlargeOversizedSplits=false,minimumScreenFillPercent=65,renderAlgorithm="ATKINSON")
     if(args[0]=="seed") {
+        check(preferences.load().options==MangaConversionOptions.preset("Manga"))
+        preferences.save(savedOptions)
         check(!comic.exists() && !out.exists() && library.books().isEmpty() && jobs.list().isEmpty())
         comic.mkdir();out.mkdir()
         val image=BufferedImage(48,72,BufferedImage.TYPE_INT_RGB)
@@ -38,6 +44,7 @@ fun main(args: Array<String>) {
         jobs.runPending({false})
         check(jobs.enqueue(listOf(comic),out,ExportFormat.XTCH,"X4",options)==1)
     }
+    check(preferences.load()==DesktopConversionPreferences.Loaded(savedOptions))
     val entry=library.books().single()
     check(entry.available && entry.file.canonicalFile==comic.canonicalFile && entry.lastOpenedAt==123456L)
     val mark=bookmarks.list(comic).single()
