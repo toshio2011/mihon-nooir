@@ -30,6 +30,7 @@ fun main() {
     configurableZoom()
     contentAwareZoom()
     naturalTiersBeforeOverlap()
+    spanningPanelReadability()
     // Exact X4-equivalent FINAL fitted minimum size, not source pixels.
     val narrow = view(390,0,410,700)
     val measure = PanelReadableSliceRefiner.fittedMinimumX4Pixels(
@@ -338,4 +339,50 @@ private fun naturalTiersBeforeOverlap() {
     val normal=listOf(view(0,0,600,450,true),view(0,450,600,900,true),view(0,900,600,1400,true))
     check(PanelReadableSliceRefiner.refineRows(normal,600,1400,480,800,dense,false,50)==normal)
     println("PASS: natural tiers before overlap, exact coverage/order, row/panel parity and fallback")
+}
+
+private fun spanningPanelReadability() {
+    for (mirror in listOf(false,true)) {
+        val tall = if (mirror) view(530,0,800,1200) else view(0,0,270,1200)
+        val a = if (mirror) view(0,0,530,600) else view(270,0,800,600)
+        val b = if (mirror) view(0,600,530,1200) else view(270,600,800,1200)
+        val dense: (Int,Int)->Boolean = { x,y -> (x*13+y*31)%97<45 }
+        for (order in listOf(listOf(tall,a,b),listOf(a,b,tall))) {
+            fun run(ink: (Int,Int)->Boolean=dense, fill: Int=50, on: Boolean=true,
+                protected: List<PageRegion> = emptyList()) = PanelReadableSliceRefiner.refine(
+                order,800,1200,480,800,ink,protected,autoFit=true,
+                enlargeOversizedSplits=on,minimumScreenFillPercent=fill,requireZoomGain=true)
+            check(run(fill=25)==order)
+            check(run(on=false)==order)
+            check(run(protected=listOf(tall.region))==order)
+            val enlarged=run()
+            val at=order.indexOf(tall)
+            check(enlarged.size==4)
+            check(enlarged.filterIndexed { i,_->i!=at && i!=at+1 } == order.filter { it!=tall })
+            val parts=enlarged.subList(at,at+2).map { it.region }
+            check(parts.all { it.left==tall.region.left && it.right==tall.region.right })
+            check(parts[0].bottom-parts[1].top==144)
+            check(PanelReadableSliceRefiner.coversSourceRow(tall.region,parts))
+            val framed: (Int,Int)->Boolean = { x,y ->
+                if(x in tall.region.left until tall.region.right) {
+                    when(y) {
+                        in 581..619 -> false
+                        580,620 -> true
+                        else -> dense(x,y)
+                    }
+                } else dense(x,y)
+            }
+            val natural=run(ink=framed)
+            check(natural.size==4)
+            val naturalParts=natural.subList(at,at+2).map { it.region }
+            check(naturalParts[0].bottom==naturalParts[1].top)
+            check(PanelReadableSliceRefiner.coversSourceRow(tall.region,naturalParts))
+        }
+    }
+    // A wider C already fills enough of a portrait viewport: keep all three.
+    val readable=listOf(view(0,0,480,1200),view(480,0,800,600),view(480,600,800,1200))
+    val dense: (Int,Int)->Boolean={x,y -> (x*13+y*31)%97<45}
+    check(PanelReadableSliceRefiner.refine(readable,800,1200,480,800,dense,
+        autoFit=true,minimumScreenFillPercent=50,requireZoomGain=true)==readable)
+    println("PASS: spanning-panel readability, mirrored order, natural-first, overlap, coverage and protections")
 }

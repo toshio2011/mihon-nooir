@@ -381,6 +381,36 @@ fun main() {
                 "Tall panels should use portrait: $sizes"
             }
         }
+        // Original synthetic A/B/C mixed layout: one tall column and two
+        // stacked neighbors. A readable C must remain exactly one output.
+        for (mirror in listOf(false,true)) {
+            val spanning = File(root,"spanning-$mirror").apply { mkdirs() }
+            val art = BufferedImage(300,420,BufferedImage.TYPE_INT_RGB)
+            val graphics=art.createGraphics()
+            try {
+                graphics.color=java.awt.Color.WHITE
+                graphics.fillRect(0,0,300,420)
+                graphics.color=java.awt.Color(80,80,80)
+                graphics.fillRect(if(mirror) 158 else 8,8,134,404)
+                graphics.color=java.awt.Color(95,95,95)
+                graphics.fillRect(if(mirror) 8 else 156,8,136,188)
+                graphics.color=java.awt.Color(105,105,105)
+                graphics.fillRect(if(mirror) 8 else 156,210,136,202)
+            } finally { graphics.dispose() }
+            check(ImageIO.write(art,"png",File(spanning,"01.png")));art.flush()
+            for(device in listOf("X4","X3")) for(format in listOf("XTC","XTCH")) {
+                for(rtl in listOf(false,true)) {
+                    val out=File(root,"spanning-$mirror-$device-$format-$rtl."+format.lowercase())
+                    NooirDesktopCli.main(arrayOf("--input",spanning.absolutePath,"--output",out.absolutePath,
+                        "--format",format,"--device",device,"--options-token",autoOptions.copy(
+                            rightToLeft=rtl, cropWhiteMargins=false, overlapPercent=0,
+                            enlargeOversizedSplits=true, minimumScreenFillPercent=50).token()))
+                    check(u16(out.readBytes(),6)==3) {
+                        "Readable spanning panel: $mirror $device $format RTL=$rtl must export three frames"
+                    }
+                }
+            }
+        }
         val mixedXtc = File(root, "mixed-auto.xtc")
         NooirDesktopCli.main(arrayOf(
             "--input", mixed.absolutePath, "--output", mixedXtc.absolutePath,

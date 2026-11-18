@@ -101,7 +101,7 @@ jobs:
               -e 'overlay/app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt' || true)
           fi
           # Separate approved shared geometry experiment; Windows-only guards remain strict.
-          if [[ "${GITHUB_HEAD_REF:-}" == experiment/content-aware-oversized-zoom-20261118 || "${GITHUB_HEAD_REF:-}" == experiment/natural-gutters-before-overlap-20261119 ]]; then
+          if [[ "${GITHUB_HEAD_REF:-}" == experiment/content-aware-oversized-zoom-20261118 || "${GITHUB_HEAD_REF:-}" == experiment/natural-gutters-before-overlap-20261119 || "${GITHUB_HEAD_REF:-}" == experiment/spanning-panel-readability-20261119 ]]; then
             protected=$(printf '%s\n' "$protected" | grep -v -F -x \
               -e 'overlay/app/src/main/java/dev/nooir/bridge/PanelReadableSliceRefiner.kt' || true)
           fi
