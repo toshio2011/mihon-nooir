@@ -1,5 +1,7 @@
 import dev.nooir.bridge.PageRegion
 import dev.nooir.bridge.PanelDetectionCore
+import dev.nooir.bridge.PairedStructure
+import kotlin.math.roundToInt
 
 private fun promotionalMontageFixture(): Triple<Int, Int, ByteArray> {
     val w = 600
@@ -49,6 +51,7 @@ private fun centerGray(pixels: ByteArray, width: Int, region: PageRegion): Int {
     return pixels[y * width + x].toInt() and 255
 }
 fun main() {
+    pairedStructureRegression()
     val (promoWidth, promoHeight, promoPixels) = promotionalMontageFixture()
     check(PanelDetectionCore.isIllustratedPromotionalBanner(
         promoWidth, promoHeight, promoPixels
@@ -934,4 +937,45 @@ fun main() {
     }
 
     println("Automatic panel Phase A passed: 2x3 RTL/LTR, coverage, guard padding, splash, staggered fallback, webtoon, spreads, limits")
+}
+
+private fun pairedStructureRegression() {
+    val w=560; val h=900
+    val img=ByteArray(w*h){255.toByte()}
+    fun offset(x:Int,slope:Int)=((x-w/2.0)*slope/100.0).roundToInt()
+    // Independently generated framed story tiers. Each divider has two
+    // straight dark rails enclosing a pale corridor. Artwork is texture.
+    for(y in 0 until h)for(x in w/14 until w-w/14){
+        val a=280+offset(x,6);val b=520+offset(x,-9)
+        val tier=if(y<a-13)0 else if(y>a+13&&y<b-13)1 else if(y>b+13&&y<842)2 else -1
+        if(tier>=0){
+            val axis=220+((y-410)*0.12).roundToInt()
+            val colGap=when(tier){1->kotlin.math.abs(x-axis)<=6;2->kotlin.math.abs(x-180)<=5||kotlin.math.abs(x-370)<=5;else->false}
+            if(!colGap && (x*17+y*23)%103<34)img[y*w+x]=80.toByte()
+            if(tier==1&&kotlin.math.abs(kotlin.math.abs(x-axis)-6)<=1)img[y*w+x]=0
+            if(tier==2&&(kotlin.math.abs(kotlin.math.abs(x-180)-5)<=1||kotlin.math.abs(kotlin.math.abs(x-370)-5)<=1))img[y*w+x]=0
+        }
+        if(listOf(a-13,a+13,b-13,b+13).any{kotlin.math.abs(y-it)<=1})img[y*w+x]=0
+    }
+    val old=listOf(PageRegion(0,0,w,280),PageRegion(0,280,w,860),PageRegion(0,860,w,h))
+    val rows=PairedStructure.recover(w,h,img,old,true,false) ?: error("row recovery failed")
+    val rtl=PairedStructure.recover(w,h,img,old,true,true) ?: error("panel recovery failed")
+    val ltr=PairedStructure.recover(w,h,img,old,false,true) ?: error("LTR recovery failed")
+    check(rows.size==3&&rtl.size==6&&ltr.size==6)
+    check(rtl[0]==rows[0]&&rtl[1].left>rtl[2].left&&rtl[3].left>rtl[4].left&&rtl[4].left>rtl[5].left)
+    check(ltr==listOf(rtl[0],rtl[2],rtl[1],rtl[5],rtl[4],rtl[3]))
+    check(rows.all{it.left==0&&it.right==w})
+    for(y in 0 until h)for(x in 0 until w)check(rtl.any{x in it.left until it.right&&y in it.top until it.bottom})
+    val noRail=img.copyOf();for(y in 0 until h)for(x in 0 until w){val a=280+offset(x,6);if(kotlin.math.abs(y-(a-13))<=1)noRail[y*w+x]=255.toByte()}
+    check(PairedStructure.recover(w,h,noRail,old,true,true)==null)
+    val sheet=ByteArray(w*h){255.toByte()}
+    fun rect(l:Int,t:Int,r:Int,b:Int){for(y in t until b)for(x in l until r)sheet[y*w+x]=0}
+    rect(30,78,w-30,81);rect(30,824,w-30,827);rect(30,78,33,827);rect(w-33,78,w-30,827)
+    for(y in 100 until 250)for(x in 65 until w-65)if((x/12+y/9)%2==0)sheet[y*w+x]=0
+    for(y in 295 until 800)for(x in 70 until w-70)if((x%49==0&&y%70<20)||(y%83==0&&x%71<40))sheet[y*w+x]=0
+    val falseRows=listOf(0,90,145,210,270,335,h).zipWithNext().map{(t,b)->PageRegion(0,t,w,b)}
+    check(PairedStructure.artwork(w,h,sheet,falseRows))
+    val noBorder=sheet.copyOf();for(y in 78 until 827)for(x in 30..32)noBorder[y*w+x]=255.toByte()
+    check(!PairedStructure.artwork(w,h,noBorder,falseRows))
+    println("PASS: paired rail tiers and individual panels, RTL/LTR, exact coverage, missing-rail negative and artwork guard")
 }
