@@ -328,16 +328,18 @@ object PanelReadableSliceRefiner {
         if (old == null) return null
         if (p.width < 120 || p.height < 160) return old
         val midpoint = p.top + p.height / 2
-        val band = maxOf(2, p.height / 120)
+        val band = (p.height / 120).coerceIn(2, 12)
         val reach = p.height / 10
         val step = maxOf(1, reach / 16)
         val dx = maxOf(1, (p.width.toLong() + 159) / 160).toInt()
-        // Five rows across a small band; use the worst line, not just one
-        // white scanline between letters. Bounded to ~35 candidates.
+        // Five sampled rows for ranking; validate every pixel in every row
+        // of up to three contiguous bands (at most 25 rows per band).
         fun inkFraction(y: Int, fullWidth: Boolean): Double {
             var worst = 0.0
             val sample = if (fullWidth) 1 else dx
-            for (offset in listOf(-band, -band / 2, 0, band / 2, band).distinct()) {
+            val offsets = if (fullWidth) (-band..band).toList()
+                else listOf(-band, -band / 2, 0, band / 2, band).distinct()
+            for (offset in offsets) {
                 var ink = 0
                 var n = 0
                 for (x in p.left until p.right step sample) {
@@ -345,6 +347,7 @@ object PanelReadableSliceRefiner {
                     n++
                 }
                 if (n > 0) worst = maxOf(worst, ink.toDouble() / n)
+                if (fullWidth && worst > 0.04) return worst
             }
             return worst
         }

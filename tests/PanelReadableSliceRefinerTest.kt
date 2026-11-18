@@ -279,6 +279,12 @@ private fun contentAwareZoom() {
     // Don't treat a moving single-pixel white line as a real band.
     val thin: (Int,Int)->Boolean = { x,y -> y!=600 && dense(x,y) }
     check(PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,thin,false,50)==base)
+    // A candidate with dark intervening scanlines can fool five-row
+    // sampling; full-band verification must reject it.
+    val interrupted: (Int,Int)->Boolean = { x,y ->
+        if (y in 590..625 && y%3!=0) false else dense(x,y)
+    }
+    check(PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,interrupted,false,50)==base)
     // Central quiet band wins over an asymmetric alternate.
     val centerQuiet: (Int,Int)->Boolean = { x,y -> y !in 505..545 && quiet(x,y) }
     check(PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,centerQuiet,false,50)==base)
