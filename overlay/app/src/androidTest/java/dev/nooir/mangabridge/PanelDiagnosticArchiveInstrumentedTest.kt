@@ -219,6 +219,70 @@ class PanelDiagnosticArchiveInstrumentedTest {
         } finally { folder.deleteRecursively() }
     }
 
+
+    /** Synthetic geometry identical to the desktop fixture; real encoded books. */
+    @Test fun oversizedRowZoomRespectsToggleAndAutoFit() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = scratch(context, "oversized-row")
+        try {
+            val input = File(folder, "oversized.png")
+            val pixels = IntArray(600 * 1400) { i ->
+                val x = i % 600
+                val y = i / 600
+                val art = x in 45..554 && (y in 20..1010 || y in 1080..1380)
+                val shade = if (art && (x*13+y*31)%97 < 45) 65 else 255
+                Color.rgb(shade, shade, shade)
+            }
+            val bitmap = Bitmap.createBitmap(pixels, 600, 1400, Bitmap.Config.ARGB_8888)
+            try { input.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,it)) } }
+            finally { bitmap.recycle() }
+            val original = input.readBytes()
+            val uri = Uri.fromFile(input)
+            val source = AndroidPageSource(context)
+            val settings = MangaConversionOptions(
+                panelMode = "ROW_BY_ROW", layout = "PAGED", orientation = "LANDSCAPE",
+                cropWhiteMargins = false, overlapPercent = 0, splitSpreads = false,
+                dither = false, includeCover = false, keepChapterFirstPageWhole = false,
+                minimumScreenFillPercent = 50,
+            )
+            for ((device, dims) in listOf("X4" to (480 to 800), "X3" to (528 to 792))) {
+                val (w,h) = dims
+                for (format in dev.nooir.bridge.XtcFormat.entries) {
+                    val off = source.pages(listOf(uri),w,h,format.depth,
+                        settings.copy(enlargeOversizedSplits=false)).toList()
+                    val on = source.pages(listOf(uri),w,h,format.depth,
+                        settings.copy(enlargeOversizedSplits=true)).toList()
+                    assertEquals("$device $format disabled",2,off.size)
+                    assertEquals("$device $format enabled",3,on.size)
+                    assertArrayEquals("Unrelated final row unchanged",off.last().levels,on.last().levels)
+                    assertFalse(off.first().levels.contentEquals(on.first().levels))
+                    val auto = settings.copy(orientation="AUTO_FIT")
+                    val autoOff = source.pages(listOf(uri),w,h,format.depth,
+                        auto.copy(enlargeOversizedSplits=false)).toList()
+                    val autoOn = source.pages(listOf(uri),w,h,format.depth,
+                        auto.copy(enlargeOversizedSplits=true)).toList()
+                    assertEquals("Auto Fit already readable",2,autoOff.size)
+                    assertEquals("No redundant crop",2,autoOn.size)
+                    for (i in autoOff.indices) assertArrayEquals(autoOff[i].levels,autoOn[i].levels)
+                    val result = File(folder,device+"-zoom."+format.extension)
+                    result.outputStream().use { stream ->
+                        dev.nooir.bridge.XtcCodec.write(format,on.asSequence(),stream,folder,
+                            dev.nooir.bridge.BookMetadata("Oversized row QA"))
+                    }
+                    val book = dev.nooir.bridge.XtcBookPreview(result)
+                    assertEquals(3,book.pageCount)
+                    for (i in 0 until book.pageCount) {
+                        val page = book.page(i)
+                        assertEquals(w,page.width)
+                        assertEquals(h,page.height)
+                        assertArrayEquals(on[i].levels,page.levels)
+                    }
+                }
+            }
+            assertArrayEquals(original,input.readBytes())
+        } finally { folder.deleteRecursively() }
+    }
+
     @Test fun realAndroidCbzZipAndRenderParity() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val temp = scratch(context, "cbz")

@@ -28,6 +28,8 @@ internal object DesktopConversionDialog {
         ))
         val renderHelp = JLabel("")
         val contextPeek = JSpinner(SpinnerNumberModel(0, 0, 8, 1))
+        val enlarge = JCheckBox("Enlarge oversized splits")
+        val minFill = JSpinner(SpinnerNumberModel(50,25,80,5))
         var selectedSettings = original
         fun renderExplanation() {
             renderHelp.text = when (renderMode.selectedItem) {
@@ -62,6 +64,10 @@ internal object DesktopConversionDialog {
             split.isSelected = o.splitSpreads
             rtl.isSelected = o.rightToLeft
             renderMode.selectedItem = o.renderAlgorithm
+            enlarge.isSelected = o.enlargeOversizedSplits
+            minFill.value = o.minimumScreenFillPercent
+            enlarge.isEnabled = o.panelMode != "OFF"
+            minFill.isEnabled = enlarge.isEnabled && enlarge.isSelected
             contextPeek.value = o.contextPeekPercent
             contextPeek.isEnabled = o.panelMode == "PANEL_BY_PANEL"
             renderExplanation()
@@ -88,7 +94,10 @@ internal object DesktopConversionDialog {
                 orientation.selectedItem = "PORTRAIT"
             }
             contextPeek.isEnabled = panelMode.selectedItem == "PANEL_BY_PANEL"
+            enlarge.isEnabled = panelMode.selectedItem != "OFF"
+            minFill.isEnabled = enlarge.isEnabled && enlarge.isSelected
         }
+        enlarge.addActionListener { minFill.isEnabled = enlarge.isEnabled && enlarge.isSelected }
         renderMode.addActionListener { if (!updating) renderExplanation() }
         val panel = JPanel(GridLayout(0, 2, 10, 5)).apply {
             add(JLabel("Preset")); add(preset)
@@ -103,6 +112,8 @@ internal object DesktopConversionDialog {
             add(JLabel("Dithering / rendering")); add(renderMode)
             add(JLabel("Rendering difference")); add(renderHelp)
             add(JLabel("Context Peek % (Panel by Panel)")); add(contextPeek)
+            add(enlarge); add(JLabel("12% protective overlap; useful zoom only"))
+            add(JLabel("Minimum screen fill %")); add(minFill)
             add(clockwise); add(cover)
             add(missingCover); add(color)
             add(showOverview); add(keepChapterFirstWhole)
@@ -125,6 +136,8 @@ internal object DesktopConversionDialog {
                 else -> true
             },
             renderAlgorithm = renderMode.selectedItem as String,
+            enlargeOversizedSplits = enlarge.isSelected,
+            minimumScreenFillPercent = minFill.value as Int,
             contextPeekPercent = if (panelMode.selectedItem == "PANEL_BY_PANEL")
                 contextPeek.value as Int else 0,
             orientation = (orientation.selectedItem as String).takeUnless {

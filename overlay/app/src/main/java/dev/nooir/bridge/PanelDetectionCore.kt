@@ -848,7 +848,11 @@ object PanelDetectionCore {
     }
 
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
-        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
+        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan =
+        detect(width,height,grayscale,rightToLeft,true,trace)
+
+    fun detect(width: Int,height: Int,grayscale: ByteArray,rightToLeft: Boolean,
+        allowOverlapRescue: Boolean,trace: ((PanelDebugEvent)->Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
             "Panel detection needs a bounded, nonempty thumbnail"
         }
@@ -1196,7 +1200,7 @@ object PanelDetectionCore {
             // shrinking a dense illustrated portrait page to one X4 frame,
             // provide three protected, overlapping story views. This is a
             // reading fallback, NOT a claim that arbitrary cuts are panels.
-            if (output.size == 1 && rows.size == 1 &&
+            if (allowOverlapRescue && output.size == 1 && rows.size == 1 &&
                 !detector.isSparseRow(whole)) {
                 val overlapViews = recoverOverlappingRowViews(
                     width, height, grayscale, rightToLeft, trace)

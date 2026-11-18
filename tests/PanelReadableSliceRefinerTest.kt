@@ -27,6 +27,7 @@ private fun preservesAll(before: List<PanelFitSlice>, after: List<PanelFitSlice>
 }
 
 fun main() {
+    configurableZoom()
     // Exact X4-equivalent FINAL fitted minimum size, not source pixels.
     val narrow = view(390,0,410,700)
     val measure = PanelReadableSliceRefiner.fittedMinimumX4Pixels(
@@ -225,4 +226,23 @@ fun main() {
     check(refine(priorOverlap)==priorOverlap)
 
     println("Readable slices passed: 5mm merge, 10mm sparse guard, huge-row overlap, source coverage")
+}
+
+private fun configurableZoom() {
+    val broad=listOf(view(0,0,600,1050,true),view(0,1050,600,1400,true))
+    val ink:(Int,Int)->Boolean={x,y -> x in 65..535 && y in 45..1330 && (x+y)%7<4}
+    val rows=PanelReadableSliceRefiner.refineRows(broad,600,1400,480,800,ink,false,50)
+    check(rows.size==3 && rows[0].region==PageRegion(0,0,600,588) &&
+        rows[1].region==PageRegion(0,462,600,1050) && rows[2]==broad[1])
+    preservesAll(broad,rows)
+    check(PanelReadableSliceRefiner.refineRows(broad,600,1400,480,800,ink,false,25)==broad)
+    val portrait=broad.map { it.copy(landscape=false) }
+    check(PanelReadableSliceRefiner.refineRows(portrait,600,1400,480,800,ink,false,50)==portrait)
+    check(PanelReadableSliceRefiner.refineRows(broad,600,1400,480,800,{_,_->true},false,50)==broad)
+    check(PanelReadableSliceRefiner.refineRows(listOf(broad[0]),600,1400,480,800,ink,false,80)==listOf(broad[0]))
+    check(PanelReadableSliceRefiner.refine(broad,600,1400,480,800,ink,autoFit=false,
+        enlargeOversizedSplits=false,requireZoomGain=true,minimumScreenFillPercent=50)==broad)
+    check(PanelReadableSliceRefiner.refine(broad,600,1400,480,800,ink,autoFit=false,
+        enlargeOversizedSplits=true,requireZoomGain=true,minimumScreenFillPercent=50)==rows)
+    println("PASS: configurable oversize zoom, full width/order, 12 percent repeat, coverage and disable")
 }
