@@ -28,6 +28,7 @@ private fun preservesAll(before: List<PanelFitSlice>, after: List<PanelFitSlice>
 
 fun main() {
     configurableZoom()
+    contentAwareZoom()
     // Exact X4-equivalent FINAL fitted minimum size, not source pixels.
     val narrow = view(390,0,410,700)
     val measure = PanelReadableSliceRefiner.fittedMinimumX4Pixels(
@@ -245,4 +246,46 @@ private fun configurableZoom() {
     check(PanelReadableSliceRefiner.refine(broad,600,1400,480,800,ink,autoFit=false,
         enlargeOversizedSplits=true,requireZoomGain=true,minimumScreenFillPercent=50)==rows)
     println("PASS: configurable oversize zoom, full width/order, 12 percent repeat, coverage and disable")
+}
+
+private fun contentAwareZoom() {
+    val items = listOf(view(0,0,600,1050,true),view(0,1050,600,1400,true))
+    val p = items.first().region
+    val dense: (Int, Int) -> Boolean = { x,y ->
+        x in 65..535 && y in 45..1330 && (x+y)%7<4
+    }
+    // Synthetic gutter below the midpoint. A dense middle band stands in
+    // for dialogue/art; the quiet band is wide enough to be verified.
+    val quiet: (Int, Int) -> Boolean = { x,y -> y !in 590..625 && dense(x,y) }
+    val base = PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,dense,false,50)
+    check(base[0].region==PageRegion(0,0,600,588) && base[1].region.top==462)
+    val shifted = PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,quiet,false,50)
+    check(shifted.size==3 && shifted[2]==items[1])
+    val a = shifted[0].region
+    val b = shifted[1].region
+    val center = (a.bottom+b.top)/2
+    check(center in 590..625) { "Expected verified quiet band, got center $center" }
+    check(a.left==p.left && b.left==p.left && a.right==p.right && b.right==p.right)
+    check(a.bottom-b.top==126 && a.top==p.top && b.bottom==p.bottom)
+    check(PanelReadableSliceRefiner.coversSourceRow(p,listOf(a,b)))
+    check(shifted.all { it.landscape })
+    // An entire central dialogue strip is still in the first view.
+    check(a.top<=490 && a.bottom>=560)
+    val panel = PanelReadableSliceRefiner.refine(items,600,1400,480,800,quiet,
+        autoFit=false,requireZoomGain=true,minimumScreenFillPercent=50)
+    check(panel==shifted) { "Row and panel fallbacks must share the same safe seam" }
+    check(PanelReadableSliceRefiner.refine(items,600,1400,480,800,quiet,
+        autoFit=false,requireZoomGain=true,enlargeOversizedSplits=false)==items)
+    // Don't treat a moving single-pixel white line as a real band.
+    val thin: (Int,Int)->Boolean = { x,y -> y!=600 && dense(x,y) }
+    check(PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,thin,false,50)==base)
+    // Central quiet band wins over an asymmetric alternate.
+    val centerQuiet: (Int,Int)->Boolean = { x,y -> y !in 505..545 && quiet(x,y) }
+    check(PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,centerQuiet,false,50)==base)
+    // Sparse/uncertain/preserved results are not newly eligible.
+    check(PanelReadableSliceRefiner.refineRows(items,600,1400,480,800,quiet,false,50,
+        protectedRegions=listOf(p))==items)
+    val portrait=items.map { it.copy(landscape=false) }
+    check(PanelReadableSliceRefiner.refineRows(portrait,600,1400,480,800,quiet,true,50)==portrait)
+    println("PASS: bounded quiet-band zoom, exact overlap/coverage, shared mode parity, noisy/center/protected fallback")
 }
