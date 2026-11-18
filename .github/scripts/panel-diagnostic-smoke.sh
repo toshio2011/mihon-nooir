@@ -34,19 +34,20 @@ adb shell am instrument -w -r \
   dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
   | tee diagnostic-instrumentation.txt
 
-# All four tests MUST have run and passed, and the runner must have finished
+# All five tests MUST have run and passed, and the runner must have finished
 # successfully. The old hardcoded "OK (1 test)" check was incorrect after
 # introducing the second instrumentation test.
 for required in \
   realAndroidCbzZipAndRenderParity \
   shortRuledFooterStaysOneFrameThroughAndroidRender \
   savedBinaryPreviewReadsActualSafBytes \
-  oversizedRowZoomRespectsToggleAndAutoFit
+  oversizedRowZoomRespectsToggleAndAutoFit \
+  mixedSlantedRowsAndPanelsThroughAndroidExport
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" diagnostic-instrumentation.txt
 done
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.txt)" -eq 4
-grep -Fxq 'OK (4 tests)' diagnostic-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.txt)" -eq 5
+grep -Fxq 'OK (5 tests)' diagnostic-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
