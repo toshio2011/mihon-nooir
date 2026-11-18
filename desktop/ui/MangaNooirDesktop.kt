@@ -124,6 +124,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
     private val managedServer = SuwayomiProcessManager()
+    private val conversionSettingsStore = DesktopConversionSettingsStore()
     private var options = MangaConversionOptions.preset("Manga")
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
@@ -150,6 +151,11 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private var compactTabs: JTabbedPane? = null
 
     init {
+        try {
+            options = conversionSettingsStore.load()
+        } catch (e: Exception) {
+            status.text = "Offline ready — saved conversion settings unreadable; using defaults. Original preserved."
+        }
         defaultCloseOperation = DISPOSE_ON_CLOSE
         DesktopWindowSizing.fit(this, Dimension(1280, 760), Dimension(600, 440))
         // A narrow work area (including high DPI) uses tabs instead of
@@ -268,7 +274,17 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             startServer, stopServer, getServer, checkWindowsUpdates)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
-            DesktopConversionDialog.show(this, options)?.let { options = it }
+            DesktopConversionDialog.show(this, options)?.let { proposed ->
+                try {
+                    conversionSettingsStore.save(proposed)
+                    options = proposed
+                    status.text = "Conversion settings saved for next launch."
+                } catch (e: Exception) {
+                    showError("Could not save conversion settings. Existing file and previously selected options are unchanged. " +
+                        "Check storage or back up/move " + DesktopConversionSettingsStore.FILE_NAME +
+                        " in the app data folder before retrying. " + (e.message ?: ""))
+                }
+            }
         }
         connect.addActionListener { loadSources() }
         startServer.addActionListener { startManagedServer() }

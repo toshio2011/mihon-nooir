@@ -1,6 +1,7 @@
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
+import dev.nooir.desktop.ui.DesktopConversionSettingsStore
 import dev.nooir.desktop.ui.DesktopXtcPreviewSizing
 import dev.nooir.desktop.ui.LocalComicPages
 import dev.nooir.desktop.ui.LatestPageLoadGate
@@ -26,6 +27,7 @@ import javax.imageio.ImageIO
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 
 fun main() {
+    verifyConversionSettingsStorage()
     // Fast page turns must decode only one page/spread at a time. The newest
     // page replaces any pending request without piling up huge bitmaps.
     val decodeGate = LatestPageLoadGate<Int>()
@@ -462,4 +464,36 @@ fun main() {
     // In headless CI we compile/load the real Swing GUI, but do not instantiate a JFrame.
     check(Class.forName("dev.nooir.desktop.ui.MangaNooirDesktop") != null)
     println("Desktop GUI model tests passed: chapter selection, two-page RTL paging, across-chapter offline navigation, formats and headless GUI")
+}
+
+private fun verifyConversionSettingsStorage() {
+    val root = Files.createTempDirectory("nooir-settings-qa")
+    try {
+        val store = DesktopConversionSettingsStore(root)
+        val file = root.resolve(DesktopConversionSettingsStore.FILE_NAME)
+        check(store.load() == MangaConversionOptions.preset("Manga") && !Files.exists(file))
+        val desired = MangaConversionOptions.preset("Manga").copy(preset="Custom",
+            panelMode="ROW_BY_ROW", orientation="AUTO_FIT", minimumScreenFillPercent=65,
+            enlargeOversizedSplits=false, overlapPercent=13, renderAlgorithm="ATKINSON")
+        store.save(desired.copy(allowMissingCover=true,skipUnavailableChapters=true,panelDiagnostics=true))
+        check(DesktopConversionSettingsStore(root).load()==desired) { "Settings must survive new store instance; one-job permissions must not persist" }
+        check(DesktopConversionSettingsStore(root.resolve("other")).load()==MangaConversionOptions.preset("Manga"))
+        val old = Files.readString(file).lines().first() + "\n" + desired.token().split('|').take(22).joinToString("|") + "\n"
+        Files.writeString(file,old)
+        check(store.load()==desired.copy(enlargeOversizedSplits=true,minimumScreenFillPercent=50))
+        store.save(desired)
+        check(store.load()==desired)
+        for (bad in listOf("unknown format", old.replace("|AUTO_FIT|","|INVALID|"),
+                "x".repeat(4097), "")) {
+            Files.writeString(file,bad)
+            val bytes=Files.readAllBytes(file)
+            check(runCatching { store.load() }.isFailure)
+            check(runCatching { store.save(desired) }.isFailure)
+            check(Files.readAllBytes(file).contentEquals(bytes)) { "Invalid settings must be preserved" }
+            Files.delete(file)
+            store.save(desired)
+        }
+        check(Files.list(root).use { it.count() } == 1L)
+        println("PASS: local conversion settings roundtrip, isolation, 22-field migration, corrupt-file refusal and no persistent per-job consent")
+    } finally { root.toFile().deleteRecursively() }
 }

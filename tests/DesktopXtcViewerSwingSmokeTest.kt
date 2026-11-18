@@ -388,6 +388,9 @@ private fun verifyOfflineLibrary(folder: File) {
         }) { "Saved bookmark did not survive reopening the reader" }
         check(comic.readBytes().contentEquals(original)) { "Offline reader changed original CBZ bytes" }
         println("PASS: packaged offline main startup, compact/wide layout, library filter, cover, reader page turn, bookmark, reopen/resume and source unchanged; windows/toolbar accessible")
+        onSwingThread { Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() } }
+        MangaNooirDesktop.main(emptyArray())
+        verifyConversionSettings(awaitFrame("MihonNooir — Windows development"), restored = true)
     } finally {
         onSwingThread {
             Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() }
@@ -401,7 +404,7 @@ private fun verifyOfflineLibrary(folder: File) {
 }
 
 /** Open the actual production main settings and verify saved/canceled edits. */
-private fun verifyConversionSettings(main: JFrame) {
+private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {
     val button = findButton(main, "Conversion settings")
     verifyToolbarReachable(button)
     fun open(): JDialog {
@@ -444,6 +447,12 @@ private fun verifyConversionSettings(main: JFrame) {
     val mode = control(dialog,"Page extraction") as JComboBox<*>
     val enlarge = toggle(dialog)
     val fill = control(dialog,"Minimum screen fill %") as JSpinner
+    if (restored) {
+        check(onSwingThread { mode.selectedItem == "ROW_BY_ROW" && enlarge.isSelected && fill.value == 65 })
+        finish(dialog,"Cancel")
+        println("PASS: new production main window restores saved conversion preferences")
+        return
+    }
     onSwingThread { mode.selectedItem = "OFF" }
     check(onSwingThread { !enlarge.isEnabled && !fill.isEnabled })
     onSwingThread { mode.selectedItem = "ROW_BY_ROW" }
@@ -456,6 +465,9 @@ private fun verifyConversionSettings(main: JFrame) {
     // Deliberately type the value without firing Enter; OK must commit it.
     onSwingThread { (fill.editor as JSpinner.DefaultEditor).textField.text = "65" }
     finish(dialog,"OK")
+    awaitUi("conversion preferences persisted") {
+        DesktopConversionSettingsStore().load().minimumScreenFillPercent == 65
+    }
     val saved = open()
     val retained = control(saved,"Minimum screen fill %") as JSpinner
     check(onSwingThread { toggle(saved).isSelected && retained.value == 65 &&

@@ -76,7 +76,7 @@ try {
   Invoke-State 'seed'
   & ./desktop/windows/verify-launcher.ps1 -ExePath (Join-Path $installed 'MihonNooir-Preview.exe') -ExistingQaDataDir $data
   # Fingerprint the application data, not just an unrelated sentinel.
-  $statePaths=@('local-library-v1.txt','reader-bookmarks-v1.tsv','conversion-queue-v1.tsv','exports/original-comic.xtc','original-comic/001.png','original-comic/002.png')
+  $statePaths=@('local-library-v1.txt','reader-bookmarks-v1.tsv','conversion-queue-v1.tsv','conversion-settings-v1.txt','exports/original-comic.xtc','original-comic/001.png','original-comic/002.png')
   $before=@{}
   foreach($relative in $statePaths) { $before[$relative]=(Get-FileHash -LiteralPath (Join-Path $data $relative) -Algorithm SHA256).Hash }
   Invoke-Msi '/i' $current 'direct-upgrade';$activeMsi=$current
