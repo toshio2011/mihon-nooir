@@ -275,10 +275,10 @@ object PanelReadableSliceRefiner {
                 continue
             }
 
-            val halves = overlapHalves(view, portraitWidth, portraitHeight, autoFit)
-            if (halves == null || (requireZoomGain &&
-                    !hasZoomGain(view, halves, portraitWidth, portraitHeight, inkAt))) result.add(view)
-            else result.addAll(halves)
+            val halves = if (requireZoomGain)
+                readableOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+            else overlapHalves(view, portraitWidth, portraitHeight, autoFit)
+            if (halves == null) result.add(view) else result.addAll(halves)
         }
         return if (result.size <= MAX_VIEWS) result else views
     }
@@ -304,20 +304,86 @@ object PanelReadableSliceRefiner {
                 result.add(view)
                 continue
             }
-            val halves = overlapHalves(view,portraitWidth,portraitHeight,autoFit)
-            if (halves != null && hasZoomGain(view,halves,portraitWidth,portraitHeight,inkAt))
-                result.addAll(halves)
-            else result.add(view)
+            val halves = readableOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+            if (halves != null) result.addAll(halves) else result.add(view)
         }
         return result
     }
 
-    private fun overlapHalves(view: PanelFitSlice,w: Int,h: Int,autoFit: Boolean): List<PanelFitSlice>? {
+    /**
+     * Only move an already eligible overlapping cut when a contiguous pale
+     * band is substantially quieter than the central band. This is not a
+     * second panel detector or OCR. Search the middle 40–60%, keep the exact
+     * old overlap width and preserve every source pixel. If uncertain, use
+     * the previous centered plan, subject to the same enlargement guards.
+     */
+    private fun readableOverlap(view: PanelFitSlice, w: Int, h: Int, autoFit: Boolean,
+        inkAt: (Int, Int) -> Boolean): List<PanelFitSlice>? {
+        val p = view.region
+        val centered = overlapHalves(view, w, h, autoFit) ?: return null
+        val old = centered.takeIf { hasZoomGain(view, it, w, h, inkAt) }
+        // An off-center cut cannot improve the worst half's scale over a
+        // centered cut with the same repeated band. Avoid extra pixel work
+        // entirely if the old balanced plan would not actually enlarge.
+        if (old == null) return null
+        if (p.width < 120 || p.height < 160) return old
+        val midpoint = p.top + p.height / 2
+        val band = (p.height / 120).coerceIn(2, 12)
+        val reach = p.height / 10
+        val step = maxOf(1, reach / 16)
+        val dx = maxOf(1, (p.width.toLong() + 159) / 160).toInt()
+        // Five sampled rows for ranking; validate every pixel in every row
+        // of up to three contiguous bands (at most 25 rows per band).
+        fun inkFraction(y: Int, fullWidth: Boolean): Double {
+            var worst = 0.0
+            val sample = if (fullWidth) 1 else dx
+            val offsets = if (fullWidth) (-band..band).toList()
+                else listOf(-band, -band / 2, 0, band / 2, band).distinct()
+            for (offset in offsets) {
+                var ink = 0
+                var n = 0
+                for (x in p.left until p.right step sample) {
+                    if (inkAt(x, y + offset)) ink++
+                    n++
+                }
+                if (n > 0) worst = maxOf(worst, ink.toDouble() / n)
+                if (fullWidth && worst > 0.04) return worst
+            }
+            return worst
+        }
+        val centerInk = inkFraction(midpoint, false)
+        // Already quiet: do not trade balanced enlargement for a marginal gain.
+        if (centerInk <= 0.12) return old
+        val candidates = mutableListOf<Pair<Int, Double>>()
+        for (y in midpoint - reach..midpoint + reach step step) {
+            if (kotlin.math.abs(y - midpoint) < band) continue
+            val score = inkFraction(y, false)
+            if (score <= 0.04 && centerInk - score >= 0.12)
+                candidates.add(y to score)
+        }
+        // Closest strongly supported quiet band first; deterministic tie break.
+        // Full-width validation of at most three proposals limits bitmap work.
+        val sorted = candidates.sortedWith(compareBy<Pair<Int, Double>> {
+            kotlin.math.abs(it.first - midpoint)
+        }.thenBy { it.second }.thenBy { it.first })
+        for ((y, _) in sorted.take(3)) {
+            if (inkFraction(y, true) > 0.04) continue
+            val shifted = overlapHalves(view, w, h, autoFit, y - midpoint) ?: continue
+            if (!hasZoomGain(view, shifted, w, h, inkAt)) continue
+            if (!coversSourceRow(p, shifted.map { it.region })) continue
+            return shifted
+        }
+        return old
+    }
+
+    private fun overlapHalves(view: PanelFitSlice,w: Int,h: Int,autoFit: Boolean,
+        shift: Int = 0): List<PanelFitSlice>? {
         val p = view.region
         if (p.height < 16) return null
-        val first = p.copy(bottom=p.top+(p.height.toLong()*56/100).toInt())
-        val second = p.copy(top=p.top+(p.height.toLong()*44/100).toInt())
-        if (first.bottom <= second.top || first.height <= 0 || second.height <= 0) return null
+        val first = p.copy(bottom=p.top+(p.height.toLong()*56/100).toInt()+shift)
+        val second = p.copy(top=p.top+(p.height.toLong()*44/100).toInt()+shift)
+        if (first.bottom <= second.top || first.height <= 0 || second.height <= 0 ||
+            first.bottom > p.bottom || second.top < p.top) return null
         return listOf(first,second).map { PanelFitSlice(it,
             if (autoFit) PanelAutoFit.landscapeForMaximumFill(it,w,h) else view.landscape) }
     }
