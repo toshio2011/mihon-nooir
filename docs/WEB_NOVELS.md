@@ -22,7 +22,9 @@ MihonNooir's first **web novel importer** is an experimental extension of [Web t
 
 Both routes ultimately use **NooirWebPageBook + NooirNovelBatchWorker** for the combined export, the same sequential Nooir Activity Queue, destination filename preflight and optional phone/XTEink upload. The default **single web article** conversion remains available on the Web Link screen, and the usual **one EPUB per novel** workflow is unchanged.
 
-## New: combine individual webpages into ONE EPUB (experimental v1.0.11)
+<a id="new-combine-individual-webpages-into-one-epub-experimental-v1011"></a>
+
+## Combine individual webpages into ONE EPUB
 
 Inspired by [Genebook's multiple-webpage converter](https://genebook.de/en/converter/multiple-web-to-ebook/). Our implementation is independent and **runs on Android, processing downloaded public HTML locally**; it does not upload your book to Genebook or any external conversion provider.
 

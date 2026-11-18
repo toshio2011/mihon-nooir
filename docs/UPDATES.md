@@ -22,7 +22,7 @@ Integration upgrades: compare commits → patch code on a branch → run tests/b
 
 ## Formats and metadata
 
-- XTC/XTCH: portable native title/author, chapters and image pages. The v1.0.12 writer no longer adds the private JSON trailer. Folio Nooir does not consume a standard in-file XTC/XTCH synopsis; a future optional sidecar would need reader support.
+- XTC/XTCH: portable native title/author, chapters and image pages. Normal exports omit the private JSON trailer by default; the optional extended-metadata setting can add it for compatible experimental workflows. Folio Nooir does not consume a standard in-file XTC/XTCH synopsis; a future optional sidecar would need reader support.
 - EPUB 2 Classic: OPF 2.0, NCX chapters and traditional `meta name=cover` pointing to a real image.
 - EPUB 3 Modern: preserved OPF 3.0 / nav XHTML exporter with book metadata.
 - CBZ: ComicInfo.xml fields and chapter bookmarks.

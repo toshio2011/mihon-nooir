@@ -22,7 +22,7 @@
 | Convert manga into XTC, XTCH, EPUB or CBZ | [Formats and conversion](CONVERSION.md) |
 | Read portrait/landscape and overlapping manga pages | [Orientation and overlap](ORIENTATION_OVERLAP.md) |
 | Convert one public webpage/article to EPUB | [Web link → EPUB](WEB_TO_READER.md) |
-| **Combine multiple webpages into one EPUB** | [Multi-link EPUB / web novels](WEB_NOVELS.md#new-combine-individual-webpages-into-one-epub-experimental-v1011) |
+| **Combine multiple webpages into one EPUB** | [Multi-link EPUB / web novels](WEB_NOVELS.md#combine-individual-webpages-into-one-epub) |
 | Turn all discoverable public web-novel chapters into EPUB | [Web novels, batch import and All chapters](WEB_NOVELS.md) |
 | Convert PDFs with **selectable text + illustrations**, or original pages to XTC/XTCH | [PDF guide](PDF_TO_EPUB.md) · [v1.0.18 notes](releases/v1.0.18.md) |
 | Compare e-ink rendering styles and inspect saved XTC/XTCH files | [v1.0.18 release notes](releases/v1.0.18.md) |
