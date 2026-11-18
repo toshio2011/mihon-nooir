@@ -13,6 +13,13 @@ def replace_once(path: Path, old: str, new: str):
         raise RuntimeError(f"Anchor changed in {path}: expected once, got {source.count(old)} for {old[:70]!r}")
     path.write_text(source.replace(old, new, 1))
 
+# Narrow backport of Mihon main 7b0fcb058beca3c889c48fe3c16abb101975a2f9 (#4253).
+# Conscrypt 2.9.0 enables its updated compromised-CA SPKI blocklist by
+# default on unbundled Android. Keep the stable Mihon v0.21.3 base, use the
+# original dependency coordinate, and fail on version-anchor drift.
+replace_once(upstream / "gradle/libs.versions.toml",
+    'conscrypt = "2.8.0"\n', 'conscrypt = "2.9.0"\n')
+
 for source in (root / "overlay").rglob("*.kt"):
     destination = upstream / source.relative_to(root / "overlay")
     destination.parent.mkdir(parents=True, exist_ok=True)
