@@ -233,6 +233,25 @@ object PanelReadableSliceRefiner {
                 intersectArea(p, it.region) * 100 >
                     p.width.toLong() * p.height * 5
             }
+            // A true tall panel beside stacked neighbors is not a row.
+            // Only the modern Panel-mode path may enlarge it independently.
+            // Keep it whole when readable; never split its neighbors here.
+            if (!fullWidthRow && overHalf && requireZoomGain &&
+                enlargeOversizedSplits && !protected(p) && !overlapsOther &&
+                result.size + views.size < MAX_VIEWS &&
+                isSpanningPanel(p, views.map { it.region }, sourceWidth, sourceHeight)) {
+                val vw = if (view.landscape) maxOf(portraitWidth, portraitHeight)
+                    else minOf(portraitWidth, portraitHeight)
+                val vh = if (view.landscape) minOf(portraitWidth, portraitHeight)
+                    else maxOf(portraitWidth, portraitHeight)
+                val poorFit = PanelAutoFit.occupiedFraction(p, vw, vh) <
+                    minimumScreenFillPercent.coerceIn(25, 80) / 100.0
+                val parts = if (poorFit && !PanelSafeSlicePlanner.isSparse(p, inkAt))
+                    naturalThenOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+                    else null
+                if (parts != null) result.addAll(parts) else result.add(view)
+                continue
+            }
             if (protected(p) || !fullWidthRow || !overHalf || overlapsOther ||
                 result.size + views.size >= MAX_VIEWS) {
                 result.add(view)
@@ -281,6 +300,34 @@ object PanelReadableSliceRefiner {
             if (halves == null) result.add(view) else result.addAll(halves)
         }
         return if (result.size <= MAX_VIEWS) result else views
+    }
+
+    /** Confirm a tall independent panel alongside exactly two stacked
+     * neighboring panels. Geometry must be consistent with an existing
+     * validated detector result; this is not a new page detector.
+     */
+    private fun isSpanningPanel(p: PageRegion, regions: List<PageRegion>,
+        sourceWidth: Int, sourceHeight: Int): Boolean {
+        if (p.width.toLong() * 100 < sourceWidth.toLong() * 16 ||
+            p.height.toLong() <= p.width.toLong() * 2) return false
+        val xt = maxOf(2, sourceWidth * 3 / 100)
+        val yt = maxOf(2, sourceHeight * 3 / 100)
+        fun onSide(left: Boolean): Boolean {
+            val neighbors = regions.filter { r ->
+                r != p && r.width.toLong() * 100 >= sourceWidth.toLong() * 16 &&
+                r.height.toLong() * 100 >= p.height.toLong() * 18 &&
+                r.top >= p.top - yt && r.bottom <= p.bottom + yt &&
+                (if (left) kotlin.math.abs(r.right - p.left) <= xt
+                 else kotlin.math.abs(r.left - p.right) <= xt)
+            }.sortedBy { it.top }
+            if (neighbors.size != 2) return false
+            val (a, b) = neighbors
+            return kotlin.math.abs(a.top - p.top) <= yt &&
+                kotlin.math.abs(b.bottom - p.bottom) <= yt &&
+                kotlin.math.abs(a.bottom - b.top) <= yt &&
+                a.top < b.top && a.bottom < b.bottom
+        }
+        return onSide(true) || onSide(false)
     }
 
     /** Strict row-only zoom: no inner-column detection, no arbitrary whole-page cut. */
