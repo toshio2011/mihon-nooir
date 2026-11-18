@@ -1,8 +1,8 @@
-# MangaNooir: EPUB 2 Classic, EPUB 3 Modern, XTC Fast, XTCH High Quality
+# MihonNooir: EPUB 2 Classic, EPUB 3 Modern, XTC Fast, XTCH High Quality
 
-> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
-> **Development preview only — draft [PR #21](https://github.com/toshio2011/mihon-nooir/pull/21).** The publicly downloadable [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) predates EPUB 2. This v1.0.12 work has not been merged or released.
+
 
 ## Choose a format
 
@@ -13,7 +13,7 @@
 | **XTC Fast** | Version-1 `XTC\\0`, `XTG\\0` one-bit 1-plane row-major pages | Reader renders and caches **page 0** | No standard synopsis consumed by Folio Nooir | 96-byte chapter records, 1-based indexes |
 | **XTCH High Quality** | Version-1 `XTCH`, `XTH\\0` 2-bit 2-plane column-major pages | Reader renders and caches **page 0** | No standard synopsis consumed by Folio Nooir | Same chapter table |
 
-**CBZ** remains available as an image archive. Existing web link, web novel and mixed PDF **reflow** converters still generate EPUB 3. EPUB 2 is selectable for manga and local image/CBZ-to-manga conversion only.
+**CBZ** remains available as an image archive. Web link and web novel converters produce reflowable EPUB. The dedicated PDF converter offers both EPUB 2 and EPUB 3, along with XTC/XTCH page-image output.
 
 ## Reader selection and transfer
 
@@ -25,26 +25,30 @@ Only a compatible XTEink HTTP File Transfer implementation can receive the app's
 
 **More conversion settings → Include separate series cover** is enabled by default. For manga from Mihon, the exporter tries actual series artwork (custom/cached/source). If found, it becomes the first book page, while original chapter pages remain in order. An XTC/XTCH first chapter then begins at zero-based page 1 (on-disk record index 2). Disable the setting to begin directly with the first selected reading page; this does not discard any chapter pages.
 
-When artwork is unavailable, XTC/XTCH with cover enabled **stop with an explanatory error**. If no cover is inserted, EPUB 2 deliberately omits fake cover metadata rather than treating the first reading page as a series cover. Local CBZ/image import likewise does not invent a separate series cover.
+When artwork is unavailable and a separate cover is required, XTC/XTCH stop with an explanatory error unless you allow export without it. If no cover is inserted, EPUB 2 deliberately omits fake cover metadata rather than treating the first reading page as a series cover. Local CBZ/image import likewise does not invent a separate series cover.
 
 EPUB 2 writes real title, identifier, language and, when available, creator and description. Missing authors/descriptions are omitted. The OPF is capped at 512 KiB for Folio Nooir's parser; export smaller chapter selections if exceeded. Folio Nooir's manual bookshelf cover refresh guards source image sizes (3 MiB in the inspected source), so very large source covers should be avoided.
 
 ## XTC/XTCH portability and synopsis
 
-Both formats use the 56-byte extended container header, 16-byte page table, 22-byte page headers and uncompressed image planes. At 480×800: **48,022 bytes/page for XTC**; **96,022 bytes/page for XTCH**. Folio Nooir reads title/author but **no standard XTC/XTCH synopsis field**. The experimental exporter no longer emits the private `NOOIRMD1` JSON trailer. Direct Wi-Fi transfer may optionally sync a synopsis to Folio Nooir's existing **reader-side** `POST /api/book` API; SD/USB copies alone will not carry a readable synopsis.
+Both formats use the 56-byte extended container header, 16-byte page table, 22-byte page headers and uncompressed image planes. At 480×800: **48,022 bytes/page for XTC**; **96,022 bytes/page for XTCH**. Folio Nooir reads title/author but **no standard XTC/XTCH synopsis field**. Portable exports omit the private `NOOIRMD1` JSON trailer by default. The optional extended-metadata setting is experimental and may add it; older or non-Nooir readers may ignore it. Direct Wi-Fi transfer may optionally sync a synopsis to Folio Nooir's existing **reader-side** `POST /api/book` API; SD/USB copies alone will not carry a readable synopsis.
 
-A future optional, explicitly versioned `book.nooir.json` sidecar could carry synopsis linked to an exact book filename/identifier, but would require receiver support. **This branch does not create sidecars or change any firmware.**
+A future optional, explicitly versioned `book.nooir.json` sidecar could carry synopsis linked to an exact book filename/identifier, but would require receiver support. **The current app does not create these sidecars or change firmware.**
+
+## Inspect a saved book
+
+In v1.0.18, open **Export → Inspect an exported XTC / XTCH file** and select the completed book to inspect actual decoded page data. The existing live manga preview remains separate; neither is a substitute for checking the book on the physical reader.
 
 ## Test status and reconversion
 
 The CI workflow builds synthetic, freely redistributable EPUB 2, XTC and XTCH books and tests EPUB XML/NCX/cover links, Folio-compatible binary layout, grayscale bit planes, chapter offsets, Unicode, malformed headers, and oversized limits. It also runs **EPUBCheck 5.4.0** on the produced EPUB 2 fixture. These host tests do not replace actual X3/X4 or third-party firmware tests.
 
-Reconvert existing manga only to **obtain EPUB 2** or to strip a prior private XTC/XTCH JSON trailer for portability. EPUB 3 exports and otherwise working reader files need not automatically be regenerated. Existing MangaNooir preferences and web/PDF converters remain separate.
+Reconvert existing manga only to **obtain EPUB 2** or to strip a prior private XTC/XTCH JSON trailer for portability. EPUB 3 exports and otherwise working reader files need not automatically be regenerated. Existing MihonNooir preferences and web/PDF converters remain separate.
 
-[Technical XTC synopsis and cover notes](XTC_METADATA.md) · [Orientation / overlap](ORIENTATION_OVERLAP.md) · [Draft PR #21](https://github.com/toshio2011/mihon-nooir/pull/21)
+[Technical XTC synopsis and cover notes](XTC_METADATA.md) · [Orientation / overlap](ORIENTATION_OVERLAP.md) · [Release notes](releases/v1.0.18.md)
 
-## Experimental EPUB section grouping (draft PR #22)
+## EPUB section grouping (experimental option)
 
-MangaNooir's **EPUB pages per XHTML** setting applies to EPUB 2 Classic and EPUB 3 only. The default is **1 page per XHTML**, preserving the previously device-tested layout. Select **5** to group up to five consecutive manga images into one XHTML document; groups always stop at chapter boundaries (for example, a 7-page chapter becomes 5 + 2, not 5 + 2 + pages from the next chapter). Images remain separate PNG assets. The OPF spine lists XHTML groups, while NCX (EPUB 2) or navigation XHTML (EPUB 3) links to the start of each chapter. Each image is wrapped in a page-break container.
+MihonNooir's **EPUB pages per XHTML** setting applies to EPUB 2 Classic and EPUB 3 only. The default is **1 page per XHTML**, preserving the previously device-tested layout. Select **5** to group up to five consecutive manga images into one XHTML document; groups always stop at chapter boundaries (for example, a 7-page chapter becomes 5 + 2, not 5 + 2 + pages from the next chapter). Images remain separate PNG assets. The OPF spine lists XHTML groups, while NCX (EPUB 2) or navigation XHTML (EPUB 3) links to the start of each chapter. Each image is wrapped in a page-break container.
 
 This option is experimental: readers may paginate multi-image XHTML differently or take longer to process larger sections. Test page turning, chapter navigation, cover thumbnails and first-open latency on your actual reader before preferring 5 over the default 1. XTC, XTCH and CBZ are unaffected. Existing saved preferences migrate to 1 automatically.

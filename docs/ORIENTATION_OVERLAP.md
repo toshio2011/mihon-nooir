@@ -1,25 +1,25 @@
-# Landscape, portrait and overlapping page cuts — experimental preview
+# Landscape, portrait, Auto Fit and overlapping page cuts
 
-> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
-> **Preview only:** Included in the [v1.0.11 draft build](https://github.com/toshio2011/mihon-nooir/actions/runs/39363272479), which passed Android CI but needs real device testing. Older v1.0.1 APKs do not expose these settings; merged `main` source now supports them.
+
 
 ## Why this exists
 
 Traditional portrait manga pages are too small if you simply rotate and fit the entire page on a landscape-held XTEink X3/X4. A better approach divides the tall page into smaller **overlapping top-to-bottom sections**, making dialogue easier to read.
 
-Inspired by the setting ideas from [MangaPoint](https://github.com/W1seGit/MangaPoint) and [xtcjs](https://github.com/varo6/xtcjs). The geometry and rendering code is implemented in Kotlin for MangaNooir, not a line-for-line port. Both upstream projects are MIT licensed.
+Inspired by the setting ideas from [MangaPoint](https://github.com/W1seGit/MangaPoint) and [xtcjs](https://github.com/varo6/xtcjs). The geometry and rendering code is implemented in Kotlin for MihonNooir, not a line-for-line port. Both upstream projects are MIT licensed.
 
 ## Choose the settings
 
-1. In MangaNooir, open a manga, **long-press** a chapter, and select the chapters you want.
+1. In MihonNooir, open a manga, **long-press** a chapter, and select the chapters you want.
 2. Tap **Export** in the manga toolbar (or open **More → Nooir Tools → Send & Convert files** for local CBZ/images).
 3. Expand **More conversion settings**.
 4. Choose **Include separate series cover** if you want the actual cover ahead of the first selected manga page; disable it to read directly from the chapter.
-5. Pick **Portrait** (normal upright X3/X4 reading) or **Landscape** (hold the reader sideways).
+5. Choose **Reading segmentation**: Page, Row by Row or Panel by Panel. Pick **Portrait**, **Landscape**, or **Auto Fit** (available with row/panel detection).
 6. When using **Landscape**, choose the **Rotate content clockwise** direction. Turn it off if you prefer the opposite physical turn.
 7. Select **Auto / Pages / Webtoon** layout. For a long strip or a portrait page being read in landscape, choose **Overlapping page cuts** from **0% (no repeat)** to **50%**. Start around **8–12%**.
-8. Optionally set white-margin trimming, split spreads, manga reading direction, contrast and dithering.
+8. Optionally set white-margin trimming, split spreads, manga reading direction, contrast, rendering style, Context Peek (Panel by Panel only), and full-page overview. Use the live preview before exporting.
 9. Save as XTC, XTCH, EPUB 2 Classic, EPUB 3 Modern or CBZ, or send to your XTEink through Folio Nooir's File Transfer mode.
 
 The settings are saved for your next export, including a legacy migration path for jobs/settings created in 1.0.4/1.0.5. The chapter selection and format/device are separate from these image settings.
@@ -34,7 +34,9 @@ The settings are saved for your next export, including a legacy migration path f
 | Landscape + Webtoon | Slice long scroll images into shorter overlapping sections suitable for sideways reading |
 | Landscape + double-page spread splitting | Split right/left (or left/right) first, then slice tall halves when useful |
 | Landscape + spread splitting OFF | Keep a panoramic image whole instead of forcing it into multiple panels |
-| Export from MangaNooir with real series cover | Keep the actual cover upright and unsplit even when chapter pages use landscape |
+| Row by Row + Auto Fit | Preserve horizontal tiers; wide rows may be rotated for a larger fitted view |
+| Panel by Panel + Auto Fit | Detect individual panels, protect uncertain/sparse content, and fit each final view in its better orientation |
+| Export from MihonNooir with real series cover | Keep the actual cover upright and unsplit even when chapter pages use landscape |
 
 **XTC/XTCH:** Pages still have the reader's normal physical resolution (X4 480×800 or X3 528×792). The actual artwork is rotated within that frame so the user turns the physical reader sideways. This avoids pretending the installed firmware supports a new page resolution.
 
@@ -42,11 +44,17 @@ The settings are saved for your next export, including a legacy migration path f
 
 **Overlap:** Duplicates the last 0–50% of a previous image slice on the next slice. The original chapter images are preserved; no pixels between cuts are discarded. Overlap is a **reading aid**, not panel/speech-bubble detection. An optional zero-overlap mode preserves the non-repeating behavior.
 
-## Not available yet
+## Panel and row reading
 
-This does **not** add all MangaPoint settings. In particular: fixed manual margins, sensitivity/padding controls, rotation per page, interactive before/after crop preview, zoom and tiling, auto-levels/histogram stretch, content-aware quiet-row cutting, additional dithering kernels, arrows, and fully remembered per-manga/series presets remain on the roadmap.
+**Row by Row** preserves each confirmed horizontal tier, including its side-by-side panels. **Panel by Panel** tries actual panel boundaries, may re-check a broad region for inner panels and can use guarded overlapping views as a fallback. It also protects sparse panels, single-frame artwork and short decorative footers when supported by detector evidence.
 
-**PDF → reflowable mixed text-and-images EPUB** is available in the experimental preview as a **separate tool**. These manga image/CBZ settings do not automatically apply to PDF text extraction.
+Auto Fit compares fitted screen occupancy rather than stretching an image. Wider regions often benefit from landscape; tall ones usually fit portrait. Near-square rows may stay portrait to avoid unnecessary rotation. White margins can remain if the source and display shapes differ. Use the separate **Context Peek** option (0–8%, default off) for small neighboring-panel context; changing normal overlap does not force the detector to invent panel boundaries.
+
+**Show full page before splits** provides an optional original-page overview; **Keep first page of each chapter whole** is independent. See [Panel Auto Fit](PANEL_AUTO_FIT.md) and [conversion settings](CONVERSION.md).
+
+The configurable **Enlarge oversized splits** option from current development work is **not in v1.0.18**. Manual crop coordinates, advanced zoom/tiling and other proposed controls are not guaranteed available.
+
+The separate [PDF converter](PDF_TO_EPUB.md) uses its own text/image mode, not manga panel segmentation.
 
 ## Validate on device
 
@@ -60,8 +68,8 @@ This does **not** add all MangaPoint settings. In particular: fixed manual margi
 - [ ] Legacy 1.0.4/1.0.5 conversion setting preferences and queued jobs still deserialize.
 - [ ] Physical device battery/memory/performance looks acceptable.
 
-These are experimental image settings until the actual phone and XTEink tests pass.
+These are suggested device checks for the released settings, not a claim that every device/input has passed.
 
-## v1.0.12 format support
+## Format support
 
-The experimental [EPUB 2 / EPUB 3 / XTC / XTCH guide](EXPORT_FORMATS_EPUB2.md) explains the new format selection and reader-specific presets. EPUB 2 uses the same chapter-image slicing and orientation controls as EPUB 3; dedicated covers stay upright and unsplit. The EPUB 2 standard does not define the EPUB 3 `page-progression-direction` OPF spine attribute, so it is **not emitted**: navigation remains in selected chapter order, while right-to-left reading behavior must be tested/configured in each EPUB 2 reader.
+The [EPUB 2 / EPUB 3 / XTC / XTCH guide](EXPORT_FORMATS_EPUB2.md) explains format selection and reader-specific presets. EPUB 2 uses the same chapter-image slicing and orientation controls as EPUB 3; dedicated covers stay upright and unsplit. The EPUB 2 standard does not define the EPUB 3 `page-progression-direction` OPF spine attribute, so it is **not emitted**: navigation remains in selected chapter order, while right-to-left reading behavior must be tested/configured in each EPUB 2 reader.

@@ -1,22 +1,23 @@
-# PDF → EPUB with real text and illustrations (experimental)
+# PDF to e-reader: EPUB 2/3, XTC and XTCH
 
-> **November 10, 2026 development draft:** [PR #82](https://github.com/toshio2011/mihon-nooir/pull/82) proposes removing the old 600-page/100 MiB input/300 MiB output cutoffs and adding multi-PDF selection with a serial conversion queue. The documentation below contains historical limitations for older releases. **Nothing in PR #82 is in the official Android v1.0.17 release yet.** Do not claim unlimited physical storage, or guaranteed handling of every PDF.
-
-
-> **Current status (21 October 2026):** The full v1.0.12 source has been [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) and passed [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **No v1.0.12 release has been published**; latest public test APK remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Hardware and website-specific validation remains pending.
+> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 This feature targets the **mixed-content novel** use case: extract **real, selectable/resizable text** from a PDF, while preserving diagrams, floor plans and pictures near their original paragraphs where possible. Think of a mystery novel with text above and below floor-plan drawings, rather than turning the entire book into page screenshots.
 
-> **Preview only:** [v1.0.11 Android CI passed](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11), but mixed-content PDF fidelity and physical XTEink EPUB reading still need real testing. This converter is **not in older v1.0.1 APKs**; the merged main source now includes it.
+
 
 ## Steps
 
-1. Open **MangaNooir → More → Nooir Tools → PDF → EPUB · Text + illustrations** (experimental v1.0.11).
-2. Choose a PDF from your phone's file picker, then optionally edit the resulting **book title, author and EPUB filename**.
-3. Select **Reflowable text + illustrations** (the intended default) or **Keep original pages as images**.
-4. Tap **Convert PDF & save EPUB to phone**, select a destination, then check the progress notification.
-5. Or turn on **Folio Nooir → File Transfer** on your XTEink, enter its IP/destination and choose **Convert PDF & send EPUB to XTEink**.
-6. Read the exported EPUB. Text from a PDF text layer can resize; embedded illustrations are interleaved by approximate vertical positions.
+1. Open **MihonNooir → More → Nooir Tools → PDF → EPUB · Text + illustrations**.
+2. Tap **Choose PDF file(s) from phone** and select one or more documents.
+3. Choose **EPUB 2**, **EPUB 3**, **XTC · 1-bit**, or **XTCH · 2-bit**. For EPUB, select **Reflowable text + illustrations** or **Keep original pages as images**; for XTC/XTCH choose the target reader.
+4. For one PDF, choose optional title, author and output filename. For a batch, each PDF becomes a separate book with a distinct name; select a destination folder for local saving.
+5. Save to your phone, or send to a compatible XTEink via File Transfer if supported. Check **Nooir Tools → Activity Queue** for progress and errors. For large books, local saving followed by SD-card copy is recommended.
+6. Inspect the output before relying on it. EPUB can preserve real selectable text; XTC/XTCH render original pages to the reader's native dimensions as pixels.
+
+## Large files and batches
+
+The old fixed 600-page, 100 MiB source, and 300 MiB output cutoffs were removed in v1.0.18. [Long PDF acceptance](PDF_ANDROID_DEVICE_ACCEPTANCE_2026-11-12.md) and [release verification](releases/v1.0.18.md) describe tests beyond 1,000 and 2,000 pages. Multiple inputs are processed sequentially, not combined into one book. Local saving is still bounded by storage, real output-format limits and decoding/rendering resources; enormous or unusual PDFs can fail. Wi-Fi transfer has a separate **180 MiB per-file** application safety limit. The original PDF is not changed.
 
 ## What happens on different source pages?
 
@@ -37,12 +38,12 @@ You can have a **single EPUB** containing genuinely reflowable text chapters **a
 - Native text is extracted locally using **PDFBox-Android** (Apache-2.0), and image-only/complex PDF pages are rendered locally using Android's **PdfRenderer**; no server subscription or OCR is required.
 - Some diagrams are vector graphics rather than embedded pictures. In difficult cases, the converter protects the content by retaining that complete page as an image, rather than discarding the diagram.
 - **Scanned-only PDFs remain image-based where no text layer exists.** No native OCR or AI service is included.
-- Some embedded image formats, unsupported fonts or PDF encryption may fail. The initial converter rejects encrypted PDF files and uses a conservative **100 MiB/600-page** guard.
+- Some embedded image formats, unsupported fonts or encryption may fail. Password-protected PDFs are unsupported; low storage and genuine format/processing limits may prevent completion.
 - Layout inspection/preview, manual paragraph/image-position adjustments, headings/TOC detection, and reliably processing forms/math/tables are **future enhancements**.
-- This is a separate feature from **PDF → XTC/XTCH/CBZ (entire pages rendered as images)**, which can reuse MangaNooir's existing manga renderer later.
+- PDF → XTC/XTCH is now available. It uses page rendering rather than selectable text; direct PDF-to-CBZ is not documented as a released option.
 - Original PDF stays untouched; the converted EPUB is saved as a new file.
 
-## Test before release
+## Suggested checks for your own PDFs
 
 - [ ] Text-only PDF: selectable/reflowable paragraphs in exported EPUB.
 - [ ] Novel PDF with actual text and a bitmap illustration between paragraphs: verify illustration order.
@@ -53,19 +54,19 @@ You can have a **single EPUB** containing genuinely reflowable text chapters **a
 - [ ] Physical X4 EPUB display, page images, navigation, and transfer.
 - [ ] Memory use, file cleanup, cancel during large document conversion.
 
-For Android-source details, see the experimental [PDF conversion PR](https://github.com/toshio2011/mihon-nooir/pulls). Track follow-up layout improvements at the [roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
+For Android implementation history, see [PR #82](https://github.com/toshio2011/mihon-nooir/pull/82) and the [current release notes](releases/v1.0.18.md). Track follow-up layout improvements at the [roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
 
-## EPUB version selector (draft PR #22)
+## EPUB version selector
 
-The PDF converter now offers **EPUB 2 · older readers** and **EPUB 3 · newer readers**. Both can contain reflowable selectable text, inline images and tables; the **Reflowable text + illustrations** versus **Keep original pages as images** setting is independent of the EPUB version. EPUB 2 writes an NCX table of contents; EPUB 3 writes a navigation XHTML. The choice is forwarded from the dialog through the background worker to the writer. This is **draft code** pending Android CI and physical XTEink testing, not a released feature.
+The PDF converter now offers **EPUB 2 · older readers** and **EPUB 3 · newer readers**. Both can contain reflowable selectable text, inline images and tables; the **Reflowable text + illustrations** versus **Keep original pages as images** setting is independent of the EPUB version. EPUB 2 writes an NCX table of contents; EPUB 3 writes a navigation XHTML. The choice is forwarded from the dialog through the background worker to the writer. Both EPUB versions are released; physical reader compatibility still varies.
 
 A scanned PDF remains image-based in either EPUB version (no OCR). Complex vector drawings and floor plans may be rendered as complete pages rather than partially extracted. Review resulting page order and illustration placement before sharing.
 
 
-## Draft PR #22: PDF → XTC / XTCH (experimental)
+## PDF → XTC / XTCH
 
 The PDF converter now also offers **XTC (1-bit)** and **XTCH (2-bit)** for supported XTEink profiles. Select the output format and device before saving or sending. This path uses Android `PdfRenderer` and converts one PDF page at a time to the native panel dimensions; it does **not** use OCR or an AI service. Scanned pages, embedded images and visible text are all rendered as pixels.
 
-**Important distinction:** EPUB 2/3 still use the existing text-and-illustration extraction path and preserve selectable/reflowable text where possible. Choosing XTC/XTCH deliberately rasterizes text; the output cannot be reflowed or selected. Large, password-protected and unusual PDFs may fail. The XTC/XTCH path has a 600-page limit and has not yet been physically verified on X3/X4.
+**Important distinction:** EPUB 2/3 still use the existing text-and-illustration extraction path and preserve selectable/reflowable text where possible. Choosing XTC/XTCH deliberately rasterizes text; the output cannot be reflowed or selected. Large, password-protected and unusual PDFs may fail. The previous 600-page cutoff is removed; real binary format limits still apply. Physical reader acceptance depends on the device and firmware.
 
 The XTC/XTCH first PDF page is treated as page zero/cover; a PDF without a dedicated cover will display its first content page instead.

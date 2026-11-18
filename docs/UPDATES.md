@@ -2,16 +2,17 @@
 
 ## Keeping the app up to date
 
-The [v1.0.12 official release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.12) is publicly available. It publishes the exact APKs from [successful CI run #39734517368](https://github.com/toshio2011/mihon-nooir/actions/runs/39734517368) at merged source commit `5563d133` (no rebuild or re-sign). **Official release status does not mean persistent-key signing or completed hardware validation.** Android experimental signing keys may differ, so back up MangaNooir before replacing older test builds. Physical-device validation is still pending.
+[Official Android v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) was published 16 November 2026. It shares the persistent signing certificate and application ID `dev.nooir.mihon.foss` with the official v1.0.17 release. Its signed candidate passed an in-place Android 16 emulator upgrade and owner-confirmed physical-phone upgrade; not every device has been tested.
 
+**Upgrading from official v1.0.17:** back up library and important downloads, then download the correct APK manually. The previous updater could choose the wrong CPU architecture. Most modern phones use [ARM64](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-arm64-v8a-foss.apk); use the [universal APK](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-universal-foss.apk) if uncertain. Verify against the release checksums. Install over the existing app; never uninstall/clear data to resolve an unexpected signature conflict. Older test-signed APKs (including v1.0.12) may use a different key.
 
-The fork will reuse Mihon's existing in-app update checker and installer, but its APK releases must come from **toshio2011/mihon-nooir**, not upstream Mihon. The fork's package ID is `dev.nooir.mihon.foss`. Android always requires matching signing certificates to install an update over an earlier APK.
+v1.0.18 directs the in-app update checker to this repository, selects an architecture-compatible official FOSS APK, and opens the official download in a browser with Android's normal installation approval. Do not install CI/debug or separate QA artifacts over the official app.
 
-The integrated build must redirect `AppUpdateChecker.GITHUB_REPO` to this fork, enable updater through `-Pdist=foss`, and use numeric three-part independent versions from `config/version.txt`. Its GitHub releases must publish `vX.Y.Z` with a `-foss.apk` asset so the existing Mihon release parser can discover the download.
+See [installation](GETTING_STARTED.md) and [v1.0.18 release verification](releases/v1.0.18.md).
 
-A *stable* release will need these repository secrets configured in **Settings → Secrets and variables → Actions**: `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Do not commit them. Debug CI APKs signed with different ephemeral keys cannot replace earlier installs.
+### Contributor policy
 
-No stable release workflow should silently auto-publish when upstream Mihon changes, and app updates should require user approval on Android.
+Keep the independent numeric version in `config/version.txt`. Publish official Android `vX.Y.Z` release tags with the five FOSS APKs and SHA-256 checksums, using the established persistent key. Repository secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` must never be committed. Verify signing and in-place upgrade before owner-approved publication. Never automatically publish just because upstream Mihon changes. Windows uses a separate release track and remains unreleased.
 
 ## Keeping up with upstream Mihon
 

@@ -1,17 +1,14 @@
-# Nooir Tools — quick start (experimental v1.0.11)
+# Nooir Tools — quick start
 
-> **Source/release status (21 October 2026):** `main` contains the merged **v1.0.12 code**, validated by [Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011), but **v1.0.12 is not publicly released**. The latest downloadable prerelease remains [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11); on-device compatibility still needs verification.
+> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
-[← MangaNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
+[← MihonNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
 
-> [!IMPORTANT]
-> These steps describe the **v1.0.11 experimental Android preview**, not the **older v1.0.1 APK** (`main` now has v1.0.12 source, not yet released). The [published v1.0.11 experimental APK](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks, **not physical phone/XTEink testing**. The experimental v1.0.11 prerelease is available; it is not a stable build.
-
-**Already using normal Mihon?** MangaNooir is a separate test app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
+**Already using normal Mihon?** MihonNooir is a separate Android app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
 
 ## Where are the new tools?
 
-Open **MangaNooir → More → Nooir Tools**. Inside the hub:
+Open **MihonNooir → More → Nooir Tools**. Inside the hub:
 
 | Choose | Use it for |
 |---|---|
@@ -19,7 +16,7 @@ Open **MangaNooir → More → Nooir Tools**. Inside the hub:
 | **Send & Convert files** | Send files already on your phone; convert local CBZ/images when supported |
 | **Web link → EPUB** | Convert a public webpage **or multiple webpage links into one EPUB** |
 | **Web novels · Batch EPUB** | One EPUB per public novel; discover chapters or combine selected chapter URLs |
-| **PDF → EPUB · Text + illustrations** | Keep text selectable and images in the same EPUB where feasible |
+| **PDF → EPUB · Text + illustrations** | Convert one or more PDFs into EPUB 2/3 or XTC/XTCH; keep text selectable in EPUB where feasible |
 | **Browse XTEink files** | Browse reader folders without editing; open its full file manager in your browser |
 
 **Manga chapter export is not inside this hub:** open a manga details page, select chapters, and use its existing Export button.
@@ -29,12 +26,14 @@ Open **MangaNooir → More → Nooir Tools**. Inside the hub:
 1. Open a manga's details page. **Long-press** the first wanted chapter, then **tap** other chapters. Review the highlighted chapters.
 2. Tap **Export** in the manga toolbar. Choose your X3/X4 preset and output format.
 3. Turn on **Quick Export** only when you want selected online chapters that are not already downloaded in Mihon. Normal Export uses already-downloaded chapters.
-4. If needed, expand **More conversion settings** for portrait/landscape, overlapping cuts, reading direction, spread handling, trimming, contrast and dithering.
-5. Choose **Save file** or **Send to XTEink**. For device sends, set an output filename; the preview checks whether that name already exists **before converting**, then again before uploading.
+4. Expand **More conversion settings**. Choose **Page**, **Row by Row** or **Panel by Panel**; try **Auto Fit** with row/panel detection, optional full-page overview, overlap, trimming, contrast and one of four rendering styles. Choose a manga image or CBZ and tap **Preview first page** to see the intended result before exporting.
+5. Choose **Save file** or **Send to XTEink**. For device sends, set an output filename; the app checks whether that name already exists **before converting**, then again before uploading.
+
+For a large book, use **Save file** and copy it to the SD card. To inspect the actual saved XTC/XTCH bytes, open **Export → Inspect an exported XTC / XTCH file**. This is separate from the live preview.
 
 No selection + Normal Export means **all downloaded chapters** of that manga. Quick Export requires **at least one selected chapter**. Original Mihon downloads are not replaced.
 
-**Missing XTC/XTCH cover?** The experimental exporter requires a decodable manga cover at the beginning of the book; if the source cover is unavailable it should show an error rather than quietly claim success. Check whether the cover is present in Mihon, then retry to a **new filename**. If page 1 has the cover but the reader **shelf** doesn't, try the reader's cache refresh (Folio Nooir: **Retrieve All Book Details**).
+**Missing XTC/XTCH cover?** If a separate cover is requested, the exporter needs decodable series artwork; you may disable the separate cover or allow an export without an available cover. It will not invent artwork. Check whether the cover is present in Mihon, then retry to a **new filename**. If page 1 has the cover but the reader **shelf** doesn't, try the reader's cache refresh (Folio Nooir: **Retrieve All Book Details**).
 
 [Chapter selection](CHAPTER_SELECTION.md) · [Conversion formats](CONVERSION.md) · [Orientation/overlap](ORIENTATION_OVERLAP.md) · [Cover and metadata](XTC_METADATA.md)
 
@@ -65,14 +64,14 @@ There's no fixed pasted-chapter count for this mode; URL-list storage is bounded
 
 [Web link guide](WEB_TO_READER.md) · [Web novel and multi-link guide](WEB_NOVELS.md)
 
-## 5. PDF → EPUB with text and illustrations
+## 5. PDF → EPUB / XTC / XTCH
 
-Open **More → Nooir Tools → PDF → EPUB · Text + illustrations**, select a PDF, and choose a conversion mode:
+Open **More → Nooir Tools → PDF → EPUB · Text + illustrations** and choose **Choose PDF file(s) from phone**.
 
-- **Reflowable text + illustrations:** extract real selectable PDF text, position accessible pictures near the relevant text when feasible, and keep scanned/complex pages as images in the **same EPUB**.
-- **Keep original pages as images:** preserve visual pages when text reflow is not suitable; the text won't be selectable as native EPUB text.
+- **EPUB 2 or EPUB 3:** select **Reflowable text + illustrations** or **Keep original pages as images**. Text is selectable where extraction succeeds; scan-only or difficult pages may remain images.
+- **XTC or XTCH:** select the device; each PDF page becomes pixels at its target resolution. Text is not selectable.
 
-You can edit the resulting **book title, author and EPUB filename**. Save locally or send to XTEink. No AI or OCR is included: an image-only scan remains an image. Review tables, fancy typography, floor plans and unusual layouts after converting.
+For one PDF, enter optional title, author and output filename. For multiple PDFs, choose a destination folder; each is saved as a separate book and jobs run sequentially. Local conversion has no arbitrary 600-page cutoff; storage, processing and format limits still apply. For large PDFs, save locally and copy to the SD card rather than relying on Wi-Fi's separate 180 MiB per-file limit. No OCR or AI is included.
 
 [Full PDF guide](PDF_TO_EPUB.md)
 
@@ -80,8 +79,8 @@ You can edit the resulting **book title, author and EPUB filename**. Save locall
 
 1. On Folio Nooir, enter **Home → File Transfer → Join Network** or **Create Hotspot**.
 2. Connect the phone so it can reach the reader. Open the **reader's displayed address** in your phone browser first and verify the file manager responds.
-3. In MangaNooir, type **only the IP/hostname** (no `http://`) and an **existing** folder such as `/Books` or `/`.
-4. Wait for **XTEink confirmation**, not merely 100% of bytes sent. The experimental upload guard is **180 MiB per file**.
+3. In MihonNooir, type **only the IP/hostname** (no `http://`) and an **existing** folder such as `/Books` or `/`.
+4. Wait for **XTEink confirmation**, not merely 100% of bytes sent. The Wi-Fi upload guard is **180 MiB per file**.
 
 Folio Nooir's local HTTP transfer server is not password protected. Use only a trusted LAN or short-lived device hotspot and close File Transfer when finished.
 
@@ -89,7 +88,7 @@ Folio Nooir's local HTTP transfer server is not password protected. Use only a t
 
 ## 7. What if one job fails or a name already exists?
 
-Open **More → Nooir Tools → Activity Queue → History** to read per-job results. In the new preview, a failed book **does not automatically fail the later queued books**, and a local multi-file batch continues with the next file. An existing destination filename is rejected instead of intentionally overwritten. **Rename it before requeuing** or use another destination folder.
+Open **More → Nooir Tools → Activity Queue → History** to read per-job results. In the current release, a failed book **does not automatically fail the later queued books**, and a local multi-file batch continues with the next file. An existing destination filename is rejected instead of intentionally overwritten. **Rename it before requeuing** or use another destination folder.
 
 The confirmed **Cancel entire Nooir queue** action stops queued jobs too; cancelling one WorkManager dependency may cascade, so individual job cancellation is not offered. Android system limits, lost Wi-Fi or low SD-card space can still interrupt a transfer. **Mihon's normal chapter Download Queue remains separate.**
 
@@ -97,8 +96,8 @@ The confirmed **Cancel entire Nooir queue** action stops queued jobs too; cancel
 
 [Queue, duplicate files, cover troubleshooting](DEVICE_FILES_AND_QUEUE.md) · [FAQ](FAQ.md)
 
-## Still being verified
+## Compatibility and feedback
 
-A successful [Android CI build](https://github.com/toshio2011/mihon-nooir/actions/runs/39375003996) confirms the preview compiled and its automated format/overlay tests passed. It **does not prove** real Wattpad/Rengkang extraction, accurate output from every PDF, correct e-ink thumbnails, or transfer safety on a physical X3/X4. Please report your build, input format/source, device firmware, destination and exact error message (without sharing copyrighted pages or credentials).
+[The v1.0.18 release notes](releases/v1.0.18.md) describe verified signed-upgrade and Android emulator tests. These do not prove every web source, PDF, manga panel or physical e-reader transfer works. Please include your build, input type, exact error, device and firmware; do not share credentials or copyrighted pages.
 
-[Merged PR #21 / integration status](https://github.com/toshio2011/mihon-nooir/pull/21) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[Current release notes](releases/v1.0.18.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)

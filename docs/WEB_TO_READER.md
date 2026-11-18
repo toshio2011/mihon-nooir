@@ -1,12 +1,12 @@
-# Web link → EPUB (experimental v1.0.11)
+# Web link → EPUB
 
-> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
-> **Preview only:** The v1.0.11 [published experimental Android prerelease](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11) passed automated checks. This workflow is **not in the older v1.0.1 APK** (it is now in v1.0.12 `main` source), and phone/XTEink testing is still pending. Conversion runs on the Android phone; no AI/OCR API.
+> Conversion runs locally on Android, without AI or OCR services; specific sites may not expose readable public HTML.
 
 ## Convert a website link to EPUB
 
-1. Open **MangaNooir → More → Nooir Tools → Web link → EPUB**.
+1. Open **MihonNooir → More → Nooir Tools → Web link → EPUB**.
 2. Paste a **public HTTPS** web article URL in **Article URL**.
 3. Tap **Save article EPUB to phone**. Pick the file location in Android's save dialog.
 4. Wait for the background notification/phase to say **Article EPUB saved successfully**.
@@ -62,7 +62,7 @@ See [all documentation](https://github.com/toshio2011/mihon-nooir/blob/main/docs
 
 A site such as `https://syazwandaniial.com/rengkang` may look readable in a normal browser while a direct public-HTML request to the converter contains very little text. This can happen when the content lives inside JavaScript-rendered components, a logged-in session, a separate embedded frame, or a site-builder layout the generic parser doesn't recognize. **Seeing text in your browser doesn't by itself establish that the same text is available in public HTML.**
 
-The latest preview build passed Android CI, but Rengkang still needs an actual phone-side test. [Merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21) includes the earlier work to expand the public HTML extractor with ordinary mobile-browser request headers, additional site-builder article containers and openly supplied structured `articleBody` text. It also reports approximately how much readable HTML text arrived, which helps separate "missing content" from a conversion defect. These changes need a fresh phone-side test; the live Rengkang page could not be independently inspected from the development environment.
+The extractor has automated coverage, but specific Rengkang layouts still need phone-side verification. [Merged PR #21](https://github.com/toshio2011/mihon-nooir/pull/21) includes the earlier work to expand the public HTML extractor with ordinary mobile-browser request headers, additional site-builder article containers and openly supplied structured `articleBody` text. It also reports approximately how much readable HTML text arrived, which helps separate "missing content" from a conversion defect. These changes need a fresh phone-side test; the live Rengkang page could not be independently inspected from the development environment.
 
-No sign-in session, site protection or paid access is bypassed. If a provider offers an authorized EPUB, save it and use **Send & Convert files** instead. If the latest preview still cannot read an ordinary publicly visible article, send a screenshot showing its page layout and the **copied error message** (not its private content or cookies), so a specific extractor can be tested.
+No sign-in session, site protection or paid access is bypassed. If a provider offers an authorized EPUB, save it and use **Send & Convert files** instead. If the current app still cannot read an ordinary publicly visible article, send a screenshot showing its page layout and the **copied error message** (not its private content or cookies), so a specific extractor can be tested.
 

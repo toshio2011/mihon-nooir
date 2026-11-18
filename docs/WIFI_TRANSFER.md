@@ -2,12 +2,12 @@
 
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [First-time setup](GETTING_STARTED.md) · [Folio Nooir web-server docs](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
 
-MangaNooir can send converted manga to XTEink readers with a **compatible HTTP/WebSocket File Transfer API**. The documented integration uses Folio Nooir's server; other firmware may have different endpoints. The experimental v1.0.11 preview can also send existing files from Android phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
+MihonNooir can send converted manga to XTEink readers with a **compatible HTTP/WebSocket File Transfer API**. The documented integration uses Folio Nooir's server; other firmware may have different endpoints. The current Android release can also send existing files from phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.
 
 > [!WARNING]
 > Folio Nooir's web server has **no authentication** and serves local HTTP. Use a trusted private network or the reader's short-lived hotspot. Turn off File Transfer when finished.
 
-> **Version note:** v1.0.1 supports basic manga Wi-Fi sending; v1.0.11's **Nooir Tools**, file browser, shared queue and pre-conversion duplicate-name checks are experimental. [Getting started](GETTING_STARTED.md).
+> **Version note:** The instructions apply to [Android v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18). A compatible reader File Transfer server is required. [Getting started](GETTING_STARTED.md).
 
 ## Option A — Use your home Wi-Fi
 
@@ -17,7 +17,7 @@ MangaNooir can send converted manga to XTEink readers with a **compatible HTTP/W
 4. The reader displays a direct address such as `http://192.168.1.102/` and may show `http://crosspoint.local/`. Your actual IP will differ.
 5. On the phone, open **Chrome** and enter the exact URL shown on the XTEink. You should see the reader's web interface and File Manager.
 
-**If this browser test fails, fix the network before trying MangaNooir.** Common causes are wrong Wi-Fi, guest/client isolation, VPN, phone switching networks or an incorrect hostname. Try the displayed **IP address** instead of `crosspoint.local`.
+**If this browser test fails, fix the network before trying MihonNooir.** Common causes are wrong Wi-Fi, guest/client isolation, VPN, phone switching networks or an incorrect hostname. Try the displayed **IP address** instead of `crosspoint.local`.
 
 ## Option B — Use the XTEink hotspot
 
@@ -29,9 +29,9 @@ No router nearby? You can connect your phone directly to the reader.
 4. Use the address shown on the reader. It is often `http://192.168.4.1/` in the browser, but always prefer the actual on-screen IP.
 5. Turn off the hotspot after transferring. It is open and not encrypted.
 
-## Send from MangaNooir
+## Send from MihonNooir
 
-### From a manga details screen (main 1.0.1 and experimental preview)
+### From a manga details screen
 
 1. Open the manga details page. **Long-press** a chapter, then **tap** the others you want. The Export dialog itself cannot select chapters. [Chapter selection tutorial →](CHAPTER_SELECTION.md)
 2. Tap **Export** next to Download.
@@ -41,7 +41,7 @@ No router nearby? You can connect your phone directly to the reader.
 6. Set the device folder to an **existing** path such as `/Books`. If you're unsure whether that folder exists, choose `/` to send to the SD-card root.
 7. Start with one **small EPUB or CBZ** and wait for confirmation.
 
-### From your phone files (experimental v1.0.11 only)
+### From your phone files
 
 Open **More → Nooir Tools → Send & Convert files**, select up to **25 files**, then choose:
 
@@ -49,7 +49,7 @@ Open **More → Nooir Tools → Send & Convert files**, select up to **25 files*
 - **Convert manga & send** — convert recognized CBZ/image manga; pass other documents through unchanged.
 - **Share selected** — invoke the Android share sheet for other installed apps/services.
 
-The v1.0.11 preview uses one **sequential** WorkManager queue for manga, phone files, PDF, web and novel transfers. You may navigate Back or switch apps; check progress under **More → Nooir Tools → Activity Queue** or in the Android foreground notification. **Conversion** and **uploading** are different stages:
+The current release uses one **sequential** WorkManager queue for manga, phone files, PDF, web and novel transfers. You may navigate Back or switch apps; check progress under **More → Nooir Tools → Activity Queue** or in the Android foreground notification. **Conversion** and **uploading** are different stages:
 
 | Status | Meaning |
 |---|---|
@@ -76,17 +76,19 @@ For initial testing, send a **5–20 MB** file, confirm it appears in the reader
 |---|---|
 | Chrome cannot open XTEink URL | Confirm File Transfer mode, same LAN/hotspot, correct IP, no guest isolation/VPN |
 | `crosspoint.local` won't resolve | Enter the XTEink's displayed IP address |
-| MangaNooir says cannot connect | Open the same address in Chrome; use **IP only**, no `http://` or slash in the app field |
+| MihonNooir says cannot connect | Open the same address in Chrome; use **IP only**, no `http://` or slash in the app field |
 | Transfer progress doesn't move | Stay close to router, check XTEink power/SD space, inspect status notification; don't turn off File Transfer |
 | XTEink says file failed or SD full | Free SD space; check for an incomplete file; try a much smaller file |
 | Transfer completes but book won't open | File transfer ≠ file format support. Check the firmware's EPUB/CBZ/XTC/XTCH support |
 | It stops after switching apps | Check Android background/battery restrictions and the last WorkManager job result; force-stop cancels/interferes with background tasks |
 | `/Books` isn't found | Use `/`, or create the folder first through the XTEink web File Manager |
 
-The reader's browser File Manager can also **upload a file manually** if you're troubleshooting MangaNooir.
+The reader's browser File Manager can also **upload a file manually** if you're troubleshooting MihonNooir.
 
 Related implementation details: [Folio Nooir web server](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md) · [HTTP API](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver-endpoints.md).
 
-## Multiple exports and existing filenames — experimental v1.0.11
+**Large books:** Save the converted output locally and copy to the SD card when possible. The 180 MiB Wi-Fi per-file limit is separate from local conversion limits.
 
-For the latest preview, open **More → Nooir Tools → Activity Queue** to see running/waiting/finished jobs. A failed book should not poison the next queued book. Set a different **output filename before conversion** if one already exists in the destination; the app checks names before processing and once more before upload. Choosing **Cancel entire Nooir queue** cancels waiting work too. If an XTC/XTCH cover is missing only on the *library shelf*, run **Retrieve All Book Details** in Folio Nooir after verifying the first book page is correct. [Full guide](DEVICE_FILES_AND_QUEUE.md).
+## Multiple exports and existing filenames
+
+In the current release, open **More → Nooir Tools → Activity Queue** to see running/waiting/finished jobs. A failed book should not poison the next queued book. Set a different **output filename before conversion** if one already exists in the destination; the app checks names before processing and once more before upload. Choosing **Cancel entire Nooir queue** cancels waiting work too. If an XTC/XTCH cover is missing only on the *library shelf*, run **Retrieve All Book Details** in Folio Nooir after verifying the first book page is correct. [Full guide](DEVICE_FILES_AND_QUEUE.md).

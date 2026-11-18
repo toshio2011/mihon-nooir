@@ -1,8 +1,8 @@
-# E-reader device profiles — experimental v1.0.12
+# E-reader device profiles
 
-> **Current status (21 October 2026):** v1.0.12 source is [merged into `main`](https://github.com/toshio2011/mihon-nooir/pull/21) with [green Android CI](https://github.com/toshio2011/mihon-nooir/actions/runs/39517669011). **v1.0.12 remains unreleased**; the latest published preview is [v1.0.11](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.11). Physical compatibility is not guaranteed.
+> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
-MangaNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.
+MihonNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.
 
 ## Choose a reader
 
@@ -42,4 +42,4 @@ XTCH custom dimensions require a **height divisible by 8 pixels** (for example 8
 
 The larger non-XTEink EPUB/CBZ pages consume more Android memory during conversion. Try a short volume first. Device dimensions and basic format guidance were crosschecked with [MangaPoint's public device profiles](https://github.com/W1seGit/MangaPoint/blob/main/crates/device-profiles/src/lib.rs), but this UI is independently implemented and real-device validation is still required.
 
-**Status:** merged v1.0.12 code on `main`, but not released. Published v1.0.11 APK lacks the additional device profiles.
+**Status:** These profiles are included in Android v1.0.18. Windows development remains separate; profiles describe output dimensions, not firmware support.
