@@ -19,6 +19,8 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /**
  * Android-device verification, not an image-only host fixture: decodes a real
@@ -280,6 +282,82 @@ class PanelDiagnosticArchiveInstrumentedTest {
                 }
             }
             assertArrayEquals(original,input.readBytes())
+        } finally { folder.deleteRecursively() }
+    }
+
+    /** Original synthetic framed geometry, through the real Android page
+     * source, Auto Fit, quantizer and actual saved-binary reader. No manga
+     * imagery is embedded or retrieved by CI.
+     */
+    @Test fun mixedSlantedRowsAndPanelsThroughAndroidExport() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = scratch(context, "mixed-slanted")
+        try {
+            val sw = 560
+            val sh = 900
+            val pixels = IntArray(sw * sh) { Color.WHITE }
+            fun offset(x: Int, slope: Int) = ((x - sw / 2.0) * slope / 100.0).roundToInt()
+            for (y in 0 until sh) for (x in sw / 14 until sw - sw / 14) {
+                val a = 280 + offset(x, 6)
+                val b = 520 + offset(x, -9)
+                val tier = if (y < a - 13) 0 else if (y > a + 13 && y < b - 13) 1
+                    else if (y > b + 13 && y < 842) 2 else -1
+                val axis = 220 + ((y - 410) * 0.12).roundToInt()
+                val c1 = abs(x - axis)
+                val c2 = abs(x - 180)
+                val c3 = abs(x - 370)
+                val gap = (tier == 1 && c1 <= 6) ||
+                    (tier == 2 && (c2 <= 5 || c3 <= 5))
+                if (tier >= 0 && !gap && (x * 17 + y * 23) % 103 < 34)
+                    pixels[y * sw + x] = Color.rgb(80, 80, 80)
+                if ((tier == 1 && abs(c1 - 6) <= 1) ||
+                    (tier == 2 && (abs(c2 - 5) <= 1 || abs(c3 - 5) <= 1)) ||
+                    abs(y - a + 13) <= 1 || abs(y - a - 13) <= 1 ||
+                    abs(y - b + 13) <= 1 || abs(y - b - 13) <= 1)
+                    pixels[y * sw + x] = Color.BLACK
+            }
+            // Small terminal rule gives the original row partition a
+            // realistic shallow footer rather than a completely blank tail.
+            for (y in 862..863) for (x in 32 until 520)
+                pixels[y * sw + x] = Color.BLACK
+            val input = File(folder, "mixed.png")
+            val bitmap = Bitmap.createBitmap(pixels, sw, sh, Bitmap.Config.ARGB_8888)
+            try { input.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) } }
+            finally { bitmap.recycle() }
+            val original = input.readBytes()
+            val source = AndroidPageSource(context)
+            val settings = MangaConversionOptions(
+                layout = "PAGED", orientation = "AUTO_FIT", rightToLeft = true,
+                cropWhiteMargins = true, splitSpreads = true, overlapPercent = 8,
+                dither = true, includeCover = false, keepChapterFirstPageWhole = false,
+                enlargeOversizedSplits = true, minimumScreenFillPercent = 50,
+            )
+            for (format in dev.nooir.bridge.XtcFormat.entries) {
+                val row = source.pages(listOf(Uri.fromFile(input)), 480, 800, format.depth,
+                    settings.copy(panelMode = "ROW_BY_ROW")).toList()
+                val panel = source.pages(listOf(Uri.fromFile(input)), 480, 800, format.depth,
+                    settings.copy(panelMode = "PANEL_BY_PANEL")).toList()
+                assertEquals("$format real rows", 3, row.size)
+                assertEquals("$format individual panels", 6, panel.size)
+                assertArrayEquals("Readable top illustration must stay intact in both modes",
+                    row.first().levels, panel.first().levels)
+                for ((mode, frames) in listOf("row" to row, "panel" to panel)) {
+                    val output = File(folder, "$mode.${format.extension}")
+                    output.outputStream().use { stream ->
+                        dev.nooir.bridge.XtcCodec.write(format, frames.asSequence(), stream, folder,
+                            dev.nooir.bridge.BookMetadata("Mixed layout QA"))
+                    }
+                    val book = dev.nooir.bridge.XtcBookPreview(output)
+                    assertEquals(frames.size, book.pageCount)
+                    for (i in frames.indices) {
+                        val page = book.page(i)
+                        assertEquals(480, page.width)
+                        assertEquals(800, page.height)
+                        assertArrayEquals("$mode $format frame $i", frames[i].levels, page.levels)
+                    }
+                }
+            }
+            assertArrayEquals(original, input.readBytes())
         } finally { folder.deleteRecursively() }
     }
 
