@@ -1,5 +1,8 @@
 package dev.nooir.bridge
 
+import kotlin.math.roundToInt
+import kotlin.math.abs
+
 /**
  * Conservative, OCR-free panel geometry. Runs on a bounded grayscale thumbnail
  * produced by the Android adapter, NOT on full-resolution manga images.
@@ -848,7 +851,11 @@ object PanelDetectionCore {
     }
 
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
-        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
+        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan =
+        detect(width,height,grayscale,rightToLeft,true,trace)
+
+    fun detect(width: Int,height: Int,grayscale: ByteArray,rightToLeft: Boolean,
+        allowOverlapRescue: Boolean,trace: ((PanelDebugEvent)->Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
             "Panel detection needs a bounded, nonempty thumbnail"
         }
@@ -882,6 +889,16 @@ object PanelDetectionCore {
         // The same recovery validators are already used by Row by Row.
         val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true,
             allowDarkRecovery = true)
+        if (PairedStructure.artwork(width, height, grayscale, rows)) {
+            val why = "single enclosed illustrated activity sheet; preserve composition"
+            trace?.invoke(PanelDebugEvent("page", whole, "keep", why))
+            return PanelPlan(listOf(whole), false, why, preserveSingleFrame = true)
+        }
+        PairedStructure.recover(width, height, grayscale, rows, rightToLeft, true)?.let {
+            val why = "paired slanted tier borders and verified internal panel rails"
+            trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+            return PanelPlan(it, false, why)
+        }
         val output = mutableListOf<PageRegion>()
         var recoveredRows = 0
         // The existing short-footer path can also collapse two rows to one.
@@ -1196,7 +1213,7 @@ object PanelDetectionCore {
             // shrinking a dense illustrated portrait page to one X4 frame,
             // provide three protected, overlapping story views. This is a
             // reading fallback, NOT a claim that arbitrary cuts are panels.
-            if (output.size == 1 && rows.size == 1 &&
+            if (allowOverlapRescue && output.size == 1 && rows.size == 1 &&
                 !detector.isSparseRow(whole)) {
                 val overlapViews = recoverOverlappingRowViews(
                     width, height, grayscale, rightToLeft, trace)
@@ -1619,6 +1636,16 @@ object PanelDetectionCore {
         // its established row-first detector unchanged.
         val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true,
             allowDarkRecovery = true)
+        if (PairedStructure.artwork(width, height, grayscale, rows)) {
+            val why = "single enclosed illustrated activity sheet; preserve composition"
+            trace?.invoke(PanelDebugEvent("page", whole, "keep", why))
+            return PanelPlan(listOf(whole), false, why, preserveSingleFrame = true)
+        }
+        PairedStructure.recover(width, height, grayscale, rows, true, false)?.let {
+            val why = "paired slanted tier borders; full-width overlapping row views"
+            trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+            return PanelPlan(it, false, why)
+        }
         if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
         if (rows.any { !detector.hasContent(it) }) return fallback("empty row")
         if (!coversEntirePage(rows, width, height)) return fallback("unsafe row coverage")
@@ -2800,5 +2827,104 @@ object PanelReadingOrder {
                 else visit(n.first) + visit(n.second)
         }
         return visit(node)
+    }
+}
+
+/** Conservative second look for a failed mixed-tier partition and for an
+ * enclosed activity illustration fragmented by false text/shape gutters.
+ * Thumbnail-only; no text recognition, no page-specific coordinates,
+ * no changes to the ordinary detector or oversized overlap fallback.
+ */
+internal object PairedStructure {
+    private data class Seam(val middle: Int, val slope: Int, val score: Double) {
+        fun low(span: Int) = middle - (abs(slope) * span / 200.0).roundToInt() - 1
+        fun high(span: Int) = middle + (abs(slope) * span / 200.0).roundToInt() + 1
+    }
+    private fun seams(w: Int, h: Int, gray: ByteArray, horizontal: Boolean,
+        start: Int, end: Int, maxSlope: Int): List<Seam> {
+        val axis = if (horizontal) h else w
+        val span = end-start
+        if (span < 100 || axis < 120) return emptyList()
+        val a = start + span*8/100
+        val b = end - span*8/100
+        val center = (start+end)/2.0
+        val first = axis*14/100
+        val last = axis*86/100
+        val gapMin = maxOf(5,axis*8/1000)
+        val gapMax = maxOf(10,axis*5/100)
+        val possible=mutableListOf<Seam>()
+        for (s in -maxSlope..maxSlope) {
+            val dark=DoubleArray(axis)
+            val pale=DoubleArray(axis)
+            val offsets=IntArray((b-a+1)/2) { i -> ((a+i*2-center)*s/100.0).roundToInt() }
+            for (m in first until last) {
+                var d=0;var p=0;var n=0
+                for (i in offsets.indices) {
+                    val v=m+offsets[i]
+                    if(v !in 0 until axis) continue
+                    val q=a+i*2
+                    val value=gray[if(horizontal) v*w+q else q*w+v].toInt() and 255
+                    if(value<140)d++
+                    if(value>=235)p++
+                    n++
+                }
+                if(n==offsets.size && n>0){dark[m]=d.toDouble()/n;pale[m]=p.toDouble()/n}
+            }
+            for(i in first until last) if(dark[i]>=0.68) {
+                for(j in i+gapMin..minOf(last-1,i+gapMax)) if(dark[j]>=0.68) {
+                    val m=(i+j)/2
+                    if((m-2..m+2).all{pale[it]>=0.80})
+                        possible.add(Seam(m,s,minOf(dark[i],dark[j])+pale[m]*0.2))
+                }
+            }
+        }
+        val chosen=mutableListOf<Seam>()
+        for(s in possible.sortedByDescending{it.score}) {
+            if(chosen.none{abs(it.middle-s.middle)<axis*8/100}) chosen.add(s)
+            if(chosen.size>3) break
+        }
+        return chosen.sortedBy{it.middle}
+    }
+    fun recover(w:Int,h:Int,gray:ByteArray,rows:List<PageRegion>,rtl:Boolean,panels:Boolean):List<PageRegion>? {
+        if(w<300||h<420||h.toLong()*10<w.toLong()*12||rows.size !in 2..4 ||
+            rows.none{it.height.toLong()*2>h}||rows.last().height*100>h*9) return null
+        val hs=seams(w,h,gray,true,0,w,15)
+        if(hs.size!=2||hs.none{abs(it.slope)>=5}||hs[0].slope*hs[1].slope>=0) return null
+        val bands=listOf(PageRegion(0,0,w,hs[0].high(w)),
+            PageRegion(0,hs[0].low(w),w,hs[1].high(w)),PageRegion(0,hs[1].low(w),w,h))
+        if(bands.any{it.height< h/6}) return null
+        val cores=listOf(0 to hs[0].low(w),hs[0].high(w) to hs[1].low(w),hs[1].high(w) to rows.last().top)
+        if(cores.any{it.second-it.first<100})return null
+        val groups=cores.map{(t,b)->seams(w,h,gray,false,t,b,20)}
+        // Require independent lower-tier frame evidence; counts follow the rails.
+        if(groups.drop(1).any{it.isEmpty()}||groups.any{it.size>3})return null
+        if(!panels)return bands
+        val result=mutableListOf<PageRegion>()
+        for(i in bands.indices){
+            val row=bands[i];val splits=groups[i];val core=cores[i]
+            val center=(core.first+core.second)/2.0
+            fun ends(s:Seam):Pair<Int,Int>{
+                val a=s.middle+((row.top-center)*s.slope/100).roundToInt()
+                val b=s.middle+((row.bottom-center)*s.slope/100).roundToInt()
+                return (minOf(a,b)-1).coerceIn(1,w-1) to (maxOf(a,b)+1).coerceIn(1,w-1)
+            }
+            val limits=splits.map{ends(it)}
+            val pieces=(0..limits.size).map{j->row.copy(left=if(j==0)0 else limits[j-1].first,right=if(j==limits.size) w else limits[j].second)}
+            if(pieces.any{it.width<w/8}||pieces.zipWithNext().any{(a,b)->a.right<b.left})return null
+            result.addAll(if(rtl)pieces.reversed() else pieces)
+        }
+        return result
+    }
+    fun artwork(w:Int,h:Int,gray:ByteArray,rows:List<PageRegion>):Boolean {
+        if(w<300||h<420||h.toLong()*10<w.toLong()*12||rows.size<5||rows.count{it.height*100<h*12}<4)return false
+        fun dark(x:Int,y:Int)=(gray[y*w+x].toInt() and 255)<140
+        fun fraction(t:Int,b:Int):Double{var n=0;var d=0;for(y in t until b step 2)for(x in w*8/100 until w*92/100 step 2){n++;if(dark(x,y))d++};return d.toDouble()/n}
+        if(fraction(h/10,h*3/10)<0.20||fraction(h*3/10,h*9/10)>0.12)return false
+        fun rail(horizontal:Boolean,at:Int):Double{val span=if(horizontal)w else h;var n=0;var hits=0;for(q in span/10 until span*9/10 step 2){n++;if((-1..1).any{d->if(horizontal)dark(q,at+d)else dark(at+d,q)})hits++};return hits.toDouble()/n}
+        fun maxRail(horizontal:Boolean,from:Int,to:Int):Double{val n=if(horizontal)h else w;return (n*from/100 until n*to/100).maxOf{rail(horizontal,it)}}
+        return maxRail(true,3,15)>=0.82&&maxRail(true,85,97)>=0.82&&
+            maxRail(false,2,15)>=0.82&&maxRail(false,85,98)>=0.82&&
+            maxRail(true,35,85)<0.55&&maxRail(false,16,84)<0.55&&
+            seams(w,h,gray,true,0,w,15).isEmpty()
     }
 }
