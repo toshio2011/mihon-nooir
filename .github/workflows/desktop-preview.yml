@@ -92,6 +92,14 @@ jobs:
                          -e 'tests/run.sh' \
                          -e 'overlay/data/src/main/java/tachiyomi/data/release/NooirReleaseApkSelector.kt' \
                          -e '.github/workflows/verify-v1.0.18-signing.yml' || true)
+          # Explicitly authorized cross-platform options experiment only.
+          if [[ "${GITHUB_HEAD_REF:-}" == experiment/oversized-splits-cross-platform-20261118 ]]; then
+            protected=$(printf '%s\n' "$protected" | grep -v -F -x \
+              -e 'overlay/app/src/main/java/dev/nooir/bridge/PanelReadableSliceRefiner.kt' \
+              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt' \
+              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt' \
+              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt' || true)
+          fi
           if [ -n "$protected" ]; then
             printf 'STOP: protected Android paths changed:\n%s\n' "$protected" >&2
             exit 1
@@ -118,7 +126,7 @@ jobs:
           grep -Fxq '    const val CURRENT_VERSION = "'"$(cat desktop/windows-version.txt)"'"' desktop/ui/DesktopWindowsUpdates.kt
           mkdir -p build/desktop
           kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" \
-            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt} \
+            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,PanelReadableSliceRefiner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt} \
             overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
             desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar

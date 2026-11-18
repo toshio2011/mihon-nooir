@@ -407,6 +407,29 @@ fun main() {
             "--format", "XTC", "--device", "X4", "--options-token", panelOptions.token(),
         ))
         check(u16(safe.readBytes(), 6) == 1) { "Splash pages must remain intact" }
+        // A full-width, very tall detected tier with no internal separator.
+        // Landscape makes the original tier under 50% occupied; safe halves
+        // enlarge both views, leaving the short second row unchanged.
+        val oversized=File(root,"oversized-row").apply { mkdirs() }
+        val art=BufferedImage(600,1400,BufferedImage.TYPE_INT_RGB)
+        for (y in 0 until art.height) for (x in 0 until art.width) {
+            val onArt=x in 45..554 && (y in 20..1010 || y in 1080..1380)
+            val shade=if(onArt && (x*13+y*31)%97<45) 65 else 255
+            art.setRGB(x,y,java.awt.Color(shade,shade,shade).rgb)
+        }
+        check(ImageIO.write(art,"png",File(oversized,"01.png")));art.flush()
+        for (format in listOf("XTC","XTCH")) {
+            for (enabled in listOf(false,true)) {
+                val output=File(root,"oversize-$format-$enabled."+format.lowercase())
+                NooirDesktopCli.main(arrayOf("--input",oversized.absolutePath,"--output",output.absolutePath,
+                    "--format",format,"--device","X4","--options-token",rowOptions.copy(
+                    orientation="LANDSCAPE",cropWhiteMargins=false,overlapPercent=0,
+                    enlargeOversizedSplits=enabled,minimumScreenFillPercent=50).token()))
+                check(u16(output.readBytes(),6)==if(enabled) 3 else 2) {
+                    "Confirmed oversized row must be two overlapping views only when enabled"
+                }
+            }
+        }
         println("Desktop panel exports passed: XTC, XTCH, EPUB2, EPUB3, CBZ, six screens, all-format Auto Fit, legacy OFF, splash fallback")
     } finally { root.deleteRecursively() }
 }
