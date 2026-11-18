@@ -18,6 +18,8 @@ on:
       - 'desktop/webp-runtime.sha256'
       - 'tests/run.sh'
       - 'tests/run_windows_full.sh'
+      - 'tools/apply_overlay.py'
+      - 'tests/test_overlay.py'
       - '.github/workflows/desktop-preview.yml'
   push:
     # Keep this isolated full-Windows branch testable before the workflow is merged.
@@ -38,6 +40,8 @@ on:
       - 'desktop/webp-runtime.sha256'
       - 'tests/run.sh'
       - 'tests/run_windows_full.sh'
+      - 'tools/apply_overlay.py'
+      - 'tests/test_overlay.py'
       - '.github/workflows/desktop-preview.yml'
 permissions:
   contents: read
