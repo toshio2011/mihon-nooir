@@ -29,12 +29,15 @@ data class MangaConversionOptions(
     val panelDiagnostics: Boolean = false, // explicit opt-in private ZIP, never part of book output
     val renderAlgorithm: String = "LEGACY", // LEGACY keeps saved 1.0.x Floyd/threshold choice
     val contextPeekPercent: Int = 0, // 0 off; optional 1..8% adjacent verified panel
+    val enlargeOversizedSplits: Boolean = true,
+    val minimumScreenFillPercent: Int = 50, // 25..80, separate from overlap band
 ) {
     fun token() = listOf(preset, layout, cropWhiteMargins, splitSpreads, rightToLeft,
         contrast.coerceIn(0, 100), dither, orientation, overlapPercent.coerceIn(0, 50),
         landscapeClockwise, includeCover, epubColor, epubPagesPerXhtml.coerceIn(0, 999), xtcExtendedMetadata,
         allowMissingCover, skipUnavailableChapters, panelMode, showFullPageBeforeSplits, keepChapterFirstPageWhole,
-        panelDiagnostics, renderAlgorithm, contextPeekPercent.coerceIn(0, 8)).joinToString("|")
+        panelDiagnostics, renderAlgorithm, contextPeekPercent.coerceIn(0, 8), enlargeOversizedSplits,
+        minimumScreenFillPercent.coerceIn(25,80)).joinToString("|")
 
     companion object {
         fun preset(name: String): MangaConversionOptions = when (name) {
@@ -55,7 +58,7 @@ data class MangaConversionOptions(
             val v = raw.split("|")
             // Existing jobs/settings created by 1.0.4/1.0.5 stored seven tokens.
             // Preserve those values and migrate only the new options to defaults.
-            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12 && v.size != 13 && v.size != 14 && v.size != 15 && v.size != 16 && v.size != 17 && v.size != 18 && v.size != 19 && v.size != 20 && v.size != 21 && v.size != 22) return MangaConversionOptions()
+            if (v.size != 7 && v.size != 10 && v.size != 11 && v.size != 12 && v.size != 13 && v.size != 14 && v.size != 15 && v.size != 16 && v.size != 17 && v.size != 18 && v.size != 19 && v.size != 20 && v.size != 21 && v.size != 22 && v.size != 23 && v.size != 24) return MangaConversionOptions()
             return MangaConversionOptions(
                 preset = v[0].take(32),
                 layout = v[1].takeIf { it in setOf("AUTO", "PAGED", "WEBTOON") } ?: "AUTO",
@@ -82,6 +85,8 @@ data class MangaConversionOptions(
                     it in setOf("LEGACY", "FLOYD_STEINBERG", "ATKINSON", "BAYER_8X8", "THRESHOLD")
                 } ?: "LEGACY",
                 contextPeekPercent = (v.getOrNull(21)?.toIntOrNull() ?: 0).coerceIn(0, 8),
+                enlargeOversizedSplits = v.getOrNull(22)?.toBooleanStrictOrNull() ?: true,
+                minimumScreenFillPercent = (v.getOrNull(23)?.toIntOrNull() ?: 50).coerceIn(25,80),
             )
         }
 

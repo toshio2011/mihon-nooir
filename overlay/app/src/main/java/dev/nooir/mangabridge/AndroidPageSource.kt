@@ -153,7 +153,7 @@ class AndroidPageSource(private val context: Context) {
             }
             val plan = if (options.panelMode == "ROW_BY_ROW")
                 PanelDetectionCore.detectRows(w, h, gray, debug?.trace)
-                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft, debug?.trace)
+                else PanelDetectionCore.detect(w, h, gray, options.rightToLeft, options.enlargeOversizedSplits, debug?.trace)
             if (plan.usedFullPageFallback) {
                 debug?.noteAnalysis(w, h, gray, plan, emptyList())
                 return null
@@ -176,7 +176,7 @@ class AndroidPageSource(private val context: Context) {
             // is further divided by the viewport slicer.
             debug?.noteAnalysis(w, h, gray, plan, regions)
             return regions.mapIndexed { index, region ->
-                val sparse = options.panelMode == "PANEL_BY_PANEL" &&
+                val sparse = options.panelMode != "OFF" &&
                     options.layout != "WEBTOON" &&
                     PanelSafeSlicePlanner.isSparse(plan.regions[index]) { x, y ->
                         (gray[y * w + x].toInt() and 255) < 220
@@ -315,7 +315,7 @@ class AndroidPageSource(private val context: Context) {
                     Color.blue(c) * 114) / 1000
                 ((lum * alpha + 255 * (255 - alpha)) / 255).toByte()
             }
-            val plan = PanelDetectionCore.detect(w, h, gray, rightToLeft)
+            val plan = PanelDetectionCore.detect(w, h, gray, rightToLeft, false)
             // Avoid recursive application of the experimental overlapping
             // thirds. Such regions are reading views, not confident panels.
             if (plan.usedFullPageFallback || plan.preserveSingleFrame ||
@@ -436,19 +436,27 @@ class AndroidPageSource(private val context: Context) {
         // source views. Never touch OFF, strict Row by Row, webtoons, covers,
         // protected sparse regions or intentionally preserved single pages.
         val slices = if (options.panelMode == "PANEL_BY_PANEL" &&
-            panels != null && sparseWhole == null && options.layout != "WEBTOON") {
+            panels != null && sparseWhole == null && options.layout != "WEBTOON" && plannedSlices.size <= 32) {
             PanelReadableSliceRefiner.refine(
                 plannedSlices, src.width, src.height, minOf(width, height),
                 maxOf(width, height),
                 inkAt = { x, y -> inkAt(src, x, y) },
                 protectedRegions = panels.filter { it.preserveWhole }.map { it.region },
                 autoFit = auto,
+                enlargeOversizedSplits = options.enlargeOversizedSplits,
+                minimumScreenFillPercent = options.minimumScreenFillPercent,
+                requireZoomGain = true,
                 allowSingleEdgeZoom = panels.size == 1 &&
                     panels[0].allowSingleEdgeZoom,
                 recoverInnerPanels = { row ->
                     recoverInnerPanelsWithinRow(src, row, options.rightToLeft)
                 },
             )
+        } else if (options.panelMode == "ROW_BY_ROW" && panels != null &&
+            options.enlargeOversizedSplits && options.layout != "WEBTOON") {
+            PanelReadableSliceRefiner.refineRows(plannedSlices,src.width,src.height,
+                minOf(width,height),maxOf(width,height),{x,y -> inkAt(src,x,y)},auto,
+                options.minimumScreenFillPercent,panels.filter { it.preserveWhole }.map { it.region })
         } else plannedSlices
         // Context peek is a post-detector framing option, NOT another cutter.
         // It can duplicate a small neighboring edge only when all output slices
