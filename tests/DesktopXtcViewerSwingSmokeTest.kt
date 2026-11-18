@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.ImageIcon
 import javax.swing.JButton
 import javax.swing.JCheckBox
+import javax.swing.JComboBox
+import javax.swing.JSpinner
 import javax.swing.JDialog
 import javax.swing.JFrame
 import javax.swing.JLabel
@@ -330,6 +332,7 @@ private fun verifyOfflineLibrary(folder: File) {
         verifyToolbarReachable(findButton(main, "Search"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
         verifyToolbarReachable(findButton(main, "Download requests"))
+        verifyConversionSettings(main)
         verifyToolbarReachable(findButton(main, "Inspect XTC / XTCH output"))
         val libraryButton = findButton(main, "Local library")
         verifyToolbarReachable(libraryButton)
@@ -395,6 +398,75 @@ private fun verifyOfflineLibrary(folder: File) {
         prefs.remove(positionKey)
         prefs.flush()
     }
+}
+
+/** Open the actual production main settings and verify saved/canceled edits. */
+private fun verifyConversionSettings(main: JFrame) {
+    val button = findButton(main, "Conversion settings")
+    verifyToolbarReachable(button)
+    fun open(): JDialog {
+        onSwingThread { SwingUtilities.invokeLater { button.doClick() } }
+        awaitUi("conversion settings modal") {
+            Window.getWindows().filterIsInstance<JDialog>().any {
+                it.isShowing && it.title == "MihonNooir conversion settings"
+            }
+        }
+        return onSwingThread { Window.getWindows().filterIsInstance<JDialog>().first {
+            it.isShowing && it.title == "MihonNooir conversion settings"
+        } }
+    }
+    fun control(dialog: JDialog, label: String): Component = onSwingThread {
+        descendants(dialog).filterIsInstance<JLabel>().single { it.text == label }.labelFor
+    }
+    fun toggle(dialog: JDialog): JCheckBox = onSwingThread {
+        descendants(dialog).filterIsInstance<JCheckBox>().single { it.text == "Enlarge oversized splits" }
+    }
+    fun finish(dialog: JDialog, action: String) {
+        onSwingThread { descendants(dialog).filterIsInstance<JButton>().single { it.text == action }.doClick() }
+        awaitUi("settings modal dismissed") { !dialog.isShowing }
+        // Flush the main action listener after the modal event loop returns.
+        onSwingThread { Unit }
+    }
+    fun reachable(control: javax.swing.JComponent) {
+        val scroll = onSwingThread {
+            SwingUtilities.getAncestorOfClass(JScrollPane::class.java, control) as JScrollPane
+        }
+        onSwingThread { control.scrollRectToVisible(Rectangle(0,0,control.width,control.height)) }
+        awaitUi("settings control scrolls into view") {
+            val rect = SwingUtilities.convertRectangle(control.parent,control.bounds,scroll.viewport.view)
+            scroll.viewport.viewRect.contains(rect)
+        }
+    }
+    val dialog = open()
+    check(onSwingThread { GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.contains(dialog.bounds) }) {
+        "Conversion settings modal exceeds desktop work area"
+    }
+    val mode = control(dialog,"Page extraction") as JComboBox<*>
+    val enlarge = toggle(dialog)
+    val fill = control(dialog,"Minimum screen fill %") as JSpinner
+    onSwingThread { mode.selectedItem = "OFF" }
+    check(onSwingThread { !enlarge.isEnabled && !fill.isEnabled })
+    onSwingThread { mode.selectedItem = "ROW_BY_ROW" }
+    check(onSwingThread { enlarge.isEnabled && enlarge.isSelected && fill.isEnabled && fill.value == 50 })
+    reachable(enlarge); reachable(fill)
+    onSwingThread { enlarge.doClick() }
+    check(onSwingThread { !fill.isEnabled })
+    onSwingThread { enlarge.doClick() }
+    check(onSwingThread { fill.isEnabled })
+    // Deliberately type the value without firing Enter; OK must commit it.
+    onSwingThread { (fill.editor as JSpinner.DefaultEditor).textField.text = "65" }
+    finish(dialog,"OK")
+    val saved = open()
+    val retained = control(saved,"Minimum screen fill %") as JSpinner
+    check(onSwingThread { toggle(saved).isSelected && retained.value == 65 &&
+        (control(saved,"Page extraction") as JComboBox<*>).selectedItem == "ROW_BY_ROW" })
+    onSwingThread { toggle(saved).doClick() }
+    finish(saved,"Cancel")
+    val reopened = open()
+    check(onSwingThread { toggle(reopened).isSelected &&
+        (control(reopened,"Minimum screen fill %") as JSpinner).value == 65 })
+    finish(reopened,"Cancel")
+    println("PASS: native scrollable conversion settings, oversized toggle/threshold, typed value commit and cancel rollback")
 }
 
 private fun awaitFrame(title: String): JFrame {
