@@ -390,7 +390,11 @@ private fun verifyOfflineLibrary(folder: File) {
         println("PASS: packaged offline main startup, compact/wide layout, library filter, cover, reader page turn, bookmark, reopen/resume and source unchanged; windows/toolbar accessible")
         onSwingThread { Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() } }
         MangaNooirDesktop.main(emptyArray())
-        verifyConversionSettings(awaitFrame("MihonNooir — Windows development"), restored = true)
+        val restarted = awaitFrame("MihonNooir — Windows development")
+        onSwingThread {
+            descendants(restarted).filterIsInstance<JTabbedPane>().singleOrNull()?.selectedIndex = 2
+        }
+        verifyConversionSettings(restarted, restored = true)
     } finally {
         onSwingThread {
             Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() }
