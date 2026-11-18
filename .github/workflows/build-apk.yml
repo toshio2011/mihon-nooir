@@ -213,7 +213,7 @@ jobs:
     # A separate emulator test validates the actual Android 1001-page PDF
     # parser/render path on PDF PR #82 and the cross-platform integration
     # PR #85. Ordinary main/updater/Windows CI remains unaffected.
-    if: ${{ github.event.pull_request.head.ref == 'feature/pdf-large-multi-input-v1.0.17' || github.ref == 'refs/heads/feature/pdf-large-multi-input-v1.0.17' || github.event.pull_request.head.ref == 'integration/visual-preview-android-windows-20261113' || github.ref == 'refs/heads/integration/visual-preview-android-windows-20261113' || github.event.pull_request.head.ref == 'release-candidate/android-v1.0.18-integrated-20261116' || github.ref == 'refs/heads/release-candidate/android-v1.0.18-integrated-20261116' }}
+    if: ${{ github.event.pull_request.head.ref == 'feature/pdf-large-multi-input-v1.0.17' || github.ref == 'refs/heads/feature/pdf-large-multi-input-v1.0.17' || github.event.pull_request.head.ref == 'integration/visual-preview-android-windows-20261113' || github.ref == 'refs/heads/integration/visual-preview-android-windows-20261113' || github.event.pull_request.head.ref == 'release-candidate/android-v1.0.18-integrated-20261116' || github.ref == 'refs/heads/release-candidate/android-v1.0.18-integrated-20261116' || github.event.pull_request.head.ref == 'integration/mihonnooir-next-candidate-20261118' || github.ref == 'refs/heads/integration/mihonnooir-next-candidate-20261118' }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 45
