@@ -28,7 +28,7 @@ adb install -r "$test_apk"
 adb shell pm list instrumentation | tee android-panel-instrumentation-packages.txt
 adb logcat -c
 
-echo "Running Android panel diagnostics, footer-render and saved XTC/XTCH SAF tests"
+echo "Running Android panel diagnostics, footer-render and saved XTC/XTCH SAF and oversized-row tests"
 adb shell am instrument -w -r \
   -e class dev.nooir.mangabridge.PanelDiagnosticArchiveInstrumentedTest \
   dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
@@ -40,12 +40,27 @@ adb shell am instrument -w -r \
 for required in \
   realAndroidCbzZipAndRenderParity \
   shortRuledFooterStaysOneFrameThroughAndroidRender \
-  savedBinaryPreviewReadsActualSafBytes
+  savedBinaryPreviewReadsActualSafBytes \
+  oversizedRowZoomRespectsToggleAndAutoFit
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" diagnostic-instrumentation.txt
 done
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.txt)" -eq 3
-grep -Fxq 'OK (3 tests)' diagnostic-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0
+grep -Fxq 'OK (4 tests)' diagnostic-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
+
+echo "Reading the actual privately saved diagnostic ZIP from the emulator"
+adb root
+adb wait-for-device
+adb pull \
+  /data/user/0/dev.nooir.mihontrial.foss/files/manganooir_panel_debug/latest.zip \
+  android-runtime-panel-diagnostic.zip
+test -s android-runtime-panel-diagnostic.zip
+python3 tools/panel_diagnostic_inspect.py \
+  android-runtime-panel-diagnostic.zip --json \
+  | tee android-panel-diagnostic-inspection.json
+ diagnostic-instrumentation.txt)" -eq 4
+grep -Fxq 'OK (4 tests)' diagnostic-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"

@@ -418,15 +418,20 @@ fun main() {
             art.setRGB(x,y,java.awt.Color(shade,shade,shade).rgb)
         }
         check(ImageIO.write(art,"png",File(oversized,"01.png")));art.flush()
-        for (format in listOf("XTC","XTCH")) {
-            for (enabled in listOf(false,true)) {
-                val output=File(root,"oversize-$format-$enabled."+format.lowercase())
-                NooirDesktopCli.main(arrayOf("--input",oversized.absolutePath,"--output",output.absolutePath,
-                    "--format",format,"--device","X4","--options-token",rowOptions.copy(
-                    orientation="LANDSCAPE",cropWhiteMargins=false,overlapPercent=0,
-                    enlargeOversizedSplits=enabled,minimumScreenFillPercent=50).token()))
-                check(u16(output.readBytes(),6)==if(enabled) 3 else 2) {
-                    "Confirmed oversized row must be two overlapping views only when enabled"
+        for (device in listOf("X4", "X3")) {
+            for (format in listOf("XTC", "XTCH")) {
+                for (orientation in listOf("LANDSCAPE", "AUTO_FIT")) {
+                    for (enabled in listOf(false, true)) {
+                        val output=File(root,"oversize-$device-$format-$orientation-$enabled."+format.lowercase())
+                        NooirDesktopCli.main(arrayOf("--input",oversized.absolutePath,"--output",output.absolutePath,
+                            "--format",format,"--device",device,"--options-token",rowOptions.copy(
+                            orientation=orientation,cropWhiteMargins=false,overlapPercent=0,
+                            enlargeOversizedSplits=enabled,minimumScreenFillPercent=50).token()))
+                        val expected=if(enabled && orientation=="LANDSCAPE") 3 else 2
+                        check(u16(output.readBytes(),6)==expected) {
+                            "$device $format $orientation enabled=$enabled expected $expected frames"
+                        }
+                    }
                 }
             }
         }
