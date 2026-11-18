@@ -13,7 +13,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
 
 internal object DesktopDocumentImportScreen {
     private val active = AtomicBoolean(false)
-    fun open(parent: Component) {
+    fun open(parent: Component, defaults: MangaConversionOptions) {
         if (active.get()) return
         val chooser = JFileChooser().apply {
             dialogTitle = "Import an unprotected PDF or image-based EPUB"
@@ -47,7 +47,7 @@ internal object DesktopDocumentImportScreen {
         }
         val options = if (pdf) MangaConversionOptions().copy(
             rightToLeft=false,renderAlgorithm=rendering.selectedItem as String,epubColor=color.isSelected)
-        else DesktopConversionDialog.show(parent,MangaConversionOptions.preset("Manga")) ?: return
+        else DesktopConversionDialog.show(parent,defaults.copy(allowMissingCover=false,skipUnavailableChapters=false,panelDiagnostics=false)) ?: return
         val save = JFileChooser().apply {
             dialogTitle = "Save converted document (new filename)"
             selectedFile = File(DesktopUiModel.suggestedFile(source.nameWithoutExtension,outputFormat))
