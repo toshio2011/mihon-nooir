@@ -15,6 +15,8 @@ import dev.nooir.desktop.suwayomi.SuwayomiProcessManager
 import dev.nooir.desktop.suwayomi.OfficialSuwayomiCache
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.Desktop
+import java.net.URI
 import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.GridLayout
@@ -69,6 +71,26 @@ object MangaNooirDesktop {
 }
 
 internal object DesktopUiModel {
+    /** Browser handoff only: match the app's localhost/root endpoint policy.
+     * Never put authorization headers, user info, query parameters or tokens
+     * into a browser URL, and never open an arbitrary remote repository.
+     */
+    fun extensionSetupUri(endpoint: String): URI {
+        val uri = try { URI(endpoint.trim()) } catch (e: Exception) {
+            throw IllegalArgumentException("Enter a valid localhost Suwayomi HTTP(S) address.", e)
+        }
+        require(uri.scheme in setOf("http", "https")) { "Use HTTP or HTTPS." }
+        require(uri.host?.lowercase() in setOf("localhost", "127.0.0.1")) {
+            "Extension setup opens a localhost Suwayomi server only."
+        }
+        require(uri.port in 1..65535) { "Supply the local Suwayomi port." }
+        require(uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null) {
+            "Do not embed credentials, query parameters or fragments in the URL."
+        }
+        require(uri.rawPath.isNullOrEmpty() || uri.rawPath == "/") { "Use the server root address." }
+        return URI.create("${uri.scheme}://${uri.rawAuthority}/")
+    }
+
     fun offlineReadyChoices(count: Int): List<String> {
         require(count in 1..OfflineChapterSaver.MAX_BATCH) { "No successfully saved offline chapters" }
         // Only a single chapter can be opened without making the user choose
@@ -120,6 +142,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val sendReader = JButton("Send to XTEINK")
     private val documentImport = JButton("Import PDF / EPUB")
     private val checkWindowsUpdates = JButton("Windows updates")
+    private val manageExtensions = JButton("Manage extensions…")
     private val startServer = JButton("Start local Suwayomi")
     private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
@@ -183,6 +206,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
         val sourcePanel = JPanel(BorderLayout(4, 4)).apply {
             border = BorderFactory.createTitledBorder("Installed sources")
+            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 3)).apply {
+                add(manageExtensions)
+            }), BorderLayout.NORTH)
             add(JScrollPane(sourceList), BorderLayout.CENTER)
         }
 
@@ -271,7 +297,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             next, previous, selected, onlyDownloaded, clear, refresh, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
             conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, inspectBinary, sendReader,
-            startServer, stopServer, getServer, checkWindowsUpdates)
+            startServer, stopServer, getServer, checkWindowsUpdates, manageExtensions)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { proposed ->
@@ -287,6 +313,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             }
         }
         connect.addActionListener { loadSources() }
+        manageExtensions.addActionListener { openExtensionSetup() }
         startServer.addActionListener { startManagedServer() }
         getServer.addActionListener { downloadAndStartManagedServer() }
         stopServer.addActionListener { stopManagedServer() }
@@ -451,6 +478,42 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             currentManga = null
             status.text = "Managed local Suwayomi stopped. Local reading remains available."
         })
+    }
+
+    /** Suwayomi owns extension installs, trust and updates. We only open its
+     * local WebUI after an explicit action; offline reading stays independent.
+     */
+    private fun openExtensionSetup() {
+        val uri = try {
+            DesktopUiModel.extensionSetupUri(endpoint.text)
+        } catch (e: IllegalArgumentException) {
+            showError(e.message ?: "Enter a valid localhost Suwayomi address.")
+            return
+        }
+        val address = JTextField(uri.toString(), 30).apply { isEditable = false }
+        val help = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(JLabel("Start or connect to your local Suwayomi server first."))
+            add(JLabel("In its web interface, add an extension repository you trust."))
+            add(JLabel("Install compatible extensions you choose; none are bundled."))
+            add(JLabel("Return here and click Connect / reload sources."))
+            add(JLabel("Your Android extensions are not automatically copied."))
+            add(JLabel("Local server address (copy if the browser cannot open):"))
+            add(address)
+        }
+        val choice = JOptionPane.showOptionDialog(this, help, "Mihon-compatible extensions",
+            JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null,
+            arrayOf("Open Suwayomi in browser", "Close"), "Open Suwayomi in browser")
+        if (choice != 0) return
+        try {
+            require(Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                "Browser opening is unavailable. Copy the displayed local address into your browser."
+            }
+            Desktop.getDesktop().browse(uri)
+            status.text = "Configure extensions in Suwayomi, then Connect / reload sources."
+        } catch (e: Exception) {
+            showError("Could not open the browser. Open ${uri} manually. " + (e.message ?: ""))
+        }
     }
 
     private fun loadSources() {
