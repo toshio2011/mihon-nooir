@@ -1,6 +1,7 @@
 import dev.nooir.bridge.PageRegion
 import dev.nooir.bridge.PanelDetectionCore
 import dev.nooir.bridge.PairedStructure
+import dev.nooir.bridge.PanelFragmentSecondLook
 import kotlin.math.roundToInt
 
 private fun promotionalMontageFixture(): Triple<Int, Int, ByteArray> {
@@ -51,6 +52,7 @@ private fun centerGray(pixels: ByteArray, width: Int, region: PageRegion): Int {
     return pixels[y * width + x].toInt() and 255
 }
 fun main() {
+    fragmentSecondLookRegression()
     pairedStructureRegression()
     val (promoWidth, promoHeight, promoPixels) = promotionalMontageFixture()
     check(PanelDetectionCore.isIllustratedPromotionalBanner(
@@ -978,4 +980,62 @@ private fun pairedStructureRegression() {
     val noBorder=sheet.copyOf();for(y in 78 until 827)for(x in 30..32)noBorder[y*w+x]=255.toByte()
     check(!PairedStructure.artwork(w,h,noBorder,falseRows))
     println("PASS: paired rail tiers and individual panels, RTL/LTR, exact coverage, missing-rail negative and artwork guard")
+}
+
+private fun fragmentSecondLookRegression() {
+    val w=500;val h=800
+    fun paper()=ByteArray(w*h){255.toByte()}
+    fun rect(a:ByteArray,l:Int,t:Int,r:Int,b:Int,v:Int=0){
+        for(y in t until b)for(x in l until r)a[y*w+x]=v.toByte()
+    }
+    fun verifyCoverage(regions:List<PageRegion>){
+        check(regions.sumOf{it.width.toLong()*it.height}==w.toLong()*h)
+        for(y in 0 until h)for(x in 0 until w)
+            check(regions.count{x in it.left until it.right&&y in it.top until it.bottom}==1)
+    }
+    val right=PageRegion(420,0,w,400)
+    val left=PageRegion(0,0,420,400)
+    val bottom=PageRegion(0,400,w,h)
+    val original=listOf(right,left,bottom)
+    val weak=paper()
+    rect(weak,444,35,480,360,30);rect(weak,15,30,390,365,80)
+    rect(weak,20,440,480,760,50)
+    val merged=PanelFragmentSecondLook.review(w,h,weak,original,true)
+    check(merged==listOf(PageRegion(0,0,w,400),bottom)){ "thin unframed fragment: $merged" }
+    verifyCoverage(merged)
+    val framed=weak.copyOf()
+    rect(framed,415,0,417,400);rect(framed,423,0,425,400)
+    check(PanelFragmentSecondLook.review(w,h,framed,original,true)==original) {
+        "genuine narrow framed panel must be preserved"
+    }
+    val header=PageRegion(0,0,w,30)
+    val under=PageRegion(0,30,w,400)
+    val cap=paper()
+    rect(cap,20,45,470,365,10);rect(cap,20,440,480,760,50)
+    val attached=PanelFragmentSecondLook.review(w,h,cap,listOf(header,under,bottom),true)
+    check(attached==listOf(PageRegion(0,0,w,400),bottom))
+    verifyCoverage(attached)
+    val grouped=PageRegion(0,0,w,400)
+    val inside=paper()
+    rect(inside,20,25,240,375,10);rect(inside,260,25,475,375,30)
+    // actual framed white corridor: two narrow black rails well inside
+    // a substantial grouped region with artwork on both sides.
+    rect(inside,245,0,246,400);rect(inside,254,0,255,400)
+    rect(inside,20,440,480,760,50)
+    val plan=listOf(grouped,bottom)
+    val rtl=PanelFragmentSecondLook.review(w,h,inside,plan,true)
+    val ltr=PanelFragmentSecondLook.review(w,h,inside,plan,false)
+    check(rtl.size==3&&rtl[0].left>0&&rtl[1].left==0&&rtl.last()==bottom) { "RTL inner recovery: $rtl" }
+    check(ltr==listOf(rtl[1],rtl[0],bottom))
+    verifyCoverage(rtl);verifyCoverage(ltr)
+    val singleRail=inside.copyOf()
+    rect(singleRail,254,0,255,400,255)
+    // also remove neighboring content edges; otherwise large solid art blocks
+    // themselves can supply a second border in this synthetic test.
+    rect(singleRail,220,0,245,400,255)
+    rect(singleRail,255,0,280,400,255)
+    check(PanelFragmentSecondLook.review(w,h,singleRail,plan,true)==plan)
+    val overlap=listOf(PageRegion(0,0,w,450),PageRegion(0,400,w,h))
+    check(PanelFragmentSecondLook.review(w,h,inside,overlap,true)==overlap)
+    println("PASS: suspicious fragment merge, real narrow-panel veto, header attachment, inner gutter RTL/LTR, exact coverage, overlap bypass")
 }

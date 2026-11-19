@@ -69,7 +69,7 @@ jobs:
                 "${{ github.event.pull_request.head.ref }}" == 'release-candidate/android-only-v1.0.19-20261119' && "$base" == 'main' ]]; then
             test -z "$(git diff --name-only "origin/$base...HEAD" -- desktop/)"
             for entry in \
-              'ea67853d3b1e3290ae48392e31de5c4dbb1d5bcd overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' \
+              '4e0fe5a549b4e397b9f06b5996d2f9c883b1c522 overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' \
               'ccaf39b4649ef5096b58e96bf861485297bceabc overlay/app/src/main/java/dev/nooir/bridge/PanelReadableSliceRefiner.kt' \
               'a1a148f1c60dcad5938c27a0ed3cbe47dac87509 overlay/app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt' \
               'e5f7bc985c5a4f615fb2e797bad2161bed16eabf overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt' \
