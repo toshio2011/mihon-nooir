@@ -1,0 +1,9 @@
+# Windows online manga reader — first transport slice (19 November 2026)
+
+Draft, Windows only; based on the passing integrated extension-setup preview. Not a finished online reader.
+
+Reviewed pinned upstream v2.4.2366: [ChapterMutation.kt](https://github.com/Suwayomi/Suwayomi-Server/blob/v2.4.2366/server/src/main/kotlin/suwayomi/tachidesk/graphql/mutations/ChapterMutation.kt) and [ChapterType.kt](https://github.com/Suwayomi/Suwayomi-Server/blob/v2.4.2366/server/src/main/kotlin/suwayomi/tachidesk/graphql/types/ChapterType.kt). The explicit fetchChapterPages mutation supplies ordered local page URLs, chapter metadata and a possible reading-sync conflict. Its server implementation can pull/update server-side KOReader progress according to configured sync policy; MihonNooir does not assume this operation is entirely read-only.
+
+This slice validates chapter/manga identities, the count (1–5000), exact source-order/index paths, and progress before accepting a manifest. Each page is fetched only on demand over the existing localhost client, without redirects, arbitrary host URLs, CBZ download requests, app-written progress mutations or local file persistence. Encoded image bytes are limited to 25 MiB per reply; byte validation is not decoded-pixel safety. The future native reader must use dimension preflight, bounded decode, worker-owned cancellation, recoverable failures, explicit chapter opening and a clear sync-conflict/progress policy. No native online reader button or sync is shipped by this transport-only draft.
+
+CI: synthetic loopback-only page API tests, no third-party extensions or copyrighted manga. Real pinned-server page contract still needs a lawful synthetic local-source fixture, followed by native UI acceptance and actual authorized source validation. Android and firmware remain unchanged.

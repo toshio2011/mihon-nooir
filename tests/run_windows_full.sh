@@ -80,6 +80,11 @@ kotlinc desktop/storage/DesktopDataHome.kt desktop/ui/OfflineSaveQueue.kt tests/
   -include-runtime -d "$tmp/windows-offline-save-queue-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-offline-save-queue-tests.jar" OfflineSaveQueueTestKt
 
+# Online reader transport contract: single-page requests, no source downloads in CI.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt} \
+  tests/WindowsOnlineChapterApiTest.kt -include-runtime -d "$tmp/windows-online-api.jar"
+java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/windows-online-api.jar" WindowsOnlineChapterApiTestKt
+
 # True Suwayomi remote download requests: synthetic localhost GraphQL only.
 # No third-party manga, extension installation or Android build edits.
 kotlinc desktop/storage/DesktopDataHome.kt desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt} \
