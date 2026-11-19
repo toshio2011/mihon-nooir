@@ -381,6 +381,36 @@ fun main() {
                 "Tall panels should use portrait: $sizes"
             }
         }
+        // Original synthetic A/B/C mixed layout: one tall column and two
+        // stacked neighbors. A readable C must remain exactly one output.
+        for (mirror in listOf(false,true)) {
+            val spanning = File(root,"spanning-$mirror").apply { mkdirs() }
+            val art = BufferedImage(300,420,BufferedImage.TYPE_INT_RGB)
+            val graphics=art.createGraphics()
+            try {
+                graphics.color=java.awt.Color.WHITE
+                graphics.fillRect(0,0,300,420)
+                graphics.color=java.awt.Color(80,80,80)
+                graphics.fillRect(if(mirror) 158 else 8,8,134,404)
+                graphics.color=java.awt.Color(95,95,95)
+                graphics.fillRect(if(mirror) 8 else 156,8,136,188)
+                graphics.color=java.awt.Color(105,105,105)
+                graphics.fillRect(if(mirror) 8 else 156,210,136,202)
+            } finally { graphics.dispose() }
+            check(ImageIO.write(art,"png",File(spanning,"01.png")));art.flush()
+            for(device in listOf("X4","X3")) for(format in listOf("XTC","XTCH")) {
+                for(rtl in listOf(false,true)) {
+                    val out=File(root,"spanning-$mirror-$device-$format-$rtl."+format.lowercase())
+                    NooirDesktopCli.main(arrayOf("--input",spanning.absolutePath,"--output",out.absolutePath,
+                        "--format",format,"--device",device,"--options-token",autoOptions.copy(
+                            rightToLeft=rtl, cropWhiteMargins=false, overlapPercent=0,
+                            enlargeOversizedSplits=true, minimumScreenFillPercent=50).token()))
+                    check(u16(out.readBytes(),6)==3) {
+                        "Readable spanning panel: $mirror $device $format RTL=$rtl must export three frames"
+                    }
+                }
+            }
+        }
         val mixedXtc = File(root, "mixed-auto.xtc")
         NooirDesktopCli.main(arrayOf(
             "--input", mixed.absolutePath, "--output", mixedXtc.absolutePath,
@@ -407,6 +437,34 @@ fun main() {
             "--format", "XTC", "--device", "X4", "--options-token", panelOptions.token(),
         ))
         check(u16(safe.readBytes(), 6) == 1) { "Splash pages must remain intact" }
+        // A full-width, very tall detected tier with no internal separator.
+        // Landscape makes the original tier under 50% occupied; safe halves
+        // enlarge both views, leaving the short second row unchanged.
+        val oversized=File(root,"oversized-row").apply { mkdirs() }
+        val art=BufferedImage(600,1400,BufferedImage.TYPE_INT_RGB)
+        for (y in 0 until art.height) for (x in 0 until art.width) {
+            val onArt=x in 45..554 && (y in 20..1010 || y in 1080..1380)
+            val shade=if(onArt && (x*13+y*31)%97<45) 65 else 255
+            art.setRGB(x,y,java.awt.Color(shade,shade,shade).rgb)
+        }
+        check(ImageIO.write(art,"png",File(oversized,"01.png")));art.flush()
+        for (device in listOf("X4", "X3")) {
+            for (format in listOf("XTC", "XTCH")) {
+                for (orientation in listOf("LANDSCAPE", "AUTO_FIT")) {
+                    for (enabled in listOf(false, true)) {
+                        val output=File(root,"oversize-$device-$format-$orientation-$enabled."+format.lowercase())
+                        NooirDesktopCli.main(arrayOf("--input",oversized.absolutePath,"--output",output.absolutePath,
+                            "--format",format,"--device",device,"--options-token",rowOptions.copy(
+                            orientation=orientation,cropWhiteMargins=false,overlapPercent=0,
+                            enlargeOversizedSplits=enabled,minimumScreenFillPercent=50).token()))
+                        val expected=if(enabled && orientation=="LANDSCAPE") 3 else 2
+                        check(u16(output.readBytes(),6)==expected) {
+                            "$device $format $orientation enabled=$enabled expected $expected frames"
+                        }
+                    }
+                }
+            }
+        }
         println("Desktop panel exports passed: XTC, XTCH, EPUB2, EPUB3, CBZ, six screens, all-format Auto Fit, legacy OFF, splash fallback")
     } finally { root.deleteRecursively() }
 }
