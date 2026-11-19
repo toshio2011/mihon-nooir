@@ -52,7 +52,7 @@ Auto Fit compares fitted screen occupancy rather than stretching an image. Wider
 
 **Show full page before splits** provides an optional original-page overview; **Keep first page of each chapter whole** is independent. See [Panel Auto Fit](PANEL_AUTO_FIT.md) and [conversion settings](CONVERSION.md).
 
-The configurable **Enlarge oversized splits** option from current development work is **not in v1.0.18**. Manual crop coordinates, advanced zoom/tiling and other proposed controls are not guaranteed available.
+The configurable **Enlarge oversized splits** option is **not in the published v1.0.18**. In the v1.0.19 release candidate, it is on by default in Row by Row and Panel by Panel. Minimum screen fill defaults to 50% (25–80%); this is a guideline for eligible poorly fitting views, not a promise to split every panel below that threshold. The detector tries supported natural boundaries first, then uses a separate 12% protective overlap when both resulting views improve scale. Ordinary overlap remains independent. Auto Fit may preserve a wide illustration without extra zoom; fixed Landscape can produce different frame counts. Manual crop coordinates, advanced zoom/tiling and other proposed controls are not guaranteed available.
 
 The separate [PDF converter](PDF_TO_EPUB.md) uses its own text/image mode, not manga panel segmentation.
 

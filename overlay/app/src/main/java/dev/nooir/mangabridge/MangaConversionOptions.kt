@@ -110,6 +110,22 @@ fun MangaConversionSettings(options: MangaConversionOptions, format: ExportForma
         } else if (options.panelMode == "PANEL_BY_PANEL") {
             Text("Detect individual manga panels. Uncertain boundaries preserve the page rather than guess.")
         }
+        if (options.panelMode != "OFF") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Switch(checked = options.enlargeOversizedSplits, onCheckedChange = {
+                    onChange(options.copy(preset = "Custom", enlargeOversizedSplits = it))
+                })
+                Text("Enlarge oversized splits")
+            }
+            Text("Try larger overlapping views only when useful. Rows stay horizontal; Panel by Panel tries real inner panels first.")
+            if (options.enlargeOversizedSplits) {
+                Text("Minimum screen fill · " + options.minimumScreenFillPercent + "%")
+                Slider(value = options.minimumScreenFillPercent.toFloat(),
+                    onValueChange = { onChange(options.copy(preset = "Custom", minimumScreenFillPercent = it.toInt())) },
+                    valueRange = 25f..80f, steps = 10)
+                Text("Consider poorly fitting oversized regions. Panel mode also retains its existing very-large-row rescue. Both halves must enlarge the art; 12% protective overlap is separate from ordinary strip overlap.")
+            }
+        }
         if (options.panelMode == "PANEL_BY_PANEL") {
             Text("Context Peek · " + if (options.contextPeekPercent == 0) "Off" else "${options.contextPeekPercent}%")
             Slider(

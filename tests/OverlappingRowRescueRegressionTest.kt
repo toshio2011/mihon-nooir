@@ -44,6 +44,7 @@ fun main() {
     )
     check(result.regions == expected) { "The 10% overlap is mandatory: $result" }
     covered(result.regions, width, height)
+    check(!PanelDetectionCore.detect(width,height,textured,true,false).reason.contains("overlapping reading rows"))
     check(trace.any { it.stage == "page" && it.decision == "accept" &&
         it.detail.contains("overlapping reading rows") })
     check(PanelDetectionCore.detect(width, height, textured, false).regions == expected)

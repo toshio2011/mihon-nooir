@@ -19,10 +19,10 @@ fun main() {
     check(MangaConversionOptions.fromToken(custom.token()) == custom)
     val panel = custom.copy(panelMode = "PANEL_BY_PANEL")
     check(MangaConversionOptions.fromToken(panel.token()) == panel)
-    check(panel.token().split("|").size == 22)
+    check(panel.token().split("|").size == 24)
     val autoFit = panel.copy(orientation = "AUTO_FIT")
     check(MangaConversionOptions.fromToken(autoFit.token()) == autoFit)
-    check(autoFit.token().split("|").size == 22) { "New modes must preserve existing diagnostic flags" }
+    check(autoFit.token().split("|").size == 24) { "New modes must preserve existing diagnostic flags" }
     check(MangaConversionOptions.fromToken(custom.token()).orientation == "LANDSCAPE")
     val debug = panel.copy(panelDiagnostics = true)
     check(MangaConversionOptions.fromToken(debug.token()) == debug)
@@ -73,5 +73,10 @@ fun main() {
         contextPeekPercent = 99).token()).contextPeekPercent == 8)
     check(MangaConversionOptions.fromToken(panel.copy(
         renderAlgorithm = "INVALID").token()).renderAlgorithm == "LEGACY")
+    val enlarged=panel.copy(enlargeOversizedSplits=false,minimumScreenFillPercent=65)
+    check(MangaConversionOptions.fromToken(enlarged.token())==enlarged)
+    val legacy22=MangaConversionOptions.fromToken(enlarged.token().split("|").take(22).joinToString("|"))
+    check(legacy22.enlargeOversizedSplits && legacy22.minimumScreenFillPercent==50)
+    check(MangaConversionOptions.fromToken(enlarged.copy(minimumScreenFillPercent=999).token()).minimumScreenFillPercent==80)
     println("Shared Android/desktop conversion settings parity, rendering and legacy migration passed")
 }

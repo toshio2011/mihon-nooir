@@ -164,6 +164,9 @@ object PanelReadableSliceRefiner {
         autoFit: Boolean = true,
         recoverInnerPanels: ((PageRegion) -> List<PageRegion>?)? = null,
         allowSingleEdgeZoom: Boolean = false,
+        enlargeOversizedSplits: Boolean = true,
+        minimumScreenFillPercent: Int = 55,
+        requireZoomGain: Boolean = false,
     ): List<PanelFitSlice> {
         require(sourceWidth > 0 && sourceHeight > 0)
         require(portraitWidth > 0 && portraitHeight > 0)
@@ -230,6 +233,25 @@ object PanelReadableSliceRefiner {
                 intersectArea(p, it.region) * 100 >
                     p.width.toLong() * p.height * 5
             }
+            // A true tall panel beside stacked neighbors is not a row.
+            // Only the modern Panel-mode path may enlarge it independently.
+            // Keep it whole when readable; never split its neighbors here.
+            if (!fullWidthRow && overHalf && requireZoomGain &&
+                enlargeOversizedSplits && !protected(p) && !overlapsOther &&
+                result.size + views.size < MAX_VIEWS &&
+                isSpanningPanel(p, views.map { it.region }, sourceWidth, sourceHeight)) {
+                val vw = if (view.landscape) maxOf(portraitWidth, portraitHeight)
+                    else minOf(portraitWidth, portraitHeight)
+                val vh = if (view.landscape) minOf(portraitWidth, portraitHeight)
+                    else maxOf(portraitWidth, portraitHeight)
+                val poorFit = PanelAutoFit.occupiedFraction(p, vw, vh) <
+                    minimumScreenFillPercent.coerceIn(25, 80) / 100.0
+                val parts = if (poorFit && !PanelSafeSlicePlanner.isSparse(p, inkAt))
+                    naturalThenOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+                    else null
+                if (parts != null) result.addAll(parts) else result.add(view)
+                continue
+            }
             if (protected(p) || !fullWidthRow || !overHalf || overlapsOther ||
                 result.size + views.size >= MAX_VIEWS) {
                 result.add(view)
@@ -262,8 +284,9 @@ object PanelReadableSliceRefiner {
                 else minOf(portraitWidth, portraitHeight)
             val viewportH = if (view.landscape) minOf(portraitWidth, portraitHeight)
                 else maxOf(portraitWidth, portraitHeight)
-            val poorFit = PanelAutoFit.occupiedFraction(p, viewportW, viewportH) < 0.55
-            val shouldOverlap = hugeRow || poorFit
+            val poorFit = PanelAutoFit.occupiedFraction(p, viewportW, viewportH) <
+                minimumScreenFillPercent.coerceIn(25,80) / 100.0
+            val shouldOverlap = enlargeOversizedSplits && (hugeRow || poorFit)
             // A strong enclosing border indicates one intentionally large
             // manga panel. Preserve its composition rather than halving it.
             if (!shouldOverlap || looksLikeOneFramedPanel(p, inkAt)) {
@@ -271,24 +294,244 @@ object PanelReadableSliceRefiner {
                 continue
             }
 
-            val firstEnd = p.top + (p.height.toLong() * 56 / 100).toInt()
-            val secondStart = p.top + (p.height.toLong() * 44 / 100).toInt()
-            val first = p.copy(bottom = firstEnd)
-            val second = p.copy(top = secondStart)
-            if (first.height <= 0 || second.height <= 0) {
+            val halves = if (requireZoomGain)
+                naturalThenOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+            else overlapHalves(view, portraitWidth, portraitHeight, autoFit)
+            if (halves == null) result.add(view) else result.addAll(halves)
+        }
+        return if (result.size <= MAX_VIEWS) result else views
+    }
+
+    /** Confirm a tall independent panel alongside exactly two stacked
+     * neighboring panels. Geometry must be consistent with an existing
+     * validated detector result; this is not a new page detector.
+     */
+    private fun isSpanningPanel(p: PageRegion, regions: List<PageRegion>,
+        sourceWidth: Int, sourceHeight: Int): Boolean {
+        if (p.width.toLong() * 100 < sourceWidth.toLong() * 16 ||
+            p.height.toLong() <= p.width.toLong() * 2) return false
+        val xt = maxOf(2, sourceWidth * 3 / 100)
+        val yt = maxOf(2, sourceHeight * 3 / 100)
+        fun onSide(left: Boolean): Boolean {
+            val neighbors = regions.filter { r ->
+                r != p && r.width.toLong() * 100 >= sourceWidth.toLong() * 16 &&
+                r.height.toLong() * 100 >= p.height.toLong() * 18 &&
+                r.top >= p.top - yt && r.bottom <= p.bottom + yt &&
+                (if (left) kotlin.math.abs(r.right - p.left) <= xt
+                 else kotlin.math.abs(r.left - p.right) <= xt)
+            }.sortedBy { it.top }
+            if (neighbors.size != 2) return false
+            val (a, b) = neighbors
+            return kotlin.math.abs(a.top - p.top) <= yt &&
+                kotlin.math.abs(b.bottom - p.bottom) <= yt &&
+                kotlin.math.abs(a.bottom - b.top) <= yt &&
+                a.top < b.top && a.bottom < b.bottom
+        }
+        return onSide(true) || onSide(false)
+    }
+
+    /** Strict row-only zoom: no inner-column detection, no arbitrary whole-page cut. */
+    fun refineRows(input: List<PanelFitSlice>, sourceWidth: Int, sourceHeight: Int,
+        portraitWidth: Int, portraitHeight: Int, inkAt: (Int, Int) -> Boolean,
+        autoFit: Boolean, minimumScreenFillPercent: Int = 50,
+        protectedRegions: List<PageRegion> = emptyList()): List<PanelFitSlice> {
+        if (input.size !in 2..MAX_VIEWS) return input
+        val result = mutableListOf<PanelFitSlice>()
+        for ((index, view) in input.withIndex()) {
+            val p = view.region
+            val w = if (view.landscape) maxOf(portraitWidth, portraitHeight) else minOf(portraitWidth, portraitHeight)
+            val h = if (view.landscape) minOf(portraitWidth, portraitHeight) else maxOf(portraitWidth, portraitHeight)
+            val poorFit = PanelAutoFit.occupiedFraction(p,w,h) < minimumScreenFillPercent.coerceIn(25,80)/100.0
+            val overlaps = input.any { it !== view &&
+                intersectArea(p,it.region)*100 > p.width.toLong()*p.height*10 }
+            if (p in protectedRegions || p.height.toLong()*2 <= sourceHeight ||
+                p.width.toLong()*100 < sourceWidth.toLong()*80 ||
+                !poorFit || overlaps || result.size + input.size-index >= MAX_VIEWS ||
+                PanelSafeSlicePlanner.isSparse(p,inkAt) || looksLikeOneFramedPanel(p,inkAt)) {
                 result.add(view)
                 continue
             }
-            result.add(PanelFitSlice(first,
-                if (autoFit) PanelAutoFit.landscapeForMaximumFill(
-                    first, portraitWidth, portraitHeight)
-                else view.landscape))
-            result.add(PanelFitSlice(second,
-                if (autoFit) PanelAutoFit.landscapeForMaximumFill(
-                    second, portraitWidth, portraitHeight)
-                else view.landscape))
+            val halves = naturalThenOverlap(view, portraitWidth, portraitHeight, autoFit, inkAt)
+            if (halves != null && result.size + halves.size + input.size - index - 1 <= MAX_VIEWS)
+                result.addAll(halves) else result.add(view)
         }
-        return if (result.size <= MAX_VIEWS) result else views
+        return result
+    }
+
+    /**
+     * Second chance for missed horizontal tiers, before overlapping zoom.
+     * Only existing eligible oversized regions reach this path. A pale
+     * band alone is NOT enough: require framing evidence on both sides.
+     * Retain exact source coverage, reading order, and actual enlargement.
+     */
+    private fun naturalThenOverlap(view: PanelFitSlice, w: Int, h: Int,
+        autoFit: Boolean, inkAt: (Int, Int) -> Boolean): List<PanelFitSlice>? =
+        recoverNaturalTiers(view, w, h, autoFit, inkAt)
+            ?: readableOverlap(view, w, h, autoFit, inkAt)
+
+    private fun recoverNaturalTiers(view: PanelFitSlice, w: Int, h: Int,
+        autoFit: Boolean, inkAt: (Int, Int) -> Boolean): List<PanelFitSlice>? {
+        val p = view.region
+        if (p.width < 120 || p.height < 160) return null
+        val minHeight = maxOf(24, (p.height.toLong() * 18 / 100).toInt())
+        val dy = maxOf(1, p.height / 320)
+        val dx = maxOf(1, ((p.width.toLong() + 159) / 160).toInt())
+        val band = (p.height / 200).coerceIn(2, 6)
+        val railReach = (p.height / 25).coerceIn(8, 48)
+        fun sampledFraction(y: Int): Double {
+            var count = 0
+            var ink = 0
+            for (x in p.left until p.right step dx) {
+                count++
+                if (inkAt(x, y)) ink++
+            }
+            return ink.toDouble() / count
+        }
+        val candidates = mutableListOf<Int>()
+        var start = -1
+        var last = -1
+        fun finish() {
+            if (start >= 0 && last - start >= band * 2)
+                candidates.add(start + (last - start) / 2)
+            start = -1
+        }
+        for (y in p.top + minHeight..p.bottom - minHeight step dy) {
+            if (sampledFraction(y) == 0.0) {
+                if (start < 0) start = y
+                last = y
+            } else finish()
+        }
+        finish()
+        fun verified(y: Int): Boolean {
+            if (y - railReach < p.top || y + railReach >= p.bottom) return false
+            // A natural cut must have a fully clear core at original
+            // resolution, including side margins. Unlike overlap, no ink
+            // crossing this seam is accepted.
+            for (yy in y - band..y + band)
+                for (x in p.left until p.right)
+                    if (inkAt(x, yy)) return false
+            fun rail(yy: Int): Boolean {
+                if (sampledFraction(yy) < 0.70) return false
+                var ink = 0
+                for (x in p.left until p.right) if (inkAt(x, yy)) ink++
+                return ink.toLong() * 100 >= p.width.toLong() * 70
+            }
+            val upper = (y - railReach until y - band).firstOrNull { sampledFraction(it) >= 0.70 }
+            val lower = (y + band + 1..y + railReach).firstOrNull { sampledFraction(it) >= 0.70 }
+            if (upper == null || lower == null) return false
+            return rail(upper) && rail(lower)
+        }
+        val mid = p.top + p.height / 2
+        val cuts = candidates.sortedWith(compareBy<Int> { kotlin.math.abs(it - mid) }.thenBy { it })
+            .take(8).filter { verified(it) }
+        fun plan(seams: List<Int>): List<PanelFitSlice>? {
+            val edges = listOf(p.top) + seams.sorted() + listOf(p.bottom)
+            if (edges.zipWithNext().any { (a, b) -> b - a < minHeight }) return null
+            val parts = edges.zipWithNext().map { (a, b) ->
+                val r = p.copy(top = a, bottom = b)
+                PanelFitSlice(r, if (autoFit) PanelAutoFit.landscapeForMaximumFill(r, w, h)
+                    else view.landscape)
+            }
+            return parts.takeIf { coversSourceRow(p, it.map { v -> v.region }) &&
+                hasZoomGain(view, it, w, h, inkAt) }
+        }
+        // Prefer recovering two distinct gutters (three natural tiers).
+        // Otherwise try one gutter; if none work, preserve overlap fallback.
+        for (i in cuts.indices) {
+            for (j in i + 1 until cuts.size)
+                plan(listOf(cuts[i], cuts[j]))?.let { return it }
+        }
+        for (cut in cuts) plan(listOf(cut))?.let { return it }
+        return null
+    }
+
+    /**
+     * Only move an already eligible overlapping cut when a contiguous pale
+     * band is substantially quieter than the central band. This is not a
+     * second panel detector or OCR. Search the middle 40–60%, keep the exact
+     * old overlap width and preserve every source pixel. If uncertain, use
+     * the previous centered plan, subject to the same enlargement guards.
+     */
+    private fun readableOverlap(view: PanelFitSlice, w: Int, h: Int, autoFit: Boolean,
+        inkAt: (Int, Int) -> Boolean): List<PanelFitSlice>? {
+        val p = view.region
+        val centered = overlapHalves(view, w, h, autoFit) ?: return null
+        val old = centered.takeIf { hasZoomGain(view, it, w, h, inkAt) }
+        // An off-center cut cannot improve the worst half's scale over a
+        // centered cut with the same repeated band. Avoid extra pixel work
+        // entirely if the old balanced plan would not actually enlarge.
+        if (old == null) return null
+        if (p.width < 120 || p.height < 160) return old
+        val midpoint = p.top + p.height / 2
+        val band = (p.height / 120).coerceIn(2, 12)
+        val reach = p.height / 10
+        val step = maxOf(1, reach / 16)
+        val dx = maxOf(1, (p.width.toLong() + 159) / 160).toInt()
+        // Five sampled rows for ranking; validate every pixel in every row
+        // of up to three contiguous bands (at most 25 rows per band).
+        fun inkFraction(y: Int, fullWidth: Boolean): Double {
+            var worst = 0.0
+            val sample = if (fullWidth) 1 else dx
+            val offsets = if (fullWidth) (-band..band).toList()
+                else listOf(-band, -band / 2, 0, band / 2, band).distinct()
+            for (offset in offsets) {
+                var ink = 0
+                var n = 0
+                for (x in p.left until p.right step sample) {
+                    if (inkAt(x, y + offset)) ink++
+                    n++
+                }
+                if (n > 0) worst = maxOf(worst, ink.toDouble() / n)
+                if (fullWidth && worst > 0.04) return worst
+            }
+            return worst
+        }
+        val centerInk = inkFraction(midpoint, false)
+        // Already quiet: do not trade balanced enlargement for a marginal gain.
+        if (centerInk <= 0.12) return old
+        val candidates = mutableListOf<Pair<Int, Double>>()
+        for (y in midpoint - reach..midpoint + reach step step) {
+            if (kotlin.math.abs(y - midpoint) < band) continue
+            val score = inkFraction(y, false)
+            if (score <= 0.04 && centerInk - score >= 0.12)
+                candidates.add(y to score)
+        }
+        // Closest strongly supported quiet band first; deterministic tie break.
+        // Full-width validation of at most three proposals limits bitmap work.
+        val sorted = candidates.sortedWith(compareBy<Pair<Int, Double>> {
+            kotlin.math.abs(it.first - midpoint)
+        }.thenBy { it.second }.thenBy { it.first })
+        for ((y, _) in sorted.take(3)) {
+            if (inkFraction(y, true) > 0.04) continue
+            val shifted = overlapHalves(view, w, h, autoFit, y - midpoint) ?: continue
+            if (!hasZoomGain(view, shifted, w, h, inkAt)) continue
+            if (!coversSourceRow(p, shifted.map { it.region })) continue
+            return shifted
+        }
+        return old
+    }
+
+    private fun overlapHalves(view: PanelFitSlice,w: Int,h: Int,autoFit: Boolean,
+        shift: Int = 0): List<PanelFitSlice>? {
+        val p = view.region
+        if (p.height < 16) return null
+        val first = p.copy(bottom=p.top+(p.height.toLong()*56/100).toInt()+shift)
+        val second = p.copy(top=p.top+(p.height.toLong()*44/100).toInt()+shift)
+        if (first.bottom <= second.top || first.height <= 0 || second.height <= 0 ||
+            first.bottom > p.bottom || second.top < p.top) return null
+        return listOf(first,second).map { PanelFitSlice(it,
+            if (autoFit) PanelAutoFit.landscapeForMaximumFill(it,w,h) else view.landscape) }
+    }
+
+    private fun hasZoomGain(original: PanelFitSlice, halves: List<PanelFitSlice>,
+        w: Int,h: Int,inkAt: (Int,Int)->Boolean): Boolean {
+        fun scale(view: PanelFitSlice): Double {
+            val vw=if(view.landscape) maxOf(w,h) else minOf(w,h)
+            val vh=if(view.landscape) minOf(w,h) else maxOf(w,h)
+            return minOf(vw.toDouble()/view.region.width,vh.toDouble()/view.region.height)
+        }
+        val old=scale(original)
+        return halves.all { scale(it)>=old*1.05 && !PanelSafeSlicePlanner.isSparse(it.region,inkAt) }
     }
 
     private fun intersectArea(a: PageRegion, b: PageRegion): Long =

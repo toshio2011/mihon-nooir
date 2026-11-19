@@ -1,5 +1,8 @@
 package dev.nooir.bridge
 
+import kotlin.math.roundToInt
+import kotlin.math.abs
+
 /**
  * Conservative, OCR-free panel geometry. Runs on a bounded grayscale thumbnail
  * produced by the Android adapter, NOT on full-resolution manga images.
@@ -848,7 +851,11 @@ object PanelDetectionCore {
     }
 
     fun detect(width: Int, height: Int, grayscale: ByteArray, rightToLeft: Boolean,
-        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan {
+        trace: ((PanelDebugEvent) -> Unit)? = null): PanelPlan =
+        detect(width,height,grayscale,rightToLeft,true,trace)
+
+    fun detect(width: Int,height: Int,grayscale: ByteArray,rightToLeft: Boolean,
+        allowOverlapRescue: Boolean,trace: ((PanelDebugEvent)->Unit)? = null): PanelPlan {
         require(width > 0 && height > 0 && width.toLong() * height <= MAX_THUMB_PIXELS) {
             "Panel detection needs a bounded, nonempty thumbnail"
         }
@@ -882,6 +889,16 @@ object PanelDetectionCore {
         // The same recovery validators are already used by Row by Row.
         val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true,
             allowDarkRecovery = true)
+        if (PairedStructure.artwork(width, height, grayscale, rows)) {
+            val why = "single enclosed illustrated activity sheet; preserve composition"
+            trace?.invoke(PanelDebugEvent("page", whole, "keep", why))
+            return PanelPlan(listOf(whole), false, why, preserveSingleFrame = true)
+        }
+        PairedStructure.recover(width, height, grayscale, rows, rightToLeft, true)?.let {
+            val why = "paired slanted tier borders and verified internal panel rails"
+            trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+            return PanelPlan(it, false, why)
+        }
         val output = mutableListOf<PageRegion>()
         var recoveredRows = 0
         // The existing short-footer path can also collapse two rows to one.
@@ -1196,7 +1213,7 @@ object PanelDetectionCore {
             // shrinking a dense illustrated portrait page to one X4 frame,
             // provide three protected, overlapping story views. This is a
             // reading fallback, NOT a claim that arbitrary cuts are panels.
-            if (output.size == 1 && rows.size == 1 &&
+            if (allowOverlapRescue && output.size == 1 && rows.size == 1 &&
                 !detector.isSparseRow(whole)) {
                 val overlapViews = recoverOverlappingRowViews(
                     width, height, grayscale, rightToLeft, trace)
@@ -1208,11 +1225,17 @@ object PanelDetectionCore {
             }
             return fallback("no validated rows or panels")
         }
-        val reason = if (recoveredRows > 0)
+        // Recheck only exact, accepted source partitions. Earlier artwork and
+        // diagonal-overlap returns bypass this pass; row mode is unchanged.
+        val reviewed = PanelFragmentSecondLook.review(width, height, grayscale, output, rightToLeft, trace)
+        val finalRegions = if (reviewed.size in 2..MAX_PANELS &&
+            coversEntirePage(reviewed, width, height)) reviewed else output
+        val reason = (if (recoveredRows > 0)
             "row-first partition with rejected-row column recovery"
-        else "row-first partition with per-row panel fallback"
+        else "row-first partition with per-row panel fallback") +
+            if (finalRegions != output) "; conservative fragment/inner-gutter review" else ""
         trace?.invoke(PanelDebugEvent("page", whole, "accept", reason))
-        return PanelPlan(output, false, reason)
+        return PanelPlan(finalRegions, false, reason)
     }
 
     /**
@@ -1619,6 +1642,16 @@ object PanelDetectionCore {
         // its established row-first detector unchanged.
         val rows = detector.partitionRows(whole, allowPaleGrayRecovery = true,
             allowDarkRecovery = true)
+        if (PairedStructure.artwork(width, height, grayscale, rows)) {
+            val why = "single enclosed illustrated activity sheet; preserve composition"
+            trace?.invoke(PanelDebugEvent("page", whole, "keep", why))
+            return PanelPlan(listOf(whole), false, why, preserveSingleFrame = true)
+        }
+        PairedStructure.recover(width, height, grayscale, rows, true, false)?.let {
+            val why = "paired slanted tier borders; full-width overlapping row views"
+            trace?.invoke(PanelDebugEvent("page", whole, "accept", why))
+            return PanelPlan(it, false, why)
+        }
         if (rows.size !in 2..MAX_PANELS) return fallback("no confident horizontal rows")
         if (rows.any { !detector.hasContent(it) }) return fallback("empty row")
         if (!coversEntirePage(rows, width, height)) return fallback("unsafe row coverage")
@@ -2800,5 +2833,260 @@ object PanelReadingOrder {
                 else visit(n.first) + visit(n.second)
         }
         return visit(node)
+    }
+}
+
+/** Conservative second look for a failed mixed-tier partition and for an
+ * enclosed activity illustration fragmented by false text/shape gutters.
+ * Thumbnail-only; no text recognition, no page-specific coordinates,
+ * no changes to the ordinary detector or oversized overlap fallback.
+ */
+internal object PairedStructure {
+    private data class Seam(val middle: Int, val slope: Int, val score: Double) {
+        fun low(span: Int) = middle - (abs(slope) * span / 200.0).roundToInt() - 1
+        fun high(span: Int) = middle + (abs(slope) * span / 200.0).roundToInt() + 1
+    }
+    private fun seams(w: Int, h: Int, gray: ByteArray, horizontal: Boolean,
+        start: Int, end: Int, maxSlope: Int): List<Seam> {
+        val axis = if (horizontal) h else w
+        val span = end-start
+        if (span < 100 || axis < 120) return emptyList()
+        val a = start + span*8/100
+        val b = end - span*8/100
+        val center = (start+end)/2.0
+        val first = axis*14/100
+        val last = axis*86/100
+        val gapMin = maxOf(5,axis*8/1000)
+        val gapMax = maxOf(10,axis*5/100)
+        val possible=mutableListOf<Seam>()
+        for (s in -maxSlope..maxSlope) {
+            val dark=DoubleArray(axis)
+            val pale=DoubleArray(axis)
+            val offsets=IntArray((b-a+1)/2) { i -> ((a+i*2-center)*s/100.0).roundToInt() }
+            for (m in first until last) {
+                var d=0;var p=0;var n=0
+                for (i in offsets.indices) {
+                    val v=m+offsets[i]
+                    if(v !in 0 until axis) continue
+                    val q=a+i*2
+                    val value=gray[if(horizontal) v*w+q else q*w+v].toInt() and 255
+                    if(value<140)d++
+                    if(value>=235)p++
+                    n++
+                }
+                if(n==offsets.size && n>0){dark[m]=d.toDouble()/n;pale[m]=p.toDouble()/n}
+            }
+            for(i in first until last) if(dark[i]>=0.68) {
+                for(j in i+gapMin..minOf(last-1,i+gapMax)) if(dark[j]>=0.68) {
+                    val m=(i+j)/2
+                    if((m-2..m+2).all{pale[it]>=0.80})
+                        possible.add(Seam(m,s,minOf(dark[i],dark[j])+pale[m]*0.2))
+                }
+            }
+        }
+        val chosen=mutableListOf<Seam>()
+        for(s in possible.sortedByDescending{it.score}) {
+            if(chosen.none{abs(it.middle-s.middle)<axis*8/100}) chosen.add(s)
+            if(chosen.size>3) break
+        }
+        return chosen.sortedBy{it.middle}
+    }
+    fun recover(w:Int,h:Int,gray:ByteArray,rows:List<PageRegion>,rtl:Boolean,panels:Boolean):List<PageRegion>? {
+        if(w<300||h<420||h.toLong()*10<w.toLong()*12||rows.size !in 2..4 ||
+            rows.none{it.height.toLong()*2>h}||rows.last().height*100>h*9) return null
+        val hs=seams(w,h,gray,true,0,w,15)
+        if(hs.size!=2||hs.none{abs(it.slope)>=5}||hs[0].slope*hs[1].slope>=0) return null
+        val bands=listOf(PageRegion(0,0,w,hs[0].high(w)),
+            PageRegion(0,hs[0].low(w),w,hs[1].high(w)),PageRegion(0,hs[1].low(w),w,h))
+        if(bands.any{it.height< h/6}) return null
+        val cores=listOf(0 to hs[0].low(w),hs[0].high(w) to hs[1].low(w),hs[1].high(w) to rows.last().top)
+        if(cores.any{it.second-it.first<100})return null
+        val groups=cores.map{(t,b)->seams(w,h,gray,false,t,b,20)}
+        // Require independent lower-tier frame evidence; counts follow the rails.
+        if(groups.drop(1).any{it.isEmpty()}||groups.any{it.size>3})return null
+        if(!panels)return bands
+        val result=mutableListOf<PageRegion>()
+        for(i in bands.indices){
+            val row=bands[i];val splits=groups[i];val core=cores[i]
+            val center=(core.first+core.second)/2.0
+            fun ends(s:Seam):Pair<Int,Int>{
+                val a=s.middle+((row.top-center)*s.slope/100).roundToInt()
+                val b=s.middle+((row.bottom-center)*s.slope/100).roundToInt()
+                return (minOf(a,b)-1).coerceIn(1,w-1) to (maxOf(a,b)+1).coerceIn(1,w-1)
+            }
+            val limits=splits.map{ends(it)}
+            val pieces=(0..limits.size).map{j->row.copy(left=if(j==0)0 else limits[j-1].first,right=if(j==limits.size) w else limits[j].second)}
+            if(pieces.any{it.width<w/8}||pieces.zipWithNext().any{(a,b)->a.right<b.left})return null
+            result.addAll(if(rtl)pieces.reversed() else pieces)
+        }
+        return result
+    }
+    fun artwork(w:Int,h:Int,gray:ByteArray,rows:List<PageRegion>):Boolean {
+        if(w<300||h<420||h.toLong()*10<w.toLong()*12||rows.size<5||rows.count{it.height*100<h*12}<4)return false
+        fun dark(x:Int,y:Int)=(gray[y*w+x].toInt() and 255)<140
+        fun fraction(t:Int,b:Int):Double{var n=0;var d=0;for(y in t until b step 2)for(x in w*8/100 until w*92/100 step 2){n++;if(dark(x,y))d++};return d.toDouble()/n}
+        if(fraction(h/10,h*3/10)<0.20||fraction(h*3/10,h*9/10)>0.12)return false
+        fun rail(horizontal:Boolean,at:Int):Double{val span=if(horizontal)w else h;var n=0;var hits=0;for(q in span/10 until span*9/10 step 2){n++;if((-1..1).any{d->if(horizontal)dark(q,at+d)else dark(at+d,q)})hits++};return hits.toDouble()/n}
+        fun maxRail(horizontal:Boolean,from:Int,to:Int):Double{val n=if(horizontal)h else w;return (n*from/100 until n*to/100).maxOf{rail(horizontal,it)}}
+        return maxRail(true,3,15)>=0.82&&maxRail(true,85,97)>=0.82&&
+            maxRail(false,2,15)>=0.82&&maxRail(false,85,98)>=0.82&&
+            maxRail(true,35,85)<0.55&&maxRail(false,16,84)<0.55&&
+            seams(w,h,gray,true,0,w,15).isEmpty()
+    }
+}
+
+/** Source-coordinate second look. Never operates on padded render crops,
+ * uncertain whole-page art, or already overlapping reading views.
+ * First consolidate weak, implausibly thin fragments. On other pages only,
+ * attempt strongly paired independent inner borders. No OCR or semantics.
+ */
+internal object PanelFragmentSecondLook {
+    private data class Evidence(val paired: Boolean, val pale: Double,
+        val before: Double, val after: Double)
+    private data class Join(val i: Int, val j: Int, val weakness: Double, val pale: Double)
+    private data class Cut(val vertical: Boolean, val at: Int, val score: Double, val gap: Int)
+
+    private fun ink(gray: ByteArray, w: Int, x: Int, y: Int) = gray[y*w+x].toInt() and 255
+    private fun fraction(w:Int,gray:ByteArray,p:PageRegion):Double {
+        var dark=0L
+        for(y in p.top until p.bottom) for(x in p.left until p.right)
+            if(ink(gray,w,x,y)<140) dark++
+        return dark.toDouble()/(p.width.toLong()*p.height)
+    }
+    private fun evidence(w:Int,h:Int,gray:ByteArray,vertical:Boolean,
+        at:Int,lo:Int,hi:Int):Evidence {
+        val axis=if(vertical)w else h
+        val radius=(axis*4/100).coerceIn(8,24)
+        val l=maxOf(0,at-radius);val r=minOf(axis,at+radius+1)
+        val t=lo+(hi-lo)*8/100;val b=hi-(hi-lo)*8/100
+        if(b<=t||at !in l until r)return Evidence(true,0.0,1.0,1.0)
+        val dark=DoubleArray(r-l);val pale=DoubleArray(r-l)
+        for(c in l until r){
+            var d=0;var p=0
+            for(q in t until b){
+                val v=if(vertical)ink(gray,w,c,q)else ink(gray,w,q,c)
+                if(v<140)d++
+                if(v>=235)p++
+            }
+            dark[c-l]=d.toDouble()/(b-t);pale[c-l]=p.toDouble()/(b-t)
+        }
+        val k=at-l
+        val maxGap=maxOf(8,axis*4/100)
+        var paired=false
+        for(i in 0 until k)if(dark[i]>=0.50)
+            for(j in k+1 until dark.size)if(dark[j]>=0.50&&j-i<=maxGap)paired=true
+        return Evidence(paired,(maxOf(0,k-2)..minOf(dark.lastIndex,k+2)).maxOf{pale[it]},
+            (0 until k).maxOfOrNull{dark[it]}?:0.0,
+            (k+1 until dark.size).maxOfOrNull{dark[it]}?:0.0)
+    }
+
+    fun review(w:Int,h:Int,gray:ByteArray,source:List<PageRegion>,rtl:Boolean,
+        trace:((PanelDebugEvent)->Unit)?=null):List<PageRegion> {
+        if(w<160||h<200||w.toLong()*h>1_048_576||gray.size!=w*h||
+            source.size !in 2..32||source.any{it.left<0||it.top<0||it.right>w||it.bottom>h||it.width<=0||it.height<=0}||
+            source.sumOf{it.width.toLong()*it.height}!=w.toLong()*h||
+            source.indices.any{i->(i+1 until source.size).any{j->
+                val a=source[i];val b=source[j]
+                minOf(a.right,b.right)>maxOf(a.left,b.left)&&minOf(a.bottom,b.bottom)>maxOf(a.top,b.top)
+            }})return source
+
+        val out=source.toMutableList();val chained=mutableSetOf<PageRegion>()
+        var changed=false
+        repeat(12){
+            val joins=mutableListOf<Join>()
+            for((i,p)in out.withIndex()){
+                val chain=p in chained
+                if(p.width*100>w*(if(chain)30 else 20)||
+                    p.width*100>p.height*(if(chain)70 else 45))continue
+                for(j in maxOf(0,i-1)..minOf(out.lastIndex,i+1)){
+                    if(j==i)continue
+                    val q=out[j]
+                    if(q.top!=p.top||q.bottom!=p.bottom)continue
+                    val at=if(q.right==p.left)p.left else if(q.left==p.right)p.right else continue
+                    val e=evidence(w,h,gray,true,at,p.top,p.bottom)
+                    if(!e.paired&&e.pale>=0.80)joins.add(Join(i,j,minOf(e.before,e.after),e.pale))
+                }
+            }
+            val join=joins.minWithOrNull(compareBy<Join>{it.weakness}.thenByDescending{it.pale}.thenBy{it.i}.thenBy{it.j})
+            if(join!=null){
+                val p=out[join.i];val q=out[join.j]
+                val merged=PageRegion(minOf(p.left,q.left),p.top,maxOf(p.right,q.right),p.bottom)
+                out[minOf(join.i,join.j)]=merged;out.removeAt(maxOf(join.i,join.j))
+                chained.add(merged);changed=true
+                trace?.invoke(PanelDebugEvent("fragment-review",merged,"merge","weak seam beside an implausibly narrow aligned fragment"))
+                return@repeat
+            }
+            var absorbed=false
+            for((i,p)in out.withIndex()){
+                if(p.height*100>h*5||p.height*100>p.width*22)continue
+                val ids=out.indices.filter{j->val q=out[j];q.top==p.bottom&&q.left>=p.left&&q.right<=p.right}
+                if(ids.size !in 1..3||ids!=(i+1..i+ids.size).toList())continue
+                val qs=ids.map{out[it]}.sortedBy{it.left}
+                if(qs.first().left!=p.left||qs.last().right!=p.right||
+                    qs.zipWithNext().any{(a,b)->a.right!=b.left}||qs.any{it.height<p.height*3})continue
+                val sparseTop=p.top==0&&qs.size>1&&fraction(w,gray,p)<0.04
+                val es=qs.map{evidence(w,h,gray,false,p.bottom,it.left,it.right)}
+                if(es.any{it.pale<0.80}||(es.any{it.paired}&&!sparseTop))continue
+                for(j in ids)out[j]=out[j].copy(top=p.top)
+                out.removeAt(i);changed=true;absorbed=true
+                trace?.invoke(PanelDebugEvent("fragment-review",p,"absorb","shallow strip attached to exactly tiled illustrated neighbors"))
+                break
+            }
+            if(!absorbed)return if(changed)out else recoverInner(w,h,gray,out,rtl,trace)
+        }
+        return out
+    }
+
+    private fun recoverInner(w:Int,h:Int,gray:ByteArray,source:List<PageRegion>,rtl:Boolean,
+        trace:((PanelDebugEvent)->Unit)?):List<PageRegion> {
+        val out=mutableListOf<PageRegion>()
+        for((index,p)in source.withIndex()){
+            if(p.width*100<w*32||p.height*100<h*25||out.size+source.size-index>=32){out.add(p);continue}
+            var best:Cut?=null
+            for(vertical in listOf(false,true)){
+                val extent=if(vertical)p.width else p.height
+                val span=if(vertical)p.height else p.width
+                val t=span*6/100;val b=span-t
+                val dark=DoubleArray(extent);val pale=DoubleArray(extent)
+                val total=LongArray(extent+1)
+                for(c in 0 until extent){
+                    var d=0;var light=0;var all=0
+                    for(q in 0 until span){
+                        val v=if(vertical)ink(gray,w,p.left+c,p.top+q)else ink(gray,w,p.left+q,p.top+c)
+                        if(v<140){all++;if(q in t until b)d++}
+                        if(q in t until b&&v>=235)light++
+                    }
+                    dark[c]=d.toDouble()/(b-t);pale[c]=light.toDouble()/(b-t)
+                    total[c+1]=total[c]+all
+                }
+                val minimum=maxOf(extent/4,(if(vertical)w else h)*15/100)
+                for(i in minimum until extent-minimum){
+                    if(dark[i]<0.83)continue
+                    for(j in i+5 until minOf(extent-minimum,i+maxOf(9,extent*4/100))){
+                        if(j>=extent||dark[j]<0.83)continue
+                        val middle=(i+j)/2
+                        if((middle-1..middle+1).any{pale[it]<0.96})continue
+                        val score=minOf(dark[i],dark[j])
+                        if(score<0.90&&j-i<8)continue
+                        if(total[i].toDouble()/(i.toLong()*span)<0.08||
+                            (total[extent]-total[j+1]).toDouble()/((extent-j-1).toLong()*span)<0.08)continue
+                        val old=best
+                        if(old==null||score>old.score||score==old.score&&(j-i>old.gap||
+                            j-i==old.gap&&(vertical&&!old.vertical||vertical==old.vertical&&middle>old.at)))
+                            best=Cut(vertical,middle,score,j-i)
+                    }
+                }
+            }
+            val cut=best
+            if(cut==null){out.add(p);continue}
+            if(cut.vertical){
+                val x=p.left+cut.at;val a=p.copy(right=x);val b=p.copy(left=x)
+                out.addAll(if(rtl)listOf(b,a)else listOf(a,b))
+            }else{
+                val y=p.top+cut.at;out.add(p.copy(bottom=y));out.add(p.copy(top=y))
+            }
+            trace?.invoke(PanelDebugEvent("inner-gutter-review",p,"split","paired dark rails around a pale corridor; substantial artwork on both sides"))
+        }
+        return out
     }
 }

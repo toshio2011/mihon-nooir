@@ -62,6 +62,7 @@ Expand **More conversion settings** in the export dialog.
 | Portrait / Landscape / Auto Fit | Fixed orientation or best-fit orientation per detected region in row/panel mode |
 | Overlapping page cuts | Repeats part of strips and provides protective padding around detected regions; not OCR |
 | Context Peek (Panel by Panel only) | 0–8%; default off; repeats a small edge of a neighboring confirmed panel |
+| Enlarge oversized splits (v1.0.19 candidate) | Default on; for eligible row/panel views only. Minimum screen fill 25–80%, default 50%. Attempts verified boundaries, then protective overlap when it improves readability. |
 | Show full page before splits | Adds original page before multi-frame detail views, not before single-frame pages |
 | Keep first page of each chapter whole | Independently protects chapter opening pages |
 | Trim white margins / Split double-page spreads | Removes empty margins or separates facing pages |

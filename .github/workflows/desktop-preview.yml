@@ -62,6 +62,28 @@ jobs:
           base="${{ github.event.pull_request.base.ref || 'main' }}"
           git fetch --no-tags origin "refs/heads/$base:refs/remotes/origin/$base"
           changed=$(git diff --name-only "origin/$base...HEAD")
+          # Android-only RC: allow the reviewed Android changes only on this
+          # same-repository PR, require the exact tested source blobs, and
+          # keep the desktop build itself running without relaxing Windows PRs.
+          if [[ "${{ github.event.pull_request.head.repo.full_name }}" == 'toshio2011/mihon-nooir' &&
+                "${{ github.event.pull_request.head.ref }}" == 'release-candidate/android-only-v1.0.19-20261119' && "$base" == 'main' ]]; then
+            test -z "$(git diff --name-only "origin/$base...HEAD" -- desktop/)"
+            for entry in \
+              '4e0fe5a549b4e397b9f06b5996d2f9c883b1c522 overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' \
+              'ccaf39b4649ef5096b58e96bf861485297bceabc overlay/app/src/main/java/dev/nooir/bridge/PanelReadableSliceRefiner.kt' \
+              'a1a148f1c60dcad5938c27a0ed3cbe47dac87509 overlay/app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt' \
+              'e5f7bc985c5a4f615fb2e797bad2161bed16eabf overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt' \
+              '65fdfe0fc8b6bb9fa46b5a5fe63bb589c8352437 overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt'; do
+              read -r expected file <<< "$entry"
+              test "$(git hash-object "$file")" = "$expected"
+            done
+            changed=$(printf '%s\n' "$changed" | grep -v -F -x \
+              -e 'overlay/app/src/main/java/dev/nooir/bridge/PanelReadableSliceRefiner.kt' \
+              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt' \
+              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt' \
+              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt' || true)
+            echo 'PASS: Android-only RC source blobs match reviewed implementation; desktop production unchanged'
+          fi
           # The visual integration may use shared core from the Android base,
           # but must not modify Android files relative to that base.
           # Narrow allowlist only for THIS draft integration's shared panel
