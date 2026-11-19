@@ -397,6 +397,7 @@ private fun verifyOfflineLibrary(folder: File) {
             descendants(restarted).filterIsInstance<JTabbedPane>().singleOrNull()?.selectedIndex = 2
         }
         verifyConversionSettings(restarted, restored = true)
+        verifyOnlineReading(restarted)
     } finally {
         onSwingThread {
             Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() }
@@ -471,6 +472,95 @@ private fun verifyExtensionSetup(main: JFrame) {
     awaitUi("invalid-address warning dismissed") { !errorDialog.isShowing }
     onSwingThread { Unit }
     println("PASS: native extension setup toolbar, local address, cancel and remote endpoint rejection; no browser launched")
+}
+
+/** Full GUI journey against synthetic localhost API, no external manga. */
+private fun verifyOnlineReading(main: JFrame) {
+    val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1",0),0)
+    val requests = java.util.concurrent.CopyOnWriteArrayList<Int>()
+    val failedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
+    val png = ByteArrayOutputStream().also {
+        val art = BufferedImage(96,144,BufferedImage.TYPE_INT_RGB)
+        check(ImageIO.write(art, "png", it)); art.flush()
+    }.toByteArray()
+    server.createContext("/api/graphql") { ctx ->
+        try {
+            val body = ctx.requestBody.bufferedReader().use { it.readText() }
+            val response = when {
+                "NooirSources" in body -> """{"data":{"sources":{"totalCount":0,"nodes":[]}}}"""
+                "NooirLibrary" in body -> """{"data":{"mangas":{"totalCount":1,"nodes":[{"id":9,"title":"Original online fixture","author":"QA","description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
+                "NooirManga" in body -> """{"data":{"manga":{"id":9,"title":"Original online fixture","author":"QA","chapters":{"nodes":[{"id":17,"name":"Chapter 1","chapterNumber":1,"sourceOrder":3,"isDownloaded":false}]}}}}"""
+                "fetchChapterPages" in body -> """{"data":{"fetchChapterPages":{"pages":["/api/v1/manga/9/chapter/3/page/0","/api/v1/manga/9/chapter/3/page/1","/api/v1/manga/9/chapter/3/page/2"],"chapter":{"id":17,"mangaId":9,"sourceOrder":3,"pageCount":3,"lastPageRead":0},"syncConflict":null}}}"""
+                else -> """{"errors":[{"message":"Unexpected fixture request"}]}"""
+            }.toByteArray()
+            ctx.responseHeaders.add("Content-Type","application/json")
+            ctx.sendResponseHeaders(200,response.size.toLong())
+            ctx.responseBody.use { it.write(response) }
+        } finally { ctx.close() }
+    }
+    server.createContext("/api/v1/manga/9/chapter/3/page/") { ctx ->
+        try {
+            val page = ctx.requestURI.path.substringAfterLast('/').toInt()
+            check(page in 0..2)
+            requests.add(page)
+            if (page==1 && failedOnce.compareAndSet(false,true)) {
+                ctx.responseHeaders.add("Content-Type","text/html")
+                ctx.sendResponseHeaders(200,1)
+                ctx.responseBody.use { it.write(65) }
+            } else {
+                ctx.responseHeaders.add("Content-Type","image/png")
+                ctx.sendResponseHeaders(200,png.size.toLong())
+                ctx.responseBody.use { it.write(png) }
+            }
+        } finally { ctx.close() }
+    }
+    server.start()
+    try {
+        val endpoint = onSwingThread { descendants(main).filterIsInstance<JTextField>().single { it.text.startsWith("http://127.0.0.1:") } }
+        onSwingThread { endpoint.text = "http://127.0.0.1:${server.address.port}"; findButton(main,"Connect / reload sources").doClick() }
+        awaitUi("online fixture manga loaded") {
+            descendants(main).filterIsInstance<JList<*>>().any {
+                it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiMangaCard
+            } && findButton(main,"Connect / reload sources").isEnabled
+        }
+        val manga = onSwingThread { descendants(main).filterIsInstance<JList<*>>().single {
+            it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiMangaCard
+        } }
+        onSwingThread { manga.selectedIndex=0 }
+        awaitUi("online chapter list loaded") {
+            descendants(main).filterIsInstance<JList<*>>().any {
+                it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
+            } && findButton(main,"Read chapter online").isEnabled
+        }
+        val chapters = onSwingThread { descendants(main).filterIsInstance<JList<*>>().single {
+            it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
+        } }
+        val open = findButton(main,"Read chapter online")
+        verifyToolbarReachable(open)
+        onSwingThread { chapters.selectedIndex=0; open.doClick() }
+        val reader = awaitFrame("MihonNooir Online Reader — Original online fixture / Chapter 1")
+        try {
+            verifyFitsWorkArea(reader)
+            fun page(n:Int) = awaitUi("online page $n displayed") {
+                descendants(reader).filterIsInstance<JLabel>().any { it.text=="Page $n / 3" }
+            }
+            page(1)
+            check(requests.toList()==listOf(0)) { "Reader must fetch a single initial page" }
+            onSwingThread { findButton(reader,"Next").doClick() }
+            awaitUi("recoverable page failure") { findButton(reader,"Retry").isEnabled }
+            onSwingThread { findButton(reader,"Retry").doClick() }
+            page(2)
+            onSwingThread { findButton(reader,"Next").doClick() }
+            page(3)
+            check(onSwingThread { !findButton(reader,"Next").isEnabled })
+            onSwingThread { findButton(reader,"Previous").doClick() }
+            page(2)
+            check(requests.toList()==listOf(0,1,1,2,1))
+            onSwingThread { findButton(reader,"Close reader").doClick() }
+            awaitUi("online reader closed") { !reader.isDisplayable }
+            println("PASS: real main chapter selection to native online reader, single-page on-demand fetch, retry, navigation, close; synthetic localhost only")
+        } finally { onSwingThread { reader.dispose() } }
+    } finally { server.stop(0) }
 }
 
 private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {

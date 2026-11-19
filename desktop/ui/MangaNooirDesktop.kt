@@ -156,6 +156,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val latest = JButton("Latest")
     private val searchButton = JButton("Search")
     private val refresh = JButton("Refresh chapters")
+    private val readOnline = JButton("Read chapter online")
     private val export = JButton("Export selected chapters")
     private val saveOffline = JButton("Save downloaded chapters offline")
     private val queueOffline = JButton("Queue downloaded chapters")
@@ -170,6 +171,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private var hasNext = false
     private var browsing = "library"
     private var currentManga: SuwayomiManga? = null
+    private var currentMangaEndpoint: String? = null
+    private var mangaListEndpoint: String? = null
     private var selectedSource: SuwayomiSource? = null
     private var compactTabs: JTabbedPane? = null
 
@@ -249,7 +252,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 add(JLabel("Device:")); add(device); add(conversionSettings)
             }))
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
-                add(downloadMissing); add(refresh); add(export)
+                add(readOnline); add(downloadMissing); add(refresh); add(export)
             }))
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
                 add(saveOffline); add(queueOffline); add(offlineJobs)
@@ -294,7 +297,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
-            next, previous, selected, onlyDownloaded, clear, refresh, export,
+            next, previous, selected, onlyDownloaded, clear, refresh, readOnline, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
             conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, inspectBinary, sendReader,
             startServer, stopServer, getServer, checkWindowsUpdates, manageExtensions)
@@ -342,6 +345,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             currentManga?.let { loadChapters(it.id, true) }
                 ?: showError("Select a manga first")
         }
+        readOnline.addActionListener { openOnlineReader() }
         export.addActionListener { exportSelected() }
         saveOffline.addActionListener { saveSelectedOffline() }
         queueOffline.addActionListener { queueSelectedOffline() }
@@ -573,6 +577,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             manga.clear()
             chapters.clear()
             currentManga = null
+            currentMangaEndpoint = null
+            mangaListEndpoint = baseUrl
             details.text = "Select a manga to view its chapters"
             items.forEach { manga.addElement(it) }
             compactTabs?.selectedIndex = 1
@@ -582,6 +588,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
     private fun loadChapters(id: Int, forceRefresh: Boolean) {
         val baseUrl = endpoint.text.trim()
+        if (mangaListEndpoint != baseUrl) {
+            showError("Server address changed. Reload sources and select manga again."); return
+        }
         runTask(if (forceRefresh) "Refreshing chapters" else "Loading chapters", {
             val c = client(baseUrl)
             if (forceRefresh) c.refreshManga(id)
@@ -589,12 +598,32 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }, { result ->
             if (mangaList.selectedValue?.id != id) return@runTask
             currentManga = result
+            currentMangaEndpoint = baseUrl
             details.text = "${result.title.take(45)} — ${result.chapters.size} chapters"
             chapters.clear()
             result.chapters.sortedWith(compareBy<SuwayomiChapter> {
                 if (it.chapterNumber >= 0) it.chapterNumber else Double.MAX_VALUE
             }.thenByDescending { it.sourceOrder }).forEach { chapters.addElement(it) }
             compactTabs?.selectedIndex = 2
+        })
+    }
+
+    /** Open the selected chapter explicitly; never enqueue a whole-chapter download. */
+    private fun openOnlineReader() {
+        if (busy.get()) return
+        val manga = currentManga
+        val chapter = chapterList.selectedValuesList.singleOrNull()
+        val baseUrl = endpoint.text.trim()
+        if (manga == null || chapter == null || mangaList.selectedValue?.id != manga.id ||
+            manga.chapters.none { it.id == chapter.id } || currentMangaEndpoint != baseUrl) {
+            showError("Select exactly one chapter from the current server. Reload sources if the address changed.")
+            return
+        }
+        runTask("Opening online chapter", {
+            val c = client(baseUrl)
+            Pair(c, c.openOnlineChapter(manga.id, chapter.id))
+        }, { (c, manifest) ->
+            if (isDisplayable) DesktopOnlineReader(c, manifest, manga.title, chapter.name).isVisible = true
         })
     }
 

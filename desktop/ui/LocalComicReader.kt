@@ -130,7 +130,7 @@ internal object LocalComicReader {
  * Painting happens on demand without creating gigantic scaled preview images.
  * At most two source pages are kept decoded for a single active spread.
  */
-private class ReaderCanvas : JComponent() {
+internal class ReaderCanvas : JComponent() {
     private var pages: List<BufferedImage> = emptyList()
     private var visualRightToLeft = true
     private var scale = 1.0
