@@ -478,6 +478,7 @@ private fun verifyExtensionSetup(main: JFrame) {
 private fun verifyOnlineReading(main: JFrame) {
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1",0),0)
     val requests = java.util.concurrent.CopyOnWriteArrayList<Int>()
+    val manifestIds = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val failedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
     val png = ByteArrayOutputStream().also {
         val art = BufferedImage(96,144,BufferedImage.TYPE_INT_RGB)
@@ -489,8 +490,13 @@ private fun verifyOnlineReading(main: JFrame) {
             val response = when {
                 "NooirSources" in body -> """{"data":{"sources":{"totalCount":0,"nodes":[]}}}"""
                 "NooirLibrary" in body -> """{"data":{"mangas":{"totalCount":1,"nodes":[{"id":9,"title":"Original online fixture","author":"QA","description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
-                "NooirManga" in body -> """{"data":{"manga":{"id":9,"title":"Original online fixture","author":"QA","chapters":{"nodes":[{"id":17,"name":"Chapter 1","chapterNumber":1,"sourceOrder":3,"isDownloaded":false}]}}}}"""
-                "fetchChapterPages" in body -> """{"data":{"fetchChapterPages":{"pages":["/api/v1/manga/9/chapter/3/page/0","/api/v1/manga/9/chapter/3/page/1","/api/v1/manga/9/chapter/3/page/2"],"chapter":{"id":17,"mangaId":9,"sourceOrder":3,"pageCount":3,"lastPageRead":0},"syncConflict":null}}}"""
+                "NooirManga" in body -> """{"data":{"manga":{"id":9,"title":"Original online fixture","author":"QA","chapters":{"nodes":[{"id":17,"name":"Chapter 1","chapterNumber":1,"sourceOrder":3,"isDownloaded":false},{"id":18,"name":"Chapter 2","chapterNumber":2,"sourceOrder":4,"isDownloaded":false}]}}}}"""
+                "fetchChapterPages" in body -> {
+                    val id = if ("chapterId: 18" in body) 18 else 17
+                    manifestIds.add(id)
+                    val order = if (id==18) 4 else 3
+                    """{"data":{"fetchChapterPages":{"pages":["/api/v1/manga/9/chapter/$order/page/0","/api/v1/manga/9/chapter/$order/page/1","/api/v1/manga/9/chapter/$order/page/2"],"chapter":{"id":$id,"mangaId":9,"sourceOrder":$order,"pageCount":3,"lastPageRead":0},"syncConflict":null}}}"""
+                }
                 else -> """{"errors":[{"message":"Unexpected fixture request"}]}"""
             }.toByteArray()
             ctx.responseHeaders.add("Content-Type","application/json")
@@ -498,12 +504,14 @@ private fun verifyOnlineReading(main: JFrame) {
             ctx.responseBody.use { it.write(response) }
         } finally { ctx.close() }
     }
-    server.createContext("/api/v1/manga/9/chapter/3/page/") { ctx ->
+    server.createContext("/api/v1/manga/9/chapter/") { ctx ->
         try {
             val page = ctx.requestURI.path.substringAfterLast('/').toInt()
             check(page in 0..2)
-            requests.add(page)
-            if (page==1 && failedOnce.compareAndSet(false,true)) {
+            val order = ctx.requestURI.path.split('/')[6].toInt()
+            check(order in 3..4)
+            requests.add(order*10+page)
+            if (order==3 && page==1 && failedOnce.compareAndSet(false,true)) {
                 ctx.responseHeaders.add("Content-Type","text/html")
                 ctx.sendResponseHeaders(200,1)
                 ctx.responseBody.use { it.write(65) }
@@ -529,11 +537,11 @@ private fun verifyOnlineReading(main: JFrame) {
         onSwingThread { manga.selectedIndex=0 }
         awaitUi("online chapter list loaded") {
             descendants(main).filterIsInstance<JList<*>>().any {
-                it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
+                it.model.size==2 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
             } && findButton(main,"Read chapter online").isEnabled
         }
         val chapters = onSwingThread { descendants(main).filterIsInstance<JList<*>>().single {
-            it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
+            it.model.size==2 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
         } }
         val open = findButton(main,"Read chapter online")
         verifyToolbarReachable(open)
@@ -545,7 +553,7 @@ private fun verifyOnlineReading(main: JFrame) {
                 descendants(reader).filterIsInstance<JLabel>().any { it.text=="Page $n / 3" }
             }
             page(1)
-            check(requests.toList()==listOf(0)) { "Reader must fetch a single initial page" }
+            check(requests.toList()==listOf(30)) { "Reader must fetch a single initial page" }
             onSwingThread { findButton(reader,"Next").doClick() }
             awaitUi("recoverable page failure") { findButton(reader,"Retry").isEnabled }
             onSwingThread { findButton(reader,"Retry").doClick() }
@@ -555,10 +563,29 @@ private fun verifyOnlineReading(main: JFrame) {
             check(onSwingThread { !findButton(reader,"Next").isEnabled })
             onSwingThread { findButton(reader,"Previous").doClick() }
             page(2)
-            check(requests.toList()==listOf(0,1,1,2,1))
+            check(requests.toList()==listOf(30,31,31,32,31))
+            check(manifestIds.toList()==listOf(17))
+            onSwingThread { findButton(reader,"Next chapter").doClick() }
+            awaitUi("second chapter opened in same window") { reader.title.endsWith("Chapter 2") }
+            page(1)
+            onSwingThread { findButton(reader,"Next").doClick() }
+            page(2)
+            onSwingThread { findButton(reader,"Previous chapter").doClick() }
+            awaitUi("first chapter reopened in same window") { reader.title.endsWith("Chapter 1") }
+            page(2)
+            check(manifestIds.toList()==listOf(17,18,17))
+            check(requests.toList()==listOf(30,31,31,32,31,40,41,31))
             onSwingThread { findButton(reader,"Close reader").doClick() }
             awaitUi("online reader closed") { !reader.isDisplayable }
-            println("PASS: real main chapter selection to native online reader, single-page on-demand fetch, retry, navigation, close; synthetic localhost only")
+            onSwingThread { open.doClick() }
+            val resumed = awaitFrame("MihonNooir Online Reader — Original online fixture / Chapter 1")
+            try {
+                awaitUi("local position restored on reopening") {
+                    descendants(resumed).filterIsInstance<JLabel>().any { it.text=="Page 2 / 3" }
+                }
+                check(requests.last()==31 && manifestIds.toList()==listOf(17,18,17,17))
+                println("PASS: native online chapter reading, retry, in-window chapter transitions and local resume; synthetic localhost only")
+            } finally { onSwingThread { resumed.dispose() } }
         } finally { onSwingThread { reader.dispose() } }
     } finally { server.stop(0) }
 }

@@ -623,7 +623,10 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             val c = client(baseUrl)
             Pair(c, c.openOnlineChapter(manga.id, chapter.id))
         }, { (c, manifest) ->
-            if (isDisplayable) DesktopOnlineReader(c, manifest, manga.title, chapter.name).isVisible = true
+            if (isDisplayable) DesktopOnlineReader(c, manifest, manga.title, chapter.name, baseUrl,
+                manga.chapters.sortedWith(compareBy<SuwayomiChapter> {
+                    if (it.chapterNumber >= 0) it.chapterNumber else Double.MAX_VALUE
+                }.thenByDescending { it.sourceOrder }.thenBy { it.id })).isVisible = true
         })
     }
 
