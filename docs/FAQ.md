@@ -1,10 +1,10 @@
 # MihonNooir FAQ
 
-> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)
 
-> **Version:** Use the official v1.0.18 APK; [installation and update instructions](GETTING_STARTED.md). Draft Android and Windows builds may differ.
+> **Version:** Use the official v1.0.19 APK; [installation and update instructions](GETTING_STARTED.md). Draft Android and Windows builds may differ.
 
 ### Where is the chapter picker?
 
@@ -16,7 +16,7 @@ Yes: select chapters first and turn on **Quick Export · fetch missing pages** i
 
 ### I can't find “Nooir Tools” under More.
 
-Check that About shows MihonNooir FOSS v1.0.18, not ordinary Mihon or a very old build. Open **More → Nooir Tools**. [Installation](GETTING_STARTED.md).
+Check that About shows MihonNooir FOSS v1.0.19, not ordinary Mihon or a very old build. Open **More → Nooir Tools**. [Installation](GETTING_STARTED.md).
 
 ### Can I send CBZ, PDF, EPUB, FB2 or other files from my phone?
 
@@ -68,15 +68,23 @@ The tools use background WorkManager jobs, and you can navigate away. Android ba
 
 ### Where can I get the app? Can it replace regular Mihon?
 
-Download the [official Android v1.0.18 APKs](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) under Assets. MihonNooir has its own package and can coexist with Mihon. Back up before updating; from v1.0.17 manually download the correct APK and install over the existing app. Do not uninstall or clear data if a signature conflict occurs. [Install guide](GETTING_STARTED.md).
+Download the [official Android v1.0.19 APKs](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) under Assets. MihonNooir has its own package and can coexist with Mihon. Back up before updating; from v1.0.17 manually download the correct APK and install over the existing app. Do not uninstall or clear data if a signature conflict occurs. [Install guide](GETTING_STARTED.md).
 
 ### Can I convert more than one PDF or a PDF with thousands of pages?
 
-Yes. v1.0.18 accepts multiple PDFs, saves separate books sequentially and no longer enforces the old fixed source-page cutoff. Real storage, memory/processing and output-format constraints still apply. For large books use local saving and copy to SD card; Wi-Fi is limited to 180 MiB per file. [PDF guide](PDF_TO_EPUB.md).
+Yes. v1.0.19 accepts multiple PDFs, saves separate books sequentially and no longer enforces the old fixed source-page cutoff. Real storage, memory/processing and output-format constraints still apply. For large books use local saving and copy to SD card; Wi-Fi is limited to 180 MiB per file. [PDF guide](PDF_TO_EPUB.md).
 
 ### Which reading segmentation should I use?
 
-**Page** for the normal page workflow; **Row by Row** to read horizontal tiers without separating columns; **Panel by Panel** to attempt individual panel detection. **Auto Fit** chooses portrait or landscape to maximize reading size, without stretching the artwork. Protected and uncertain pages can stay whole. The new configurable oversized-split enhancement is still development-only.
+**Page** for the normal page workflow; **Row by Row** to read horizontal tiers without separating columns; **Panel by Panel** to attempt individual panel detection. **Auto Fit** chooses portrait or landscape to maximize reading size, without stretching the artwork. Protected and uncertain pages can stay whole. For Japanese manga, choose **Apply recommended manga panel settings**. v1.0.19 includes the configurable oversized-split enhancement in both row and panel modes. [Recommended settings](PANEL_AUTO_FIT.md).
+
+### Why did a panel stay whole, split into a thin strip, or combine with another panel?
+
+Panel detection is heuristic. v1.0.19 examines suspicious fragments and strongly framed internal gutters, but unusual artwork can still defeat it. A real narrow panel is not necessarily a bug. Try Row by Row or Page for that layout, or use Full Page Before Splits to retain the original context. Changing normal overlap alone does not repair detection. Use the optional private panel diagnostics ZIP for troubleshooting.
+
+### What's the difference between ordinary overlap and oversized enlargement?
+
+Ordinary overlapping page cuts control repeated areas in ordinary slices. **Enlarge oversized splits** (default on) checks eligible poorly fitting views using the separate **Minimum screen fill** setting (25–80%, default 50%). It tries verified natural boundaries first and can use a separate 12% protective overlap if both views become more readable. The recommended manga shortcut sets ordinary overlap to 0%; it does not reset enlargement, threshold or Context Peek. To avoid optional zoom splits, turn enlargement off; existing detection and normal slicing may still produce multiple frames. [Orientation guide](ORIENTATION_OVERLAP.md).
 
 ### What's the difference between the previews?
 
@@ -84,7 +92,7 @@ Yes. v1.0.18 accepts multiple PDFs, saves separate books sequentially and no lon
 
 ### Is Windows available?
 
-Not as an official public Windows release. Windows preview development remains separate from Android v1.0.18.
+Not as an official public Windows release. Windows preview development remains separate from Android v1.0.19.
 
 ### Is MihonNooir official, and does it include free manga?
 

@@ -1,35 +1,35 @@
 # Getting started with MihonNooir
 
-> **Release status (16 November 2026):** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) is the latest official Android release. It uses the same persistent signing certificate as official v1.0.17. [Release notes and verification](releases/v1.0.18.md). Windows remains in development.
+> **Release status (19 November 2026):** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) is the latest official Android release. It uses the same persistent signing certificate as official v1.0.18 and v1.0.17. [Release notes and verification](releases/v1.0.19.md). Windows remains in development.
 
 [← Homepage](../README.md) · [All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi guide](WIFI_TRANSFER.md)
 
-MihonNooir is an **experimental Android app based on the full Mihon reader**. Browse, organize and read manga as usual; MihonNooir adds ways to prepare and send books to e-ink readers.
+MihonNooir is an **independent, unofficial Android app based on the full Mihon reader**. Browse, organize and read manga as usual; MihonNooir adds ways to prepare and send books to e-ink readers.
 
 ## Step 1 — Choose the correct APK
 
-Download from the [official v1.0.18 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18), not an Actions/debug artifact or the separate QA app.
+Download from the [official v1.0.19 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19), not an Actions/debug artifact or the separate QA app.
 
 | Android device | APK |
 |---|---|
-| Most modern phones (ARM64) | [app-arm64-v8a-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-arm64-v8a-foss.apk) |
-| Architecture uncertain | [app-universal-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-universal-foss.apk) |
-| Other supported devices | [All APKs and checksums](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) |
+| Most modern phones (ARM64) | [app-arm64-v8a-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-arm64-v8a-foss.apk) |
+| Architecture uncertain | [app-universal-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-universal-foss.apk) |
+| Other supported devices | [All APKs and checksums](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) |
 
-1. Download the APK and optionally verify its SHA-256 against [SHA256SUMS.txt](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/SHA256SUMS.txt).
-2. Back up your existing MihonNooir library and important downloads before updating. From official v1.0.17, use the manual download above because the old updater may select an incompatible APK.
+1. Download the APK and optionally verify its SHA-256 against [SHA256SUMS.txt](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/SHA256SUMS.txt).
+2. Back up your existing MihonNooir library and important downloads before updating. From official v1.0.18, use the in-app updater or the manual download. From v1.0.17, use the manual download above because the old updater may select an incompatible APK.
 3. Open the APK from Android's file manager; no ZIP extraction is required. Allow installation from the chosen file manager if prompted.
 4. If updating the official app, install **over** the existing installation. Do not uninstall or clear storage.
-5. Open MihonNooir and confirm About shows **FOSS v1.0.18**; verify your library and reading progress. It can coexist with ordinary Mihon.
+5. Open MihonNooir and confirm About shows **FOSS v1.0.19**; verify your library and reading progress. It can coexist with ordinary Mihon.
 
 > [!WARNING]
 > Older temporary-key builds, such as v1.0.12, may not update in place. If Android reports a signature or package conflict, stop and report it rather than deleting app data. No manga or source extensions are bundled.
 
-[Current release notes](releases/v1.0.18.md) · [Build/update details](UPDATES.md)
+[Current release notes](releases/v1.0.19.md) · [Build/update details](UPDATES.md)
 
 ## Step 2 — Locate the features
 
-In v1.0.18 open **More → Nooir Tools**:
+In v1.0.19 open **More → Nooir Tools**:
 
 | Tool | What it does |
 |---|---|
@@ -50,7 +50,7 @@ In v1.0.18 open **More → Nooir Tools**:
 2. To select specific chapters, **long-press** the first chapter and **tap** the others. Check the highlighted selection count.
 3. Press the **Export/Save** action in the manga toolbar.
 4. Choose the **X4/X3** device preset and **XTC / XTCH / EPUB / CBZ** (or Auto).
-5. In **More conversion settings**, choose Page, Row by Row or Panel by Panel; try Auto Fit, Full Page Before Splits or the four rendering styles. Use **Preview first page** after choosing a manga image or CBZ, then **Save file**. For XTC/XTCH use **Inspect an exported XTC / XTCH file** to verify the actual saved book.
+5. In **More conversion settings**, tap **Apply recommended manga panel settings** for Japanese manga (Panel by Panel + Auto Fit, ordinary overlap 0%). Check **Enlarge oversized splits** is on and Minimum screen fill is 50% if you want the recommended enlargement behavior. Choose Row by Row or Page if you prefer larger groups or intact pages. Use **Preview first page** after choosing a manga image or CBZ, then **Save file**. For XTC/XTCH use **Inspect an exported XTC / XTCH file** to verify the actual saved book. [Settings walkthrough](PANEL_AUTO_FIT.md).
 
 **Normal Export:** Only *already downloaded* selected chapters are exported. If no chapters are selected, Normal Export exports **all downloaded chapters**.
 
@@ -100,4 +100,4 @@ The current release uses a **shared sequential WorkManager queue** for manga, fi
 
 Please verify the output on your own phone and XTEink. Automated CI does not test your installed source extensions, protected/dynamic websites, scan-heavy PDFs, reader SD-card reliability or cover cache behavior. If something goes wrong, collect your **build SHA, input/source, file type, phone version, XTEink firmware and exact error** without sharing private credentials or copyrighted book pages.
 
-[v1.0.18 release notes](releases/v1.0.18.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[v1.0.19 release notes](releases/v1.0.19.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)

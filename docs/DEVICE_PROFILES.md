@@ -1,6 +1,6 @@
 # E-reader device profiles
 
-> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 MihonNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.
 
@@ -42,4 +42,4 @@ XTCH custom dimensions require a **height divisible by 8 pixels** (for example 8
 
 The larger non-XTEink EPUB/CBZ pages consume more Android memory during conversion. Try a short volume first. Device dimensions and basic format guidance were crosschecked with [MangaPoint's public device profiles](https://github.com/W1seGit/MangaPoint/blob/main/crates/device-profiles/src/lib.rs), but this UI is independently implemented and real-device validation is still required.
 
-**Status:** These profiles are included in Android v1.0.18. Windows development remains separate; profiles describe output dimensions, not firmware support.
+**Status:** These profiles are included in Android v1.0.19. Windows development remains separate; profiles describe output dimensions, not firmware support.

@@ -18,7 +18,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MihonNooir is independent and unofficial.** The latest official Android release is **[v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19)**, based on Mihon v0.21.3. It uses the persistent signing certificate shared with official v1.0.18 and v1.0.17. Back up your library and important downloaded chapters before updating. **From v1.0.17, download the correct APK manually** because the old updater could choose the wrong CPU architecture. Install over the existing app; do not uninstall or clear storage. If Android reports a signing/package conflict, stop and report it. Windows is still in development.
+> **MihonNooir is independent and unofficial.** The latest official Android release is **[v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19)**, published 19 November 2026, based on Mihon v0.21.3. It uses the persistent signing certificate shared with official v1.0.18 and v1.0.17. Back up your library and important downloaded chapters before updating. **From v1.0.17, download the correct APK manually** because the old updater could choose the wrong CPU architecture. Install over the existing app; do not uninstall or clear storage. If Android reports a signing/package conflict, stop and report it. Windows is still in development.
 
 ## What's new in Android v1.0.19
 
@@ -37,7 +37,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 - **XTC Fast**: portable XTC 1-bit row-major bitmap pages and chapter records.
 - **XTCH High Quality**: portable 2-bit, four-level grayscale with correct first-page cover and chapter indexing.
 - **Reader presets**: X3, X4, X4 Pro, select Kindle, Kobo, Boox and PocketBook models, or a safe custom resolution. XTEink-only Wi-Fi delivery is disabled for other readers.
-- **Cover choice**: include a real series cover, or start directly with the first selected chapter page. Portable XTC/XTCH exports no longer contain an undocumented JSON trailer.
+- **Cover choice**: include a real series cover, or start directly with the first selected chapter page. Portable XTC/XTCH exports omit the private JSON trailer by default; optional extended metadata is experimental.
 
 [**Detailed compatibility, image encoding, synopsis, cover and reconversion guide →**](docs/EXPORT_FORMATS_EPUB2.md)
 
@@ -81,14 +81,14 @@ The **Nooir Tools** hub, web/PDF converters, shared queue and advanced controls 
 ## Get a book onto your XTEink in five steps
 
 1. **Select the manga chapters before opening Export.** Long-press the first chapter on a manga details page and tap the others. No selection + Normal Export means **all downloaded chapters**; Quick Export can fetch missing pages for selected online chapters through installed sources.
-2. **Choose X3/X4 and output format.** XTC is black/white, XTCH has four grayscale levels, EPUB and CBZ contain page images. For manga pages, choose Page, Row by Row or Panel by Panel, then optionally Auto Fit, trimming, reading order, rendering style and overlap. Preview the settings before export.
+2. **Choose X3/X4 and output format.** XTC is black/white, XTCH has four grayscale levels, EPUB and CBZ contain page images. For Japanese manga, tap **More conversion settings → Apply recommended manga panel settings** (Panel by Panel + Auto Fit). Check **Enlarge oversized splits** (default on, 50% minimum screen fill). Use Page or Row by Row for different reading styles; preview the settings before export.
 3. **Prepare the reader.** On Folio Nooir open **Home → File Transfer → Join Network** or **Create Hotspot**. Your phone must be able to reach the address shown on the reader.
 4. **Test the connection in Chrome.** Open the reader's displayed HTTP address. In MihonNooir, enter **only** its IP/hostname (not `http://`) and an existing folder such as `/Books`.
 5. Choose **Save file** for local storage or **Send to XTEink** over Wi-Fi. For large manga/PDF books, saving locally and copying to the SD card is often more practical. With Wi-Fi, wait for receiver confirmation; 100% uploaded is not confirmation of acceptance. Original Mihon downloads remain untouched.
 
 **No router nearby?** Use the XTEink's temporary hotspot and the exact IP it displays. Its local web server has **no login or encryption**: use trusted networks and close File Transfer when finished.
 
-[**Wi-Fi walkthrough →**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/WIFI_TRANSFER.md) · [Chapter selection examples](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CHAPTER_SELECTION.md)
+[Recommended manga settings and Auto Fit](docs/PANEL_AUTO_FIT.md) · [**Wi-Fi walkthrough →**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/WIFI_TRANSFER.md) · [Chapter selection examples](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CHAPTER_SELECTION.md)
 
 ## More tools in the Android app
 
@@ -114,6 +114,7 @@ Windows is being developed as a separate desktop app with a local manga library/
 | [Getting started](https://github.com/toshio2011/mihon-nooir/blob/main/docs/GETTING_STARTED.md) | Install the right build, first export, file picker |
 | [Choosing chapters](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CHAPTER_SELECTION.md) | Normal vs Quick Export, specific ranges, all downloaded chapters |
 | [Wi-Fi transfer](https://github.com/toshio2011/mihon-nooir/blob/main/docs/WIFI_TRANSFER.md) | Join Network/hotspot, addresses, receiver confirmation |
+| [Recommended manga panel settings](docs/PANEL_AUTO_FIT.md) | Auto Fit, genuine narrow panels, oversized enlargement and what to do if a page is grouped |
 | [Format and settings](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CONVERSION.md) · [Landscape/overlap](https://github.com/toshio2011/mihon-nooir/blob/main/docs/ORIENTATION_OVERLAP.md) | XTC/XTCH/EPUB/CBZ, direction, trimming and page cuts |
 | [Web link → EPUB](https://github.com/toshio2011/mihon-nooir/blob/main/docs/WEB_TO_READER.md) · [Multiple web links / novels](https://github.com/toshio2011/mihon-nooir/blob/main/docs/WEB_NOVELS.md) | One article, many pages in one EPUB, or many independent stories |
 | [PDF → EPUB](https://github.com/toshio2011/mihon-nooir/blob/main/docs/PDF_TO_EPUB.md) | Reflowable text plus figures, scanned-page fallback, limitations |

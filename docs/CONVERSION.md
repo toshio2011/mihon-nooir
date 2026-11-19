@@ -1,12 +1,12 @@
 # Formats, image conversion and metadata
 
-> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [Getting started](GETTING_STARTED.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 MihonNooir exports manga into e-reader-oriented formats while keeping the source chapters and library information in Mihon.
 
-> **Version note:** Quick Export, Nooir Tools, the shared queue and advanced image settings are included in v1.0.18. [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
+> **Version note:** Quick Export, Nooir Tools, the shared queue and advanced image settings are included in v1.0.19. [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
 
 ## Pick an output
 
@@ -62,7 +62,7 @@ Expand **More conversion settings** in the export dialog.
 | Portrait / Landscape / Auto Fit | Fixed orientation or best-fit orientation per detected region in row/panel mode |
 | Overlapping page cuts | Repeats part of strips and provides protective padding around detected regions; not OCR |
 | Context Peek (Panel by Panel only) | 0–8%; default off; repeats a small edge of a neighboring confirmed panel |
-| Enlarge oversized splits (v1.0.19 candidate) | Default on; for eligible row/panel views only. Minimum screen fill 25–80%, default 50%. Attempts verified boundaries, then protective overlap when it improves readability. |
+| Enlarge oversized splits | Default on; for eligible row/panel views only. Minimum screen fill 25–80%, default 50%. Attempts verified boundaries, then protective overlap when it improves readability. |
 | Show full page before splits | Adds original page before multi-frame detail views, not before single-frame pages |
 | Keep first page of each chapter whole | Independently protects chapter opening pages |
 | Trim white margins / Split double-page spreads | Removes empty margins or separates facing pages |
@@ -71,6 +71,14 @@ Expand **More conversion settings** in the export dialog.
 | E-ink rendering style | Floyd–Steinberg, Atkinson, Bayer 8×8 or Threshold |
 | EPUB / CBZ colors | Preserve original color if chosen; XTC/XTCH remain grayscale |
 | Separate series cover / EPUB section grouping | Book packaging options |
+
+### Recommended settings for Japanese manga
+
+Tap **Apply recommended manga panel settings**: Pages layout, Panel by Panel, Auto Fit, ordinary overlap 0%, white-margin trim on, split spreads on, right-to-left on, and full-page overview off.
+
+The shortcut retains your other settings. For a useful starting point, check that **Enlarge oversized splits** is enabled, **Minimum screen fill** is 50%, and **Context Peek** is off. Keep first page of each chapter whole defaults to on; disable it only if you also want the opening source page segmented. Choose the device profile and format independently.
+
+v1.0.19 rejoins weakly supported thin fragments, recovers strongly framed inner panels, recognizes supported slanted/spanning layouts and protects some continuous artwork. A real narrow panel can remain narrow. The new enlargement setting tries verified natural boundaries first; a separate 12% protective overlap is used only on eligible regions when both views improve scale. The ordinary overlap slider is independent. Use Row by Row or Page if a particular layout is not recognized. [Detailed settings and examples](PANEL_AUTO_FIT.md).
 
 ### Pick a rendering style
 
@@ -90,7 +98,7 @@ Try a small sample with your own manga first. The ideal style varies by artwork 
 
 Use optional **Save panel diagnostics after this export** in Panel by Panel only when troubleshooting. Reopen the export dialog to save the latest private ZIP; review the source images before sharing. The option is off by default.
 
-[Orientation and overlap](ORIENTATION_OVERLAP.md) · [Format details](EXPORT_FORMATS_EPUB2.md) · [v1.0.18 release notes](releases/v1.0.18.md)
+[Orientation and overlap](ORIENTATION_OVERLAP.md) · [Format details](EXPORT_FORMATS_EPUB2.md) · [v1.0.19 release notes](releases/v1.0.19.md)
 
 ## What happens to metadata?
 

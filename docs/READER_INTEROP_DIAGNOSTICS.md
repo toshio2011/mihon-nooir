@@ -1,5 +1,8 @@
 # Reader interoperability debugging — readable test books (21 October 2026)
 
+> This is the original dated diagnostic fixture explanation, not current release status. For the latest verified Android version and actual-build smoke tests, see [v1.0.19 release notes](releases/v1.0.19.md) and [format guidance](EXPORT_FORMATS_EPUB2.md).
+
+
 ## What went wrong with the old CI samples?
 
 The earlier EPUB 2 fixture drew a gradient cover and used white image pages. The old XTC and XTCH fixtures were synthetic bit patterns and blank white pages. They were useful for validating binary structure, NOT for testing readability or real-device memory. A green Android build or EPUBCheck result never established that a user could read those samples on X3/X4.

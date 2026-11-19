@@ -1,6 +1,16 @@
 # MangaNooir — project handover and continuation guide
 
 > [!IMPORTANT]
+> **CURRENT CHECKPOINT — 19 November 2026:** Android [v1.0.19 is officially published](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19). Main version is 1.0.19. Reviewed RC2 source: `403bd0e631832a9ac2ffebd18439612e36f9f37d`; merged release commit `de21466ce568bada3f777a776ee8eaeed8f889c7`. [PR #105](https://github.com/toshio2011/mihon-nooir/pull/105) integrated the owner-approved #106 detector changes. All earlier October checkpoints below are historical.
+>
+> See [current release notes](releases/v1.0.19.md), [conversion guide](CONVERSION.md) and [Auto Fit settings](PANEL_AUTO_FIT.md) for shipped behavior. Main detector improvements: paired/slanted structure, protected standalone artwork, natural boundaries before optional overlap, independent spanning panels, suspicious-fragment consolidation and strongly framed inner-panel recovery. Enlargement defaults to on/50%; ordinary overlap, Auto Fit, first-page protection and Context Peek stay independent. Panel detection remains heuristic.
+>
+> Validation: [Android run 44450823995](https://github.com/toshio2011/mihon-nooir/actions/runs/44450823995) passed five manga and seven long-PDF tests; [Windows compatibility run 44450824030](https://github.com/toshio2011/mihon-nooir/actions/runs/44450824030) passed. [Signing run 44450814868](https://github.com/toshio2011/mihon-nooir/actions/runs/44450814868) verified all five variants, certificate match and in-place upgrade. [Publication run 44456570394](https://github.com/toshio2011/mihon-nooir/actions/runs/44456570394) promoted artifact 14495886989 byte-for-byte; public ARM64 SHA-256 `16c1869ab7ce452ebd635d7f931a8c9d0728916e016dcf9195c61db4ccb6da97`. Owner accepted RC2 panel results. Do not claim full device/library parity.
+>
+> Next work: keep stable Android v1.0.19 unchanged unless an owner-approved fix is needed; continue Windows as a separate track, verify live branch heads and upstream pins before changes, preserve previous successful Android behavior, and keep Folio Nooir untouched. No copyrighted source manga belongs in GitHub.
+
+
+> [!IMPORTANT]
 > **LATEST HANDOVER — 28 OCTOBER 2026:** Start with **[docs/HANDOVER_2026-10-28.md](HANDOVER_2026-10-28.md)**. It is the authoritative dated snapshot for Conan Panel by Panel QA, merged PRs #47–#50, and unfinished **draft PR #51 (private Panel Diagnostic ZIP)**. The older October 20–21 status, public v1.0.11, main v1.0.1, and draft PR #21 claims **below** are archived historical facts and are **NOT CURRENT**. As of October 28, main source version is **1.0.16**, while the most recent published release is **v1.0.12**; the diagnostic feature is **not yet merged or released**. Always recheck GitHub head and CI.
 
 

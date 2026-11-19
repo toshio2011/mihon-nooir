@@ -4,7 +4,7 @@
 
 **The most important step:** choose chapters **on the manga details screen before opening Export**. The Export dialog chooses the device, format and destination; it does **not** contain a separate chapter picker. In this context, “import chapters” usually means **export chapters out of MihonNooir** for your e-reader.
 
-> **Version note:** These workflows are included in [Android v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18). [Installation guide](GETTING_STARTED.md).
+> **Version note:** These workflows are included in [Android v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19). [Installation guide](GETTING_STARTED.md).
 
 ## Select exactly the chapters you want
 

@@ -1,11 +1,11 @@
 # Browse XTEink files, Activity Queue and filename conflicts
 
-> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 > [!IMPORTANT]
-> The built-in **Nooir Tools** and shared **Activity Queue** are included in v1.0.18. Mihon's download queue remains separate.
+> The built-in **Nooir Tools** and shared **Activity Queue** are included in v1.0.19. Mihon's download queue remains separate.
 
 ## The built-in reader file browser
 

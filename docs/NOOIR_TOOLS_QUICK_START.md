@@ -1,6 +1,6 @@
 # Nooir Tools — quick start
 
-> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← MihonNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
 
@@ -26,7 +26,7 @@ Open **MihonNooir → More → Nooir Tools**. Inside the hub:
 1. Open a manga's details page. **Long-press** the first wanted chapter, then **tap** other chapters. Review the highlighted chapters.
 2. Tap **Export** in the manga toolbar. Choose your X3/X4 preset and output format.
 3. Turn on **Quick Export** only when you want selected online chapters that are not already downloaded in Mihon. Normal Export uses already-downloaded chapters.
-4. Expand **More conversion settings**. Choose **Page**, **Row by Row** or **Panel by Panel**; try **Auto Fit** with row/panel detection, optional full-page overview, overlap, trimming, contrast and one of four rendering styles. Choose a manga image or CBZ and tap **Preview first page** to see the intended result before exporting.
+4. Expand **More conversion settings**. For Japanese manga, tap **Apply recommended manga panel settings** (Panel by Panel + Auto Fit, ordinary overlap 0%). Check enlargement is on and Minimum screen fill is 50% if desired. Choose Page or Row by Row for other layouts; use optional full-page overview, trimming, contrast and one of four rendering styles. [Detailed settings](PANEL_AUTO_FIT.md). Choose a manga image or CBZ and tap **Preview first page** to see the intended result before exporting.
 5. Choose **Save file** or **Send to XTEink**. For device sends, set an output filename; the app checks whether that name already exists **before converting**, then again before uploading.
 
 For a large book, use **Save file** and copy it to the SD card. To inspect the actual saved XTC/XTCH bytes, open **Export → Inspect an exported XTC / XTCH file**. This is separate from the live preview.
@@ -98,6 +98,6 @@ The confirmed **Cancel entire Nooir queue** action stops queued jobs too; cancel
 
 ## Compatibility and feedback
 
-[The v1.0.18 release notes](releases/v1.0.18.md) describe verified signed-upgrade and Android emulator tests. These do not prove every web source, PDF, manga panel or physical e-reader transfer works. Please include your build, input type, exact error, device and firmware; do not share credentials or copyrighted pages.
+[The v1.0.19 release notes](releases/v1.0.19.md) describe verified signed-upgrade and Android emulator tests. These do not prove every web source, PDF, manga panel or physical e-reader transfer works. Please include your build, input type, exact error, device and firmware; do not share credentials or copyrighted pages.
 
-[Current release notes](releases/v1.0.18.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[Current release notes](releases/v1.0.19.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)

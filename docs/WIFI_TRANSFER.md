@@ -7,7 +7,7 @@ MihonNooir can send converted manga to XTEink readers with a **compatible HTTP/W
 > [!WARNING]
 > Folio Nooir's web server has **no authentication** and serves local HTTP. Use a trusted private network or the reader's short-lived hotspot. Turn off File Transfer when finished.
 
-> **Version note:** The instructions apply to [Android v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18). A compatible reader File Transfer server is required. [Getting started](GETTING_STARTED.md).
+> **Version note:** The instructions apply to [Android v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19). A compatible reader File Transfer server is required. [Getting started](GETTING_STARTED.md).
 
 ## Option A — Use your home Wi-Fi
 

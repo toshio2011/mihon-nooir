@@ -1,6 +1,6 @@
 # Web novels, multiple webpages and batch EPUBs
 
-> **Current Android release:** [MihonNooir v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) (16 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.18.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 MihonNooir's first **web novel importer** is an experimental extension of [Web to E-reader](WEB_TO_READER.md). The goal is to read longer publicly available web stories as **real, reflowable EPUB books**, keeping individual chapters, a table of contents, an available cover, and inline illustrations.
 

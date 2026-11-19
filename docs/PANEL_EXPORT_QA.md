@@ -1,5 +1,8 @@
 # Compare panel EPUB exports without manually paging through everything
 
+> **v1.0.19 testing note:** lock the exact input, device profile, segmentation, orientation, ordinary overlap, Enlarge oversized splits/minimum screen fill, Context Peek, keep-first-page/overview, trim/spread and rendering settings before comparing. Inspect changed source regions visually; a smaller or larger frame count alone does not prove quality. [Current release evidence](releases/v1.0.19.md) includes the exact compiled desktop A/B corpus and Android smoke tests.
+
+
 This is a **developer/tester diagnostic**, not a new Android app screen. It works offline, uses only Python's standard library, reads EPUB files **without extracting manga images onto disk**, and commits no manga artwork.
 
 ## When to use
