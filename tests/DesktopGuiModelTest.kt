@@ -27,6 +27,16 @@ import javax.imageio.ImageIO
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 
 fun main() {
+    check(DesktopUiModel.extensionSetupUri(" http://127.0.0.1:4567 ").toString()=="http://127.0.0.1:4567/")
+    check(DesktopUiModel.extensionSetupUri("https://localhost:8443/").toString()=="https://localhost:8443/")
+    for (url in listOf("https://example.com:4567", "file:///tmp/test", "http://localhost",
+        "http://localhost:0", "http://localhost:65536", "http://user:pass@localhost:4567",
+        "http://localhost:4567/?token=secret", "http://localhost:4567/#fragment",
+        "http://localhost:4567/api", "http://localhost:4567@evil.example:4567",
+        "http://localhost.evil.example:4567", "http://127.0.0.2:4567", "not a URL")) {
+        check(runCatching { DesktopUiModel.extensionSetupUri(url) }.isFailure) { "Unsafe extension setup URL accepted: $url" }
+    }
+    println("PASS: explicit local extension setup URI policy")
     verifyConversionSettingsStorage()
     // Fast page turns must decode only one page/spread at a time. The newest
     // page replaces any pending request without piling up huge bitmaps.

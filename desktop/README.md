@@ -2,6 +2,17 @@
 
 > **Development track, not a public release.** Android v1.0.19 stays stable. This branch consolidates the Windows preview with the exact released v1.0.19 shared panel geometry and settings; no Android production source or firmware changes. Preview version: 0.1.0. Fresh integrated CI and physical PC/reader acceptance are required.
 
+## Set up Mihon-compatible extensions (optional)
+
+Windows uses the pinned official Suwayomi backend, which runs compatible Mihon/Tachiyomi extensions. Extension setup is separate from Android; MihonNooir neither bundles sources nor automatically imports APKs or repository URLs from the phone.
+
+1. Choose **Download & start Suwayomi** and explicitly approve the verified official server download, or start/connect to an existing supported local instance.
+2. In **Installed sources**, choose **Manage extensions…**, then open the local Suwayomi browser interface.
+3. Use Suwayomi's extension repository settings to add a compatible repository you trust, then install the extensions you choose. See [Suwayomi's extension setup instructions](https://github.com/Suwayomi/Suwayomi-Server/blob/master/docs/Getting-Extensions.md).
+4. Return to MihonNooir and choose **Connect / reload sources**. Select an installed source, search/browse titles and export authorized content.
+
+This is a browser handoff, not a native extension-store implementation. No repository is preconfigured; individual extensions can be incompatible with the pinned backend, require authentication, or stop working. Only trusted local servers and explicitly selected extensions should be used. Local CBZ/ZIP reading and conversion work without any extension or server.
+
 ## Windows preview workflow
 
 - Local CBZ/ZIP/image-folder library and reader, with optional Suwayomi browsing/download and local copy.
