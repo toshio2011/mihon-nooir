@@ -118,6 +118,7 @@ fun main() {
                             next.doClick()
                         }
                         awaitPage(dialog, details, preview, 3, "1:1 pixels")
+                        captureWindow(dialog, "saved-book-" + device.lowercase() + "-" + format.name.lowercase())
                         check(onSwingThread { previous.isEnabled && !next.isEnabled })
                         onSwingThread {
                             previous.doClick()
@@ -329,6 +330,7 @@ private fun verifyOfflineLibrary(folder: File) {
         } else {
             check(tabs == null) { "Wide main layout should keep the three panes" }
         }
+        captureWindow(main, "main-offline")
         verifyExtensionSetup(main)
         if (tabs != null) onSwingThread { tabs.selectedIndex = 1 }
         verifyToolbarReachable(findButton(main, "Search"))
@@ -360,10 +362,12 @@ private fun verifyOfflineLibrary(folder: File) {
                 .any { it.icon is ImageIcon }
         }
 
+        captureWindow(library, "local-library")
         onSwingThread { read.doClick() }
         val reader = awaitFrame("MihonNooir Reader — " + comic.name)
         verifyFitsWorkArea(reader)
         awaitReaderPage(reader, 1)
+        captureWindow(reader, "offline-reader")
         val next = findButton(reader, "Next")
         onSwingThread { next.doClick() }
         awaitReaderPage(reader, 2)
@@ -428,6 +432,7 @@ private fun verifyExtensionSetup(main: JFrame) {
         }
     }
     val dialog = showDialog("Mihon-compatible extensions")
+    captureWindow(dialog, "extension-setup")
     check(onSwingThread {
         GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.contains(dialog.bounds)
     }) { "Extension setup modal exceeds desktop work area" }
@@ -545,6 +550,7 @@ private fun verifyOnlineReading(main: JFrame) {
         } }
         val open = findButton(main,"Read chapter online")
         verifyToolbarReachable(open)
+        captureWindow(main, "online-chapters")
         onSwingThread { chapters.selectedIndex=0; open.doClick() }
         val reader = awaitFrame("MihonNooir Online Reader — Original online fixture / Chapter 1")
         try {
@@ -553,9 +559,11 @@ private fun verifyOnlineReading(main: JFrame) {
                 descendants(reader).filterIsInstance<JLabel>().any { it.text=="Page $n / 3" }
             }
             page(1)
+            captureWindow(reader, "online-reader")
             check(requests.toList()==listOf(30)) { "Reader must fetch a single initial page" }
             onSwingThread { findButton(reader,"Next").doClick() }
             awaitUi("recoverable page failure") { findButton(reader,"Retry").isEnabled }
+            captureWindow(reader, "online-retry")
             onSwingThread { findButton(reader,"Retry").doClick() }
             page(2)
             onSwingThread { findButton(reader,"Next").doClick() }
@@ -568,6 +576,7 @@ private fun verifyOnlineReading(main: JFrame) {
             onSwingThread { findButton(reader,"Next chapter").doClick() }
             awaitUi("second chapter opened in same window") { reader.title.endsWith("Chapter 2") }
             page(1)
+            captureWindow(reader, "online-next-chapter")
             onSwingThread { findButton(reader,"Next").doClick() }
             page(2)
             onSwingThread { findButton(reader,"Previous chapter").doClick() }
@@ -583,6 +592,7 @@ private fun verifyOnlineReading(main: JFrame) {
                 awaitUi("local position restored on reopening") {
                     descendants(resumed).filterIsInstance<JLabel>().any { it.text=="Page 2 / 3" }
                 }
+                captureWindow(resumed, "online-resumed")
                 check(requests.last()==31 && manifestIds.toList()==listOf(17,18,17,17))
                 println("PASS: native online chapter reading, retry, in-window chapter transitions and local resume; synthetic localhost only")
             } finally { onSwingThread { resumed.dispose() } }
@@ -644,6 +654,7 @@ private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {
     onSwingThread { mode.selectedItem = "ROW_BY_ROW" }
     check(onSwingThread { enlarge.isEnabled && enlarge.isSelected && fill.isEnabled && fill.value == 50 })
     reachable(enlarge); reachable(fill)
+    captureWindow(dialog, "conversion-settings")
     onSwingThread { enlarge.doClick() }
     check(onSwingThread { !fill.isEnabled })
     onSwingThread { enlarge.doClick() }
@@ -665,6 +676,28 @@ private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {
         (control(reopened,"Minimum screen fill %") as JSpinner).value == 65 })
     finish(reopened,"Cancel")
     println("PASS: native scrollable conversion settings, oversized toggle/threshold, typed value commit and cancel rollback")
+}
+
+/** Capture only the application's actual painted window, never the runner desktop.
+ *  Opt-in output directory is supplied by the packaged Windows CI job.
+ *  All windows in this test contain synthetic fixtures and isolated test data.
+ */
+private fun captureWindow(window: Window, name: String) {
+    val output = System.getProperty("nooir.test.screenshotDir") ?: return
+    require(name.matches(Regex("[a-z0-9-]+")))
+    val dir = java.nio.file.Path.of(output)
+    Files.createDirectories(dir)
+    val image = onSwingThread {
+        check(window.isShowing && window.width > 0 && window.height > 0)
+        val pixels = BufferedImage(window.width, window.height, BufferedImage.TYPE_INT_RGB)
+        val g = pixels.createGraphics()
+        try { window.printAll(g) } finally { g.dispose() }
+        pixels
+    }
+    try {
+        check(ImageIO.write(image, "png", dir.resolve("$name.png").toFile()))
+        println("CAPTURE: $name.png")
+    } finally { image.flush() }
 }
 
 private fun awaitFrame(title: String): JFrame {
