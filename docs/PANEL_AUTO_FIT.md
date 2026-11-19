@@ -23,4 +23,4 @@ Automated tests cover deterministic portrait/wide/square decisions, no-crop geom
 
 **Still pending:** complex real-world manga corpus, exact Android-vs-desktop pixel parity, X3/X4 hardware viewing comfort, mixed-orientation usability and large-volume preflight/splitting. Auto Fit is not a substitute for accurate panel detection; uncertain pages remain whole.
 
-Auto Fit is released on Android. The upcoming configurable oversized-split work is not shipped in v1.0.18. Windows remains in development; Folio Nooir firmware is not modified.
+Auto Fit is released on Android. The v1.0.19 candidate adds adjustable oversized-split enlargement (50% default minimum screen fill, 25–80%), verified natural-boundary recovery and separate protective overlap. It also improves supported mixed slanted layouts and protects certain enclosed activity illustrations. These changes are not shipped in v1.0.18. Recognition remains heuristic, not a semantic guarantee; use Page mode to preserve unfamiliar artwork. Windows remains in development; Folio Nooir firmware is not modified.
