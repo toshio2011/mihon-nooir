@@ -1032,6 +1032,7 @@ private fun fragmentSecondLookRegression() {
     rect(singleRail,254,0,255,400,255)
     // also remove neighboring content edges; otherwise large solid art blocks
     // themselves can supply a second border in this synthetic test.
+    rect(singleRail,220,0,245,400,255)
     rect(singleRail,255,0,280,400,255)
     check(PanelFragmentSecondLook.review(w,h,singleRail,plan,true)==plan)
     val overlap=listOf(PageRegion(0,0,w,450),PageRegion(0,400,w,h))
