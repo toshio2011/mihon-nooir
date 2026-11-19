@@ -6,9 +6,9 @@
 
 Read manga on Android · Choose chapters · Convert books · Send to XTEink over Wi-Fi
 
-**[Download Android v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18)** · [Installation & first export](docs/GETTING_STARTED.md) · [Nooir Tools](docs/NOOIR_TOOLS_QUICK_START.md) · [All guides](docs/README.md) · [FAQ](docs/FAQ.md)
+**[Download Android v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19)** · [Installation & first export](docs/GETTING_STARTED.md) · [Nooir Tools](docs/NOOIR_TOOLS_QUICK_START.md) · [All guides](docs/README.md) · [FAQ](docs/FAQ.md)
 
-[ARM64 APK](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-arm64-v8a-foss.apk) · [Universal APK](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-universal-foss.apk) · [SHA-256 checksums](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/SHA256SUMS.txt)
+[ARM64 APK](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-arm64-v8a-foss.apk) · [Universal APK](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-universal-foss.apk) · [SHA-256 checksums](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/SHA256SUMS.txt)
 
 [![Android release](https://img.shields.io/github/v/release/toshio2011/mihon-nooir?label=Android)](https://github.com/toshio2011/mihon-nooir/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Android-blue)
@@ -18,18 +18,17 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 </div>
 
 > [!IMPORTANT]
-> **MihonNooir is independent and unofficial.** The latest official Android release is **[v1.0.18](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18)**, published 16 November 2026, based on Mihon v0.21.3. It uses the persistent signing certificate shared with official v1.0.17. Back up your library and important downloaded chapters before updating. **From v1.0.17, download the correct APK manually** because the old updater could choose the wrong CPU architecture. Install over the existing app; do not uninstall or clear storage. If Android reports a signing/package conflict, stop and report it. Windows is still in development.
+> **MihonNooir is independent and unofficial.** The latest official Android release is **[v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19)**, based on Mihon v0.21.3. It uses the persistent signing certificate shared with official v1.0.18 and v1.0.17. Back up your library and important downloaded chapters before updating. **From v1.0.17, download the correct APK manually** because the old updater could choose the wrong CPU architecture. Install over the existing app; do not uninstall or clear storage. If Android reports a signing/package conflict, stop and report it. Windows is still in development.
 
-## What's new in Android v1.0.18
+## What's new in Android v1.0.19
 
-- **Actual XTC/XTCH preview:** inspect the encoded pages of a saved book, in addition to the existing live pre-export manga preview.
-- **Four e-ink rendering styles:** Floyd–Steinberg (default), Atkinson, Bayer 8×8 and Threshold. Compare them using preview to find the rendering you prefer.
-- **Improved manga splitting:** Panel by Panel, Row by Row, Auto Fit, optional Full Page Before Splits, protected sparse panels and improved handling of short footers. Optional **Context Peek** repeats a small edge of an adjacent confirmed panel (off by default).
-- **Long PDFs and multi-PDF conversion:** choose one or more PDFs and save separate EPUB 2/3 or XTC/XTCH books. Local conversion has no arbitrary source-page cap, subject to available storage and format/processing limits. Selectable text is retained in EPUB where supported; XTC/XTCH render pages as images.
-- **Safer app updates:** architecture-aware APK selection and an official browser download, with normal Android installer confirmation.
-- **Optional private diagnostics:** save a panel diagnostic ZIP when troubleshooting; off by default and not automatically uploaded.
+- **Smarter manga segmentation:** detect supported slanted/irregular layouts, independent spanning panels and stacked panels.
+- **Second-look detection:** consolidate suspicious thin fragments and recover strongly framed internal gutters, while protecting genuine narrow panels.
+- **Enlarge oversized splits:** enabled by default in Panel by Panel and Row by Row. Adjustable minimum screen fill (25–80%, default 50%); prefer verified natural boundaries, then use protective overlap only where it improves readability.
+- **Artwork preservation:** avoid fragmenting supported continuous illustrations and activity sheets.
+- **Existing features retained:** actual XTC/XTCH inspection, four rendering styles, Context Peek, PDF/EPUB conversion, queue and architecture-aware updater.
 
-[Full v1.0.18 release notes and test evidence →](docs/releases/v1.0.18.md)
+[Full v1.0.19 release notes and verification →](docs/releases/v1.0.19.md) · [Previous v1.0.18 release notes](docs/releases/v1.0.18.md)
 
 ## Supported export formats
 
@@ -46,7 +45,7 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 
 MihonNooir is built as a minimal Android overlay on the **full [Mihon](https://github.com/mihonapp/mihon)** app. Its aim is to keep Mihon's normal **reader, extensions, library, downloads, tracking, history, categories and backups**, while adding optional e-reader workflows.
 
-| What you want to do | Where to start in **v1.0.18** | Guide |
+| What you want to do | Where to start in **v1.0.19** | Guide |
 |---|---|---|
 | Export selected manga chapters | **Manga details → select chapters → Export** | [Choose chapters](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CHAPTER_SELECTION.md) |
 | Convert a manga to XTC / XTCH / EPUB / CBZ | **Manga details → Export → format / settings** | [Formats](https://github.com/toshio2011/mihon-nooir/blob/main/docs/CONVERSION.md) |
@@ -56,26 +55,26 @@ MihonNooir is built as a minimal Android overlay on the **full [Mihon](https://g
 | Download public web novel chapters | **More → Nooir Tools → Web novels · Batch EPUB** | [Web novels](https://github.com/toshio2011/mihon-nooir/blob/main/docs/WEB_NOVELS.md) |
 | Convert one or more PDFs into EPUB / XTC / XTCH | **More → Nooir Tools → PDF → EPUB · Text + illustrations** | [PDF conversion](docs/PDF_TO_EPUB.md) |
 | Preview manga settings before export | **Manga details → Export → Choose manga image or CBZ for preview → Preview first page** | [Conversion](docs/CONVERSION.md) |
-| Inspect actual saved XTC/XTCH pages | **Manga details → Export → Inspect an exported XTC / XTCH file** | [v1.0.18 release notes](docs/releases/v1.0.18.md) |
+| Inspect actual saved XTC/XTCH pages | **Manga details → Export → Inspect an exported XTC / XTCH file** | [v1.0.19 release notes](docs/releases/v1.0.19.md) |
 | Watch transfers and diagnose a failed book | **More → Nooir Tools → Activity Queue** | [Queue and conflicts](https://github.com/toshio2011/mihon-nooir/blob/main/docs/DEVICE_FILES_AND_QUEUE.md) |
 | Browse your XTEink's SD-card files | **More → Nooir Tools → Browse XTEink files** | [Reader files](https://github.com/toshio2011/mihon-nooir/blob/main/docs/DEVICE_FILES_AND_QUEUE.md) |
 
-The **Nooir Tools** hub, web/PDF converters, shared queue and advanced controls are included in v1.0.18. Mihon's native chapter Download Queue is separate.
+The **Nooir Tools** hub, web/PDF converters, shared queue and advanced controls are included in v1.0.19. Mihon's native chapter Download Queue is separate.
 
-## Download and install Android v1.0.18
+## Download and install Android v1.0.19
 
 | Device | Download |
 |---|---|
-| Most modern Android phones (ARM64) | [app-arm64-v8a-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-arm64-v8a-foss.apk) |
-| Unsure of architecture | [app-universal-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/app-universal-foss.apk) |
-| Other supported architectures | [All official release assets](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18) |
-| Verify your download | [SHA256SUMS.txt](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.18/SHA256SUMS.txt) |
+| Most modern Android phones (ARM64) | [app-arm64-v8a-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-arm64-v8a-foss.apk) |
+| Unsure of architecture | [app-universal-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-universal-foss.apk) |
+| Other supported architectures | [All official release assets](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) |
+| Verify your download | [SHA256SUMS.txt](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/SHA256SUMS.txt) |
 
 1. Download the official APK directly; no ZIP extraction is necessary.
 2. For an existing MihonNooir installation, back up your library and important downloads first. If upgrading from v1.0.17, use the manual download above.
 3. Open the APK in Android's file manager and follow the installer. MihonNooir can coexist with ordinary Mihon.
 4. Install over the existing official MihonNooir app. Do not uninstall or clear storage if Android refuses the update; older test-signed builds (including v1.0.12) may use a different key.
-5. Confirm About displays **FOSS v1.0.18** and check your library, reading progress and downloads.
+5. Confirm About displays **FOSS v1.0.19** and check your library, reading progress and downloads.
 
 [Full installation / first export tutorial →](docs/GETTING_STARTED.md) · [Build/update policy](docs/UPDATES.md)
 
@@ -103,7 +102,7 @@ These features are available in the current Android release. Individual source, 
 
 ## Windows desktop — in development
 
-Windows is being developed as a separate desktop app with a local manga library/reader, optional Suwayomi integration, conversion and saved-book inspection, a job queue and compatible XTEink transfer. The portable and installer builds are unsigned development previews; there is **no official public Windows release yet**. Android v1.0.18 does not contain the upcoming oversized-split setting or other draft-only enhancements.
+Windows is being developed as a separate desktop app with a local manga library/reader, optional Suwayomi integration, conversion and saved-book inspection, a job queue and compatible XTEink transfer. The portable and installer builds are unsigned development previews; there is **no official public Windows release yet**. Android includes the reviewed oversized-split and panel-detection improvements; further Windows-only development remains separate.
 
 [Windows development documentation](desktop/README.md) · [Open development pull requests](https://github.com/toshio2011/mihon-nooir/pulls)
 
@@ -128,7 +127,7 @@ Windows is being developed as a separate desktop app with a local manga library/
 
 This repository contains an **integration overlay**, not an independent rewrite of Mihon. Its [GitHub Actions workflow](.github/workflows/build-apk.yml) checks out the pinned Mihon revision from `config/mihon-upstream.sha`, applies `tools/apply_overlay.py`, runs smoke tests, and assembles a FOSS Android APK. Automated CI is not the same as on-device testing.
 
-- **[Official Android v1.0.18 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.18)** — latest published APKs, [verified upgrade and test evidence](docs/releases/v1.0.18.md). Real-device results depend on firmware and input.
+- **[Official Android v1.0.19 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19)** — latest published APKs, [verified upgrade and test evidence](docs/releases/v1.0.19.md). Real-device results depend on firmware and input.
 - [**Roadmap / feature requests**](https://github.com/toshio2011/mihon-nooir/issues/8) — improvements and known work.
 - [**Project handover**](https://github.com/toshio2011/mihon-nooir/blob/main/docs/PROJECT_HANDOVER.md) — contributor context and technical status.
 
