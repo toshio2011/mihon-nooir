@@ -325,10 +325,12 @@ private fun verifyOfflineLibrary(folder: File) {
                 (0 until tabs.tabCount).map { tabs.getTitleAt(it) } ==
                     listOf("Sources", "Browse", "Chapters")
             })
-            onSwingThread { tabs.selectedIndex = 1 }
+            onSwingThread { tabs.selectedIndex = 0 }
         } else {
             check(tabs == null) { "Wide main layout should keep the three panes" }
         }
+        verifyExtensionSetup(main)
+        if (tabs != null) onSwingThread { tabs.selectedIndex = 1 }
         verifyToolbarReachable(findButton(main, "Search"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
         verifyToolbarReachable(findButton(main, "Download requests"))
@@ -408,6 +410,69 @@ private fun verifyOfflineLibrary(folder: File) {
 }
 
 /** Open the actual production main settings and verify saved/canceled edits. */
+/** Exercise the real toolbar and modal without launching a browser or installing an extension. */
+private fun verifyExtensionSetup(main: JFrame) {
+    val button = findButton(main, "Manage extensions…")
+    verifyToolbarReachable(button)
+    val endpoint = onSwingThread {
+        descendants(main).filterIsInstance<JTextField>().single { it.text == "http://127.0.0.1:4567" }
+    }
+    fun showDialog(title: String): JDialog {
+        onSwingThread { SwingUtilities.invokeLater { button.doClick() } }
+        awaitUi("extension setup dialog: " + title) {
+            Window.getWindows().filterIsInstance<JDialog>().any { it.isShowing && it.title == title }
+        }
+        return onSwingThread {
+            Window.getWindows().filterIsInstance<JDialog>().single { it.isShowing && it.title == title }
+        }
+    }
+    val dialog = showDialog("Mihon-compatible extensions")
+    check(onSwingThread {
+        GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.contains(dialog.bounds)
+    }) { "Extension setup modal exceeds desktop work area" }
+    check(onSwingThread {
+        descendants(dialog).filterIsInstance<JTextField>().single().let {
+            !it.isEditable && it.text == "http://127.0.0.1:4567/"
+        }
+    })
+    check(onSwingThread {
+        descendants(dialog).filterIsInstance<JButton>().any { it.text == "Open Suwayomi in browser" }
+    })
+    onSwingThread {
+        descendants(dialog).filterIsInstance<JButton>().single { it.text == "Close" }.doClick()
+    }
+    awaitUi("extension setup closes without a browser") { !dialog.isShowing }
+    onSwingThread { Unit }
+    check(onSwingThread {
+        descendants(main).filterIsInstance<JLabel>().any { it.text.startsWith("Offline ready") }
+    }) { "Cancelling setup must not connect to the backend" }
+
+    // Reject remote endpoints at the actual UI boundary, without making a request.
+    onSwingThread { endpoint.text = "https://example.com:4567" }
+    onSwingThread { SwingUtilities.invokeLater { button.doClick() } }
+    awaitUi("invalid extension setup address warning") {
+        Window.getWindows().filterIsInstance<JDialog>().any {
+            it.isShowing && descendants(it).filterIsInstance<JLabel>().any { label ->
+                label.text.contains("localhost Suwayomi server only")
+            }
+        }
+    }
+    val errorDialog = onSwingThread {
+        Window.getWindows().filterIsInstance<JDialog>().single {
+            it.isShowing && descendants(it).filterIsInstance<JLabel>().any { label ->
+                label.text.contains("localhost Suwayomi server only")
+            }
+        }
+    }
+    onSwingThread {
+        descendants(errorDialog).filterIsInstance<JButton>().single { it.text == "OK" }.doClick()
+        endpoint.text = "http://127.0.0.1:4567"
+    }
+    awaitUi("invalid-address warning dismissed") { !errorDialog.isShowing }
+    onSwingThread { Unit }
+    println("PASS: native extension setup toolbar, local address, cancel and remote endpoint rejection; no browser launched")
+}
+
 private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {
     val button = findButton(main, "Conversion settings")
     verifyToolbarReachable(button)
