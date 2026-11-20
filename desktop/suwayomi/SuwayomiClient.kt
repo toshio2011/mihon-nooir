@@ -197,6 +197,23 @@ class SuwayomiClient(
         return SuwayomiLibraryPage(mangas, total, offset, limit)
     }
 
+    /** Official pinned v2.4.2366 updateManga patch; explicit UI action only. */
+    fun setMangaInLibrary(id: Int, inLibrary: Boolean): Boolean {
+        require(id > 0) { "Invalid manga ID" }
+        val query = """
+            mutation NooirLibraryMembership {
+              updateManga(input: { id: $id, patch: { inLibrary: $inLibrary } }) {
+                manga { id inLibrary }
+              }
+            }
+        """.trimIndent()
+        val changed = graphql(query).obj("updateManga").obj("manga")
+        require(changed.int("id") == id) { "Suwayomi returned a different manga ID" }
+        val state = changed["inLibrary"] as? Boolean ?: error("Missing updated library status")
+        require(state == inLibrary) { "Suwayomi did not apply the library change" }
+        return state
+    }
+
     /**
      * Fetch a source page using Suwayomi's v2.4.2366 FetchSourceManga mutation.
      * Search terms are GraphQL-string-escaped and signed source IDs use LongString literals.

@@ -332,6 +332,7 @@ private fun verifyOfflineLibrary(folder: File) {
         }
         captureWindow(main, "main-offline")
         verifyExtensionSetup(main)
+        verifyToolbarReachable(findButton(main, "Open full Suwayomi WebUI"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 1 }
         verifyToolbarReachable(findButton(main, "Search"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
@@ -539,7 +540,12 @@ private fun verifyOnlineReading(main: JFrame) {
         val manga = onSwingThread { descendants(main).filterIsInstance<JList<*>>().single {
             it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiMangaCard
         } }
+        check(onSwingThread { manga.cellRenderer is dev.nooir.desktop.ui.DesktopMangaCardRenderer })
+        captureWindow(main, "suwayomi-inspired-manga-browse")
         onSwingThread { manga.selectedIndex=0 }
+        awaitUi("library action available for selected manga") {
+            findButton(main, "Remove from library").isEnabled
+        }
         awaitUi("online chapter list loaded") {
             descendants(main).filterIsInstance<JList<*>>().any {
                 it.model.size==2 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
