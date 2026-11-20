@@ -27,6 +27,24 @@ import javax.imageio.ImageIO
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 
 fun main() {
+    val positionRoot = Files.createTempDirectory("nooir-online-position-")
+    try {
+        val c = dev.nooir.desktop.suwayomi.SuwayomiOnlineChapter(17,9,3,3,0,null)
+        val store = dev.nooir.desktop.ui.OnlineReadingPositionStore(positionRoot)
+        val endpoint = "http://127.0.0.1:4567"
+        check(store.load(endpoint,c,"Manga","Chapter 1")==null)
+        store.save(endpoint,c,"Manga","Chapter 1",1)
+        check(dev.nooir.desktop.ui.OnlineReadingPositionStore(positionRoot).load(endpoint,c,"Manga","Chapter 1")==1)
+        check(store.load("http://127.0.0.1:4568",c,"Manga","Chapter 1")==null)
+        check(store.load(endpoint,c.copy(chapterId=18),"Manga","Chapter 1")==null)
+        check(store.load(endpoint,c.copy(pageCount=4),"Manga","Chapter 1")==null)
+        check(runCatching { store.save(endpoint,c,"Manga","Chapter 1",3) }.isFailure)
+        val file = positionRoot.resolve("online-reading-v1").toFile().listFiles()!!.single()
+        file.writeText("invalid")
+        check(runCatching { store.save(endpoint,c,"Manga","Chapter 1",2) }.isFailure)
+        check(file.readText()=="invalid")
+        println("PASS: online local positions persist, isolate endpoint/chapter/count and preserve damaged metadata")
+    } finally { positionRoot.toFile().deleteRecursively() }
     check(DesktopUiModel.extensionSetupUri(" http://127.0.0.1:4567 ").toString()=="http://127.0.0.1:4567/")
     check(DesktopUiModel.extensionSetupUri("https://localhost:8443/").toString()=="https://localhost:8443/")
     for (url in listOf("https://example.com:4567", "file:///tmp/test", "http://localhost",

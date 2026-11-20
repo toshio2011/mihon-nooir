@@ -58,6 +58,15 @@ fun main() {
                 }
                 """{"data":{"fetchSourceManga":{"hasNextPage":false,"mangas":[{"id":103,"title":"Tokyo Cafe","author":null,"description":null,"thumbnailUrl":null,"inLibrary":false}]}}}"""
             }
+            "NooirLibraryMembership" in query -> {
+                check("id: 101" in query)
+                val keep = when {
+                    "inLibrary: true" in query -> true
+                    "inLibrary: false" in query -> false
+                    else -> error("Invalid library membership mutation")
+                }
+                """{"data":{"updateManga":{"manga":{"id":101,"inLibrary":$keep}}}}"""
+            }
             "fetchMangaAndChapters" in query -> {
                 check("id: 101" in query && "fetchManga: true" in query &&
                     "fetchChapters: true" in query)
@@ -94,6 +103,9 @@ fun main() {
         val searched = client.browse(SOURCE_ID, SuwayomiBrowseMode.SEARCH, 3, "Tokyo \"Cafe\"")
         check(searched.mangas.single().id == 103)
         client.refreshManga(101)
+        check(client.setMangaInLibrary(101, true))
+        check(!client.setMangaInLibrary(101, false))
+        check(runCatching { client.setMangaInLibrary(0, true) }.isFailure)
         check(runCatching { client.refreshManga(0) }.isFailure)
         check(runCatching { client.refreshManga(101, false, false) }.isFailure)
         val beforeInvalid = hits.get()
@@ -135,7 +147,7 @@ fun main() {
             SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "sources",
                 "--limit", "2", "--limit", "1"))
         }.isFailure)
-        println("Suwayomi source browsing contract passed: GraphQL LongString signed source IDs, paginated installed sources and library, popular/latest/search, escaping, explicit refresh, chapters and CLI")
+        println("Suwayomi source browsing contract passed: GraphQL LongString signed source IDs, paginated installed sources and library, popular/latest/search, explicit library membership, escaping, explicit refresh, chapters and CLI")
     } finally {
         server.stop(0)
     }

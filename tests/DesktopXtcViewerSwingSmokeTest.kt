@@ -118,6 +118,7 @@ fun main() {
                             next.doClick()
                         }
                         awaitPage(dialog, details, preview, 3, "1:1 pixels")
+                        captureWindow(dialog, "saved-book-" + device.lowercase() + "-" + format.name.lowercase())
                         check(onSwingThread { previous.isEnabled && !next.isEnabled })
                         onSwingThread {
                             previous.doClick()
@@ -329,7 +330,9 @@ private fun verifyOfflineLibrary(folder: File) {
         } else {
             check(tabs == null) { "Wide main layout should keep the three panes" }
         }
+        captureWindow(main, "main-offline")
         verifyExtensionSetup(main)
+        verifyToolbarReachable(findButton(main, "Open full Suwayomi WebUI"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 1 }
         verifyToolbarReachable(findButton(main, "Search"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
@@ -360,10 +363,12 @@ private fun verifyOfflineLibrary(folder: File) {
                 .any { it.icon is ImageIcon }
         }
 
+        captureWindow(library, "local-library")
         onSwingThread { read.doClick() }
         val reader = awaitFrame("MihonNooir Reader — " + comic.name)
         verifyFitsWorkArea(reader)
         awaitReaderPage(reader, 1)
+        captureWindow(reader, "offline-reader")
         val next = findButton(reader, "Next")
         onSwingThread { next.doClick() }
         awaitReaderPage(reader, 2)
@@ -397,6 +402,7 @@ private fun verifyOfflineLibrary(folder: File) {
             descendants(restarted).filterIsInstance<JTabbedPane>().singleOrNull()?.selectedIndex = 2
         }
         verifyConversionSettings(restarted, restored = true)
+        verifyOnlineReading(restarted)
     } finally {
         onSwingThread {
             Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() }
@@ -427,6 +433,7 @@ private fun verifyExtensionSetup(main: JFrame) {
         }
     }
     val dialog = showDialog("Mihon-compatible extensions")
+    captureWindow(dialog, "extension-setup")
     check(onSwingThread {
         GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.contains(dialog.bounds)
     }) { "Extension setup modal exceeds desktop work area" }
@@ -471,6 +478,147 @@ private fun verifyExtensionSetup(main: JFrame) {
     awaitUi("invalid-address warning dismissed") { !errorDialog.isShowing }
     onSwingThread { Unit }
     println("PASS: native extension setup toolbar, local address, cancel and remote endpoint rejection; no browser launched")
+}
+
+/** Full GUI journey against synthetic localhost API, no external manga. */
+private fun verifyOnlineReading(main: JFrame) {
+    val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1",0),0)
+    val requests = java.util.concurrent.CopyOnWriteArrayList<Int>()
+    val manifestIds = java.util.concurrent.CopyOnWriteArrayList<Int>()
+    val failedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
+    val png = ByteArrayOutputStream().also {
+        val art = BufferedImage(96,144,BufferedImage.TYPE_INT_RGB)
+        val g = art.createGraphics()
+        try {
+            g.color = Color(53, 66, 105); g.fillRect(0,0,96,144)
+            g.color = Color(206, 188, 128); g.fillRect(10,16,76,102)
+            g.color = Color(49, 54, 74); g.fillRect(23,32,50,60)
+            g.color = Color(237, 224, 193); g.fillOval(33,42,30,30)
+        } finally { g.dispose() }
+        check(ImageIO.write(art, "png", it)); art.flush()
+    }.toByteArray()
+    server.createContext("/api/graphql") { ctx ->
+        try {
+            val body = ctx.requestBody.bufferedReader().use { it.readText() }
+            val response = when {
+                "NooirSources" in body -> """{"data":{"sources":{"totalCount":0,"nodes":[]}}}"""
+                "NooirLibrary" in body -> """{"data":{"mangas":{"totalCount":1,"nodes":[{"id":9,"title":"Original online fixture","author":"QA","description":null,"thumbnailUrl":"/api/v1/manga/9/thumbnail","inLibrary":true}]}}}"""
+                "NooirManga" in body -> """{"data":{"manga":{"id":9,"title":"Original online fixture","author":"QA","chapters":{"nodes":[{"id":17,"name":"Chapter 1","chapterNumber":1,"sourceOrder":3,"isDownloaded":false},{"id":18,"name":"Chapter 2","chapterNumber":2,"sourceOrder":4,"isDownloaded":false}]}}}}"""
+                "fetchChapterPages" in body -> {
+                    val id = if ("chapterId: 18" in body) 18 else 17
+                    manifestIds.add(id)
+                    val order = if (id==18) 4 else 3
+                    """{"data":{"fetchChapterPages":{"pages":["/api/v1/manga/9/chapter/$order/page/0","/api/v1/manga/9/chapter/$order/page/1","/api/v1/manga/9/chapter/$order/page/2"],"chapter":{"id":$id,"mangaId":9,"sourceOrder":$order,"pageCount":3,"lastPageRead":0},"syncConflict":null}}}"""
+                }
+                else -> """{"errors":[{"message":"Unexpected fixture request"}]}"""
+            }.toByteArray()
+            ctx.responseHeaders.add("Content-Type","application/json")
+            ctx.sendResponseHeaders(200,response.size.toLong())
+            ctx.responseBody.use { it.write(response) }
+        } finally { ctx.close() }
+    }
+    server.createContext("/api/v1/manga/9/chapter/") { ctx ->
+        try {
+            val page = ctx.requestURI.path.substringAfterLast('/').toInt()
+            check(page in 0..2)
+            val order = ctx.requestURI.path.split('/')[6].toInt()
+            check(order in 3..4)
+            requests.add(order*10+page)
+            if (order==3 && page==1 && failedOnce.compareAndSet(false,true)) {
+                ctx.responseHeaders.add("Content-Type","text/html")
+                ctx.sendResponseHeaders(200,1)
+                ctx.responseBody.use { it.write(65) }
+            } else {
+                ctx.responseHeaders.add("Content-Type","image/png")
+                ctx.sendResponseHeaders(200,png.size.toLong())
+                ctx.responseBody.use { it.write(png) }
+            }
+        } finally { ctx.close() }
+    }
+    server.createContext("/api/v1/manga/9/thumbnail") { ctx ->
+        try {
+            check(ctx.requestMethod == "GET" && ctx.requestURI.rawQuery == null)
+            ctx.responseHeaders.add("Content-Type","image/png")
+            ctx.sendResponseHeaders(200,png.size.toLong())
+            ctx.responseBody.use { it.write(png) }
+        } finally { ctx.close() }
+    }
+    server.start()
+    try {
+        val endpoint = onSwingThread { descendants(main).filterIsInstance<JTextField>().single { it.text.startsWith("http://127.0.0.1:") } }
+        onSwingThread { endpoint.text = "http://127.0.0.1:${server.address.port}"; findButton(main,"Connect / reload sources").doClick() }
+        awaitUi("online fixture manga loaded") {
+            descendants(main).filterIsInstance<JList<*>>().any {
+                it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiMangaCard
+            } && findButton(main,"Connect / reload sources").isEnabled
+        }
+        val manga = onSwingThread { descendants(main).filterIsInstance<JList<*>>().single {
+            it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiMangaCard
+        } }
+        check(onSwingThread { manga.cellRenderer is dev.nooir.desktop.ui.DesktopMangaCardRenderer })
+        captureWindow(main, "suwayomi-inspired-manga-browse")
+        onSwingThread { manga.selectedIndex=0 }
+        awaitUi("library action available for selected manga") {
+            findButton(main, "Remove from library").isEnabled
+        }
+        awaitUi("online chapter list loaded") {
+            descendants(main).filterIsInstance<JList<*>>().any {
+                it.model.size==2 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
+            } && findButton(main,"Read chapter online").isEnabled
+        }
+        val chapters = onSwingThread { descendants(main).filterIsInstance<JList<*>>().single {
+            it.model.size==2 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiChapter
+        } }
+        val open = findButton(main,"Read chapter online")
+        verifyToolbarReachable(open)
+        captureWindow(main, "online-chapters")
+        onSwingThread { chapters.selectedIndex=0; open.doClick() }
+        val reader = awaitFrame("MihonNooir Online Reader — Original online fixture / Chapter 1")
+        try {
+            verifyFitsWorkArea(reader)
+            fun page(n:Int) = awaitUi("online page $n displayed") {
+                descendants(reader).filterIsInstance<JLabel>().any { it.text=="Page $n / 3" }
+            }
+            page(1)
+            captureWindow(reader, "online-reader")
+            check(requests.toList()==listOf(30)) { "Reader must fetch a single initial page" }
+            onSwingThread { findButton(reader,"Next").doClick() }
+            awaitUi("recoverable page failure") { findButton(reader,"Retry").isEnabled }
+            captureWindow(reader, "online-retry")
+            onSwingThread { findButton(reader,"Retry").doClick() }
+            page(2)
+            onSwingThread { findButton(reader,"Next").doClick() }
+            page(3)
+            check(onSwingThread { !findButton(reader,"Next").isEnabled })
+            onSwingThread { findButton(reader,"Previous").doClick() }
+            page(2)
+            check(requests.toList()==listOf(30,31,31,32,31))
+            check(manifestIds.toList()==listOf(17))
+            onSwingThread { findButton(reader,"Next chapter").doClick() }
+            awaitUi("second chapter opened in same window") { reader.title.endsWith("Chapter 2") }
+            page(1)
+            captureWindow(reader, "online-next-chapter")
+            onSwingThread { findButton(reader,"Next").doClick() }
+            page(2)
+            onSwingThread { findButton(reader,"Previous chapter").doClick() }
+            awaitUi("first chapter reopened in same window") { reader.title.endsWith("Chapter 1") }
+            page(2)
+            check(manifestIds.toList()==listOf(17,18,17))
+            check(requests.toList()==listOf(30,31,31,32,31,40,41,31))
+            onSwingThread { findButton(reader,"Close reader").doClick() }
+            awaitUi("online reader closed") { !reader.isDisplayable }
+            onSwingThread { open.doClick() }
+            val resumed = awaitFrame("MihonNooir Online Reader — Original online fixture / Chapter 1")
+            try {
+                awaitUi("local position restored on reopening") {
+                    descendants(resumed).filterIsInstance<JLabel>().any { it.text=="Page 2 / 3" }
+                }
+                captureWindow(resumed, "online-resumed")
+                check(requests.last()==31 && manifestIds.toList()==listOf(17,18,17,17))
+                println("PASS: native online chapter reading, retry, in-window chapter transitions and local resume; synthetic localhost only")
+            } finally { onSwingThread { resumed.dispose() } }
+        } finally { onSwingThread { reader.dispose() } }
+    } finally { server.stop(0) }
 }
 
 private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {
@@ -527,6 +675,7 @@ private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {
     onSwingThread { mode.selectedItem = "ROW_BY_ROW" }
     check(onSwingThread { enlarge.isEnabled && enlarge.isSelected && fill.isEnabled && fill.value == 50 })
     reachable(enlarge); reachable(fill)
+    captureWindow(dialog, "conversion-settings")
     onSwingThread { enlarge.doClick() }
     check(onSwingThread { !fill.isEnabled })
     onSwingThread { enlarge.doClick() }
@@ -548,6 +697,28 @@ private fun verifyConversionSettings(main: JFrame, restored: Boolean = false) {
         (control(reopened,"Minimum screen fill %") as JSpinner).value == 65 })
     finish(reopened,"Cancel")
     println("PASS: native scrollable conversion settings, oversized toggle/threshold, typed value commit and cancel rollback")
+}
+
+/** Capture only the application's actual painted window, never the runner desktop.
+ *  Opt-in output directory is supplied by the packaged Windows CI job.
+ *  All windows in this test contain synthetic fixtures and isolated test data.
+ */
+private fun captureWindow(window: Window, name: String) {
+    val output = System.getProperty("nooir.test.screenshotDir") ?: return
+    require(name.matches(Regex("[a-z0-9-]+")))
+    val dir = java.nio.file.Path.of(output)
+    Files.createDirectories(dir)
+    val image = onSwingThread {
+        check(window.isShowing && window.width > 0 && window.height > 0)
+        val pixels = BufferedImage(window.width, window.height, BufferedImage.TYPE_INT_RGB)
+        val g = pixels.createGraphics()
+        try { window.printAll(g) } finally { g.dispose() }
+        pixels
+    }
+    try {
+        check(ImageIO.write(image, "png", dir.resolve("$name.png").toFile()))
+        println("CAPTURE: $name.png")
+    } finally { image.flush() }
 }
 
 private fun awaitFrame(title: String): JFrame {

@@ -15,6 +15,7 @@ import dev.nooir.desktop.suwayomi.SuwayomiProcessManager
 import dev.nooir.desktop.suwayomi.OfficialSuwayomiCache
 import java.awt.BorderLayout
 import java.awt.Dimension
+import javax.swing.Box
 import java.awt.Desktop
 import java.net.URI
 import java.awt.FlowLayout
@@ -65,6 +66,7 @@ object MangaNooirDesktop {
                         ?: UIManager.getSystemLookAndFeelClassName(),
                 )
             }
+            DesktopVisualTheme.install()
             DesktopWindow().isVisible = true
         }
     }
@@ -122,6 +124,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val endpoint = JTextField("http://127.0.0.1:4567", 22)
     private val status = JLabel("Offline ready — open Local library or connect to Suwayomi when needed")
     private val busy = AtomicBoolean(false)
+    private val coverCache = DesktopMangaCoverCache()
 
     private val sources = DefaultListModel<SuwayomiSource>()
     private val sourceList = JList(sources)
@@ -143,6 +146,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val documentImport = JButton("Import PDF / EPUB")
     private val checkWindowsUpdates = JButton("Windows updates")
     private val manageExtensions = JButton("Manage extensions…")
+    private val openSuwayomiUi = JButton("Open full Suwayomi WebUI")
     private val startServer = JButton("Start local Suwayomi")
     private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
@@ -155,7 +159,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val popular = JButton("Popular")
     private val latest = JButton("Latest")
     private val searchButton = JButton("Search")
+    private val libraryToggle = JButton("Add to library").apply { isEnabled = false }
     private val refresh = JButton("Refresh chapters")
+    private val readOnline = JButton("Read chapter online")
     private val export = JButton("Export selected chapters")
     private val saveOffline = JButton("Save downloaded chapters offline")
     private val queueOffline = JButton("Queue downloaded chapters")
@@ -170,6 +176,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private var hasNext = false
     private var browsing = "library"
     private var currentManga: SuwayomiManga? = null
+    private var currentMangaEndpoint: String? = null
+    private var mangaListEndpoint: String? = null
     private var selectedSource: SuwayomiSource? = null
     private var compactTabs: JTabbedPane? = null
 
@@ -187,15 +195,57 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
 
         val connect = JButton("Connect / reload sources")
         val header = JPanel(BorderLayout()).apply {
-            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
-                add(localLibrary); add(localReader); add(localImport); add(conversionJobs); add(documentImport); add(inspectBinary); add(sendReader)
-            }), BorderLayout.NORTH)
-            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
-                add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library)
-                add(startServer); add(stopServer); add(getServer); add(checkWindowsUpdates)
-            }), BorderLayout.SOUTH)
+            background = DesktopVisualTheme.background
+            border = BorderFactory.createEmptyBorder(8, 12, 8, 12)
+            add(DesktopVisualTheme.brand(), BorderLayout.NORTH)
+            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
+                background = DesktopVisualTheme.surface
+                add(JLabel("LOCAL SUWAYOMI").apply {
+                    foreground = DesktopVisualTheme.muted
+                    font = Font("SansSerif", Font.BOLD, 11)
+                })
+                add(endpoint); add(connect)
+                add(startServer); add(stopServer); add(getServer)
+            }), BorderLayout.CENTER)
         }
         add(header, BorderLayout.NORTH)
+
+        val navigation = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            background = DesktopVisualTheme.surface
+            border = BorderFactory.createEmptyBorder(10, 10, 15, 10)
+            fun nav(button: JButton, primary: Boolean = false) {
+                DesktopVisualTheme.nav(button, primary)
+                add(button)
+                add(Box.createVerticalStrut(6))
+            }
+            add(DesktopVisualTheme.section("MANGA"))
+            nav(library, true)
+            nav(localLibrary)
+            nav(openSuwayomiUi)
+            add(DesktopVisualTheme.section("READ & CONVERT"))
+            nav(localReader)
+            nav(localImport)
+            nav(documentImport)
+            nav(conversionJobs)
+            nav(inspectBinary)
+            nav(sendReader)
+            add(DesktopVisualTheme.section("MANAGE"))
+            nav(manageExtensions)
+            nav(offlineJobs)
+            nav(remoteJobs)
+            nav(checkWindowsUpdates)
+        }
+        add(JScrollPane(navigation,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER).apply {
+            // Reserve room for the longest action label and native scrollbar.
+            // An under-sized view causes buttons to be unscrollably clipped.
+            preferredSize = Dimension(264, 1)
+            minimumSize = Dimension(240, 1)
+            border = BorderFactory.createMatteBorder(0, 0, 0, 1, DesktopVisualTheme.divider)
+            verticalScrollBar.unitIncrement = 22
+        }, BorderLayout.WEST)
 
         sourceList.selectionMode = ListSelectionModel.SINGLE_SELECTION
         sourceList.cellRenderer = itemRenderer { s: SuwayomiSource ->
@@ -205,28 +255,29 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             if (!e.valueIsAdjusting) selectedSource = sourceList.selectedValue
         }
         val sourcePanel = JPanel(BorderLayout(4, 4)).apply {
-            border = BorderFactory.createTitledBorder("Installed sources")
-            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 3)).apply {
-                add(manageExtensions)
-            }), BorderLayout.NORTH)
+            border = DesktopVisualTheme.pane("INSTALLED SOURCES")
             add(JScrollPane(sourceList), BorderLayout.CENTER)
         }
 
         mangaList.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        mangaList.cellRenderer = itemRenderer { m: SuwayomiMangaCard ->
-            "${m.title}${if (m.inLibrary) "  [Library]" else ""}"
+        mangaList.cellRenderer = DesktopMangaCardRenderer(coverCache, { mangaListEndpoint }) {
+            mangaList.repaint()
         }
+        mangaList.fixedCellHeight = 106
         mangaList.addListSelectionListener { e ->
-            if (!e.valueIsAdjusting) mangaList.selectedValue?.let { loadChapters(it.id, false) }
+            if (!e.valueIsAdjusting) {
+                updateLibraryToggle()
+                mangaList.selectedValue?.let { loadChapters(it.id, false) }
+            }
         }
         val mangaActions = JPanel(FlowLayout(FlowLayout.LEFT, 5, 4)).apply {
-            add(popular); add(latest); add(search); add(searchButton)
+            add(popular); add(latest); add(search); add(searchButton); add(libraryToggle)
         }
         val paging = JPanel(FlowLayout(FlowLayout.LEFT, 6, 4)).apply {
             add(previous); add(pageInfo); add(next)
         }
         val browsePanel = JPanel(BorderLayout(4, 4)).apply {
-            border = BorderFactory.createTitledBorder("Browse manga")
+            border = DesktopVisualTheme.pane("DISCOVER MANGA")
             add(DesktopWindowSizing.toolbar(mangaActions), BorderLayout.NORTH)
             add(JScrollPane(mangaList), BorderLayout.CENTER)
             add(DesktopWindowSizing.toolbar(paging), BorderLayout.SOUTH)
@@ -249,7 +300,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 add(JLabel("Device:")); add(device); add(conversionSettings)
             }))
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
-                add(downloadMissing); add(refresh); add(export)
+                add(readOnline); add(downloadMissing); add(refresh); add(export)
             }))
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
                 add(saveOffline); add(queueOffline); add(offlineJobs)
@@ -257,7 +308,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             }))
         }
         val chapterPanel = JPanel(BorderLayout(4, 4)).apply {
-            border = BorderFactory.createTitledBorder("Chapters — Ctrl/Shift to select")
+            border = DesktopVisualTheme.pane("CHAPTERS — CTRL/SHIFT TO SELECT")
             add(JPanel(BorderLayout()).apply {
                 add(details, BorderLayout.NORTH)
                 add(DesktopWindowSizing.toolbar(selection), BorderLayout.SOUTH)
@@ -294,10 +345,10 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
-            next, previous, selected, onlyDownloaded, clear, refresh, export,
+            next, previous, selected, onlyDownloaded, clear, refresh, readOnline, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
-            conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, inspectBinary, sendReader,
-            startServer, stopServer, getServer, checkWindowsUpdates, manageExtensions)
+            conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, inspectBinary, sendReader, libraryToggle,
+            startServer, stopServer, getServer, checkWindowsUpdates, manageExtensions, openSuwayomiUi)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { proposed ->
@@ -314,11 +365,23 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
         connect.addActionListener { loadSources() }
         manageExtensions.addActionListener { openExtensionSetup() }
+        openSuwayomiUi.addActionListener {
+            try {
+                val target = DesktopUiModel.extensionSetupUri(endpoint.text)
+                require(Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    "A browser is unavailable. Open $target manually."
+                }
+                Desktop.getDesktop().browse(target)
+            } catch (e: Exception) {
+                showError(e.message ?: "Cannot open the local Suwayomi WebUI")
+            }
+        }
         startServer.addActionListener { startManagedServer() }
         getServer.addActionListener { downloadAndStartManagedServer() }
         stopServer.addActionListener { stopManagedServer() }
         addWindowListener(object : WindowAdapter() {
             override fun windowClosed(e: WindowEvent?) {
+                coverCache.close()
                 // Never block AWT while stopping the exact process we launched.
                 Thread({ managedServer.close() }, "nooir-managed-server-shutdown").start()
             }
@@ -327,6 +390,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         popular.addActionListener { browse("popular", 1) }
         latest.addActionListener { browse("latest", 1) }
         searchButton.addActionListener { browse("search", 1) }
+        libraryToggle.addActionListener { toggleSelectedLibrary() }
         search.addActionListener { browse("search", 1) }
         next.addActionListener { if (hasNext) browse(browsing, page + 1) }
         previous.addActionListener { if (page > 1) browse(browsing, page - 1) }
@@ -342,6 +406,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             currentManga?.let { loadChapters(it.id, true) }
                 ?: showError("Select a manga first")
         }
+        readOnline.addActionListener { openOnlineReader() }
         export.addActionListener { exportSelected() }
         saveOffline.addActionListener { saveSelectedOffline() }
         queueOffline.addActionListener { queueSelectedOffline() }
@@ -358,6 +423,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         checkWindowsUpdates.addActionListener { DesktopWindowsUpdateScreen.open(this) }
         setPaging()
         stopServer.isEnabled = false
+        // Inputs keep native focus and selection behavior; the navigation and cover cards are themed.
         // Do not connect automatically on startup: a local-library-only user
         // must be able to open and read manga with no server or network.
         // The explicit Connect / reload sources button starts online browsing.
@@ -391,6 +457,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                     listOf(endpoint, search, sourceList, mangaList, chapterList, format, device, downloadMissing)
                         .forEach { it.isEnabled = true }
                     setPaging()
+                    updateLibraryToggle()
                     startServer.isEnabled = !managedServer.running
                     stopServer.isEnabled = managedServer.running
                 }
@@ -573,6 +640,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             manga.clear()
             chapters.clear()
             currentManga = null
+            updateLibraryToggle()
+            currentMangaEndpoint = null
+            mangaListEndpoint = baseUrl
             details.text = "Select a manga to view its chapters"
             items.forEach { manga.addElement(it) }
             compactTabs?.selectedIndex = 1
@@ -580,8 +650,49 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         })
     }
 
+    private fun updateLibraryToggle() {
+        val selected = mangaList.selectedValue
+        libraryToggle.isEnabled = selected != null && !busy.get() && mangaListEndpoint == endpoint.text.trim()
+        libraryToggle.text = if (selected?.inLibrary == true) "Remove from library" else "Add to library"
+    }
+
+    /** Suwayomi owns the library database; never change local files or pretend a failed mutation succeeded. */
+    private fun toggleSelectedLibrary() {
+        if (busy.get()) return
+        val selected = mangaList.selectedValue ?: return
+        val server = endpoint.text.trim()
+        if (mangaListEndpoint != server) {
+            showError("Server changed. Reload the manga list first."); return
+        }
+        val keep = !selected.inLibrary
+        if (!keep) {
+            val answer = JOptionPane.showConfirmDialog(this,
+                "Remove ${selected.title.take(100)} from your Suwayomi library?\n" +
+                "Downloaded files are not deleted by this action.",
+                "Remove from library", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+            if (answer != JOptionPane.YES_OPTION) return
+        }
+        runTask(if (keep) "Adding manga to library" else "Removing manga from library", {
+            client(server).setMangaInLibrary(selected.id, keep)
+        }, { confirmed ->
+            // Don't replace a different user's selection or another server's list.
+            if (mangaListEndpoint != server) return@runTask
+            val index = (0 until manga.size()).firstOrNull { manga[it].id == selected.id }
+                ?: return@runTask
+            manga.set(index, manga[index].copy(inLibrary = confirmed))
+            if (browsing == "library" && !confirmed) {
+                manga.remove(index)
+                chapters.clear(); currentManga = null; currentMangaEndpoint = null
+            }
+            updateLibraryToggle()
+        })
+    }
+
     private fun loadChapters(id: Int, forceRefresh: Boolean) {
         val baseUrl = endpoint.text.trim()
+        if (mangaListEndpoint != baseUrl) {
+            showError("Server address changed. Reload sources and select manga again."); return
+        }
         runTask(if (forceRefresh) "Refreshing chapters" else "Loading chapters", {
             val c = client(baseUrl)
             if (forceRefresh) c.refreshManga(id)
@@ -589,12 +700,35 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }, { result ->
             if (mangaList.selectedValue?.id != id) return@runTask
             currentManga = result
+            currentMangaEndpoint = baseUrl
             details.text = "${result.title.take(45)} — ${result.chapters.size} chapters"
             chapters.clear()
             result.chapters.sortedWith(compareBy<SuwayomiChapter> {
                 if (it.chapterNumber >= 0) it.chapterNumber else Double.MAX_VALUE
             }.thenByDescending { it.sourceOrder }).forEach { chapters.addElement(it) }
             compactTabs?.selectedIndex = 2
+        })
+    }
+
+    /** Open the selected chapter explicitly; never enqueue a whole-chapter download. */
+    private fun openOnlineReader() {
+        if (busy.get()) return
+        val manga = currentManga
+        val chapter = chapterList.selectedValuesList.singleOrNull()
+        val baseUrl = endpoint.text.trim()
+        if (manga == null || chapter == null || mangaList.selectedValue?.id != manga.id ||
+            manga.chapters.none { it.id == chapter.id } || currentMangaEndpoint != baseUrl) {
+            showError("Select exactly one chapter from the current server. Reload sources if the address changed.")
+            return
+        }
+        runTask("Opening online chapter", {
+            val c = client(baseUrl)
+            Pair(c, c.openOnlineChapter(manga.id, chapter.id))
+        }, { (c, manifest) ->
+            if (isDisplayable) DesktopOnlineReader(c, manifest, manga.title, chapter.name, baseUrl,
+                manga.chapters.sortedWith(compareBy<SuwayomiChapter> {
+                    if (it.chapterNumber >= 0) it.chapterNumber else Double.MAX_VALUE
+                }.thenByDescending { it.sourceOrder }.thenBy { it.id })).isVisible = true
         })
     }
 

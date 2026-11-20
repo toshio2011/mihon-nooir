@@ -415,7 +415,8 @@ jobs:
             $previousHome = $env:MIHONNOOIR_DATA_DIR
             try {
               $env:MIHONNOOIR_DATA_DIR = $qaHome
-              & $runtime '-Djava.awt.headless=false' '-Dnooir.test.offlineLibrary=true' "-Dsun.java2d.uiScale=$scale" "-Dnooir.test.expectedUiScale=$scale" '-cp' $classpath 'dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt'
+              $screens = Join-Path (Get-Location) "package/gui-screenshots/scale-$scale"
+              & $runtime '-Djava.awt.headless=false' '-Dnooir.test.offlineLibrary=true' "-Dsun.java2d.uiScale=$scale" "-Dnooir.test.expectedUiScale=$scale" "-Dnooir.test.screenshotDir=$screens" '-cp' $classpath 'dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt'
               if ($LASTEXITCODE -ne 0) { throw "Packaged Windows GUI smoke failed at scale $scale ($LASTEXITCODE)" }
             } finally {
               $env:MIHONNOOIR_DATA_DIR = $previousHome
@@ -423,6 +424,14 @@ jobs:
             }
           }
           Write-Host 'PASS: packaged Windows runtime saved-book viewer at 100/125/150% requested Java2D scales'
+      - name: Retain actual packaged Windows GUI test captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-screenshots
+          path: package/gui-screenshots/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Test document import and persistent jobs against the packaged Windows runtime
         shell: pwsh
         timeout-minutes: 10
