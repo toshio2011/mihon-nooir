@@ -488,6 +488,13 @@ private fun verifyOnlineReading(main: JFrame) {
     val failedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
     val png = ByteArrayOutputStream().also {
         val art = BufferedImage(96,144,BufferedImage.TYPE_INT_RGB)
+        val g = art.createGraphics()
+        try {
+            g.color = Color(53, 66, 105); g.fillRect(0,0,96,144)
+            g.color = Color(206, 188, 128); g.fillRect(10,16,76,102)
+            g.color = Color(49, 54, 74); g.fillRect(23,32,50,60)
+            g.color = Color(237, 224, 193); g.fillOval(33,42,30,30)
+        } finally { g.dispose() }
         check(ImageIO.write(art, "png", it)); art.flush()
     }.toByteArray()
     server.createContext("/api/graphql") { ctx ->
@@ -495,7 +502,7 @@ private fun verifyOnlineReading(main: JFrame) {
             val body = ctx.requestBody.bufferedReader().use { it.readText() }
             val response = when {
                 "NooirSources" in body -> """{"data":{"sources":{"totalCount":0,"nodes":[]}}}"""
-                "NooirLibrary" in body -> """{"data":{"mangas":{"totalCount":1,"nodes":[{"id":9,"title":"Original online fixture","author":"QA","description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
+                "NooirLibrary" in body -> """{"data":{"mangas":{"totalCount":1,"nodes":[{"id":9,"title":"Original online fixture","author":"QA","description":null,"thumbnailUrl":"/api/v1/manga/9/thumbnail","inLibrary":true}]}}}"""
                 "NooirManga" in body -> """{"data":{"manga":{"id":9,"title":"Original online fixture","author":"QA","chapters":{"nodes":[{"id":17,"name":"Chapter 1","chapterNumber":1,"sourceOrder":3,"isDownloaded":false},{"id":18,"name":"Chapter 2","chapterNumber":2,"sourceOrder":4,"isDownloaded":false}]}}}}"""
                 "fetchChapterPages" in body -> {
                     val id = if ("chapterId: 18" in body) 18 else 17
@@ -526,6 +533,14 @@ private fun verifyOnlineReading(main: JFrame) {
                 ctx.sendResponseHeaders(200,png.size.toLong())
                 ctx.responseBody.use { it.write(png) }
             }
+        } finally { ctx.close() }
+    }
+    server.createContext("/api/v1/manga/9/thumbnail") { ctx ->
+        try {
+            check(ctx.requestMethod == "GET" && ctx.requestURI.rawQuery == null)
+            ctx.responseHeaders.add("Content-Type","image/png")
+            ctx.sendResponseHeaders(200,png.size.toLong())
+            ctx.responseBody.use { it.write(png) }
         } finally { ctx.close() }
     }
     server.start()

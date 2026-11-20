@@ -239,8 +239,10 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         add(JScrollPane(navigation,
             JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
             JScrollPane.HORIZONTAL_SCROLLBAR_NEVER).apply {
-            preferredSize = Dimension(204, 1)
-            minimumSize = Dimension(130, 1)
+            // Reserve room for the longest action label and native scrollbar.
+            // An under-sized view causes buttons to be unscrollably clipped.
+            preferredSize = Dimension(264, 1)
+            minimumSize = Dimension(240, 1)
             border = BorderFactory.createMatteBorder(0, 0, 0, 1, DesktopVisualTheme.divider)
             verticalScrollBar.unitIncrement = 22
         }, BorderLayout.WEST)
