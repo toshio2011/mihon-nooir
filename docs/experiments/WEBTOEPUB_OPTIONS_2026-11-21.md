@@ -73,9 +73,17 @@ For a project created from **Analyze chapters**, the library also remembers the 
 
 This is not in-place EPUB merging, automatic scheduled checking, guaranteed detection on dynamically loaded sites, resumable chapter downloads or a background watcher. It avoids silently reintroducing excluded chapters or mutating an EPUB already installed on the reader. Real-source manual testing is still needed.
 
+### Android phone-cover picker (new experimental slice)
+
+Combined-book single-cover mode now has **Choose cover from phone**, using Android's document picker restricted to JPEG/PNG. The app requests persistable read permission, so a queued WorkManager export can reopen the selected image later. Cover previews decode that exact file; the export worker reads it as a bounded content URI and embeds the validated bytes as an EPUB cover instead of relying on a remote cover URL. A selected phone cover is exclusive with a remote URL and with collage mode. The saved-project library can remember the document URI; if access is revoked or the document disappears, preview/export fails clearly and the user can reselect it.
+
+No arbitrary filesystem path is accepted. The selected source is streamed up to 1.5 MB, verified by JPEG/PNG signature, and decoded only for the 16-million-pixel dimension guard before being embedded. Both remote and phone covers share the same image validation routine. The cover is not sent to any third-party service; the user still chooses where to export the finished EPUB.
+
+Real Android document-provider and physical Folio Nooir testing are required before calling this stable.
+
 ### Not yet implemented
 
-A phone-file cover picker, full site-specific parser compatibility, advanced cover-tile editing, complete unrestricted WebToEpub CSS/pipeline parity, background/resumable imports, automatic novel library refresh, persistent EPUB-in-place chapter merging and comprehensive real-site/device verification. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
+Full site-specific parser compatibility, advanced cover-tile editing, complete unrestricted WebToEpub CSS/pipeline parity, background/resumable imports, automatic novel library refresh, persistent EPUB-in-place chapter merging and comprehensive real-site/device verification. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
 
 ### Acceptance gates
 
@@ -87,8 +95,8 @@ A phone-file cover picker, full site-specific parser compatibility, advanced cov
 
 ## Next useful improvements
 
-1. Complete Android compilation, real phone UI acceptance, EPUBCheck and independent Folio Nooir/XTEink reading, with actual screenshots.
-2. Add phone-file cover picking and richer cover/metadata UI, with predictable storage and size validation.
+1. Complete Android compilation, real phone UI acceptance (including the new document picker), EPUBCheck and independent Folio Nooir/XTEink reading, with actual screenshots.
+2. Improve metadata/cover editing beyond the initial phone cover picker and actual cover preview.
 3. Add reliable resumable imports and book-update workflows (without accidentally overwriting existing EPUBs).
 4. Expand public-site parser tests and safe per-site extractor profiles, respecting access terms.
 
