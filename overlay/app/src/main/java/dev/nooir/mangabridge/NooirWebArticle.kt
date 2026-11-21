@@ -200,6 +200,7 @@ object NooirWebArticle {
         doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
         maxImages: Int = 25,
         contentSelector: String = "", removeSelector: String = "",
+        imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
     ) {
         val article = readableArticle(doc, chapterTitle, contentSelector, removeSelector)
         var images = 0
@@ -226,7 +227,8 @@ object NooirWebArticle {
                 }
                 val bytes = response.bodyAsBytes()
                 require(bytes.size in 1..2_000_000)
-                ReflowEpubWriter.ImageAsset(bytes, extension, mime)
+                NooirWebImageOptimizer.optimize(
+                    ReflowEpubWriter.ImageAsset(bytes, extension, mime), imageProfile)
             }.getOrNull()
             if (asset == null) img.remove()
             else {
