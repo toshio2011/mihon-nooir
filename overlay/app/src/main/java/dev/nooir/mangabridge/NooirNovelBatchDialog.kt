@@ -479,7 +479,8 @@ fun NooirNovelBatchDialog(
                                     }
                                 }
                                 checkingExtraction = false
-                                if (combinePages && urls.firstOrNull() == requested &&
+                                if (combinePages && links.lines().map(String::trim)
+                                        .filter(String::isNotBlank).distinct().firstOrNull() == requested &&
                                     contentSelector.trim() == content && removeSelector.trim() == removed) {
                                     extractionPreview = result.getOrElse {
                                         "Preview failed: " + (it.message ?: "No readable public text").take(240)
