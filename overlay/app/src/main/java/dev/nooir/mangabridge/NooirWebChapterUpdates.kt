@@ -27,7 +27,8 @@ internal object NooirWebChapterUpdates {
         // When a newly discovered URL is already in the selected chapters
         // (e.g. an imported manual URL), never duplicate it in the EPUB.
         val selected = selectedUrls.map(String::trim).toSet()
-        val added = newChapters.filterNot { it.url.trim() in selected }
+        val added = newChapters.filter { it.included }
+            .filterNot { it.url.trim() in selected }
             .distinctBy { it.url.trim() }
         return NooirWebChapterPlan.export(old + added)
     }
