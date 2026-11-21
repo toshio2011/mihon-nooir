@@ -2,6 +2,7 @@ package dev.nooir.mangabridge
 
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowEpubFormat
+import dev.nooir.bridge.ReflowEpubStyle
 import org.jsoup.nodes.Document
 import java.io.File
 import java.net.URI
@@ -96,6 +97,7 @@ object NooirWebPageBook {
         bookDescription: String = "",
         bookLanguage: String = "",
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
+        readingStyle: ReflowEpubStyle = ReflowEpubStyle.STANDARD,
         includeImages: Boolean = true,
         imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         contentSelector: String = "",
@@ -155,6 +157,7 @@ object NooirWebPageBook {
             language = language,
         )
         ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
+            epub.setReadingStyle(readingStyle)
             if (collageCover) {
                 NooirWebCover.embedImage(epub, collageAsset(first, preloaded, extraCovers))
             } else {
