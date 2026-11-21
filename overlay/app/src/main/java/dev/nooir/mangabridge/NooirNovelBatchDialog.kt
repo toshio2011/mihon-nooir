@@ -77,6 +77,7 @@ fun NooirNovelBatchDialog(
         mutableStateOf<List<NooirWebChapterPlan.Entry>>(emptyList())
     }
     var latestInventory by remember { mutableStateOf("") }
+    var updatesPage by remember { mutableStateOf(0) }
     var updateMessage by remember { mutableStateOf("") }
     var links by remember(initialUrls) { mutableStateOf(initialUrls) }
     var customNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -674,6 +675,7 @@ fun NooirNovelBatchDialog(
                                             return@onSuccess
                                         }
                                         foundNewChapters = newItems
+                                        updatesPage = 0
                                         latestInventory = discovery.chapters.joinToString("\n") { it.url }
                                         updateMessage = if (newItems.isEmpty())
                                             "No newly listed public chapters found. Existing EPUB is unchanged."
@@ -693,8 +695,54 @@ fun NooirNovelBatchDialog(
                     }
                     if (updateMessage.isNotBlank()) Text(updateMessage)
                     if (foundNewChapters.isNotEmpty()) {
-                        Text(foundNewChapters.take(6).joinToString("\n") { "• " + it.title })
-                        OutlinedButton(onClick = {
+                        val selectedUpdates = foundNewChapters.count { it.included }
+                        Text("New chapters: ${foundNewChapters.size} found · $selectedUpdates selected")
+                        Text("Review each new chapter before adding it. Excluded chapters are " +
+                            "marked as seen when you accept the update.")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = {
+                                foundNewChapters = NooirWebChapterPlan.chooseAll(
+                                    foundNewChapters, true)
+                            }) { Text("Select all new") }
+                            OutlinedButton(onClick = {
+                                foundNewChapters = NooirWebChapterPlan.chooseAll(
+                                    foundNewChapters, false)
+                            }) { Text("Select none") }
+                        }
+                        val updatesChunk = 10
+                        val maxUpdatesPage = ((foundNewChapters.size - 1) / updatesChunk)
+                            .coerceAtLeast(0)
+                        val currentUpdatesPage = updatesPage.coerceIn(0, maxUpdatesPage)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(enabled = currentUpdatesPage > 0, onClick = {
+                                updatesPage = currentUpdatesPage - 1
+                            }) { Text("Previous new") }
+                            Text("${currentUpdatesPage + 1}/${maxUpdatesPage + 1}")
+                            OutlinedButton(enabled = currentUpdatesPage < maxUpdatesPage,
+                                onClick = { updatesPage = currentUpdatesPage + 1 }) {
+                                Text("Next new")
+                            }
+                        }
+                        val updateFrom = currentUpdatesPage * updatesChunk
+                        for (index in updateFrom until minOf(
+                                foundNewChapters.size, updateFrom + updatesChunk)) {
+                            val entry = foundNewChapters[index]
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Checkbox(
+                                    checked = entry.included,
+                                    onCheckedChange = {
+                                        foundNewChapters = NooirWebChapterPlan.toggle(
+                                            foundNewChapters, index)
+                                    },
+                                )
+                                Text("${index + 1}. " + entry.title,
+                                    modifier = Modifier.weight(1f), maxLines = 2)
+                            }
+                        }
+                        OutlinedButton(enabled = selectedUpdates > 0 && !busy, onClick = {
                             runCatching {
                                 val merged = NooirWebChapterUpdates.append(
                                     urls,
@@ -705,7 +753,8 @@ fun NooirNovelBatchDialog(
                                 orderedChapterTitles = merged.titles.joinToString("\n")
                                 knownChapterUrls = latestInventory
                                 foundNewChapters = emptyList()
-                                updateMessage = "New chapters added to the editor. " +
+                                updatesPage = 0
+                                updateMessage = "Selected new chapters added; excluded ones marked as seen. " +
                                     "Save the project, then export a new EPUB file when ready."
                             }.onFailure {
                                 updateMessage = "Could not add chapters: " +
