@@ -17,6 +17,11 @@ fun main() {
     val deduplicated = Update.append(listOf(latest[0].url, latest[2].url),
         listOf("One", "Selected Three"), found)
     check(deduplicated.titles == listOf("One", "Selected Three", "Four"))
+    val explicitlySkipped = found.map { if (it.title == "Three") it.copy(included = false) else it }
+    val reviewed = Update.append(listOf(latest[0].url), listOf("Custom One"), explicitlySkipped)
+    check(reviewed.titles == listOf("Custom One", "Four"))
+    check(reviewed.urls == listOf(latest[0].url, latest[3].url))
+    // Mark all discovered links as known, even when the user skipped one.
     check(Update.findNew(latest.map { it.url }, latest).isEmpty())
     check(runCatching { Update.findNew(emptyList(), latest) }.isFailure)
     println("PASS: known-excluded chapters, updates, deduplication, preserved custom titles")
