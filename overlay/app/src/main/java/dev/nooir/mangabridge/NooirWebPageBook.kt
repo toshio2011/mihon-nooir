@@ -98,11 +98,22 @@ object NooirWebPageBook {
                         .distinctBy { it.first }.take(4)
                         .mapNotNull { (cover, doc) -> NooirWebCover.load(doc, cover) }
                 }
-                require(sources.size in 2..4) {
-                    "Only ${sources.size} distinct public source covers could be loaded. " +
+                // Two different image URLs may return the exact same cover.
+                // Deduplicate the decoded source bytes before building the grid.
+                val sourcesByHash = sources.distinctBy { asset ->
+                    java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(asset.bytes).joinToString("") { byte ->
+                            "%02x".format(byte.toInt() and 0xff)
+                        }
+                }
+                if (extraCovers.isNotEmpty()) require(sourcesByHash.size == sources.size) {
+                    "Two selected cover URLs returned identical artwork. Choose distinct book covers."
+                }
+                require(sourcesByHash.size in 2..4) {
+                    "Only ${sourcesByHash.size} distinct public source covers could be loaded. " +
                     "Provide 2–4 direct HTTPS JPEG/PNG cover URLs, or switch to a single cover."
                 }
-                NooirWebCover.embedImage(epub, NooirCoverCollage.compose(sources))
+                NooirWebCover.embedImage(epub, NooirCoverCollage.compose(sourcesByHash))
             } else {
                 NooirWebCover.embed(first, epub, coverUrl)
             }
