@@ -59,9 +59,23 @@ The combined preview reuses the *same* source-image validation, distinct-artwork
 
 Android compilation plus real phone preview and final EPUB rendering are still acceptance gates. There is not yet an on-device photo picker or cover-tile editor.
 
+### Illustration optimization, reader styles and custom EPUB CSS (experimental)
+
+The Web → EPUB editor now offers three chapter-illustration modes: **Original** (existing embedded bytes), **Balanced** (downsample oversized JPEG/PNG to 1600 px, JPEG quality 82), and **Small** (1000 px, quality 70). Cover quality is independent. Animated GIFs remain original; PNG transparency is retained. Per-source inputs and decoded pixel dimensions are still bounded. Original image mode preserves earlier output for regression testing. Android memory/device measurements remain outstanding.
+
+Both combined and separate-story exports can select **Standard**, **Compact** or **Large** text styling, plus optional user-entered **offline EPUB CSS**. Standard with no custom CSS retains the shared writer's previous XHTML output; the other presets add limited body/paragraph spacing and font-size styles. Custom CSS allows up to 12 simple tag-only rules and 2000 characters, with text-friendly properties such as font size, line height, indentation, margins, alignment, fonts and hex colors. No remote stylesheets, URL assets, at-rules, arbitrary HTML, complex selectors or scripts. Settings reach the actual EPUB2/3 XHTML through the shared writer, with host tests for CSS inclusion and rejected unsafe input. Reader applications may override EPUB font size.
+
+### Local saved novels and chapter checks (experimental)
+
+In **Combine pasted webpages into ONE EPUB**, **Save project** stores the book/chapter editor, cover, extraction, image and styling settings in a bounded app-private JSON library on the phone (up to 24 projects / 1 MB). **Load** restores a project. **Delete** uses a second confirmation click and removes only the saved project, not any exported book. No login credentials, cookies, browser sessions or chapter content are saved.
+
+For a project created from **Analyze chapters**, the library also remembers the original public table-of-contents URL and *all* known chapter links, including chapters the user excluded. **Check new chapters** re-reads that public TOC and lists only URLs that were not previously known; **Add new chapters to export list** appends them while preserving previously selected titles, ordering and excluded entries. The user then saves the project and explicitly creates a **new EPUB**, subject to the existing destination collision protections.
+
+This is not in-place EPUB merging, automatic scheduled checking, guaranteed detection on dynamically loaded sites, resumable chapter downloads or a background watcher. It avoids silently reintroducing excluded chapters or mutating an EPUB already installed on the reader. Real-source manual testing is still needed.
+
 ### Not yet implemented
 
-Phone-file cover picker, editable EPUB stylesheets, per-site parsers beyond current source handling, image compression/resizing, saved novel presets, persistent chapter checklists/retry/resume and WebToEpub-style library update/merge. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
+A phone-file cover picker, full site-specific parser compatibility, advanced cover-tile editing, complete unrestricted WebToEpub CSS/pipeline parity, background/resumable imports, automatic novel library refresh, persistent EPUB-in-place chapter merging and comprehensive real-site/device verification. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
 
 ### Acceptance gates
 
@@ -73,9 +87,9 @@ Phone-file cover picker, editable EPUB stylesheets, per-site parsers beyond curr
 
 ## Next useful improvements
 
-1. Add an optional on-phone cover picker and richer metadata panel; the single/collage cover **preview** is now implemented experimentally.
-2. Add saveable **content selector presets per public site**, building on the manual preview and unwanted-element removal now wired into the experimental combined-book flow.
-3. Add image sizing/compression and a bounded stylesheet preset picker (avoid accepting arbitrary unsafe CSS before sanitization).
-4. Save per-site nonsecret importer preferences, with explicit retry/resume for permitted sources.
+1. Complete Android compilation, real phone UI acceptance, EPUBCheck and independent Folio Nooir/XTEink reading, with actual screenshots.
+2. Add phone-file cover picking and richer cover/metadata UI, with predictable storage and size validation.
+3. Add reliable resumable imports and book-update workflows (without accidentally overwriting existing EPUBs).
+4. Expand public-site parser tests and safe per-site extractor profiles, respecting access terms.
 
 Do not claim feature parity with WebToEpub's extensive site-specific parser ecosystem. Do not merge or publish without review and real testing.
