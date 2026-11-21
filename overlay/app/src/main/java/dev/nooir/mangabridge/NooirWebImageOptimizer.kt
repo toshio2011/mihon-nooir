@@ -32,7 +32,8 @@ internal object NooirWebImageOptimizer {
         while (maxSide / (sample * 2) >= profile.maxEdge) sample *= 2
         val options = BitmapFactory.Options().apply {
             inSampleSize = sample
-            inPreferredConfig = Bitmap.Config.RGB_565
+            inPreferredConfig = if (asset.mime == "image/png") Bitmap.Config.ARGB_8888
+                else Bitmap.Config.RGB_565
         }
         val decoded = BitmapFactory.decodeByteArray(asset.bytes, 0, asset.bytes.size, options)
             ?: error("Could not decode chapter illustration")
@@ -45,13 +46,7 @@ internal object NooirWebImageOptimizer {
             val bitmap = if (width == decoded.width && height == decoded.height) decoded
                 else Bitmap.createScaledBitmap(decoded, width, height, true)
             try {
-                val keepPng = asset.mime == "image/png" &&
-                    BitmapFactory.decodeByteArray(
-                        asset.bytes, 0, asset.bytes.size,
-                        BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    ) == null && asset.extension == "png"
-                // A PNG may carry transparency; decode with ARGB_8888 for it
-                // in the next branch instead of corrupting alpha as JPEG.
+                // Retain PNG alpha and avoid JPEG for transparent illustrations.
                 val output = ByteArrayOutputStream()
                 val encoding = if (asset.mime == "image/png") Bitmap.CompressFormat.PNG
                     else Bitmap.CompressFormat.JPEG
