@@ -98,6 +98,7 @@ object NooirWebPageBook {
         bookLanguage: String = "",
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
         readingStyle: ReflowEpubStyle = ReflowEpubStyle.STANDARD,
+        customCss: String = "",
         includeImages: Boolean = true,
         imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         contentSelector: String = "",
@@ -158,6 +159,7 @@ object NooirWebPageBook {
         )
         ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
             epub.setReadingStyle(readingStyle)
+            epub.setCustomCss(customCss)
             if (collageCover) {
                 NooirWebCover.embedImage(epub, collageAsset(first, preloaded, extraCovers))
             } else {
