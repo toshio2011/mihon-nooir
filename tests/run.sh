@@ -51,6 +51,11 @@ java -jar "$tmp/slicing.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
 java -jar "$tmp/reflow.jar"
 
+# Combined web-book cover geometry: pure Kotlin, no Android graphics dependencies.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirCoverCollageLayout.kt \
+  tests/NooirCoverCollageLayoutTest.kt -include-runtime -d "$tmp/collage-layout.jar"
+java -jar "$tmp/collage-layout.jar"
+
 # Desktop uses the same source files as Android; never maintain duplicate codecs.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt tests/ConversionOptionsParityTest.kt -include-runtime -d "$tmp/options-parity.jar"
 java -jar "$tmp/options-parity.jar"

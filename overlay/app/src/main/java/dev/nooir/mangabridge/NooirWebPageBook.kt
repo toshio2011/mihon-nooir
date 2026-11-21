@@ -24,6 +24,8 @@ object NooirWebPageBook {
         chapterTitles: List<String> = emptyList(),
         firstPage: Document? = null,
         coverUrl: String = "",
+        collageCover: Boolean = false,
+        collageCoverUrls: List<String> = emptyList(),
         bookDescription: String = "",
         bookLanguage: String = "",
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
@@ -48,6 +50,31 @@ object NooirWebPageBook {
         if (coverUrl.isNotBlank()) require(coverUrl.trim().startsWith("https://", true)) {
             "Cover image must be a public HTTPS URL"
         }
+        require(!collageCover || coverUrl.isBlank()) {
+            "Choose either one custom cover or a combined cover, not both"
+        }
+        require(collageCover || collageCoverUrls.isEmpty()) {
+            "Extra cover URLs require combined cover mode"
+        }
+        require(collageCoverUrls.isEmpty() || (
+            collageCoverUrls.size in 2..4 && collageCoverUrls.distinct().size == collageCoverUrls.size
+        )) { "Use 2–4 different cover URLs for the collage" }
+        val extraCovers = collageCoverUrls.map {
+            require(it.length <= 600) { "A collage cover URL exceeds 600 characters" }
+            NooirWebArticle.publicHttps(it)
+        }
+        // The first four source webpages are inspected only when the user
+        // chooses automatic collage covers. Each fetched page is later used
+        // for its actual EPUB chapter, avoiding duplicate requests.
+        val preloaded = mutableMapOf(0 to first)
+        if (collageCover && extraCovers.isEmpty()) {
+            val inspectCount = minOf(safeUrls.size, 4)
+            for (i in 1 until inspectCount) {
+                Thread.sleep(1300L)
+                onPage(0, inspectCount, "Inspecting cover metadata for source " + (i + 1))
+                preloaded[i] = NooirWebArticle.load(safeUrls[i])
+            }
+        }
         val meta = existing.copy(
             title = bookTitle.trim().take(240),
             author = bookAuthor.trim().ifBlank { existing.author }.take(120),
@@ -57,11 +84,32 @@ object NooirWebPageBook {
             language = language,
         )
         ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
-            NooirWebCover.embed(first, epub, coverUrl)
+            if (collageCover) {
+                val sources = if (extraCovers.isNotEmpty()) {
+                    extraCovers.map { chosen ->
+                        NooirWebCover.load(first, chosen)
+                            ?: error("Selected collage cover could not be loaded")
+                    }
+                } else {
+                    preloaded.toSortedMap().values
+                        .mapNotNull { doc ->
+                            NooirWebCover.detectedUrl(doc)?.let { candidate -> candidate to doc }
+                        }
+                        .distinctBy { it.first }.take(4)
+                        .mapNotNull { (cover, doc) -> NooirWebCover.load(doc, cover) }
+                }
+                require(sources.size in 2..4) {
+                    "Only ${sources.size} distinct public source covers could be loaded. " +
+                    "Provide 2–4 direct HTTPS JPEG/PNG cover URLs, or switch to a single cover."
+                }
+                NooirWebCover.embedImage(epub, NooirCoverCollage.compose(sources))
+            } else {
+                NooirWebCover.embed(first, epub, coverUrl)
+            }
             for ((index, url) in safeUrls.withIndex()) {
-                if (index > 0) Thread.sleep(1300L) // polite sequential requests
+                if (index > 0 && index !in preloaded) Thread.sleep(1300L)
                 onPage(index + 1, safeUrls.size, "Reading public webpage")
-                val page = if (index == 0) first else NooirWebArticle.load(url)
+                val page = preloaded.remove(index) ?: NooirWebArticle.load(url)
                 val pageUri = URI(page.location())
                 require(!(pageUri.host.orEmpty().lowercase().endsWith("wattpad.com") &&
                     pageUri.path.startsWith("/story/"))) {

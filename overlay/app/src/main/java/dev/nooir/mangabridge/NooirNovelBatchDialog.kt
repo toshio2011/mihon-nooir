@@ -57,6 +57,8 @@ fun NooirNovelBatchDialog(
     var combinedDescription by remember { mutableStateOf("") }
     var combinedLanguage by remember { mutableStateOf("") }
     var coverUrl by remember { mutableStateOf("") }
+    var combineCovers by remember { mutableStateOf(false) }
+    var collageCoverLinks by remember { mutableStateOf("") }
     var epub2 by remember { mutableStateOf(false) }
     var includeImages by remember { mutableStateOf(true) }
     var combinedFilename by remember { mutableStateOf("") }
@@ -75,6 +77,7 @@ fun NooirNovelBatchDialog(
     }
 
     val urls = links.lines().map(String::trim).filter(String::isNotBlank).distinct()
+    val collageUrls = collageCoverLinks.lines().map(String::trim).filter(String::isNotBlank)
     val start = first.toIntOrNull()
     val end = last.toIntOrNull()
     // A combined book can use hundreds of public chapter links. The manifest
@@ -88,6 +91,10 @@ fun NooirNovelBatchDialog(
         (!combinePages || (
             coverUrl.length <= 600 &&
             (coverUrl.isBlank() || coverUrl.trim().startsWith("https://", true)) &&
+            (!combineCovers || (coverUrl.isBlank() &&
+                (collageUrls.isEmpty() || (collageUrls.size in 2..4 &&
+                    collageUrls.distinct().size == collageUrls.size &&
+                    collageUrls.all { it.length <= 600 && it.startsWith("https://", true) })) )) &&
             (combinedLanguage.isBlank() ||
                 combinedLanguage.matches(Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}")))
         )) &&
@@ -132,6 +139,9 @@ fun NooirNovelBatchDialog(
                 NooirNovelBatchWorker.BOOK_DESCRIPTION to (if (combinePages) combinedDescription.trim() else ""),
                 NooirNovelBatchWorker.BOOK_LANGUAGE to (if (combinePages) combinedLanguage.trim() else ""),
                 NooirNovelBatchWorker.BOOK_COVER_URL to (if (combinePages) coverUrl.trim() else ""),
+                NooirNovelBatchWorker.BOOK_COVER_COLLAGE to (combinePages && combineCovers),
+                NooirNovelBatchWorker.BOOK_COVER_SOURCES to (
+                    if (combinePages && combineCovers) collageUrls.toTypedArray() else emptyArray<String>()),
                 NooirNovelBatchWorker.EPUB_VERSION to (if (epub2) "EPUB2" else "EPUB3"),
                 NooirNovelBatchWorker.INCLUDE_IMAGES to includeImages,
                 NooirNovelBatchWorker.BOOK_FILENAME to combinedFilename.trim(),
@@ -202,11 +212,35 @@ fun NooirNovelBatchDialog(
                         onValueChange = { combinedDescription = it.take(1200) },
                         label = { Text("Book description (optional)") },
                         minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = coverUrl,
-                        onValueChange = { coverUrl = it.take(600) },
-                        label = { Text("Cover image HTTPS URL (optional)") },
-                        supportingText = { Text("Blank: try source og:image or Twitter cover. Custom cover errors are shown instead of silently ignored. JPEG or PNG, up to 1.5 MB.") },
-                        singleLine = true, modifier = Modifier.fillMaxWidth())
+                    androidx.compose.foundation.layout.Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = combineCovers,
+                            onCheckedChange = { enabled ->
+                                combineCovers = enabled
+                                if (enabled) coverUrl = ""
+                            },
+                        )
+                        Text("Make one combined cover from multiple book covers")
+                    }
+                    if (combineCovers) {
+                        Text("Automatically use 2–4 distinct book covers found in the first four source pages. For chapter-only pages without book cover metadata, paste 2–4 public JPEG/PNG cover image URLs below.")
+                        OutlinedTextField(
+                            value = collageCoverLinks,
+                            onValueChange = { collageCoverLinks = it.take(2500) },
+                            label = { Text("Optional individual cover image URLs (one per line)") },
+                            placeholder = { Text("https://example.org/cover-one.jpg\\nhttps://example.org/cover-two.jpg") },
+                            supportingText = { Text("Leave empty for automatic covers. All selected covers must be public HTTPS; minimum two distinct covers. The finished EPUB has one combined portrait cover.") },
+                            minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        OutlinedTextField(value = coverUrl,
+                            onValueChange = { coverUrl = it.take(600) },
+                            label = { Text("Single cover image HTTPS URL (optional)") },
+                            supportingText = { Text("Blank: try source og:image or Twitter cover. JPEG or PNG, up to 1.5 MB.") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth())
+                    }
                     OutlinedTextField(value = combinedFilename,
                         onValueChange = { combinedFilename = it.take(70) },
                         label = { Text("Combined EPUB filename (without .epub)") },

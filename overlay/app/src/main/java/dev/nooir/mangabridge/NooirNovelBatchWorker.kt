@@ -31,6 +31,8 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         const val BOOK_DESCRIPTION = "combined_book_description"
         const val BOOK_LANGUAGE = "combined_book_language"
         const val BOOK_COVER_URL = "combined_book_cover_url"
+        const val BOOK_COVER_COLLAGE = "combined_book_cover_collage"
+        const val BOOK_COVER_SOURCES = "combined_book_cover_sources"
         const val EPUB_VERSION = "novel_epub_version"
         const val INCLUDE_IMAGES = "novel_include_images"
         const val BOOK_FILENAME = "combined_book_filename"
@@ -94,12 +96,22 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         }
         val inlineImages = inputData.getBoolean(INCLUDE_IMAGES, true)
         val coverUrl = inputData.getString(BOOK_COVER_URL).orEmpty().trim()
+        val coverCollage = inputData.getBoolean(BOOK_COVER_COLLAGE, false)
+        val collageCoverUrls = inputData.getStringArray(BOOK_COVER_SOURCES)?.map(String::trim)
+            ?.filter(String::isNotBlank).orEmpty()
         val description = inputData.getString(BOOK_DESCRIPTION).orEmpty().trim()
         val language = inputData.getString(BOOK_LANGUAGE).orEmpty().trim()
         if (urls.isEmpty() || (!combinePages && urls.size > 10) ||
             urls.any { it.length > 600 || !it.startsWith("https://", true) } ||
             first < 1 || last < first || epubFormat == null ||
+            (!combinePages && (coverCollage || collageCoverUrls.isNotEmpty())) ||
             (combinePages && (coverUrl.length > 600 || description.length > 1200 ||
+                (coverCollage && coverUrl.isNotBlank()) ||
+                (!coverCollage && collageCoverUrls.isNotEmpty()) ||
+                (collageCoverUrls.isNotEmpty() &&
+                    (collageCoverUrls.size !in 2..4 ||
+                    collageCoverUrls.distinct().size != collageCoverUrls.size ||
+                    collageCoverUrls.any { it.length > 600 || !it.startsWith("https://", true) })) ||
                 (coverUrl.isNotBlank() && !coverUrl.startsWith("https://", true)) ||
                 (language.isNotBlank() && !language.matches(Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}"))))) ||
             (destination == null && (host.isBlank() || !folder.startsWith("/") || folder.contains("..")))) {
@@ -146,6 +158,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                             urls = urls, output = temp, bookTitle = title,
                             bookAuthor = author, chapterTitles = customNames.toList(),
                             firstPage = firstPage, coverUrl = coverUrl,
+                            collageCover = coverCollage, collageCoverUrls = collageCoverUrls,
                             bookDescription = description, bookLanguage = language,
                             epubFormat = epubFormat, includeImages = inlineImages,
                         ) { index, total, message ->
