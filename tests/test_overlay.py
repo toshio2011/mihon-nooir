@@ -385,8 +385,14 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
             self.assertIn('fromPublicStoryJson', wattpad)
             self.assertIn('optJSONArray("parts")', wattpad)
             self.assertIn('!part.optBoolean("draft")', wattpad)
-            self.assertIn('NooirWattpadPublic.discover(storyUrl)', novel)
+            # Discovery moved to the shared analyze/convert path. Check that
+            # both routes still use the same public Wattpad metadata fallback.
+            discovery = (work_dir/'NooirWebChapterDiscovery.kt').read_text()
+            self.assertIn('NooirWebChapterDiscovery.chapters(storyUrl, page)', novel)
+            self.assertIn('NooirWattpadPublic.discover(storyUrl)', discovery)
+            self.assertIn('NooirWebNovel.discover(page)', discovery)
             self.assertIn('NooirWebArticle.appendChapter', novel)
+            self.assertIn('NooirWebArticle.previewChapterText', novel_dialog)
             self.assertNotIn('storytext?id=', wattpad)
             self.assertNotIn('Cookie', wattpad)
             novel = (work_dir/'NooirWebNovel.kt').read_text()

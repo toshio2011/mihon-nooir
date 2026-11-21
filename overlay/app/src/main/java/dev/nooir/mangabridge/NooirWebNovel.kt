@@ -1,6 +1,8 @@
 package dev.nooir.mangabridge
 
 import dev.nooir.bridge.ReflowEpubWriter
+import dev.nooir.bridge.ReflowEpubFormat
+import dev.nooir.bridge.ReflowEpubStyle
 import org.jsoup.nodes.Document
 import org.jsoup.Jsoup
 import dev.nooir.bridge.ReflowEpubWriter.ImageAsset
@@ -68,34 +70,16 @@ object NooirWebNovel {
         return found.values.toList()
     }
 
-    /** Optional metadata cover. Failure is nonfatal and doesn't fetch extra pages. */
-    private fun embedCover(doc: Document, epub: ReflowEpubWriter) {
-        val original = doc.selectFirst("meta[property=og:image]")?.attr("content")
-            ?.takeIf { it.isNotBlank() } ?: return
-        runCatching {
-            val candidate = URI(doc.location()).resolve(original).toString()
-            val url = NooirWebArticle.publicHttps(candidate)
-            val response = Jsoup.connect(url).ignoreContentType(true)
-                .timeout(12000).maxBodySize(1_500_000).followRedirects(false).execute()
-            require(response.statusCode() == 200)
-            val mime = response.contentType().orEmpty().substringBefore(';').lowercase()
-            val ext = when (mime) {
-                "image/jpeg" -> "jpg"
-                "image/png" -> "png"
-                else -> error("Not a supported book cover")
-            }
-            val bytes = response.bodyAsBytes()
-            require(bytes.size in 1..1_500_000)
-            val image = epub.addImage(ImageAsset(bytes, ext, mime), isCover = true)
-            epub.addSection("Cover", """<figure><img src="$image" alt="Book cover"/></figure>""")
-        }
-    }
-
     /** One EPUB per URL. Individual chapters become EPUB sections with a TOC. */
     fun convert(
         storyUrl: String, output: File,
         startAt: Int = 1, endAt: Int = Int.MAX_VALUE,
         preloadedPage: Document? = null,
+        epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
+        readingStyle: ReflowEpubStyle = ReflowEpubStyle.STANDARD,
+        customCss: String = "",
+        includeImages: Boolean = true,
+        imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         onStage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ): Result {
         require(startAt >= 1 && endAt >= startAt) { "Invalid chapter range" }
@@ -107,15 +91,7 @@ object NooirWebNovel {
         // when the story HTML has no <a> chapter links. Try only the public
         // metadata response; if it is blocked, use any truly visible HTML
         // chapter links, not a fake synopsis-only EPUB.
-        val htmlChapters = discover(page)
-        val chapterLinks = if (wattpadStory) {
-            runCatching { NooirWattpadPublic.discover(storyUrl) }.getOrElse { err ->
-                if (htmlChapters.isNotEmpty()) htmlChapters
-                else error("Wattpad chapter discovery failed: " +
-                    (err.message ?: "public story metadata unavailable") +
-                    " No EPUB was generated.")
-            }
-        } else htmlChapters
+        val chapterLinks = NooirWebChapterDiscovery.chapters(storyUrl, page)
         if (chapterLinks.isEmpty()) {
             require(startAt == 1) { "This page has no visible chapter list; use chapter 1 or a directly readable chapter link." }
             if (wattpadStory) {
@@ -135,8 +111,10 @@ object NooirWebNovel {
         // "All chapters" means every chapter discoverable from public HTML, without a count limit.
         // Failed chapters stop this book rather than silently creating a truncated EPUB.
         // Never silently omit undiscovered chapters or pretend locked text is readable.
-        ReflowEpubWriter.write(output, meta) { epub ->
-            embedCover(page, epub)
+        ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
+            epub.setReadingStyle(readingStyle)
+            epub.setCustomCss(customCss)
+            NooirWebCover.embed(page, epub)
             val total = chosen.size
             for ((i, item) in chosen.withIndex()) {
                 if (i > 0) Thread.sleep(1300L) // basic rate etiquette; no burst fetching
@@ -145,7 +123,9 @@ object NooirWebNovel {
                     else NooirWebArticle.load(item.url)
                 // Even if a source returns HTTP 200 to a sign-in/paywall message,
                 // the extractor will reject pages without article text.
-                NooirWebArticle.appendChapter(chapterDoc, epub, item.title, maxImages = 8)
+                NooirWebArticle.appendChapter(chapterDoc, epub, item.title,
+                    maxImages = if (includeImages) 8 else 0,
+                    imageProfile = imageProfile)
                 onStage(i + 1, total, "Saved chapter " + (i + 1) + "/" + total)
             }
         }

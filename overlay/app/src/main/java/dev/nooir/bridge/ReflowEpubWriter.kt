@@ -20,6 +20,18 @@ data class ReflowMetadata(
 /** EPUB 2 supports selectable XHTML prose and diagrams, not only image-based comics. */
 enum class ReflowEpubFormat { EPUB2, EPUB3 }
 
+/** Limited, predictable EPUB text styling. Default retains the original writer output. */
+enum class ReflowEpubStyle(val css: String) {
+    STANDARD(""),
+    COMPACT("body{margin:2%;line-height:1.25}p{margin:.35em 0}"),
+    LARGE_PRINT("body{font-size:1.25em;line-height:1.65}p{margin:1em 0}");
+
+    companion object {
+        fun parse(value: String) = entries.firstOrNull { it.name == value }
+            ?: error("Unknown EPUB reading style")
+    }
+}
+
 class ReflowEpubWriter private constructor(
     private val zip: ZipOutputStream,
     private val meta: ReflowMetadata,
@@ -30,6 +42,20 @@ class ReflowEpubWriter private constructor(
     private val manifest = mutableListOf<String>()
     private var imageIndex = 0
     private var coverId: String? = null
+    private var readingStyle = ReflowEpubStyle.STANDARD
+    private var customCss = ""
+
+    /** Set once before adding text sections. The default keeps legacy exports unchanged. */
+    fun setReadingStyle(style: ReflowEpubStyle) {
+        require(sections.isEmpty()) { "Set EPUB style before adding chapters" }
+        readingStyle = style
+    }
+
+    /** Only canonicalized offline text CSS is embedded; never fetch external styles. */
+    fun setCustomCss(value: String) {
+        require(sections.isEmpty()) { "Set EPUB CSS before adding chapters" }
+        customCss = NooirEpubCssRules.canonicalize(value)
+    }
 
     /** Add an embedded image and get its relative EPUB XHTML URL. */
     fun addImage(asset: ImageAsset, isCover: Boolean = false): String {
@@ -68,7 +94,7 @@ class ReflowEpubWriter private constructor(
         val doc = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${xml(meta.language.ifBlank { "en" })}">
 <head><title>${xml(title)}</title><meta name="viewport" content="width=device-width"/>
-<style type="text/css">body{margin:4%;line-height:1.45;font-family:serif}p{margin:.7em 0}h1,h2,h3{break-after:avoid}img{display:block;max-width:100%;height:auto;margin:1em auto}figure{margin:1em 0;text-align:center}figcaption{font-size:.85em}pre{white-space:pre-wrap;overflow-wrap:anywhere}blockquote{margin:1em 4%}table{border-collapse:collapse;max-width:100%;width:100%;margin:1em 0}th,td{vertical-align:top;padding:.2em .3em}div.illustration{text-align:center;page-break-inside:avoid}.caption{font-size:.85em;text-align:center}</style>
+<style type="text/css">body{margin:4%;line-height:1.45;font-family:serif}p{margin:.7em 0}h1,h2,h3{break-after:avoid}img{display:block;max-width:100%;height:auto;margin:1em auto}figure{margin:1em 0;text-align:center}figcaption{font-size:.85em}pre{white-space:pre-wrap;overflow-wrap:anywhere}blockquote{margin:1em 4%}table{border-collapse:collapse;max-width:100%;width:100%;margin:1em 0}th,td{vertical-align:top;padding:.2em .3em}div.illustration{text-align:center;page-break-inside:avoid}.caption{font-size:.85em;text-align:center}${readingStyle.css}${customCss}</style>
 </head><body>$body</body></html>"""
         writeEntry("OEBPS/" + name, doc.toByteArray(Charsets.UTF_8))
         manifest += "<item id=\"s$index\" href=\"$name\" media-type=\"application/xhtml+xml\"/>"

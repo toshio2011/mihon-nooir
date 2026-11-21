@@ -132,10 +132,11 @@ object NooirWebArticle {
      * embedded JPEG/PNG/GIF artwork, without taking full-page screenshots.
      * Images are capped for memory/size safety; no source scripts execute.
      */
-    internal fun appendChapter(
-        doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
-        maxImages: Int = 25,
-    ) {
+    private fun readableArticle(
+        doc: Document, chapterTitle: String,
+        contentSelector: String = "", removeSelector: String = "",
+    ): Element {
+        NooirWebExtractRules.validate(contentSelector, removeSelector)
         // Keep the actual text of a publicly served WordPress/Elementor page,
         // rather than relying only on traditional <article>/<main> wrappers.
         // Strip menus and scripts before choosing the best readable candidate.
@@ -152,13 +153,19 @@ object NooirWebArticle {
                     "video,audio,canvas,svg,noscript,.advertisement,.ads,.social-share," +
                     ".newsletter,.cookie-banner,.related-posts,.sidebar").remove()
             }
-        val candidates = doc.select(contentSelectors).map(::stripped)
+        val explicit = contentSelector.trim()
+        val candidates = doc.select(if (explicit.isBlank()) contentSelectors else explicit)
+            .map(::stripped)
         val fromMarkup = candidates.maxByOrNull {
             val paras = it.select("p").count()
             // Prose with several paragraphs beats a large navigation menu.
             it.text().length + paras * 60
         }?.takeIf { it.text().length >= 60 }
-        val structured = publicArticleBody(doc)
+        if (explicit.isNotBlank()) require(fromMarkup != null) {
+            "The custom content selector found no readable text (at least 60 characters). " +
+                "Test another selector on the public page before exporting."
+        }
+        val structured = if (explicit.isBlank()) publicArticleBody(doc) else null
         // A navigational <main> can have 100+ characters while the real
         // article is present as public JSON-LD. Prefer much richer structured
         // prose in that case; otherwise retain the HTML to preserve images.
@@ -169,6 +176,7 @@ object NooirWebArticle {
                 structured
             else -> fromMarkup
         }
+        if (removeSelector.isNotBlank()) article.select(removeSelector.trim()).remove()
         val textLength = article.text().trim().length
         require(textLength >= 60) {
             "Received the webpage '$chapterTitle' but only $textLength readable " +
@@ -177,6 +185,24 @@ object NooirWebArticle {
                 "MangaNooir does not load that session; try a direct, publicly " +
                 "readable article/chapter link or an authorized EPUB export."
         }
+        return article
+    }
+
+    /** Actual readable content selection used by EPUB export; no image downloads. */
+    internal fun previewChapterText(
+        doc: Document, chapterTitle: String,
+        contentSelector: String = "", removeSelector: String = "",
+    ): String =
+        readableArticle(doc, chapterTitle, contentSelector, removeSelector).text()
+            .replace(Regex("\\s+"), " ").trim().take(1500)
+
+    internal fun appendChapter(
+        doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
+        maxImages: Int = 25,
+        contentSelector: String = "", removeSelector: String = "",
+        imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
+    ) {
+        val article = readableArticle(doc, chapterTitle, contentSelector, removeSelector)
         var images = 0
         article.select("img").forEach { img ->
             val source = listOf("data-src", "data-original", "src")
@@ -201,7 +227,8 @@ object NooirWebArticle {
                 }
                 val bytes = response.bodyAsBytes()
                 require(bytes.size in 1..2_000_000)
-                ReflowEpubWriter.ImageAsset(bytes, extension, mime)
+                NooirWebImageOptimizer.optimize(
+                    ReflowEpubWriter.ImageAsset(bytes, extension, mime), imageProfile)
             }.getOrNull()
             if (asset == null) img.remove()
             else {
