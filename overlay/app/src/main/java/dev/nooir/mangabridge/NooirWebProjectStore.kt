@@ -26,6 +26,7 @@ internal class NooirWebProjectStore(context: Context) {
         val description: String,
         val language: String,
         val coverUrl: String,
+        val localCoverUri: String,
         val collageUrls: String,
         val collage: Boolean,
         val filename: String,
@@ -59,6 +60,7 @@ internal class NooirWebProjectStore(context: Context) {
                 description = item.optString("description"),
                 language = item.optString("language"),
                 coverUrl = item.optString("coverUrl"),
+                localCoverUri = item.optString("localCoverUri"),
                 collageUrls = item.optString("collageUrls"),
                 collage = item.optBoolean("collage"),
                 filename = item.optString("filename"),
@@ -121,6 +123,11 @@ internal class NooirWebProjectStore(context: Context) {
             p.filename.length <= 70 && p.language.length <= 32) {
             "Saved project metadata is too large"
         }
+        require(p.localCoverUri.isBlank() || (p.localCoverUri.length <= 1000 &&
+            p.localCoverUri.startsWith("content://") &&
+            !p.collage && p.coverUrl.isBlank())) {
+            "Pick either a phone cover, a URL cover, or a combined cover"
+        }
         NooirWebExtractRules.validate(p.contentSelector, p.removeSelector)
         NooirWebImageProfile.parse(p.imageProfile)
         ReflowEpubStyle.parse(p.readingStyle)
@@ -136,7 +143,8 @@ internal class NooirWebProjectStore(context: Context) {
                 put("chapterUrls", p.chapterUrls); put("chapterTitles", p.chapterTitles)
                 put("bookTitle", p.bookTitle); put("author", p.author)
                 put("description", p.description); put("language", p.language)
-                put("coverUrl", p.coverUrl); put("collageUrls", p.collageUrls)
+                put("coverUrl", p.coverUrl); put("localCoverUri", p.localCoverUri)
+                put("collageUrls", p.collageUrls)
                 put("collage", p.collage); put("filename", p.filename)
                 put("contentSelector", p.contentSelector); put("removeSelector", p.removeSelector)
                 put("epub2", p.epub2); put("includeImages", p.includeImages)
