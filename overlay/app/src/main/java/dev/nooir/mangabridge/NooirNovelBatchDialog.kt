@@ -3,6 +3,7 @@ package dev.nooir.mangabridge
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import dev.nooir.bridge.ReflowEpubStyle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -80,6 +81,7 @@ fun NooirNovelBatchDialog(
     var epub2 by remember { mutableStateOf(false) }
     var includeImages by remember { mutableStateOf(true) }
     var imageProfile by remember { mutableStateOf(NooirWebImageProfile.BALANCED) }
+    var readingStyle by remember { mutableStateOf(ReflowEpubStyle.STANDARD) }
     var contentSelector by remember { mutableStateOf("") }
     var removeSelector by remember { mutableStateOf("") }
     var checkingExtraction by remember { mutableStateOf(false) }
@@ -189,6 +191,7 @@ fun NooirNovelBatchDialog(
                 NooirNovelBatchWorker.EPUB_VERSION to (if (epub2) "EPUB2" else "EPUB3"),
                 NooirNovelBatchWorker.INCLUDE_IMAGES to includeImages,
                 NooirNovelBatchWorker.IMAGE_PROFILE to imageProfile.name,
+                NooirNovelBatchWorker.READING_STYLE to readingStyle.name,
                 NooirNovelBatchWorker.CONTENT_SELECTOR to (if (combinePages) contentSelector.trim() else ""),
                 NooirNovelBatchWorker.REMOVE_SELECTOR to (if (combinePages) removeSelector.trim() else ""),
                 NooirNovelBatchWorker.BOOK_FILENAME to combinedFilename.trim(),
@@ -601,6 +604,23 @@ fun NooirNovelBatchDialog(
                     )
                     Text("Include inline chapter illustrations")
                 }
+                Text("EPUB text style")
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    for (preset in ReflowEpubStyle.entries) {
+                        androidx.compose.material3.FilterChip(
+                            selected = readingStyle == preset,
+                            onClick = { readingStyle = preset },
+                            label = {
+                                Text(when (preset) {
+                                    ReflowEpubStyle.STANDARD -> "Standard"
+                                    ReflowEpubStyle.COMPACT -> "Compact"
+                                    ReflowEpubStyle.LARGE_PRINT -> "Large"
+                                })
+                            },
+                        )
+                    }
+                }
+                Text("Styles are saved inside the EPUB. E-readers may override font size.")
                 if (includeImages) {
                     Text("Chapter illustration size (covers remain unchanged)")
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
