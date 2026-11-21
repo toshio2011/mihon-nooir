@@ -13,6 +13,7 @@ import androidx.work.Data
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import dev.nooir.bridge.NooirUpload
+import dev.nooir.bridge.ReflowEpubFormat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,6 +28,11 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         const val COMBINE_PAGES = "combine_webpages"
         const val BOOK_TITLE = "combined_book_title"
         const val BOOK_AUTHOR = "combined_book_author"
+        const val BOOK_DESCRIPTION = "combined_book_description"
+        const val BOOK_LANGUAGE = "combined_book_language"
+        const val BOOK_COVER_URL = "combined_book_cover_url"
+        const val EPUB_VERSION = "novel_epub_version"
+        const val INCLUDE_IMAGES = "novel_include_images"
         const val BOOK_FILENAME = "combined_book_filename"
         const val URL_MANIFEST = "combined_urls_manifest"
         const val OUTPUT_TREE = "novel_output_tree"
@@ -80,9 +86,22 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         val folder = inputData.getString(FOLDER) ?: "/Books"
         val first = inputData.getInt(FIRST, 1)
         val last = inputData.getInt(LAST, Int.MAX_VALUE)
+        val rawVersion = inputData.getString(EPUB_VERSION) ?: "EPUB3"
+        val epubFormat = when (rawVersion) {
+            "EPUB2" -> ReflowEpubFormat.EPUB2
+            "EPUB3" -> ReflowEpubFormat.EPUB3
+            else -> null
+        }
+        val inlineImages = inputData.getBoolean(INCLUDE_IMAGES, true)
+        val coverUrl = inputData.getString(BOOK_COVER_URL).orEmpty().trim()
+        val description = inputData.getString(BOOK_DESCRIPTION).orEmpty().trim()
+        val language = inputData.getString(BOOK_LANGUAGE).orEmpty().trim()
         if (urls.isEmpty() || (!combinePages && urls.size > 10) ||
             urls.any { it.length > 600 || !it.startsWith("https://", true) } ||
-            first < 1 || last < first ||
+            first < 1 || last < first || epubFormat == null ||
+            (combinePages && (coverUrl.length > 600 || description.length > 1200 ||
+                (coverUrl.isNotBlank() && !coverUrl.startsWith("https://", true)) ||
+                (language.isNotBlank() && !language.matches(Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}"))))) ||
             (destination == null && (host.isBlank() || !folder.startsWith("/") || folder.contains("..")))) {
             manifestFile?.delete()
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERRORS,
@@ -126,7 +145,9 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                         val converted = NooirWebPageBook.convert(
                             urls = urls, output = temp, bookTitle = title,
                             bookAuthor = author, chapterTitles = customNames.toList(),
-                            firstPage = firstPage,
+                            firstPage = firstPage, coverUrl = coverUrl,
+                            bookDescription = description, bookLanguage = language,
+                            epubFormat = epubFormat, includeImages = inlineImages,
                         ) { index, total, message ->
                             progress("Chapter " + index + "/" + total + " · " + message)
                         }
@@ -193,7 +214,8 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                         if (destination != null) NooirDestinationGuard.requireInPhoneFolder(
                             applicationContext, destination, filename)
                         else NooirDestinationGuard.requireOnReader(host, folder, filename)
-                        val result = NooirWebNovel.convert(url, temp, first, last, page) { chapter, total, message ->
+                        val result = NooirWebNovel.convert(url, temp, first, last, page,
+                            epubFormat = epubFormat, includeImages = inlineImages) { chapter, total, message ->
                             progress(message + if (total > 0) " (" + chapter + "/" + total + ")" else "")
                         }
                         if (destination != null) {

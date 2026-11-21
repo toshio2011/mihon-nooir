@@ -1,4 +1,5 @@
 import dev.nooir.bridge.ReflowEpubWriter
+import dev.nooir.bridge.ReflowEpubFormat
 import dev.nooir.bridge.ReflowMetadata
 import java.io.File
 import java.util.zip.ZipFile
@@ -37,6 +38,49 @@ fun main() {
             check(opf.contains("text/s00003.xhtml"))
             check(zip.getEntry("OEBPS/nav.xhtml") != null)
             check(zip.getEntry("META-INF/container.xml") != null)
+        }
+        // Regression: visible cover + embedded metadata + proper manifest
+        // for both EPUB versions supported by the Windows/Folio readers.
+        for (format in ReflowEpubFormat.entries) {
+            val covered = File.createTempFile("nooir-covered-", ".epub")
+            try {
+                ReflowEpubWriter.write(covered, ReflowMetadata(
+                    "The Example Novel", "Example Author", "A short description", "ms",
+                    "https://example.org/story",
+                ), format) { epub ->
+                    val src = epub.addImage(ReflowEpubWriter.ImageAsset(
+                        byteArrayOf(137.toByte(),80,78,71,13,10,26,10), "png", "image/png"
+                    ), isCover = true)
+                    epub.addSection("Cover",
+                        "<figure><img src=\"$src\" alt=\"Book cover\"/></figure>")
+                    epub.addSection("Chapter 1", "<h1>Chapter 1</h1><p>Actual reflowable text</p>")
+                }
+                ZipFile(covered).use { zip ->
+                    val opf = zip.getInputStream(zip.getEntry("OEBPS/package.opf"))
+                        .bufferedReader().readText()
+                    check(opf.contains("<dc:language>ms</dc:language>"))
+                    check(opf.contains("<dc:creator>Example Author</dc:creator>"))
+                    check(opf.contains("A short description"))
+                    check(opf.contains("images/img00001.png"))
+                    check(zip.getEntry("OEBPS/images/img00001.png") != null)
+                    val cover = zip.getInputStream(zip.getEntry("OEBPS/text/s00001.xhtml"))
+                        .bufferedReader().readText()
+                    check(cover.contains("Book cover"))
+                    val chapter = zip.getInputStream(zip.getEntry("OEBPS/text/s00002.xhtml"))
+                        .bufferedReader().readText()
+                    check(chapter.contains("Actual reflowable text"))
+                    if (format == ReflowEpubFormat.EPUB3) {
+                        check(opf.contains("properties=\"cover-image\""))
+                        val nav = zip.getInputStream(zip.getEntry("OEBPS/nav.xhtml"))
+                            .bufferedReader().readText()
+                        check(nav.indexOf(">Cover<") in 0 until nav.indexOf(">Chapter 1<"))
+                    } else {
+                        check(opf.contains("<meta name=\"cover\" content=\"img1\"/>"))
+                        check(opf.contains("<reference type=\"cover\""))
+                        check(zip.getEntry("OEBPS/toc.ncx") != null)
+                    }
+                }
+            } finally { covered.delete() }
         }
         // An inaccessible chapter must never expose a truncated combined ebook.
         val aborted = File.createTempFile("nooir-failed-merge-", ".epub")

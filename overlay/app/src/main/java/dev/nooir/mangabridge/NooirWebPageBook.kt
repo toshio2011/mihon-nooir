@@ -1,6 +1,7 @@
 package dev.nooir.mangabridge
 
 import dev.nooir.bridge.ReflowEpubWriter
+import dev.nooir.bridge.ReflowEpubFormat
 import org.jsoup.nodes.Document
 import java.io.File
 import java.net.URI
@@ -22,6 +23,11 @@ object NooirWebPageBook {
         bookAuthor: String = "",
         chapterTitles: List<String> = emptyList(),
         firstPage: Document? = null,
+        coverUrl: String = "",
+        bookDescription: String = "",
+        bookLanguage: String = "",
+        epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
+        includeImages: Boolean = true,
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ): Result {
         require(urls.isNotEmpty()) { "Add at least one public chapter URL" }
@@ -30,12 +36,28 @@ object NooirWebPageBook {
         val safeUrls = urls.map { NooirWebArticle.publicHttps(it) }
         val first = firstPage ?: NooirWebArticle.load(safeUrls.first())
         val existing = NooirWebArticle.metadata(first)
+        val language = bookLanguage.trim().ifBlank { existing.language }
+        require(language.matches(Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}"))) {
+            "Use a valid language tag such as en, ms, ar or en-GB"
+        }
+        require(bookDescription.length <= 1200 && coverUrl.length <= 600) {
+            "Book description or cover URL is too long"
+        }
+        // Validate explicit inputs before writing. No remote request or
+        // source content change is made during the metadata check.
+        if (coverUrl.isNotBlank()) require(coverUrl.trim().startsWith("https://", true)) {
+            "Cover image must be a public HTTPS URL"
+        }
         val meta = existing.copy(
             title = bookTitle.trim().take(240),
             author = bookAuthor.trim().ifBlank { existing.author }.take(120),
-            description = "Combined from ${safeUrls.size} public webpages. " + existing.description,
+            description = bookDescription.trim().ifBlank {
+                "Combined from ${safeUrls.size} public webpages. " + existing.description
+            },
+            language = language,
         )
-        ReflowEpubWriter.write(output, meta) { epub ->
+        ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
+            NooirWebCover.embed(first, epub, coverUrl)
             for ((index, url) in safeUrls.withIndex()) {
                 if (index > 0) Thread.sleep(1300L) // polite sequential requests
                 onPage(index + 1, safeUrls.size, "Reading public webpage")
@@ -51,7 +73,7 @@ object NooirWebPageBook {
                 require(title.isNotBlank()) { "Page ${index + 1} has no chapter title" }
                 // Avoid creating a partial EPUB from navigation-only landing
                 // pages or blocked chapters; appendChapter validates content.
-                NooirWebArticle.appendChapter(page, epub, title, maxImages = 25)
+                NooirWebArticle.appendChapter(page, epub, title, maxImages = if (includeImages) 25 else 0)
                 onPage(index + 1, safeUrls.size, "Added " + title)
             }
         }

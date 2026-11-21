@@ -54,6 +54,11 @@ fun NooirNovelBatchDialog(
     var combinePages by remember(initialCombinePages) { mutableStateOf(initialCombinePages) }
     var combinedTitle by remember { mutableStateOf("") }
     var combinedAuthor by remember { mutableStateOf("") }
+    var combinedDescription by remember { mutableStateOf("") }
+    var combinedLanguage by remember { mutableStateOf("") }
+    var coverUrl by remember { mutableStateOf("") }
+    var epub2 by remember { mutableStateOf(false) }
+    var includeImages by remember { mutableStateOf(true) }
     var combinedFilename by remember { mutableStateOf("") }
     var orderedChapterTitles by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf("") }
@@ -80,6 +85,12 @@ fun NooirNovelBatchDialog(
         urls.all { it.length <= 600 && it.startsWith("https://", true) } &&
         (!combinePages || orderedChapterTitles.isBlank() ||
             orderedChapterTitles.lines().size <= urls.size) &&
+        (!combinePages || (
+            coverUrl.length <= 600 &&
+            (coverUrl.isBlank() || coverUrl.trim().startsWith("https://", true)) &&
+            (combinedLanguage.isBlank() ||
+                combinedLanguage.matches(Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}")))
+        )) &&
         (combinePages || allChapters || (start != null && end != null && start >= 1 && end >= start))
     val busy = jobState?.state == WorkInfo.State.ENQUEUED ||
         jobState?.state == WorkInfo.State.BLOCKED ||
@@ -118,6 +129,11 @@ fun NooirNovelBatchDialog(
                 NooirNovelBatchWorker.COMBINE_PAGES to combinePages,
                 NooirNovelBatchWorker.BOOK_TITLE to combinedTitle.trim(),
                 NooirNovelBatchWorker.BOOK_AUTHOR to combinedAuthor.trim(),
+                NooirNovelBatchWorker.BOOK_DESCRIPTION to (if (combinePages) combinedDescription.trim() else ""),
+                NooirNovelBatchWorker.BOOK_LANGUAGE to (if (combinePages) combinedLanguage.trim() else ""),
+                NooirNovelBatchWorker.BOOK_COVER_URL to (if (combinePages) coverUrl.trim() else ""),
+                NooirNovelBatchWorker.EPUB_VERSION to (if (epub2) "EPUB2" else "EPUB3"),
+                NooirNovelBatchWorker.INCLUDE_IMAGES to includeImages,
                 NooirNovelBatchWorker.BOOK_FILENAME to combinedFilename.trim(),
                 NooirNovelBatchWorker.OUTPUT_TREE to treeUri?.toString(),
                 NooirNovelBatchWorker.HOST to host.trim(),
@@ -177,6 +193,20 @@ fun NooirNovelBatchDialog(
                     OutlinedTextField(value = combinedAuthor,
                         onValueChange = { combinedAuthor = it.take(100) },
                         label = { Text("Book author (optional)") }, singleLine = true)
+                    OutlinedTextField(value = combinedLanguage,
+                        onValueChange = { combinedLanguage = it.take(32) },
+                        label = { Text("Book language (optional, e.g. en, ms, ar)") },
+                        supportingText = { Text("Blank keeps the source page language.") },
+                        singleLine = true)
+                    OutlinedTextField(value = combinedDescription,
+                        onValueChange = { combinedDescription = it.take(1200) },
+                        label = { Text("Book description (optional)") },
+                        minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = coverUrl,
+                        onValueChange = { coverUrl = it.take(600) },
+                        label = { Text("Cover image HTTPS URL (optional)") },
+                        supportingText = { Text("Blank: try source og:image or Twitter cover. Custom cover errors are shown instead of silently ignored. JPEG or PNG, up to 1.5 MB.") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = combinedFilename,
                         onValueChange = { combinedFilename = it.take(70) },
                         label = { Text("Combined EPUB filename (without .epub)") },
@@ -200,6 +230,18 @@ fun NooirNovelBatchDialog(
                             placeholder = { Text("Book title (without .epub)") },
                             singleLine = true)
                     }
+                }
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    androidx.compose.material3.Checkbox(
+                        checked = epub2, onCheckedChange = { epub2 = it },
+                    )
+                    Text("EPUB 2 compatibility (unchecked: EPUB 3)")
+                }
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    androidx.compose.material3.Checkbox(
+                        checked = includeImages, onCheckedChange = { includeImages = it },
+                    )
+                    Text("Include inline chapter illustrations")
                 }
                 if (!combinePages) {
                     androidx.compose.foundation.layout.Row(
