@@ -1,6 +1,9 @@
 package dev.nooir.mangabridge
 
 import android.graphics.BitmapFactory
+import android.content.Context
+import android.net.Uri
+import java.io.ByteArrayOutputStream
 import dev.nooir.bridge.ReflowEpubWriter
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -12,6 +15,49 @@ import java.net.URI
  */
 internal object NooirWebCover {
     private const val MAX_BYTES = 1_500_000
+
+    private fun checkedAsset(bytes: ByteArray, declaredType: String = ""): ReflowEpubWriter.ImageAsset {
+        require(bytes.size in 8..MAX_BYTES) { "Cover exceeds 1.5 MB or is empty" }
+        val png = bytes.take(8) ==
+            listOf(137, 80, 78, 71, 13, 10, 26, 10).map(Int::toByte)
+        val jpeg = bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte()
+        val mime = when {
+            png -> "image/png"
+            jpeg -> "image/jpeg"
+            else -> error("Cover must be JPEG or PNG")
+        }
+        require(declaredType.isBlank() || declaredType == mime) {
+            "Cover content type does not match its image bytes"
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        require(bounds.outWidth in 1..12000 && bounds.outHeight in 1..12000 &&
+            bounds.outWidth.toLong() * bounds.outHeight.toLong() <= 16_000_000L) {
+            "Cover dimensions are invalid or exceed the safe pixel limit"
+        }
+        return ReflowEpubWriter.ImageAsset(bytes, if (png) "png" else "jpg", mime)
+    }
+
+    /** Read only previously selected Android documents, with an explicit size bound. */
+    fun loadLocal(context: Context, uri: Uri): ReflowEpubWriter.ImageAsset {
+        require(uri.scheme == "content") { "Choose a cover through the Android file picker" }
+        val stream = context.contentResolver.openInputStream(uri)
+            ?: error("Selected cover cannot be opened; choose it again")
+        val bytes = stream.use { input ->
+            val output = ByteArrayOutputStream()
+            val block = ByteArray(8192)
+            while (true) {
+                val read = input.read(block)
+                if (read < 0) break
+                require(output.size() + read <= MAX_BYTES) {
+                    "Selected phone cover exceeds 1.5 MB"
+                }
+                output.write(block, 0, read)
+            }
+            output.toByteArray()
+        }
+        return checkedAsset(bytes)
+    }
 
     /** Only a real, public, fully resolved cover URL is eligible for a collage. */
     fun detectedUrl(doc: Document): String? {
@@ -36,24 +82,7 @@ internal object NooirWebCover {
                 .followRedirects(false).execute()
             require(response.statusCode() == 200) { "Cover image HTTP ${response.statusCode()}" }
             val type = response.contentType().orEmpty().substringBefore(';').trim().lowercase()
-            val extension = when (type) {
-                "image/jpeg" -> "jpg"
-                "image/png" -> "png"
-                else -> error("Cover must be JPEG or PNG")
-            }
-            val bytes = response.bodyAsBytes()
-            require(bytes.size in 8..MAX_BYTES) { "Cover exceeds 1.5 MB or is empty" }
-            require(when (extension) {
-                "png" -> bytes.take(8) == listOf(137, 80, 78, 71, 13, 10, 26, 10).map(Int::toByte)
-                else -> bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte()
-            }) { "Cover has an invalid image signature" }
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            require(bounds.outWidth in 1..12000 && bounds.outHeight in 1..12000 &&
-                bounds.outWidth.toLong() * bounds.outHeight.toLong() <= 16_000_000L) {
-                "Cover dimensions are invalid or exceed the safe pixel limit"
-            }
-            ReflowEpubWriter.ImageAsset(bytes, extension, type)
+            checkedAsset(response.bodyAsBytes(), type)
         }
         return if (selected.isNotBlank()) fetch() else runCatching(fetch).getOrNull()
     }
