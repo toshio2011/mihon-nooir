@@ -195,7 +195,8 @@ fun NooirNovelBatchDialog(
             return
         } else null
         prefs.edit().putString("host", host.trim()).putString("destination", folder.trim()).apply()
-        val job = OneTimeWorkRequestBuilder<NooirNovelBatchWorker>()
+        try {
+            val job = OneTimeWorkRequestBuilder<NooirNovelBatchWorker>()
             .setInputData(workDataOf(
                 NooirNovelBatchWorker.URLS to (if (combinePages) emptyArray<String>() else urls.toTypedArray()),
                 NooirNovelBatchWorker.NAMES to (if (combinePages) emptyArray<String>()
@@ -228,7 +229,11 @@ fun NooirNovelBatchDialog(
             )).build()
         manager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, job)
         jobId = job.id
-        prefs.edit().putString(NooirNovelBatchWorker.LAST_WORK, job.id.toString()).apply()
+            prefs.edit().putString(NooirNovelBatchWorker.LAST_WORK, job.id.toString()).apply()
+        } catch (e: Exception) {
+            manifest?.delete()
+            inputError = "Could not queue web import: " + (e.message ?: "Invalid settings").take(200)
+        }
     }
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { target ->
