@@ -69,6 +69,10 @@ fun NooirNovelBatchDialog(
     var collageCoverLinks by remember { mutableStateOf("") }
     var epub2 by remember { mutableStateOf(false) }
     var includeImages by remember { mutableStateOf(true) }
+    var contentSelector by remember { mutableStateOf("") }
+    var removeSelector by remember { mutableStateOf("") }
+    var checkingExtraction by remember { mutableStateOf(false) }
+    var extractionPreview by remember { mutableStateOf("") }
     var analysis by remember { mutableStateOf<NooirWebChapterDiscovery.Analysis?>(null) }
     var choices by remember { mutableStateOf<List<NooirWebChapterPlan.Entry>>(emptyList()) }
     var analyzing by remember { mutableStateOf(false) }
@@ -112,6 +116,7 @@ fun NooirNovelBatchDialog(
         (if (combinePages) links.toByteArray(Charsets.UTF_8).size <= 120_000
             else urls.size <= 10) &&
         urls.all { it.length <= 600 && it.startsWith("https://", true) } &&
+        (!combinePages || NooirWebExtractRules.valid(contentSelector, removeSelector)) &&
         (!combinePages || orderedChapterTitles.isBlank() ||
             orderedChapterTitles.lines().size <= urls.size) &&
         (!combinePages || (
@@ -170,6 +175,8 @@ fun NooirNovelBatchDialog(
                     if (combinePages && combineCovers) collageUrls.toTypedArray() else emptyArray<String>()),
                 NooirNovelBatchWorker.EPUB_VERSION to (if (epub2) "EPUB2" else "EPUB3"),
                 NooirNovelBatchWorker.INCLUDE_IMAGES to includeImages,
+                NooirNovelBatchWorker.CONTENT_SELECTOR to (if (combinePages) contentSelector.trim() else ""),
+                NooirNovelBatchWorker.REMOVE_SELECTOR to (if (combinePages) removeSelector.trim() else ""),
                 NooirNovelBatchWorker.BOOK_FILENAME to combinedFilename.trim(),
                 NooirNovelBatchWorker.OUTPUT_TREE to treeUri?.toString(),
                 NooirNovelBatchWorker.HOST to host.trim(),
@@ -425,6 +432,70 @@ fun NooirNovelBatchDialog(
                         placeholder = { Text("Prologue\\nChapter One\\nChapter Two") },
                         minLines = 2, maxLines = 6,
                         modifier = Modifier.fillMaxWidth())
+                    Text("Advanced chapter text extraction (optional). Leave both blank for automatic detection. " +
+                        "Use simple CSS selectors such as article, #chapter-content or .reading-content. " +
+                        "No scripts, complex selectors or login-only content.")
+                    OutlinedTextField(
+                        value = contentSelector,
+                        onValueChange = {
+                            contentSelector = it.take(160)
+                            extractionPreview = ""
+                        },
+                        label = { Text("Read chapter content from CSS selector (optional)") },
+                        placeholder = { Text("article .chapter-body") },
+                        supportingText = { Text("Blank: automatic prose detection. Up to four simple selectors.") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = removeSelector,
+                        onValueChange = {
+                            removeSelector = it.take(160)
+                            extractionPreview = ""
+                        },
+                        label = { Text("Remove unwanted elements (optional)") },
+                        placeholder = { Text(".advertisement, .social-share") },
+                        supportingText = { Text("Removes these elements after the chapter body is selected.") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (!NooirWebExtractRules.valid(contentSelector, removeSelector)) {
+                        Text("Use tags, #ids, .classes and descendant spaces only. " +
+                            "Pseudo-selectors, attributes and more than four alternatives are not supported.")
+                    }
+                    OutlinedButton(
+                        enabled = !checkingExtraction && urls.isNotEmpty() &&
+                            NooirWebExtractRules.valid(contentSelector, removeSelector),
+                        onClick = {
+                            val requested = urls.first()
+                            val content = contentSelector.trim()
+                            val removed = removeSelector.trim()
+                            checkingExtraction = true
+                            extractionPreview = ""
+                            previewScope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        val page = NooirWebArticle.load(requested)
+                                        NooirWebArticle.previewChapterText(
+                                            page, NooirWebArticle.title(page), content, removed)
+                                    }
+                                }
+                                checkingExtraction = false
+                                if (combinePages && urls.firstOrNull() == requested &&
+                                    contentSelector.trim() == content && removeSelector.trim() == removed) {
+                                    extractionPreview = result.getOrElse {
+                                        "Preview failed: " + (it.message ?: "No readable public text").take(240)
+                                    }.take(800)
+                                }
+                            }
+                        },
+                    ) { Text("Test extraction on first chapter") }
+                    if (checkingExtraction) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Checking first public chapter…")
+                    }
+                    if (extractionPreview.isNotBlank()) {
+                        Text("Extraction preview (first 800 characters):")
+                        Text(extractionPreview)
+                    }
                 } else {
                     Text("Optional: rename each EPUB before conversion. Leave blank to use the story title.")
                     urls.forEach { story ->
