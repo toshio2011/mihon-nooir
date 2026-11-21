@@ -41,9 +41,19 @@ Safety: analysis is a user-initiated foreground action, with IO off the Compose 
 
 CI: added pure Kotlin `tests/NooirWebChapterPlanTest.kt` to `tests/run.sh` covering selected order, exclude/reverse/move, duplicate/empty/oversize manifests, and metadata sanitization. Android Compose compile and device UI acceptance remain mandatory. No official APK change and no Windows code changes.
 
+### Public chapter extraction test (new experimental slice)
+
+In combined-webpage EPUB mode, optional **Read chapter content from CSS selector** and **Remove unwanted elements** settings let readers recover prose from a public site's specific HTML wrapper and remove advertisements or social widgets. Empty fields keep the established automatic selection. Examples: `article .chapter-body` and `.advertisement, .social-share`.
+
+**Test extraction on first chapter** downloads the first selected public HTML page without illustrations and previews its first 800 characters. The actual EPUB export passes these same selector rules through the existing private WorkManager job to the **same** readable-content routine. A custom selector that finds no readable text fails rather than silently falling back to a navigation menu or saving a partial EPUB.
+
+Rules are intentionally bounded: 160 characters per field, at most four comma-separated simple selectors and five descendant components per selector. Tags, IDs and class selectors are allowed; pseudo-selectors, attribute selectors and arbitrarily complex CSS are rejected. No browser scripts, cookies or premium content are involved. Pure Kotlin contract tests run in `tests/run.sh`. Android integration and real-site tests are still required.
+
+These are *content selection* controls, not EPUB style-sheet editing or custom per-site parsers.
+
 ### Not yet implemented
 
-Actual cover preview/phone-file picker, editable stylesheets, content-selector tester, per-site parsers beyond current source handling, image compression/resizing, saved novel presets, persistent chapter checklists/retry/resume and WebToEpub-style library update/merge. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
+Actual cover preview/phone-file picker, editable EPUB stylesheets, per-site parsers beyond current source handling, image compression/resizing, saved novel presets, persistent chapter checklists/retry/resume and WebToEpub-style library update/merge. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
 
 ### Acceptance gates
 
@@ -56,7 +66,7 @@ Actual cover preview/phone-file picker, editable stylesheets, content-selector t
 ## Next useful improvements
 
 1. Add actual single/collage cover previews and a native book-metadata panel; chapter selection preview is now implemented experimentally.
-2. Add safe **content CSS selector presets** with preview against fetched public HTML, plus unwanted-element removal.
+2. Add saveable **content selector presets per public site**, building on the manual preview and unwanted-element removal now wired into the experimental combined-book flow.
 3. Add image sizing/compression and a bounded stylesheet preset picker (avoid accepting arbitrary unsafe CSS before sanitization).
 4. Save per-site nonsecret importer preferences, with explicit retry/resume for permitted sources.
 
