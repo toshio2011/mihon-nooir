@@ -2,6 +2,7 @@ package dev.nooir.mangabridge
 
 import android.content.Context
 import dev.nooir.bridge.ReflowEpubStyle
+import dev.nooir.bridge.NooirEpubCssRules
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -34,6 +35,7 @@ internal class NooirWebProjectStore(context: Context) {
         val includeImages: Boolean,
         val imageProfile: String,
         val readingStyle: String,
+        val customCss: String,
     )
 
     private val file = File(context.filesDir, "nooir-web-novel-projects-v1.json")
@@ -66,6 +68,7 @@ internal class NooirWebProjectStore(context: Context) {
                 includeImages = item.optBoolean("includeImages", true),
                 imageProfile = item.optString("imageProfile", "ORIGINAL"),
                 readingStyle = item.optString("readingStyle", "STANDARD"),
+                customCss = item.optString("customCss"),
             ).also(::validate)
         }
     }
@@ -121,6 +124,7 @@ internal class NooirWebProjectStore(context: Context) {
         NooirWebExtractRules.validate(p.contentSelector, p.removeSelector)
         NooirWebImageProfile.parse(p.imageProfile)
         ReflowEpubStyle.parse(p.readingStyle)
+        NooirEpubCssRules.canonicalize(p.customCss)
     }
 
     private fun write(items: List<Project>) {
@@ -137,6 +141,7 @@ internal class NooirWebProjectStore(context: Context) {
                 put("contentSelector", p.contentSelector); put("removeSelector", p.removeSelector)
                 put("epub2", p.epub2); put("includeImages", p.includeImages)
                 put("imageProfile", p.imageProfile); put("readingStyle", p.readingStyle)
+                put("customCss", p.customCss)
             })
         }
         val bytes = array.toString().toByteArray(Charsets.UTF_8)
