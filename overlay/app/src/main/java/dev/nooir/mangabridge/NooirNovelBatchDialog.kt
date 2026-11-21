@@ -539,6 +539,170 @@ fun NooirNovelBatchDialog(
                         placeholder = { Text("Prologue\\nChapter One\\nChapter Two") },
                         minLines = 2, maxLines = 6,
                         modifier = Modifier.fillMaxWidth())
+                    Text("Saved web-novel projects (on this phone only)")
+                    OutlinedTextField(
+                        value = projectName,
+                        onValueChange = { projectName = it.take(100) },
+                        label = { Text("Project name (for saving this setup)") },
+                        placeholder = { Text("My novel or Volume 1") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            enabled = !busy && urls.isNotEmpty(),
+                            onClick = {
+                                val selectedName = projectName.trim().ifBlank {
+                                    combinedTitle.trim().ifBlank { "My web novel" }
+                                }
+                                runCatching {
+                                    savedProjects = projectStore.save(
+                                        NooirWebProjectStore.Project(
+                                            id = activeProjectId,
+                                            name = selectedName.take(100),
+                                            sourceUrl = sourceStoryUrl,
+                                            knownChapterUrls = knownChapterUrls,
+                                            chapterUrls = links,
+                                            chapterTitles = orderedChapterTitles,
+                                            bookTitle = combinedTitle,
+                                            author = combinedAuthor,
+                                            description = combinedDescription,
+                                            language = combinedLanguage,
+                                            coverUrl = coverUrl,
+                                            collageUrls = collageCoverLinks,
+                                            collage = combineCovers,
+                                            filename = combinedFilename,
+                                            contentSelector = contentSelector,
+                                            removeSelector = removeSelector,
+                                            epub2 = epub2,
+                                            includeImages = includeImages,
+                                            imageProfile = imageProfile.name,
+                                            readingStyle = readingStyle.name,
+                                        ))
+                                    activeProjectId = savedProjects.first().id
+                                    projectName = selectedName
+                                    projectMessage = "Saved project locally. EPUB files are not modified."
+                                }.onFailure {
+                                    projectMessage = "Could not save project: " +
+                                        (it.message ?: "Unknown error").take(160)
+                                }
+                            },
+                        ) { Text("Save project") }
+                        OutlinedButton(
+                            enabled = sourceStoryUrl.isNotBlank() && knownChapterUrls.isNotBlank() &&
+                                !busy && !checkingUpdates,
+                            onClick = {
+                                val requested = sourceStoryUrl
+                                val previouslyKnown = knownChapterUrls.lines()
+                                    .map(String::trim).filter(String::isNotBlank)
+                                checkingUpdates = true
+                                foundNewChapters = emptyList()
+                                latestInventory = ""
+                                updateMessage = ""
+                                previewScope.launch {
+                                    val latest = withContext(Dispatchers.IO) {
+                                        runCatching { NooirWebChapterDiscovery.inspect(requested) }
+                                    }
+                                    checkingUpdates = false
+                                    if (sourceStoryUrl != requested || !combinePages) return@launch
+                                    latest.onSuccess { discovery ->
+                                        val newItems = runCatching {
+                                            NooirWebChapterUpdates.findNew(
+                                                previouslyKnown, discovery.chapters)
+                                        }.getOrElse {
+                                            updateMessage = "Update comparison failed: " +
+                                                (it.message ?: "Invalid chapter inventory")
+                                            return@onSuccess
+                                        }
+                                        foundNewChapters = newItems
+                                        latestInventory = discovery.chapters.joinToString("\n") { it.url }
+                                        updateMessage = if (newItems.isEmpty())
+                                            "No newly listed public chapters found. Existing EPUB is unchanged."
+                                        else
+                                            "${newItems.size} new publicly listed chapter(s) found. Review before adding."
+                                    }.onFailure {
+                                        updateMessage = "Could not check public chapter list: " +
+                                            (it.message ?: "Source not readable").take(200)
+                                    }
+                                }
+                            },
+                        ) { Text("Check new chapters") }
+                    }
+                    if (checkingUpdates) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Checking public chapter metadata…")
+                    }
+                    if (updateMessage.isNotBlank()) Text(updateMessage)
+                    if (foundNewChapters.isNotEmpty()) {
+                        Text(foundNewChapters.take(6).joinToString("\n") { "• " + it.title })
+                        OutlinedButton(onClick = {
+                            runCatching {
+                                val merged = NooirWebChapterUpdates.append(
+                                    urls,
+                                    orderedChapterTitles.lines(),
+                                    foundNewChapters,
+                                )
+                                links = merged.urls.joinToString("\n")
+                                orderedChapterTitles = merged.titles.joinToString("\n")
+                                knownChapterUrls = latestInventory
+                                foundNewChapters = emptyList()
+                                updateMessage = "New chapters added to the editor. " +
+                                    "Save the project, then export a new EPUB file when ready."
+                            }.onFailure {
+                                updateMessage = "Could not add chapters: " +
+                                    (it.message ?: "Chapter list too large").take(200)
+                            }
+                        }) { Text("Add new chapters to export list") }
+                    }
+                    for (saved in savedProjects) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Text(saved.name.take(40), modifier = Modifier.weight(1f), maxLines = 2)
+                            OutlinedButton(enabled = !busy, onClick = {
+                                activeProjectId = saved.id
+                                projectName = saved.name
+                                sourceStoryUrl = saved.sourceUrl
+                                knownChapterUrls = saved.knownChapterUrls
+                                links = saved.chapterUrls
+                                orderedChapterTitles = saved.chapterTitles
+                                combinedTitle = saved.bookTitle
+                                combinedAuthor = saved.author
+                                combinedDescription = saved.description
+                                combinedLanguage = saved.language
+                                coverUrl = saved.coverUrl
+                                collageCoverLinks = saved.collageUrls
+                                combineCovers = saved.collage
+                                combinedFilename = saved.filename
+                                contentSelector = saved.contentSelector
+                                removeSelector = saved.removeSelector
+                                epub2 = saved.epub2
+                                includeImages = saved.includeImages
+                                imageProfile = NooirWebImageProfile.parse(saved.imageProfile)
+                                readingStyle = ReflowEpubStyle.parse(saved.readingStyle)
+                                combinePages = true
+                                foundNewChapters = emptyList()
+                                latestInventory = ""
+                                updateMessage = ""
+                                projectMessage = "Loaded ${saved.name}. Review settings before exporting."
+                            }) { Text("Load") }
+                            TextButton(onClick = {
+                                if (pendingDeletion == saved.id) {
+                                    runCatching { savedProjects = projectStore.delete(saved.id) }
+                                        .onSuccess {
+                                            if (activeProjectId == saved.id) activeProjectId = ""
+                                            projectMessage = "Deleted the saved project only; EPUBs are untouched."
+                                        }.onFailure {
+                                            projectMessage = "Could not delete project: " +
+                                                (it.message ?: "Storage error").take(160)
+                                        }
+                                    pendingDeletion = ""
+                                } else pendingDeletion = saved.id
+                            }) { Text(if (pendingDeletion == saved.id) "Confirm" else "Delete") }
+                        }
+                    }
+                    if (projectMessage.isNotBlank()) Text(projectMessage)
                     Text("Advanced chapter text extraction (optional). Leave both blank for automatic detection. " +
                         "Use simple CSS selectors such as article, #chapter-content or .reading-content. " +
                         "No scripts, complex selectors or login-only content.")
