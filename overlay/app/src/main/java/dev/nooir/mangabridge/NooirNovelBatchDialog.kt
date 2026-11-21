@@ -2,6 +2,7 @@ package dev.nooir.mangabridge
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -28,6 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.work.ExistingWorkPolicy
@@ -67,6 +73,10 @@ fun NooirNovelBatchDialog(
     var coverUrl by remember { mutableStateOf("") }
     var combineCovers by remember { mutableStateOf(false) }
     var collageCoverLinks by remember { mutableStateOf("") }
+    var coverPreview by remember { mutableStateOf<ImageBitmap?>(null) }
+    var previewingCover by remember { mutableStateOf(false) }
+    var coverPreviewMessage by remember { mutableStateOf("") }
+    var coverPreviewFor by remember { mutableStateOf("") }
     var epub2 by remember { mutableStateOf(false) }
     var includeImages by remember { mutableStateOf(true) }
     var contentSelector by remember { mutableStateOf("") }
@@ -108,6 +118,8 @@ fun NooirNovelBatchDialog(
         }
     }
     val collageUrls = collageCoverLinks.lines().map(String::trim).filter(String::isNotBlank)
+    val coverPreviewKey = listOf(links, coverUrl, combineCovers.toString(),
+        collageCoverLinks).joinToString("\u0001")
     val start = first.toIntOrNull()
     val end = last.toIntOrNull()
     // A combined book can use hundreds of public chapter links. The manifest
@@ -417,6 +429,74 @@ fun NooirNovelBatchDialog(
                             label = { Text("Single cover image HTTPS URL (optional)") },
                             supportingText = { Text("Blank: try source og:image or Twitter cover. JPEG or PNG, up to 1.5 MB.") },
                             singleLine = true, modifier = Modifier.fillMaxWidth())
+                    }
+                    OutlinedButton(
+                        enabled = !previewingCover && !busy && urls.isNotEmpty() &&
+                            (!combineCovers || collageUrls.isEmpty() ||
+                                (collageUrls.size in 2..4 && collageUrls.distinct().size == collageUrls.size)),
+                        onClick = {
+                            val requestedUrls = urls.toList()
+                            val requestedSingle = coverUrl.trim()
+                            val requestedCollage = combineCovers
+                            val requestedCollageUrls = collageUrls.toList()
+                            val requestedKey = coverPreviewKey
+                            previewingCover = true
+                            coverPreviewMessage = ""
+                            coverPreview = null
+                            previewScope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        val asset = NooirWebPageBook.previewCoverAsset(
+                                            requestedUrls, requestedSingle,
+                                            requestedCollage, requestedCollageUrls,
+                                        ) ?: error("No publicly accessible cover found in source metadata. " +
+                                            "Paste a direct JPEG/PNG cover image URL.")
+                                        val bounds = BitmapFactory.Options().apply {
+                                            inJustDecodeBounds = true
+                                        }
+                                        BitmapFactory.decodeByteArray(
+                                            asset.bytes, 0, asset.bytes.size, bounds)
+                                        var scale = 1
+                                        while (bounds.outWidth / scale > 480 ||
+                                            bounds.outHeight / scale > 640) scale *= 2
+                                        val options = BitmapFactory.Options().apply {
+                                            inSampleSize = scale
+                                            inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                                        }
+                                        (BitmapFactory.decodeByteArray(
+                                            asset.bytes, 0, asset.bytes.size, options)
+                                            ?: error("Cannot decode selected cover")).asImageBitmap()
+                                    }
+                                }
+                                previewingCover = false
+                                val currentKey = listOf(links, coverUrl, combineCovers.toString(),
+                                    collageCoverLinks).joinToString("\u0001")
+                                if (combinePages && currentKey == requestedKey) {
+                                    coverPreviewFor = requestedKey
+                                    result.onSuccess { coverPreview = it }
+                                        .onFailure { coverPreviewMessage =
+                                            "Cover preview failed: " +
+                                            (it.message ?: "Unknown cover error").take(220) }
+                                }
+                            }
+                        },
+                    ) {
+                        Text(if (combineCovers) "Preview actual combined cover" else "Preview selected book cover")
+                    }
+                    if (previewingCover) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Loading public cover images…")
+                    }
+                    if (coverPreviewFor == coverPreviewKey) {
+                        coverPreview?.let { image ->
+                            Image(
+                                bitmap = image,
+                                contentDescription = "Preview of the selected EPUB book cover",
+                                modifier = Modifier.fillMaxWidth().height(230.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
+                        if (coverPreviewMessage.isNotBlank()) Text(coverPreviewMessage)
                     }
                     OutlinedTextField(value = combinedFilename,
                         onValueChange = { combinedFilename = it.take(70) },
