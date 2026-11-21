@@ -1,5 +1,6 @@
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowEpubFormat
+import dev.nooir.bridge.ReflowEpubStyle
 import dev.nooir.bridge.ReflowMetadata
 import java.io.File
 import java.util.zip.ZipFile
@@ -82,6 +83,27 @@ fun main() {
                 }
             } finally { covered.delete() }
         }
+        // Style presets change the EPUB XHTML but never the default writer.
+        for (style in ReflowEpubStyle.entries) {
+            val styled = File.createTempFile("nooir-style-", ".epub")
+            try {
+                ReflowEpubWriter.write(styled, ReflowMetadata("Readable Styles")) { epub ->
+                    epub.setReadingStyle(style)
+                    epub.addSection("Chapter", "<p>Readable prose</p>")
+                }
+                ZipFile(styled).use { zip ->
+                    val chapter = zip.getInputStream(zip.getEntry("OEBPS/text/s00001.xhtml"))
+                        .bufferedReader().readText()
+                    check(chapter.contains("Readable prose"))
+                    when (style) {
+                        ReflowEpubStyle.STANDARD -> check(!chapter.contains("font-size:1.25em"))
+                        ReflowEpubStyle.COMPACT -> check(chapter.contains("line-height:1.25"))
+                        ReflowEpubStyle.LARGE_PRINT -> check(chapter.contains("font-size:1.25em"))
+                    }
+                }
+            } finally { styled.delete() }
+        }
+        check(runCatching { ReflowEpubStyle.parse("unsafe") }.isFailure)
         // An inaccessible chapter must never expose a truncated combined ebook.
         val aborted = File.createTempFile("nooir-failed-merge-", ".epub")
         try {
