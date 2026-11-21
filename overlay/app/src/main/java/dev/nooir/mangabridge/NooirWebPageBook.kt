@@ -92,6 +92,7 @@ object NooirWebPageBook {
         chapterTitles: List<String> = emptyList(),
         firstPage: Document? = null,
         coverUrl: String = "",
+        localCover: ReflowEpubWriter.ImageAsset? = null,
         collageCover: Boolean = false,
         collageCoverUrls: List<String> = emptyList(),
         bookDescription: String = "",
@@ -124,8 +125,11 @@ object NooirWebPageBook {
         if (coverUrl.isNotBlank()) require(coverUrl.trim().startsWith("https://", true)) {
             "Cover image must be a public HTTPS URL"
         }
-        require(!collageCover || coverUrl.isBlank()) {
+        require(!collageCover || (coverUrl.isBlank() && localCover == null)) {
             "Choose either one custom cover or a combined cover, not both"
+        }
+        require(localCover == null || coverUrl.isBlank()) {
+            "Choose either a phone cover or a public cover URL, not both"
         }
         require(collageCover || collageCoverUrls.isEmpty()) {
             "Extra cover URLs require combined cover mode"
@@ -162,6 +166,8 @@ object NooirWebPageBook {
             epub.setCustomCss(customCss)
             if (collageCover) {
                 NooirWebCover.embedImage(epub, collageAsset(first, preloaded, extraCovers))
+            } else if (localCover != null) {
+                NooirWebCover.embedImage(epub, localCover)
             } else {
                 NooirWebCover.embed(first, epub, coverUrl)
             }
