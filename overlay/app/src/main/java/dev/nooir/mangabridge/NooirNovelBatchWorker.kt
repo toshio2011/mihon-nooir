@@ -35,6 +35,8 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         const val BOOK_COVER_SOURCES = "combined_book_cover_sources"
         const val EPUB_VERSION = "novel_epub_version"
         const val INCLUDE_IMAGES = "novel_include_images"
+        const val CONTENT_SELECTOR = "combined_content_selector"
+        const val REMOVE_SELECTOR = "combined_remove_selector"
         const val BOOK_FILENAME = "combined_book_filename"
         const val URL_MANIFEST = "combined_urls_manifest"
         const val OUTPUT_TREE = "novel_output_tree"
@@ -95,6 +97,8 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             else -> null
         }
         val inlineImages = inputData.getBoolean(INCLUDE_IMAGES, true)
+        val contentSelector = inputData.getString(CONTENT_SELECTOR).orEmpty()
+        val removeSelector = inputData.getString(REMOVE_SELECTOR).orEmpty()
         val coverUrl = inputData.getString(BOOK_COVER_URL).orEmpty().trim()
         val coverCollage = inputData.getBoolean(BOOK_COVER_COLLAGE, false)
         val collageCoverUrls = inputData.getStringArray(BOOK_COVER_SOURCES)?.map(String::trim)
@@ -105,6 +109,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             urls.any { it.length > 600 || !it.startsWith("https://", true) } ||
             first < 1 || last < first || epubFormat == null ||
             (!combinePages && (coverCollage || collageCoverUrls.isNotEmpty())) ||
+            (combinePages && !NooirWebExtractRules.valid(contentSelector, removeSelector)) ||
             (combinePages && (coverUrl.length > 600 || description.length > 1200 ||
                 (coverCollage && coverUrl.isNotBlank()) ||
                 (!coverCollage && collageCoverUrls.isNotEmpty()) ||
@@ -161,6 +166,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                             collageCover = coverCollage, collageCoverUrls = collageCoverUrls,
                             bookDescription = description, bookLanguage = language,
                             epubFormat = epubFormat, includeImages = inlineImages,
+                            contentSelector = contentSelector, removeSelector = removeSelector,
                         ) { index, total, message ->
                             progress("Chapter " + index + "/" + total + " · " + message)
                         }
