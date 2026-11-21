@@ -33,6 +33,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         const val BOOK_DESCRIPTION = "combined_book_description"
         const val BOOK_LANGUAGE = "combined_book_language"
         const val BOOK_COVER_URL = "combined_book_cover_url"
+        const val BOOK_COVER_LOCAL_URI = "combined_book_cover_local_uri"
         const val BOOK_COVER_COLLAGE = "combined_book_cover_collage"
         const val BOOK_COVER_SOURCES = "combined_book_cover_sources"
         const val EPUB_VERSION = "novel_epub_version"
@@ -112,6 +113,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         val contentSelector = inputData.getString(CONTENT_SELECTOR).orEmpty()
         val removeSelector = inputData.getString(REMOVE_SELECTOR).orEmpty()
         val coverUrl = inputData.getString(BOOK_COVER_URL).orEmpty().trim()
+        val localCoverUri = inputData.getString(BOOK_COVER_LOCAL_URI).orEmpty().trim()
         val coverCollage = inputData.getBoolean(BOOK_COVER_COLLAGE, false)
         val collageCoverUrls = inputData.getStringArray(BOOK_COVER_SOURCES)?.map(String::trim)
             ?.filter(String::isNotBlank).orEmpty()
@@ -125,6 +127,9 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             (!combinePages && (coverCollage || collageCoverUrls.isNotEmpty())) ||
             (combinePages && !NooirWebExtractRules.valid(contentSelector, removeSelector)) ||
             (combinePages && (coverUrl.length > 600 || description.length > 1200 ||
+                localCoverUri.length > 1000 ||
+                (localCoverUri.isNotBlank() && (!localCoverUri.startsWith("content://") ||
+                    coverUrl.isNotBlank() || coverCollage)) ||
                 (coverCollage && coverUrl.isNotBlank()) ||
                 (!coverCollage && collageCoverUrls.isNotEmpty()) ||
                 (collageCoverUrls.isNotEmpty() &&
@@ -173,10 +178,14 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                         if (destination != null) NooirDestinationGuard.requireInPhoneFolder(
                             applicationContext, destination, filename)
                         else NooirDestinationGuard.requireOnReader(host, folder, filename)
+                        val phoneCover = if (localCoverUri.isNotBlank())
+                            NooirWebCover.loadLocal(applicationContext, Uri.parse(localCoverUri))
+                        else null
                         val converted = NooirWebPageBook.convert(
                             urls = urls, output = temp, bookTitle = title,
                             bookAuthor = author, chapterTitles = customNames.toList(),
                             firstPage = firstPage, coverUrl = coverUrl,
+                            localCover = phoneCover,
                             collageCover = coverCollage, collageCoverUrls = collageCoverUrls,
                             bookDescription = description, bookLanguage = language,
                             epubFormat = epubFormat, includeImages = inlineImages,
