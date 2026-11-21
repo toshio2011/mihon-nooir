@@ -1,6 +1,7 @@
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowEpubFormat
 import dev.nooir.bridge.ReflowEpubStyle
+import dev.nooir.bridge.NooirEpubCssRules
 import dev.nooir.bridge.ReflowMetadata
 import java.io.File
 import java.util.zip.ZipFile
@@ -104,6 +105,25 @@ fun main() {
             } finally { styled.delete() }
         }
         check(runCatching { ReflowEpubStyle.parse("unsafe") }.isFailure)
+        check(NooirEpubCssRules.canonicalize(
+            "p { text-indent: 1em; line-height: 1.5; }"
+        ) == "p{text-indent:1em;line-height:1.5}")
+        check(!NooirEpubCssRules.valid("p { background: url(https://remote.css) }"))
+        check(!NooirEpubCssRules.valid("p:hover { color: #000000 }"))
+        check(!NooirEpubCssRules.valid("</style><script>evil()</script>"))
+        check(!NooirEpubCssRules.valid("body { font-size:99999em }"))
+        val customStyled = File.createTempFile("nooir-custom-css-", ".epub")
+        try {
+            ReflowEpubWriter.write(customStyled, ReflowMetadata("CSS Example")) { epub ->
+                epub.setCustomCss("p { text-indent: 1em; line-height: 1.5 }")
+                epub.addSection("Chapter", "<p>Offline reading</p>")
+            }
+            ZipFile(customStyled).use { zip ->
+                val chapter = zip.getInputStream(zip.getEntry("OEBPS/text/s00001.xhtml"))
+                    .bufferedReader().readText()
+                check(chapter.contains("p{text-indent:1em;line-height:1.5}"))
+            }
+        } finally { customStyled.delete() }
         // An inaccessible chapter must never expose a truncated combined ebook.
         val aborted = File.createTempFile("nooir-failed-merge-", ".epub")
         try {
