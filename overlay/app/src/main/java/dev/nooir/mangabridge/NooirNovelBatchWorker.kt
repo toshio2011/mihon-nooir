@@ -35,6 +35,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         const val BOOK_COVER_SOURCES = "combined_book_cover_sources"
         const val EPUB_VERSION = "novel_epub_version"
         const val INCLUDE_IMAGES = "novel_include_images"
+        const val IMAGE_PROFILE = "novel_image_profile"
         const val CONTENT_SELECTOR = "combined_content_selector"
         const val REMOVE_SELECTOR = "combined_remove_selector"
         const val BOOK_FILENAME = "combined_book_filename"
@@ -97,6 +98,9 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             else -> null
         }
         val inlineImages = inputData.getBoolean(INCLUDE_IMAGES, true)
+        val imageProfile = runCatching {
+            NooirWebImageProfile.parse(inputData.getString(IMAGE_PROFILE) ?: "ORIGINAL")
+        }.getOrNull()
         val contentSelector = inputData.getString(CONTENT_SELECTOR).orEmpty()
         val removeSelector = inputData.getString(REMOVE_SELECTOR).orEmpty()
         val coverUrl = inputData.getString(BOOK_COVER_URL).orEmpty().trim()
@@ -107,7 +111,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
         val language = inputData.getString(BOOK_LANGUAGE).orEmpty().trim()
         if (urls.isEmpty() || (!combinePages && urls.size > 10) ||
             urls.any { it.length > 600 || !it.startsWith("https://", true) } ||
-            first < 1 || last < first || epubFormat == null ||
+            first < 1 || last < first || epubFormat == null || imageProfile == null ||
             (!combinePages && (coverCollage || collageCoverUrls.isNotEmpty())) ||
             (combinePages && !NooirWebExtractRules.valid(contentSelector, removeSelector)) ||
             (combinePages && (coverUrl.length > 600 || description.length > 1200 ||
@@ -166,6 +170,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                             collageCover = coverCollage, collageCoverUrls = collageCoverUrls,
                             bookDescription = description, bookLanguage = language,
                             epubFormat = epubFormat, includeImages = inlineImages,
+                            imageProfile = requireNotNull(imageProfile),
                             contentSelector = contentSelector, removeSelector = removeSelector,
                         ) { index, total, message ->
                             progress("Chapter " + index + "/" + total + " · " + message)
@@ -234,7 +239,8 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
                             applicationContext, destination, filename)
                         else NooirDestinationGuard.requireOnReader(host, folder, filename)
                         val result = NooirWebNovel.convert(url, temp, first, last, page,
-                            epubFormat = epubFormat, includeImages = inlineImages) { chapter, total, message ->
+                            epubFormat = epubFormat, includeImages = inlineImages,
+                            imageProfile = requireNotNull(imageProfile)) { chapter, total, message ->
                             progress(message + if (total > 0) " (" + chapter + "/" + total + ")" else "")
                         }
                         if (destination != null) {
