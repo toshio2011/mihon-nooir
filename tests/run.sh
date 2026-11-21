@@ -42,13 +42,13 @@ java -jar "$tmp/epub2.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PdfReflowLines.kt tests/PdfReflowLinesTest.kt -include-runtime -d "$tmp/pdf-reflow.jar"
 java -jar "$tmp/pdf-reflow.jar"
 
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,ReflowEpubWriter.kt} tests/ReadableFixturesTest.kt -include-runtime -d "$tmp/readable-fixtures.jar"
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,ReflowEpubWriter.kt,NooirEpubCssRules.kt} tests/ReadableFixturesTest.kt -include-runtime -d "$tmp/readable-fixtures.jar"
 java -Djava.awt.headless=true -jar "$tmp/readable-fixtures.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PageSlicePlanner.kt tests/PageSlicePlannerTest.kt -include-runtime -d "$tmp/slicing.jar"
 java -jar "$tmp/slicing.jar"
 
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{ReflowEpubWriter.kt,NooirEpubCssRules.kt} tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
 java -jar "$tmp/reflow.jar"
 
 # Combined web-book cover geometry: pure Kotlin, no Android graphics dependencies.
@@ -206,7 +206,7 @@ java -jar "$tmp/panel-safe-corridors.jar"
 
 # Long PDF-to-EPUB container regression. Synthetic original sections only:
 # proves that both EPUB versions can store well over 600 source pages.
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt \
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{ReflowEpubWriter.kt,NooirEpubCssRules.kt} \
   tests/PdfLargeReflowTest.kt -include-runtime -d "$tmp/pdf-long-epub.jar"
 java -Djava.awt.headless=true -jar "$tmp/pdf-long-epub.jar"
 
