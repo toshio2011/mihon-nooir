@@ -56,6 +56,11 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirCoverCollageLayout.
   tests/NooirCoverCollageLayoutTest.kt -include-runtime -d "$tmp/collage-layout.jar"
 java -jar "$tmp/collage-layout.jar"
 
+# Public novel chapter checklist: selected order must match the combined EPUB manifest.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebChapterPlan.kt \
+  tests/NooirWebChapterPlanTest.kt -include-runtime -d "$tmp/web-chapter-plan.jar"
+java -jar "$tmp/web-chapter-plan.jar"
+
 # Desktop uses the same source files as Android; never maintain duplicate codecs.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt tests/ConversionOptionsParityTest.kt -include-runtime -d "$tmp/options-parity.jar"
 java -jar "$tmp/options-parity.jar"

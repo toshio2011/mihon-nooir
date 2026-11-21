@@ -132,10 +132,7 @@ object NooirWebArticle {
      * embedded JPEG/PNG/GIF artwork, without taking full-page screenshots.
      * Images are capped for memory/size safety; no source scripts execute.
      */
-    internal fun appendChapter(
-        doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
-        maxImages: Int = 25,
-    ) {
+    private fun readableArticle(doc: Document, chapterTitle: String): Element {
         // Keep the actual text of a publicly served WordPress/Elementor page,
         // rather than relying only on traditional <article>/<main> wrappers.
         // Strip menus and scripts before choosing the best readable candidate.
@@ -177,6 +174,19 @@ object NooirWebArticle {
                 "MangaNooir does not load that session; try a direct, publicly " +
                 "readable article/chapter link or an authorized EPUB export."
         }
+        return article
+    }
+
+    /** Actual readable content selection used by EPUB export; no image downloads. */
+    internal fun previewChapterText(doc: Document, chapterTitle: String): String =
+        readableArticle(doc, chapterTitle).text()
+            .replace(Regex("\\s+"), " ").trim().take(1500)
+
+    internal fun appendChapter(
+        doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
+        maxImages: Int = 25,
+    ) {
+        val article = readableArticle(doc, chapterTitle)
         var images = 0
         article.select("img").forEach { img ->
             val source = listOf("data-src", "data-original", "src")

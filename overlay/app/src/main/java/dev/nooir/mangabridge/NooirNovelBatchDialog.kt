@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +16,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +39,9 @@ import java.util.UUID
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Simple manual multi-link importer. All work runs in the phone and shared IO queue. */
 @Composable
@@ -45,6 +52,7 @@ fun NooirNovelBatchDialog(
 ) {
     val context = LocalContext.current
     val manager = remember { WorkManager.getInstance(context) }
+    val previewScope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
     var links by remember(initialUrls) { mutableStateOf(initialUrls) }
     var customNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -61,6 +69,13 @@ fun NooirNovelBatchDialog(
     var collageCoverLinks by remember { mutableStateOf("") }
     var epub2 by remember { mutableStateOf(false) }
     var includeImages by remember { mutableStateOf(true) }
+    var analysis by remember { mutableStateOf<NooirWebChapterDiscovery.Analysis?>(null) }
+    var choices by remember { mutableStateOf<List<NooirWebChapterPlan.Entry>>(emptyList()) }
+    var analyzing by remember { mutableStateOf(false) }
+    var chaptersPage by remember { mutableStateOf(0) }
+    var previewing by remember { mutableStateOf(false) }
+    var sampleUrl by remember { mutableStateOf("") }
+    var sampleText by remember { mutableStateOf("") }
     var combinedFilename by remember { mutableStateOf("") }
     var orderedChapterTitles by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf("") }
@@ -77,6 +92,17 @@ fun NooirNovelBatchDialog(
     }
 
     val urls = links.lines().map(String::trim).filter(String::isNotBlank).distinct()
+    val freshAnalysis = analysis?.takeIf { !combinePages && urls.size == 1 &&
+        it.inputUrl == urls.single() }
+    LaunchedEffect(links, combinePages) {
+        if (combinePages || analysis?.inputUrl != urls.singleOrNull()) {
+            analysis = null
+            choices = emptyList()
+            chaptersPage = 0
+            sampleUrl = ""
+            sampleText = ""
+        }
+    }
     val collageUrls = collageCoverLinks.lines().map(String::trim).filter(String::isNotBlank)
     val start = first.toIntOrNull()
     val end = last.toIntOrNull()
@@ -194,6 +220,150 @@ fun NooirNovelBatchDialog(
                 )
                 Text((if (combinePages) "Selected chapters: " else "Selected stories: ") + urls.size +
                     if (combinePages) " · no fixed chapter count (128 KiB list budget)" else " / 10")
+                if (!combinePages && urls.size == 1) {
+                    OutlinedButton(
+                        enabled = !busy && !analyzing,
+                        onClick = {
+                            val requested = urls.single()
+                            analyzing = true
+                            analysis = null
+                            choices = emptyList()
+                            sampleUrl = ""
+                            sampleText = ""
+                            inputError = ""
+                            previewScope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching { NooirWebChapterDiscovery.inspect(requested) }
+                                }
+                                analyzing = false
+                                if (combinePages || links.lines().map(String::trim)
+                                        .filter(String::isNotBlank).distinct() != listOf(requested)) {
+                                    return@launch
+                                }
+                                result.onSuccess {
+                                    analysis = it
+                                    choices = it.chapters
+                                    chaptersPage = 0
+                                }.onFailure {
+                                    inputError = "Could not analyze chapter list: " +
+                                        (it.message ?: "public chapters unavailable").take(260)
+                                }
+                            }
+                        },
+                    ) { Text("Analyze chapters before export") }
+                    if (analyzing) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Discovering public chapter links…")
+                    }
+                    freshAnalysis?.let { discovered ->
+                        val current = choices
+                        val selectedCount = current.count { it.included }
+                        Text("Found ${current.size} listed chapters · ${selectedCount} selected")
+                        Text("Book: " + discovered.title.take(120))
+                        if (discovered.author.isNotBlank()) Text("Author: " + discovered.author.take(120))
+                        if (discovered.detectedCoverUrl.isNotBlank())
+                            Text("Detected cover: " + discovered.detectedCoverUrl.take(115))
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            OutlinedButton(onClick = {
+                                choices = NooirWebChapterPlan.chooseAll(choices, true)
+                            }) { Text("Select all") }
+                            OutlinedButton(onClick = {
+                                choices = NooirWebChapterPlan.chooseAll(choices, false)
+                            }) { Text("Select none") }
+                            OutlinedButton(onClick = {
+                                choices = NooirWebChapterPlan.reverse(choices)
+                            }) { Text("Reverse") }
+                        }
+                        val chunkSize = 10
+                        val maxPage = ((current.size - 1) / chunkSize).coerceAtLeast(0)
+                        val page = chaptersPage.coerceIn(0, maxPage)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(enabled = page > 0, onClick = {
+                                chaptersPage = page - 1
+                            }) { Text("Previous 10") }
+                            Text("Page ${page + 1}/${maxPage + 1}")
+                            OutlinedButton(enabled = page < maxPage, onClick = {
+                                chaptersPage = page + 1
+                            }) { Text("Next 10") }
+                        }
+                        val from = page * chunkSize
+                        for (index in from until minOf(current.size, from + chunkSize)) {
+                            val entry = current[index]
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Checkbox(checked = entry.included, onCheckedChange = {
+                                    choices = NooirWebChapterPlan.toggle(choices, index)
+                                })
+                                Text("${index + 1}. " + entry.title, modifier = Modifier.weight(1f),
+                                    maxLines = 2)
+                                OutlinedButton(enabled = index > 0, onClick = {
+                                    choices = NooirWebChapterPlan.move(choices, index, index - 1)
+                                }) { Text("↑") }
+                                OutlinedButton(enabled = index < current.lastIndex, onClick = {
+                                    choices = NooirWebChapterPlan.move(choices, index, index + 1)
+                                }) { Text("↓") }
+                            }
+                            OutlinedButton(
+                                enabled = !previewing,
+                                onClick = {
+                                    previewing = true
+                                    sampleText = ""
+                                    sampleUrl = entry.url
+                                    val title = entry.title
+                                    val chapterUrl = entry.url
+                                    previewScope.launch {
+                                        val result = withContext(Dispatchers.IO) {
+                                            runCatching {
+                                                val pageDoc = NooirWebArticle.load(chapterUrl)
+                                                NooirWebArticle.previewChapterText(pageDoc, title)
+                                            }
+                                        }
+                                        previewing = false
+                                        if (analysis?.inputUrl == discovered.inputUrl &&
+                                            choices.any { it.url == chapterUrl } && !combinePages) {
+                                            sampleUrl = chapterUrl
+                                            sampleText = result.getOrElse {
+                                                "Preview unavailable: " + (it.message ?: "Cannot read public text").take(180)
+                                            }
+                                        }
+                                    }
+                                },
+                            ) { Text("Preview text") }
+                            if (sampleUrl == entry.url) {
+                                if (previewing) Text("Loading public text…")
+                                else if (sampleText.isNotBlank())
+                                    Text(sampleText.take(1500))
+                            }
+                        }
+                        OutlinedButton(enabled = selectedCount > 0 && !busy,
+                            onClick = {
+                                runCatching { NooirWebChapterPlan.export(choices) }
+                                    .onSuccess { selected ->
+                                        links = selected.urls.joinToString("\n")
+                                        orderedChapterTitles = selected.titles.joinToString("\n")
+                                        if (combinedTitle.isBlank()) combinedTitle = discovered.title
+                                        if (combinedAuthor.isBlank()) combinedAuthor = discovered.author
+                                        if (combinedLanguage.isBlank())
+                                            combinedLanguage = discovered.language
+                                        if (combinedDescription.isBlank())
+                                            combinedDescription = discovered.description
+                                        if (coverUrl.isBlank() && !combineCovers)
+                                            coverUrl = discovered.detectedCoverUrl.take(600)
+                                        combinePages = true
+                                        inputError = ""
+                                    }
+                                    .onFailure { inputError = it.message ?: "Invalid chapter selection" }
+                            }) {
+                            Text("Use selected chapters in one EPUB")
+                        }
+                        Text("This opens the editable combined-book settings next. " +
+                            "Chapter content is fetched only during preview or export; " +
+                            "a public chapter list does not guarantee readable text.")
+                    }
+                }
+
                 if (combinePages) {
                     OutlinedTextField(value = combinedTitle,
                         onValueChange = { combinedTitle = it.take(180) },

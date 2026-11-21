@@ -87,15 +87,7 @@ object NooirWebNovel {
         // when the story HTML has no <a> chapter links. Try only the public
         // metadata response; if it is blocked, use any truly visible HTML
         // chapter links, not a fake synopsis-only EPUB.
-        val htmlChapters = discover(page)
-        val chapterLinks = if (wattpadStory) {
-            runCatching { NooirWattpadPublic.discover(storyUrl) }.getOrElse { err ->
-                if (htmlChapters.isNotEmpty()) htmlChapters
-                else error("Wattpad chapter discovery failed: " +
-                    (err.message ?: "public story metadata unavailable") +
-                    " No EPUB was generated.")
-            }
-        } else htmlChapters
+        val chapterLinks = NooirWebChapterDiscovery.chapters(storyUrl, page)
         if (chapterLinks.isEmpty()) {
             require(startAt == 1) { "This page has no visible chapter list; use chapter 1 or a directly readable chapter link." }
             if (wattpadStory) {

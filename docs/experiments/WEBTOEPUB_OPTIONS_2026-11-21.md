@@ -29,6 +29,18 @@ The collage uses fit-contain tiles to avoid cropping cover artwork, with a dark 
 
 **Scope:** this currently combines public webpage/chapter links into one EPUB. Importing several existing local `.epub` files and merging their full books/metadata is a *different* feature and is not implemented by this option. The renderer and pure-Kotlin tile geometry are independent of WebToEpub GPLv3 sources. Android device rendering, actual page-cover retrieval and physical Folio Nooir reader acceptance still need verification.
 
+### Chapter analysis and selection before export (new experimental slice)
+
+In **Web novels / Batch EPUB**, paste **one public story/table-of-contents URL** while separate-story mode is active, then tap **Analyze chapters before export**. This fetches only public HTML or the same limited public Wattpad story metadata already used by the converter; no browser login or premium chapter access. Analysis is separate from exporting.
+
+The analyzer displays the detected story title, author, cover URL (if provided by the site), total chapter count, and a paginated 10-at-a-time checklist with **select all**, **select none**, **reverse**, **move up/down** and **Preview text** per chapter. Text preview performs an explicit public chapter request and uses exactly the same readable-content selection routine as the EPUB exporter, but skips downloading illustrations. It reports missing/locked/dynamic prose rather than inventing an extract.
+
+**Use selected chapters in one EPUB** copies only included chapter links in the chosen order to the existing combined-book editor, with matching editable chapter titles and suggested source title/author/language/description and source cover URL. The user still confirms the export destination, final cover, EPUB version and illustrations. It does not start a background export automatically. This does **not** add a full rendered EPUB page preview or a browser-session reader.
+
+Safety: analysis is a user-initiated foreground action, with IO off the Compose main thread; stale results are discarded if the link is changed. The chapter plan validates HTTPS URLs, ordering, duplicates and the 120 KiB link-manifest budget. A fully selected 1000+ chapter story may exceed that budget: select fewer chapters or split volumes rather than silently truncating. Public chapter-list metadata never guarantees every chapter can be read; conversion still aborts atomically on unreadable pages.
+
+CI: added pure Kotlin `tests/NooirWebChapterPlanTest.kt` to `tests/run.sh` covering selected order, exclude/reverse/move, duplicate/empty/oversize manifests, and metadata sanitization. Android Compose compile and device UI acceptance remain mandatory. No official APK change and no Windows code changes.
+
 ### Not yet implemented
 
 Actual cover preview/phone-file picker, editable stylesheets, content-selector tester, per-site parsers beyond current source handling, image compression/resizing, saved novel presets, persistent chapter checklists/retry/resume and WebToEpub-style library update/merge. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
@@ -43,7 +55,7 @@ Actual cover preview/phone-file picker, editable stylesheets, content-selector t
 
 ## Next useful improvements
 
-1. Add a **live chapter-list and single/collage cover preview** before conversion, then let users select/deselect/reorder chapters.
+1. Add actual single/collage cover previews and a native book-metadata panel; chapter selection preview is now implemented experimentally.
 2. Add safe **content CSS selector presets** with preview against fetched public HTML, plus unwanted-element removal.
 3. Add image sizing/compression and a bounded stylesheet preset picker (avoid accepting arbitrary unsafe CSS before sanitization).
 4. Save per-site nonsecret importer preferences, with explicit retry/resume for permitted sources.
