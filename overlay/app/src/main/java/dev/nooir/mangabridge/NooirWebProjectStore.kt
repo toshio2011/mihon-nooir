@@ -17,6 +17,7 @@ internal class NooirWebProjectStore(context: Context) {
         val id: String,
         val name: String,
         val sourceUrl: String,
+        val knownChapterUrls: String,
         val chapterUrls: String,
         val chapterTitles: String,
         val bookTitle: String,
@@ -48,6 +49,7 @@ internal class NooirWebProjectStore(context: Context) {
                 id = item.getString("id"),
                 name = item.getString("name"),
                 sourceUrl = item.optString("sourceUrl"),
+                knownChapterUrls = item.optString("knownChapterUrls"),
                 chapterUrls = item.getString("chapterUrls"),
                 chapterTitles = item.optString("chapterTitles"),
                 bookTitle = item.optString("bookTitle"),
@@ -103,6 +105,13 @@ internal class NooirWebProjectStore(context: Context) {
             (p.sourceUrl.length <= 600 && p.sourceUrl.startsWith("https://", true))) {
             "Saved story URL must be public HTTPS"
         }
+        require(p.knownChapterUrls.length <= 120_000) {
+            "Saved public chapter inventory is too long"
+        }
+        require(p.knownChapterUrls.lines().filter(String::isNotBlank)
+            .all { it.length <= 600 && it.startsWith("https://", true) }) {
+            "Saved chapter inventory contains a non-HTTPS URL"
+        }
         require(p.chapterTitles.length <= 120_000 && p.bookTitle.length <= 240 &&
             p.author.length <= 120 && p.description.length <= 1200 &&
             p.coverUrl.length <= 600 && p.collageUrls.length <= 2500 &&
@@ -119,6 +128,7 @@ internal class NooirWebProjectStore(context: Context) {
         items.forEach { p ->
             array.put(JSONObject().apply {
                 put("id", p.id); put("name", p.name); put("sourceUrl", p.sourceUrl)
+                put("knownChapterUrls", p.knownChapterUrls)
                 put("chapterUrls", p.chapterUrls); put("chapterTitles", p.chapterTitles)
                 put("bookTitle", p.bookTitle); put("author", p.author)
                 put("description", p.description); put("language", p.language)
