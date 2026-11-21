@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import dev.nooir.bridge.ReflowEpubStyle
+import dev.nooir.bridge.NooirEpubCssRules
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -98,6 +99,7 @@ fun NooirNovelBatchDialog(
     var includeImages by remember { mutableStateOf(true) }
     var imageProfile by remember { mutableStateOf(NooirWebImageProfile.BALANCED) }
     var readingStyle by remember { mutableStateOf(ReflowEpubStyle.STANDARD) }
+    var customCss by remember { mutableStateOf("") }
     var contentSelector by remember { mutableStateOf("") }
     var removeSelector by remember { mutableStateOf("") }
     var checkingExtraction by remember { mutableStateOf(false) }
@@ -147,6 +149,7 @@ fun NooirNovelBatchDialog(
         (if (combinePages) links.toByteArray(Charsets.UTF_8).size <= 120_000
             else urls.size <= 10) &&
         urls.all { it.length <= 600 && it.startsWith("https://", true) } &&
+        NooirEpubCssRules.valid(customCss) &&
         (!combinePages || NooirWebExtractRules.valid(contentSelector, removeSelector)) &&
         (!combinePages || orderedChapterTitles.isBlank() ||
             orderedChapterTitles.lines().size <= urls.size) &&
@@ -208,6 +211,7 @@ fun NooirNovelBatchDialog(
                 NooirNovelBatchWorker.INCLUDE_IMAGES to includeImages,
                 NooirNovelBatchWorker.IMAGE_PROFILE to imageProfile.name,
                 NooirNovelBatchWorker.READING_STYLE to readingStyle.name,
+                NooirNovelBatchWorker.CUSTOM_CSS to customCss,
                 NooirNovelBatchWorker.CONTENT_SELECTOR to (if (combinePages) contentSelector.trim() else ""),
                 NooirNovelBatchWorker.REMOVE_SELECTOR to (if (combinePages) removeSelector.trim() else ""),
                 NooirNovelBatchWorker.BOOK_FILENAME to combinedFilename.trim(),
@@ -578,6 +582,7 @@ fun NooirNovelBatchDialog(
                                             includeImages = includeImages,
                                             imageProfile = imageProfile.name,
                                             readingStyle = readingStyle.name,
+                                            customCss = customCss,
                                         ))
                                     activeProjectId = savedProjects.first().id
                                     projectName = selectedName
@@ -681,6 +686,7 @@ fun NooirNovelBatchDialog(
                                 includeImages = saved.includeImages
                                 imageProfile = NooirWebImageProfile.parse(saved.imageProfile)
                                 readingStyle = ReflowEpubStyle.parse(saved.readingStyle)
+                                customCss = saved.customCss
                                 combinePages = true
                                 foundNewChapters = emptyList()
                                 latestInventory = ""
@@ -807,6 +813,19 @@ fun NooirNovelBatchDialog(
                     }
                 }
                 Text("Styles are saved inside the EPUB. E-readers may override font size.")
+                OutlinedTextField(
+                    value = customCss,
+                    onValueChange = { customCss = it.take(2000) },
+                    label = { Text("Optional custom EPUB text CSS") },
+                    placeholder = { Text("p { text-indent: 1em; line-height: 1.5; }") },
+                    supportingText = { Text("Safe offline text styling only: body, p, headings, " +
+                        "font size, spacing and alignment. No imports, URLs or complex selectors.") },
+                    minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth(),
+                )
+                if (!NooirEpubCssRules.valid(customCss)) {
+                    Text("Invalid custom CSS. Use simple tag { property: value; } rules " +
+                        "without external resources or HTML.")
+                }
                 if (includeImages) {
                     Text("Chapter illustration size (covers remain unchanged)")
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
