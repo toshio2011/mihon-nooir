@@ -16,6 +16,73 @@ import java.net.URI
 object NooirWebPageBook {
     data class Result(val title: String, val pages: Int)
 
+    /** Shared collage construction for actual EPUB covers and the editor preview. */
+    internal fun collageAsset(
+        first: Document,
+        preloaded: Map<Int, Document>,
+        extraCovers: List<String>,
+    ): ReflowEpubWriter.ImageAsset {
+                val sources = if (extraCovers.isNotEmpty()) {
+                    extraCovers.map { chosen ->
+                        NooirWebCover.load(first, chosen)
+                            ?: error("Selected collage cover could not be loaded")
+                    }
+                } else {
+                    preloaded.toSortedMap().values
+                        .mapNotNull { doc ->
+                            NooirWebCover.detectedUrl(doc)?.let { candidate -> candidate to doc }
+                        }
+                        .distinctBy { it.first }.take(4)
+                        .mapNotNull { (cover, doc) -> NooirWebCover.load(doc, cover) }
+                }
+                // Two different image URLs may return the exact same cover.
+                // Deduplicate the decoded source bytes before building the grid.
+                val sourcesByHash = sources.distinctBy { asset ->
+                    java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(asset.bytes).joinToString("") { byte ->
+                            "%02x".format(byte.toInt() and 0xff)
+                        }
+                }
+                if (extraCovers.isNotEmpty()) require(sourcesByHash.size == sources.size) {
+                    "Two selected cover URLs returned identical artwork. Choose distinct book covers."
+                }
+                require(sourcesByHash.size in 2..4) {
+                    "Only ${sourcesByHash.size} distinct public source covers could be loaded. " +
+                    "Provide 2–4 direct HTTPS JPEG/PNG cover URLs, or switch to a single cover."
+                }
+        return NooirCoverCollage.compose(sourcesByHash)
+    }
+
+    /** The preview uses the same image validation and collage layout as export.
+     * The caller performs this explicit network work on Dispatchers.IO.
+     */
+    internal fun previewCoverAsset(
+        urls: List<String>,
+        coverUrl: String,
+        collageCover: Boolean,
+        collageCoverUrls: List<String>,
+    ): ReflowEpubWriter.ImageAsset? {
+        require(urls.isNotEmpty()) { "Add public chapter URLs before previewing a cover" }
+        require(!collageCover || coverUrl.isBlank()) { "Select either a single or combined cover" }
+        val safeUrls = urls.take(4).map { NooirWebArticle.publicHttps(it) }
+        val first = NooirWebArticle.load(safeUrls.first())
+        if (!collageCover) return NooirWebCover.load(first, coverUrl)
+        require(collageCoverUrls.isEmpty() ||
+            (collageCoverUrls.size in 2..4 &&
+                collageCoverUrls.distinct().size == collageCoverUrls.size)) {
+            "Select 2–4 different public cover URLs"
+        }
+        val extras = collageCoverUrls.map { NooirWebArticle.publicHttps(it) }
+        val preloaded = mutableMapOf(0 to first)
+        if (extras.isEmpty()) {
+            for (index in 1 until safeUrls.size) {
+                Thread.sleep(1300L)
+                preloaded[index] = NooirWebArticle.load(safeUrls[index])
+            }
+        }
+        return collageAsset(first, preloaded, extras)
+    }
+
     fun convert(
         urls: List<String>,
         output: File,
@@ -88,35 +155,7 @@ object NooirWebPageBook {
         )
         ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
             if (collageCover) {
-                val sources = if (extraCovers.isNotEmpty()) {
-                    extraCovers.map { chosen ->
-                        NooirWebCover.load(first, chosen)
-                            ?: error("Selected collage cover could not be loaded")
-                    }
-                } else {
-                    preloaded.toSortedMap().values
-                        .mapNotNull { doc ->
-                            NooirWebCover.detectedUrl(doc)?.let { candidate -> candidate to doc }
-                        }
-                        .distinctBy { it.first }.take(4)
-                        .mapNotNull { (cover, doc) -> NooirWebCover.load(doc, cover) }
-                }
-                // Two different image URLs may return the exact same cover.
-                // Deduplicate the decoded source bytes before building the grid.
-                val sourcesByHash = sources.distinctBy { asset ->
-                    java.security.MessageDigest.getInstance("SHA-256")
-                        .digest(asset.bytes).joinToString("") { byte ->
-                            "%02x".format(byte.toInt() and 0xff)
-                        }
-                }
-                if (extraCovers.isNotEmpty()) require(sourcesByHash.size == sources.size) {
-                    "Two selected cover URLs returned identical artwork. Choose distinct book covers."
-                }
-                require(sourcesByHash.size in 2..4) {
-                    "Only ${sourcesByHash.size} distinct public source covers could be loaded. " +
-                    "Provide 2–4 direct HTTPS JPEG/PNG cover URLs, or switch to a single cover."
-                }
-                NooirWebCover.embedImage(epub, NooirCoverCollage.compose(sourcesByHash))
+                NooirWebCover.embedImage(epub, collageAsset(first, preloaded, extraCovers))
             } else {
                 NooirWebCover.embed(first, epub, coverUrl)
             }
