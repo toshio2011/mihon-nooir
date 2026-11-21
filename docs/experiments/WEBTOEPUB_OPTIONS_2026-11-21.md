@@ -51,9 +51,17 @@ Rules are intentionally bounded: 160 characters per field, at most four comma-se
 
 These are *content selection* controls, not EPUB style-sheet editing or custom per-site parsers.
 
+### Actual EPUB cover preview (new experimental slice)
+
+The combined-book editor now provides **Preview selected book cover** or **Preview actual combined cover** after the source cover URL(s) are set. This is an explicit, cancellable-on-dialog-dismiss UI request to fetch public HTTPS artwork, decode a downsampled on-screen preview and display it within the editor before export. It does not save or upload the book. Automatic source covers are best-effort; a missing cover displays a clear preview error.
+
+The combined preview reuses the *same* source-image validation, distinct-artwork deduplication, tile geometry and JPEG collage composer used by EPUB export; it is not a misleading mockup. The preview is downsampled for display, while export keeps the full 800×1120 composited image. Manual covers must still be public JPEG/PNG images and collage mode requires 2–4 distinct covers. No new third-party image service or browser session is involved.
+
+Android compilation plus real phone preview and final EPUB rendering are still acceptance gates. There is not yet an on-device photo picker or cover-tile editor.
+
 ### Not yet implemented
 
-Actual cover preview/phone-file picker, editable EPUB stylesheets, per-site parsers beyond current source handling, image compression/resizing, saved novel presets, persistent chapter checklists/retry/resume and WebToEpub-style library update/merge. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
+Phone-file cover picker, editable EPUB stylesheets, per-site parsers beyond current source handling, image compression/resizing, saved novel presets, persistent chapter checklists/retry/resume and WebToEpub-style library update/merge. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
 
 ### Acceptance gates
 
@@ -65,7 +73,7 @@ Actual cover preview/phone-file picker, editable EPUB stylesheets, per-site pars
 
 ## Next useful improvements
 
-1. Add actual single/collage cover previews and a native book-metadata panel; chapter selection preview is now implemented experimentally.
+1. Add an optional on-phone cover picker and richer metadata panel; the single/collage cover **preview** is now implemented experimentally.
 2. Add saveable **content selector presets per public site**, building on the manual preview and unwanted-element removal now wired into the experimental combined-book flow.
 3. Add image sizing/compression and a bounded stylesheet preset picker (avoid accepting arbitrary unsafe CSS before sanitization).
 4. Save per-site nonsecret importer preferences, with explicit retry/resume for permitted sources.
