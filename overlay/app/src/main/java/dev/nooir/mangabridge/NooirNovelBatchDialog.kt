@@ -61,6 +61,22 @@ fun NooirNovelBatchDialog(
     val manager = remember { WorkManager.getInstance(context) }
     val previewScope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
+    val projectStore = remember { NooirWebProjectStore(context.applicationContext) }
+    var savedProjects by remember {
+        mutableStateOf(runCatching { projectStore.list() }.getOrDefault(emptyList()))
+    }
+    var projectName by remember { mutableStateOf("") }
+    var activeProjectId by remember { mutableStateOf("") }
+    var projectMessage by remember { mutableStateOf("") }
+    var pendingDeletion by remember { mutableStateOf("") }
+    var sourceStoryUrl by remember { mutableStateOf("") }
+    var knownChapterUrls by remember { mutableStateOf("") }
+    var checkingUpdates by remember { mutableStateOf(false) }
+    var foundNewChapters by remember {
+        mutableStateOf<List<NooirWebChapterPlan.Entry>>(emptyList())
+    }
+    var latestInventory by remember { mutableStateOf("") }
+    var updateMessage by remember { mutableStateOf("") }
     var links by remember(initialUrls) { mutableStateOf(initialUrls) }
     var customNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var first by remember { mutableStateOf("1") }
@@ -376,6 +392,12 @@ fun NooirNovelBatchDialog(
                                         if (coverUrl.isBlank() && !combineCovers)
                                             coverUrl = discovered.detectedCoverUrl.take(600)
                                         combinePages = true
+                                        sourceStoryUrl = discovered.inputUrl
+                                        knownChapterUrls = discovered.chapters.joinToString("\n") { it.url }
+                                        foundNewChapters = emptyList()
+                                        latestInventory = ""
+                                        updateMessage = ""
+                                        if (projectName.isBlank()) projectName = discovered.title.take(100)
                                         inputError = ""
                                     }
                                     .onFailure { inputError = it.message ?: "Invalid chapter selection" }
