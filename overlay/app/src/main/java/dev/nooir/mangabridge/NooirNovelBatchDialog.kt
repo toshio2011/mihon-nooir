@@ -79,6 +79,7 @@ fun NooirNovelBatchDialog(
     var coverPreviewFor by remember { mutableStateOf("") }
     var epub2 by remember { mutableStateOf(false) }
     var includeImages by remember { mutableStateOf(true) }
+    var imageProfile by remember { mutableStateOf(NooirWebImageProfile.BALANCED) }
     var contentSelector by remember { mutableStateOf("") }
     var removeSelector by remember { mutableStateOf("") }
     var checkingExtraction by remember { mutableStateOf(false) }
@@ -187,6 +188,7 @@ fun NooirNovelBatchDialog(
                     if (combinePages && combineCovers) collageUrls.toTypedArray() else emptyArray<String>()),
                 NooirNovelBatchWorker.EPUB_VERSION to (if (epub2) "EPUB2" else "EPUB3"),
                 NooirNovelBatchWorker.INCLUDE_IMAGES to includeImages,
+                NooirNovelBatchWorker.IMAGE_PROFILE to imageProfile.name,
                 NooirNovelBatchWorker.CONTENT_SELECTOR to (if (combinePages) contentSelector.trim() else ""),
                 NooirNovelBatchWorker.REMOVE_SELECTOR to (if (combinePages) removeSelector.trim() else ""),
                 NooirNovelBatchWorker.BOOK_FILENAME to combinedFilename.trim(),
@@ -598,6 +600,26 @@ fun NooirNovelBatchDialog(
                         checked = includeImages, onCheckedChange = { includeImages = it },
                     )
                     Text("Include inline chapter illustrations")
+                }
+                if (includeImages) {
+                    Text("Chapter illustration size (covers remain unchanged)")
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        for (preset in NooirWebImageProfile.entries) {
+                            androidx.compose.material3.FilterChip(
+                                selected = imageProfile == preset,
+                                onClick = { imageProfile = preset },
+                                label = {
+                                    Text(when (preset) {
+                                        NooirWebImageProfile.ORIGINAL -> "Original"
+                                        NooirWebImageProfile.BALANCED -> "Balanced"
+                                        NooirWebImageProfile.SMALL -> "Small"
+                                    })
+                                },
+                            )
+                        }
+                    }
+                    Text("Balanced resizes oversized artwork to 1600 px; Small to 1000 px. " +
+                        "Original preserves existing illustration bytes. PNG transparency is retained.")
                 }
                 if (!combinePages) {
                     androidx.compose.foundation.layout.Row(
