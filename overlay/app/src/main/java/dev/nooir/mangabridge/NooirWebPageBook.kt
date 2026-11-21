@@ -97,6 +97,7 @@ object NooirWebPageBook {
         bookLanguage: String = "",
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
         includeImages: Boolean = true,
+        imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         contentSelector: String = "",
         removeSelector: String = "",
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
@@ -177,6 +178,7 @@ object NooirWebPageBook {
                 NooirWebArticle.appendChapter(
                     page, epub, title, maxImages = if (includeImages) 25 else 0,
                     contentSelector = contentSelector, removeSelector = removeSelector,
+                    imageProfile = imageProfile,
                 )
                 onPage(index + 1, safeUrls.size, "Added " + title)
             }
