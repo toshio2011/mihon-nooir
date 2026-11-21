@@ -22,7 +22,7 @@ object NooirWebPageBook {
         preloaded: Map<Int, Document>,
         extraCovers: List<String>,
     ): ReflowEpubWriter.ImageAsset {
-                val sources = if (extraCovers.isNotEmpty()) {
+        val sources = if (extraCovers.isNotEmpty()) {
                     extraCovers.map { chosen ->
                         NooirWebCover.load(first, chosen)
                             ?: error("Selected collage cover could not be loaded")
@@ -35,8 +35,8 @@ object NooirWebPageBook {
                         .distinctBy { it.first }.take(4)
                         .mapNotNull { (cover, doc) -> NooirWebCover.load(doc, cover) }
                 }
-                // Two different image URLs may return the exact same cover.
-                // Deduplicate the decoded source bytes before building the grid.
+        // Two different image URLs may return the exact same cover.
+        // Deduplicate the decoded source bytes before building the grid.
                 val sourcesByHash = sources.distinctBy { asset ->
                     java.security.MessageDigest.getInstance("SHA-256")
                         .digest(asset.bytes).joinToString("") { byte ->
