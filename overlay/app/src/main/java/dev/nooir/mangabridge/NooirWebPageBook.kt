@@ -30,10 +30,13 @@ object NooirWebPageBook {
         bookLanguage: String = "",
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
         includeImages: Boolean = true,
+        contentSelector: String = "",
+        removeSelector: String = "",
         onPage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ): Result {
         require(urls.isNotEmpty()) { "Add at least one public chapter URL" }
         require(bookTitle.isNotBlank()) { "Enter a book title" }
+        NooirWebExtractRules.validate(contentSelector, removeSelector)
         require(urls.distinct().size == urls.size) { "Remove repeated chapter URLs" }
         val safeUrls = urls.map { NooirWebArticle.publicHttps(it) }
         val first = firstPage ?: NooirWebArticle.load(safeUrls.first())
@@ -132,7 +135,10 @@ object NooirWebPageBook {
                 require(title.isNotBlank()) { "Page ${index + 1} has no chapter title" }
                 // Avoid creating a partial EPUB from navigation-only landing
                 // pages or blocked chapters; appendChapter validates content.
-                NooirWebArticle.appendChapter(page, epub, title, maxImages = if (includeImages) 25 else 0)
+                NooirWebArticle.appendChapter(
+                    page, epub, title, maxImages = if (includeImages) 25 else 0,
+                    contentSelector = contentSelector, removeSelector = removeSelector,
+                )
                 onPage(index + 1, safeUrls.size, "Added " + title)
             }
         }
