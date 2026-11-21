@@ -89,6 +89,7 @@ fun NooirNovelBatchDialog(
     var combinedDescription by remember { mutableStateOf("") }
     var combinedLanguage by remember { mutableStateOf("") }
     var coverUrl by remember { mutableStateOf("") }
+    var localCoverUri by remember { mutableStateOf("") }
     var combineCovers by remember { mutableStateOf(false) }
     var collageCoverLinks by remember { mutableStateOf("") }
     var coverPreview by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -140,7 +141,7 @@ fun NooirNovelBatchDialog(
     }
     val collageUrls = collageCoverLinks.lines().map(String::trim).filter(String::isNotBlank)
     val coverPreviewKey = listOf(links, coverUrl, combineCovers.toString(),
-        collageCoverLinks).joinToString("\u0001")
+        collageCoverLinks, localCoverUri).joinToString("\u0001")
     val start = first.toIntOrNull()
     val end = last.toIntOrNull()
     // A combined book can use hundreds of public chapter links. The manifest
@@ -155,6 +156,8 @@ fun NooirNovelBatchDialog(
             orderedChapterTitles.lines().size <= urls.size) &&
         (!combinePages || (
             coverUrl.length <= 600 &&
+            (localCoverUri.isBlank() || (localCoverUri.startsWith("content://") &&
+                localCoverUri.length <= 1000 && coverUrl.isBlank() && !combineCovers)) &&
             (coverUrl.isBlank() || coverUrl.trim().startsWith("https://", true)) &&
             (!combineCovers || (coverUrl.isBlank() &&
                 (collageUrls.isEmpty() || (collageUrls.size in 2..4 &&
@@ -204,6 +207,8 @@ fun NooirNovelBatchDialog(
                 NooirNovelBatchWorker.BOOK_DESCRIPTION to (if (combinePages) combinedDescription.trim() else ""),
                 NooirNovelBatchWorker.BOOK_LANGUAGE to (if (combinePages) combinedLanguage.trim() else ""),
                 NooirNovelBatchWorker.BOOK_COVER_URL to (if (combinePages) coverUrl.trim() else ""),
+                NooirNovelBatchWorker.BOOK_COVER_LOCAL_URI to (
+                    if (combinePages && !combineCovers) localCoverUri else ""),
                 NooirNovelBatchWorker.BOOK_COVER_COLLAGE to (combinePages && combineCovers),
                 NooirNovelBatchWorker.BOOK_COVER_SOURCES to (
                     if (combinePages && combineCovers) collageUrls.toTypedArray() else emptyArray<String>()),
@@ -233,6 +238,25 @@ fun NooirNovelBatchDialog(
                     target, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             } catch (_: SecurityException) { }
             enqueue(target)
+        }
+    }
+
+    val coverPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { target ->
+        if (target != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    target, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                localCoverUri = target.toString()
+                coverUrl = ""
+                combineCovers = false
+                coverPreview = null
+                coverPreviewMessage = ""
+                inputError = ""
+            } catch (_: SecurityException) {
+                inputError = "Cannot keep access to this cover; choose a different image document."
+            }
         }
     }
 
@@ -439,7 +463,10 @@ fun NooirNovelBatchDialog(
                             checked = combineCovers,
                             onCheckedChange = { enabled ->
                                 combineCovers = enabled
-                                if (enabled) coverUrl = ""
+                                if (enabled) {
+                                    coverUrl = ""
+                                    localCoverUri = ""
+                                }
                             },
                         )
                         Text("Make one combined cover from multiple book covers")
@@ -456,10 +483,28 @@ fun NooirNovelBatchDialog(
                         )
                     } else {
                         OutlinedTextField(value = coverUrl,
-                            onValueChange = { coverUrl = it.take(600) },
+                            onValueChange = {
+                                coverUrl = it.take(600)
+                                if (it.isNotBlank()) localCoverUri = ""
+                            },
                             label = { Text("Single cover image HTTPS URL (optional)") },
                             supportingText = { Text("Blank: try source og:image or Twitter cover. JPEG or PNG, up to 1.5 MB.") },
                             singleLine = true, modifier = Modifier.fillMaxWidth())
+                    }
+                    if (!combineCovers) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(enabled = !busy,
+                                onClick = { coverPicker.launch(arrayOf("image/jpeg", "image/png")) }) {
+                                Text("Choose cover from phone")
+                            }
+                            if (localCoverUri.isNotBlank()) {
+                                TextButton(onClick = { localCoverUri = "" }) {
+                                    Text("Clear phone cover")
+                                }
+                            }
+                        }
+                        if (localCoverUri.isNotBlank())
+                            Text("Phone cover selected. It must remain accessible until export.")
                     }
                     OutlinedButton(
                         enabled = !previewingCover && !busy && urls.isNotEmpty() &&
@@ -468,6 +513,7 @@ fun NooirNovelBatchDialog(
                         onClick = {
                             val requestedUrls = urls.toList()
                             val requestedSingle = coverUrl.trim()
+                            val requestedLocal = localCoverUri
                             val requestedCollage = combineCovers
                             val requestedCollageUrls = collageUrls.toList()
                             val requestedKey = coverPreviewKey
@@ -477,11 +523,13 @@ fun NooirNovelBatchDialog(
                             previewScope.launch {
                                 val result = withContext(Dispatchers.IO) {
                                     runCatching {
-                                        val asset = NooirWebPageBook.previewCoverAsset(
+                                        val asset = if (requestedLocal.isNotBlank())
+                                            NooirWebCover.loadLocal(context, Uri.parse(requestedLocal))
+                                        else NooirWebPageBook.previewCoverAsset(
                                             requestedUrls, requestedSingle,
                                             requestedCollage, requestedCollageUrls,
-                                        ) ?: error("No publicly accessible cover found in source metadata. " +
-                                            "Paste a direct JPEG/PNG cover image URL.")
+                                        ) ?: error("No cover found in public metadata. " +
+                                            "Choose a phone image or a public JPEG/PNG cover URL.")
                                         val bounds = BitmapFactory.Options().apply {
                                             inJustDecodeBounds = true
                                         }
@@ -501,7 +549,7 @@ fun NooirNovelBatchDialog(
                                 }
                                 previewingCover = false
                                 val currentKey = listOf(links, coverUrl, combineCovers.toString(),
-                                    collageCoverLinks).joinToString("\u0001")
+                                    collageCoverLinks, localCoverUri).joinToString("\u0001")
                                 if (combinePages && currentKey == requestedKey) {
                                     coverPreviewFor = requestedKey
                                     result.onSuccess { coverPreview = it }
@@ -573,6 +621,7 @@ fun NooirNovelBatchDialog(
                                             description = combinedDescription,
                                             language = combinedLanguage,
                                             coverUrl = coverUrl,
+                                            localCoverUri = localCoverUri,
                                             collageUrls = collageCoverLinks,
                                             collage = combineCovers,
                                             filename = combinedFilename,
@@ -677,6 +726,7 @@ fun NooirNovelBatchDialog(
                                 combinedDescription = saved.description
                                 combinedLanguage = saved.language
                                 coverUrl = saved.coverUrl
+                                localCoverUri = saved.localCoverUri
                                 collageCoverLinks = saved.collageUrls
                                 combineCovers = saved.collage
                                 combinedFilename = saved.filename
