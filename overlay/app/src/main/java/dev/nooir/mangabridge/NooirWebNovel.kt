@@ -77,6 +77,7 @@ object NooirWebNovel {
         preloadedPage: Document? = null,
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
         readingStyle: ReflowEpubStyle = ReflowEpubStyle.STANDARD,
+        customCss: String = "",
         includeImages: Boolean = true,
         imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         onStage: (Int, Int, String) -> Unit = { _, _, _ -> },
@@ -112,6 +113,7 @@ object NooirWebNovel {
         // Never silently omit undiscovered chapters or pretend locked text is readable.
         ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
             epub.setReadingStyle(readingStyle)
+            epub.setCustomCss(customCss)
             NooirWebCover.embed(page, epub)
             val total = chosen.size
             for ((i, item) in chosen.withIndex()) {
