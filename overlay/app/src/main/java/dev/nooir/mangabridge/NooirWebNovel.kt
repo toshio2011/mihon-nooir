@@ -76,6 +76,7 @@ object NooirWebNovel {
         preloadedPage: Document? = null,
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
         includeImages: Boolean = true,
+        imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         onStage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ): Result {
         require(startAt >= 1 && endAt >= startAt) { "Invalid chapter range" }
@@ -118,7 +119,8 @@ object NooirWebNovel {
                 // Even if a source returns HTTP 200 to a sign-in/paywall message,
                 // the extractor will reject pages without article text.
                 NooirWebArticle.appendChapter(chapterDoc, epub, item.title,
-                    maxImages = if (includeImages) 8 else 0)
+                    maxImages = if (includeImages) 8 else 0,
+                    imageProfile = imageProfile)
                 onStage(i + 1, total, "Saved chapter " + (i + 1) + "/" + total)
             }
         }
