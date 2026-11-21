@@ -61,6 +61,11 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebChapterPlan.kt \
   tests/NooirWebChapterPlanTest.kt -include-runtime -d "$tmp/web-chapter-plan.jar"
 java -jar "$tmp/web-chapter-plan.jar"
 
+# Saved-story update detection preserves excluded chapters and user-defined order.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/{NooirWebChapterPlan.kt,NooirWebChapterUpdates.kt} \
+  tests/NooirWebChapterUpdatesTest.kt -include-runtime -d "$tmp/web-chapter-updates.jar"
+java -jar "$tmp/web-chapter-updates.jar"
+
 # Public chapter selector policy: pure Kotlin, independent of Android/Jsoup.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebExtractRules.kt \
   tests/NooirWebExtractRulesTest.kt -include-runtime -d "$tmp/web-extract-rules.jar"
