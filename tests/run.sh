@@ -66,6 +66,11 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebExtractRules.kt 
   tests/NooirWebExtractRulesTest.kt -include-runtime -d "$tmp/web-extract-rules.jar"
 java -jar "$tmp/web-extract-rules.jar"
 
+# Image optimization presets are independent of Android bitmap implementations.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageProfile.kt \
+  tests/NooirWebImageProfileTest.kt -include-runtime -d "$tmp/web-image-profile.jar"
+java -jar "$tmp/web-image-profile.jar"
+
 # Desktop uses the same source files as Android; never maintain duplicate codecs.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt tests/ConversionOptionsParityTest.kt -include-runtime -d "$tmp/options-parity.jar"
 java -jar "$tmp/options-parity.jar"
