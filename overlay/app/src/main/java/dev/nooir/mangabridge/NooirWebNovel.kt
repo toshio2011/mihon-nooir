@@ -2,6 +2,7 @@ package dev.nooir.mangabridge
 
 import dev.nooir.bridge.ReflowEpubWriter
 import dev.nooir.bridge.ReflowEpubFormat
+import dev.nooir.bridge.ReflowEpubStyle
 import org.jsoup.nodes.Document
 import org.jsoup.Jsoup
 import dev.nooir.bridge.ReflowEpubWriter.ImageAsset
@@ -75,6 +76,7 @@ object NooirWebNovel {
         startAt: Int = 1, endAt: Int = Int.MAX_VALUE,
         preloadedPage: Document? = null,
         epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
+        readingStyle: ReflowEpubStyle = ReflowEpubStyle.STANDARD,
         includeImages: Boolean = true,
         imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         onStage: (Int, Int, String) -> Unit = { _, _, _ -> },
@@ -109,6 +111,7 @@ object NooirWebNovel {
         // Failed chapters stop this book rather than silently creating a truncated EPUB.
         // Never silently omit undiscovered chapters or pretend locked text is readable.
         ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
+            epub.setReadingStyle(readingStyle)
             NooirWebCover.embed(page, epub)
             val total = chosen.size
             for ((i, item) in chosen.withIndex()) {
