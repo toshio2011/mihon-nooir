@@ -54,7 +54,11 @@ internal object NooirWebImageOptimizer {
                     "Could not resize chapter illustration"
                 }
                 val bytes = output.toByteArray()
-                require(bytes.size in 1..2_000_000) { "Optimized illustration is too large" }
+                // PNG compression may increase file size on artwork with fine texture.
+                // Never drop a previously valid illustration just because an
+                // optional resize produced more bytes than the original.
+                if (bytes.isEmpty() || bytes.size > 2_000_000 ||
+                    bytes.size >= asset.bytes.size) return asset
                 return ReflowEpubWriter.ImageAsset(bytes,
                     if (encoding == Bitmap.CompressFormat.PNG) "png" else "jpg",
                     if (encoding == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg")
