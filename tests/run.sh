@@ -76,6 +76,16 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageProfile.kt 
   tests/NooirWebImageProfileTest.kt -include-runtime -d "$tmp/web-image-profile.jar"
 java -jar "$tmp/web-image-profile.jar"
 
+# Public HTML image selection: lazy-load/full-resolution ordering and fallbacks.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageCandidates.kt \
+  tests/NooirWebImageCandidatesTest.kt -include-runtime -d "$tmp/web-image-candidates.jar"
+java -jar "$tmp/web-image-candidates.jar"
+
+# Public HTML reader candidate scoring: reject link-heavy navigation blocks.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebReadability.kt \
+  tests/NooirWebReadabilityTest.kt -include-runtime -d "$tmp/web-readability.jar"
+java -jar "$tmp/web-readability.jar"
+
 # Desktop uses the same source files as Android; never maintain duplicate codecs.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt tests/ConversionOptionsParityTest.kt -include-runtime -d "$tmp/options-parity.jar"
 java -jar "$tmp/options-parity.jar"
