@@ -68,7 +68,18 @@ r8_rules.write_text(r8_rules.read_text() +
     "# The PDF-to-XTC/XTCH Android instrumentation invokes these separately\n" +
     "# compiled public entrypoints against the minified FOSS app APK.\n" +
     "-keep class dev.nooir.mangabridge.NooirPdfToXtc { *; }\n" +
-    "-keep class dev.nooir.bridge.XtcFormat { *; }\n")
+    "-keep class dev.nooir.bridge.XtcFormat { *; }\n" + 
+    "# Public Web-to-EPUB DOM instrumentation is compiled separately from\n" +
+    "# the minified FOSS app. Keep the exact Kotlin object INSTANCE fields,\n" +
+    "# method/default-argument entrypoints and chapter/pager value types.\n" +
+    "# Limit this to the small Web TOC test surface, not broad app packages.\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebNovel { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebNovel$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebChapterDiscovery { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebChapterDiscovery$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebTocPagination { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebTocPagination$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebChapterIdentity { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
