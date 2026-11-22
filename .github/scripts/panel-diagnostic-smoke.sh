@@ -59,11 +59,12 @@ for required in \
   realXtcContainsDecodedTextAndArtPages \
   realXtchContainsDecodedTextAndArtPages \
   inlineIllustrationsStayBetweenTheirSurroundingWords \
-  x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes
+  x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes \
+  arabicParagraphsAlignRightAndMarkBookRtl
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
 done
-grep -Fxq 'OK (4 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'OK (5 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
