@@ -50,6 +50,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     val manager = remember { WorkManager.getInstance(context) }
     var chosen by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var displayNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var inputMimeTypes by remember { mutableStateOf<List<String>>(emptyList()) }
     var outputNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var showRename by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -95,6 +96,18 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     }
     fun enqueue(convert: Boolean, saveTree: Uri? = null) {
         if (chosen.isEmpty()) return
+        if (convert || saveTree != null) {
+            val unsupported = displayNames.indices.filterNot { index ->
+                NooirLocalConversionPolicy.canConvertHere(
+                    displayNames[index], inputMimeTypes.getOrNull(index).orEmpty())
+            }
+            if (unsupported.isNotEmpty() || displayNames.size != chosen.size) {
+                message = "Conversion not supported for: " +
+                    unsupported.take(3).joinToString(", ") { displayNames[it] } +
+                    ". Use Send originals to transfer unchanged; PDF has a separate converter."
+                return
+            }
+        }
         persist()
         val req = OneTimeWorkRequestBuilder<NooirTransferWorker>()
             .setInputData(workDataOf(
@@ -149,6 +162,9 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         if (cursor.moveToFirst()) cursor.getString(0) else null
                     } ?: (file.lastPathSegment ?: "Document")
                 }
+                inputMimeTypes = files.map { file ->
+                    context.contentResolver.getType(file).orEmpty()
+                }
                 outputNames = displayNames
                 message = "Selected " + files.size + " file(s). Edit output names before starting if any already exist."
             }
@@ -159,6 +175,14 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     val profile = NooirDeviceProfiles.forId(device)
     val running = workInfo?.state == WorkInfo.State.RUNNING || workInfo?.state == WorkInfo.State.ENQUEUED
     val canQueue = chosen.isNotEmpty() && profile.xteinkWifi && valid && !running && outputNames.size == chosen.size && outputNames.all { it.isNotBlank() }
+    val unsupportedForConversion = displayNames.indices.filterNot { index ->
+        NooirLocalConversionPolicy.canConvertHere(
+            displayNames[index], inputMimeTypes.getOrNull(index).orEmpty())
+    }
+    val canConvertSelection = chosen.isNotEmpty() &&
+        displayNames.size == chosen.size && inputMimeTypes.size == chosen.size &&
+        unsupportedForConversion.isEmpty() && outputNames.size == chosen.size &&
+        outputNames.all { it.isNotBlank() }
     val progress = workInfo?.progress
     val phase = progress?.getString(NooirTransferWorker.KEY_PHASE).orEmpty()
     val item = progress?.getInt(NooirTransferWorker.KEY_INDEX, 0) ?: 0
@@ -316,15 +340,25 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 Button(enabled = canQueue, onClick = { enqueue(false) }) {
                     Text("Send " + chosen.size + " original file(s)")
                 }
-                Button(enabled = canQueue, onClick = { enqueue(true) }) {
-                    Text("Convert manga & send · " + chosen.size + " file(s)")
+                Button(enabled = canQueue && canConvertSelection, onClick = { enqueue(true) }) {
+                    Text("Convert images/CBZ & send · " + chosen.size + " file(s)")
                 }
-                TextButton(enabled = chosen.isNotEmpty() && !running,
+                TextButton(enabled = canConvertSelection && !running,
                     onClick = { persist(); chooseFolder.launch(null) }) {
-                    Text("Convert & save selected to phone folder")
+                    Text("Convert & save supported files to phone folder")
+                }
+                if (unsupportedForConversion.isNotEmpty()) {
+                    val first = unsupportedForConversion.first()
+                    Text("Not convertible here: " +
+                        unsupportedForConversion.take(4).joinToString(", ") { displayNames[it] } +
+                        if (unsupportedForConversion.size > 4) " (and more)" else "")
+                    Text(NooirLocalConversionPolicy.unsupportedHint(
+                        displayNames[first], inputMimeTypes.getOrNull(first).orEmpty()))
                 }
                 Text("Existing names are checked in the destination before each conversion. Rename above if needed; a conflict skips only that file and later books continue. For converted manga the selected format extension is used.")
-                Text("Convert mode converts CBZ/images and copies unsupported documents unchanged. Each file is saved or sent separately.")
+                Text("Convert mode currently supports image files and comic CBZ/ZIP archives only. " +
+                    "Other formats are not converted or renamed: use Send originals instead. " +
+                    "EPUB → XTC/XTCH requires a separate page renderer (not yet implemented).")
                 TextButton(
                     enabled = chosen.isNotEmpty(),
                     onClick = {
