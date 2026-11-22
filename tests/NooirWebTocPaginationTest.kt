@@ -22,8 +22,8 @@ fun main() {
         link("?page=2", pager = false, next = false))) == null)
     check(Pager.next("https://example.org/story/chapters", listOf(
         link("?page=2&chapter=45"))) == null)
-    check(Pager.next("https://example.org/story/chapters", listOf(
-        link("?page=2")), setOf("https://example.org/story/chapters?page=2")) == null)
+    check(runCatching { Pager.next("https://example.org/story/chapters", listOf(
+        link("?page=2")), setOf("https://example.org/story/chapters?page=2")) }.isFailure)
     check(Pager.next("https://example.org/story/chapters?utm_source=x", listOf(
         link("?page=2&fbclid=click"))) == "https://example.org/story/chapters?page=2&fbclid=click")
     check(Pager.sameCollection(
