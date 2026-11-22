@@ -49,8 +49,10 @@ fun NooirToolsHubDialog(onDismiss: () -> Unit) {
                     }
                     Text("Manga & local files")
                     OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "files" }) {
-                        Text("Send & Convert files")
+                        Text("Send originals · Convert images/CBZ")
                     }
+                    Text("Send an EPUB unchanged, or convert a supported image/CBZ. " +
+                        "EPUB → XTC/XTCH is not supported here yet.")
                     Text("Books from the web")
                     OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "web" }) {
                         Text("Web link → EPUB")
