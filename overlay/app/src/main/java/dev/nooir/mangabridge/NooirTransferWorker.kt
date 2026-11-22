@@ -137,7 +137,17 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     val title = selected.name.take(70)
                     val requestedName = editedNames.getOrNull(offset)?.trim().orEmpty()
                         .ifBlank { selected.name }
-                    val convertThis = selected.isManga && (convert || treeUri != null)
+                    val conversionRequested = convert || treeUri != null
+                    // Never silently copy EPUB/PDF/other documents while the
+                    // user requested XTC, XTCH or another conversion format.
+                    // Reject BEFORE creating a destination or uploading bytes.
+                    require(!conversionRequested || selected.isManga) {
+                        "Conversion not supported for ${selected.name}: " +
+                            NooirLocalConversionPolicy.unsupportedHint(
+                                selected.name, applicationContext.contentResolver.getType(uri).orEmpty())
+                            .ifBlank { "Only supported image files or image-based CBZ/ZIP archives can be converted here." }
+                    }
+                    val convertThis = conversionRequested && selected.isManga
                     val outputName = if (convertThis) NooirDestinationGuard.forManga(
                         requestedName.substringBeforeLast('.', requestedName), format, device)
                         else NooirDestinationGuard.original(requestedName)
