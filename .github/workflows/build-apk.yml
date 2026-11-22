@@ -204,6 +204,7 @@ jobs:
           path: |
             diagnostic-instrumentation.txt
             android-epub-xtc-instrumentation.txt
+            android-epub-xtc-previews/*.png
             android-runtime-panel-diagnostic.zip
             android-panel-diagnostic-inspection.json
             android-panel-diagnostic-logcat.txt
