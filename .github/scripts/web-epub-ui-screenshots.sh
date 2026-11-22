@@ -119,6 +119,7 @@ for onboarding in {1..8}; do
     tap_visible "ALLOW" 2 || true
     sleep 3
   fi
+  if tap_visible "Get started" 1; then break; fi
   if tap_visible "Finish" 1; then break; fi
   if ! tap_visible "Next" 1; then
     tap_visible "Continue" 1 || tap_visible "Skip" 1 || true
