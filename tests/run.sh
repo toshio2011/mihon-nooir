@@ -86,6 +86,11 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebReadability.kt \
   tests/NooirWebReadabilityTest.kt -include-runtime -d "$tmp/web-readability.jar"
 java -jar "$tmp/web-readability.jar"
 
+# Retry only transient public HTTP failures, never access-denied pages.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebFetchPolicy.kt \
+  tests/NooirWebFetchPolicyTest.kt -include-runtime -d "$tmp/web-fetch-policy.jar"
+java -jar "$tmp/web-fetch-policy.jar"
+
 # Desktop uses the same source files as Android; never maintain duplicate codecs.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt tests/ConversionOptionsParityTest.kt -include-runtime -d "$tmp/options-parity.jar"
 java -jar "$tmp/options-parity.jar"
