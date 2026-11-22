@@ -6,6 +6,12 @@ trap 'rm -rf "$tmp"' EXIT
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirExportPreflight.kt tests/PreflightTest.kt -include-runtime -d "$tmp/preflight.jar"
 java -jar "$tmp/preflight.jar"
 
+# Send & Convert must never claim to convert EPUB, PDF or other documents
+# through the manga-image path (and must not silently copy them as XTC).
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirLocalConversionPolicy.kt \
+  tests/NooirLocalConversionPolicyTest.kt -include-runtime -d "$tmp/local-file-support.jar"
+java -jar "$tmp/local-file-support.jar"
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} tests/CoreSmokeTest.kt -include-runtime -d "$tmp/smoke.jar"
 java -jar "$tmp/smoke.jar"
 
