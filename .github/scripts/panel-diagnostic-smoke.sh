@@ -57,11 +57,12 @@ adb shell am instrument -w -r \
   | tee android-epub-xtc-instrumentation.txt
 for required in \
   realXtcContainsDecodedTextAndArtPages \
-  realXtchContainsDecodedTextAndArtPages
+  realXtchContainsDecodedTextAndArtPages \
+  inlineIllustrationsStayBetweenTheirSurroundingWords
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
 done
-grep -Fxq 'OK (2 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'OK (3 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
