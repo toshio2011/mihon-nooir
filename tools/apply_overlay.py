@@ -79,7 +79,14 @@ r8_rules.write_text(r8_rules.read_text() +
     "-keep class dev.nooir.mangabridge.NooirWebChapterDiscovery$* { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirWebTocPagination { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirWebTocPagination$* { *; }\n" +
-    "-keep class dev.nooir.mangabridge.NooirWebChapterIdentity { *; }\n")
+    "-keep class dev.nooir.mangabridge.NooirWebChapterIdentity { *; }\n" +
+    "# Separate AndroidTest APK also executes the real article extractor\n" +
+    "# and EPUB2/3 writer, then inspects the resulting ZIP contents.\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebArticle { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowEpubWriter { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowEpubWriter$* { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowMetadata { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowEpubStyle { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
