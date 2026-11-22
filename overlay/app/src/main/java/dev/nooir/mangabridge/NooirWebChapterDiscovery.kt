@@ -17,7 +17,7 @@ internal object NooirWebChapterDiscovery {
         val chapters: List<NooirWebChapterPlan.Entry>,
     )
 
-    private fun tocLinks(page: Document): List<NooirWebTocPagination.Candidate> =
+    internal fun tocLinks(page: Document): List<NooirWebTocPagination.Candidate> =
         page.select("a[rel=next][href], link[rel=next][href], " +
             ".pagination a[href], [class*=pagination] a[href], " +
             ".page-numbers a[href], nav[aria-label*=agination] a[href]")
