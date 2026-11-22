@@ -39,7 +39,8 @@ internal object NooirWebTocPagination {
             first.port == -1 && second.port == -1 &&
             first.rawUserInfo == null && second.rawUserInfo == null &&
             basePath(first) == basePath(second) &&
-            stableQuery(first) == stableQuery(second)
+            stableQuery(first) == stableQuery(second) &&
+            pageNumber(first) == pageNumber(second)
     }
 
     fun next(pageUrl: String, links: List<Candidate>, visited: Set<String> = emptySet()): String? {
