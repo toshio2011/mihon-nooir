@@ -77,9 +77,23 @@ sleep 9
 capture "00-launch-state"
 dump_ui || true
 
-# Some first-launch builds enter onboarding; try only harmless navigation.
-for onboarding in "Get started" "Skip" "Next" "Continue" "Finish"; do
-  tap_visible "$onboarding" 1 || true
+# Mihon's first launch has multiple onboarding pages and requires a
+# Storage Access Framework folder selection before its main tabs unlock.
+# Complete this only in the throwaway emulator, never on a user's device.
+for onboarding in {1..8}; do
+  dump_ui || true
+  if [ -n "$(lookup "Select storage")" ]; then
+    tap_visible "Select storage" 1 || true
+    sleep 2
+    tap_visible "Download" 3 || tap_visible "Documents" 2 || true
+    tap_visible "Use this folder" 2 || tap_visible "Select" 1 || true
+    tap_visible "Allow" 2 || true
+    sleep 3
+  fi
+  if tap_visible "Finish" 1; then break; fi
+  if ! tap_visible "Next" 1; then
+    tap_visible "Continue" 1 || tap_visible "Skip" 1 || true
+  fi
 done
 
 if ! tap_visible "More" 2; then
