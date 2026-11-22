@@ -168,7 +168,10 @@ internal object NooirEpubToXtc {
             if (text.isEmpty()) return result
             require(text.length <= 200000) { "A single EPUB paragraph is too long to render" }
             val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
-                .setAlignment(if (rtl) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL)
+                // ALIGN_NORMAL follows the paragraph's resolved reading direction:
+                // right edge for Arabic/RTL, left edge for Latin/LTR. Using
+                // ALIGN_OPPOSITE here incorrectly left-aligned Arabic prose.
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                 .setTextDirection(if (rtl) TextDirectionHeuristics.FIRSTSTRONG_RTL
                     else TextDirectionHeuristics.FIRSTSTRONG_LTR)
                 .setIncludePad(false)
