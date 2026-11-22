@@ -103,8 +103,20 @@ for onboarding in {1..8}; do
     tap_visible "Select a folder" 1 || true
     sleep 2
     tap_visible "Download" 3 || tap_visible "Documents" 2 || true
-    tap_visible "Use this folder" 2 || tap_visible "Select" 1 || true
-    tap_visible "Allow" 2 || true
+    # Android 11+ disallows granting the Downloads/Documents root.
+    # Create and select an app-specific child folder in this throwaway AVD.
+    if dump_ui && { [ -n "$(lookup "Can't use this folder")" ] || \
+       [ -n "$(lookup "CREATE NEW FOLDER")" ]; }; then
+      tap_visible "CREATE NEW FOLDER" 2 || tap_visible "New folder" 1 || true
+      adb shell input text Nooir_QA
+      tap_visible "OK" 2 || tap_visible "CREATE" 2 || true
+      # Some document picker versions remain at the parent after creation.
+      if dump_ui && [ -n "$(lookup "Nooir_QA")" ]; then
+        tap_visible "Nooir_QA" 1 || true
+      fi
+    fi
+    tap_visible "USE THIS FOLDER" 2 || tap_visible "Select" 1 || true
+    tap_visible "ALLOW" 2 || true
     sleep 3
   fi
   if tap_visible "Finish" 1; then break; fi
