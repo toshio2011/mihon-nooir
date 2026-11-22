@@ -23,6 +23,13 @@ fun main() {
     )) check(!Policy.canConvertHere(name, mime)) {
         "Unsupported source was advertised as convertible: $name / $mime"
     }
+    check(Policy.canConvertTo("My Novel.epub", "application/epub+zip", "XTC"))
+    check(Policy.canConvertTo("My Novel.epub", "application/epub+zip", "XTCH"))
+    check(!Policy.canConvertTo("My Novel.epub", "application/epub+zip", "EPUB"))
+    check(!Policy.canConvertTo("My Novel.epub", "application/epub+zip", "CBZ"))
+    check(!Policy.canConvertTo("paper.pdf", "application/pdf", "XTC"))
+    check(Policy.canConvertTo("comic.cbz", "application/zip", "XTC"))
+    check(Policy.canConvertTo("picture.png", "image/png", "EPUB2"))
     check(Policy.canConvertHere("comic.cbz", "application/zip"))
     check(Policy.canConvertHere("spread.zip"))
     check(Policy.canConvertHere("picture.jpeg", "image/jpeg"))
