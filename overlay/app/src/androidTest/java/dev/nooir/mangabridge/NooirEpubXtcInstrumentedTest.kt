@@ -23,7 +23,7 @@ import java.util.zip.ZipOutputStream
  */
 @RunWith(AndroidJUnit4::class)
 class NooirEpubXtcInstrumentedTest {
-    private fun makeBook(file: File) {
+    private fun makeBook(file: File, rtl: Boolean = false) {
         val image = Bitmap.createBitmap(100, 120, Bitmap.Config.ARGB_8888)
         val png = try {
             image.eraseColor(Color.WHITE)
@@ -60,9 +60,12 @@ class NooirEpubXtcInstrumentedTest {
                   <spine><itemref idref="a"/><itemref idref="b"/></spine>
                 </package>
             """.trimIndent()).toByteArray(),
-            "OEBPS/Text/one.xhtml" to ("<html><body><h1>First Chapter</h1><p>" +
-                longText + "</p><img src='../Images/figure.png'/>" +
-                "<p>A concluding line after the illustration.</p></body></html>").toByteArray(),
+            "OEBPS/Text/one.xhtml" to (if (rtl)
+                "<html><body><p>مرحبا بالعالم، كتاب جميل للقراءة.</p></body></html>"
+                else "<html><body><h1>First Chapter</h1><p>" +
+                    longText + "</p><img src='../Images/figure.png'/>" +
+                    "<p>A concluding line after the illustration.</p></body></html>"
+            ).toByteArray(),
             "OEBPS/Text/two.xhtml" to
                 "<html><body><h1>Second Chapter</h1><p>Last paragraph.</p></body></html>".toByteArray(),
             "OEBPS/Images/cover.png" to png,
@@ -98,6 +101,34 @@ class NooirEpubXtcInstrumentedTest {
 
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)
     @Test fun realXtchContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTCH)
+
+    @Test fun arabicParagraphsAlignRightAndMarkBookRtl() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-epub-arabic-", ".epub", cache)
+        val output = File.createTempFile("nooir-xtc-arabic-", ".xtc", cache)
+        try {
+            makeBook(input, rtl = true)
+            NooirEpubToXtc.convert(input, output, XtcFormat.XTC, "X4", rtl = true)
+            RandomAccessFile(output, "r").use { header ->
+                header.seek(8L)
+                assertEquals("XTC reading-order flag", 1, header.readUnsignedByte())
+            }
+            val prose = XtcBookPreview(output).page(1) // page zero is cover
+            var leftInk = 0
+            var rightInk = 0
+            for (y in 26 until 155) for (x in 30 until 450) {
+                if (prose.levels[y * prose.width + x].toInt() == 0) {
+                    if (x < 160) leftInk++
+                    if (x > 320) rightInk++
+                }
+            }
+            assertTrue("Arabic glyphs should render on the right/leading edge",
+                rightInk > leftInk * 2 + 20)
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
 
     @Test fun x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes() {
         val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
