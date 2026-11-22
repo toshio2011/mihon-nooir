@@ -67,5 +67,29 @@ fun main() {
         check(failure.isFailure)
         check(failure.exceptionOrNull()?.message?.contains("Encrypted EPUB") == true)
     } finally { encrypted.delete() }
-    println("PASS: EPUB2/3 package metadata, OPF spine order, local images and trust guards")
+    val hostileContainer = fixture(listOf(
+        "META-INF/container.xml" to """<?xml version="1.0"?>
+            <!DOCTYPE container [<!ENTITY hostile SYSTEM "file:///etc/passwd">]>
+            <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+              <rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>
+            </container>""".trimIndent(),
+    ))
+    try {
+        val result = runCatching { NooirEpubBook.open(hostileContainer).use {} }
+        check(result.isFailure)
+        check(result.exceptionOrNull()?.message?.contains("DTD and entity") == true)
+    } finally { hostileContainer.delete() }
+
+    val hostileOpf = fixture(listOf(
+        "OEBPS/content.opf" to """<?xml version="1.0"?>
+            <!DOCTYPE package SYSTEM "https://untrusted.example/epub.dtd">
+            <package xmlns="http://www.idpf.org/2007/opf" />""".trimIndent(),
+    ))
+    try {
+        val result = runCatching { NooirEpubBook.open(hostileOpf).use {} }
+        check(result.isFailure)
+        check(result.exceptionOrNull()?.message?.contains("DTD and entity") == true)
+    } finally { hostileOpf.delete() }
+
+    println("PASS: EPUB package metadata, OPF spine, offline images and XXE/DTD rejection")
 }
