@@ -64,4 +64,59 @@ class NooirWebTocHtmlInstrumentedTest {
         assertNull(NooirWebTocPagination.next(
             page.location(), NooirWebChapterDiscovery.tocLinks(page)))
     }
+    @Test fun consecutiveTocPagesMergeWithoutDuplicateChapters() {
+        val root = "https://example.org/story/chapters"
+        val first = Jsoup.parse(
+            "<div class='chapter-list'>" +
+                "<a href='/chapter/1'>Chapter One</a>" +
+                "<a href='/chapter/2'>Chapter Two</a></div>" +
+                "<nav class='pagination'><a href='?page=2'>Next page</a></nav>",
+            root,
+        )
+        val second = Jsoup.parse(
+            "<div class='chapter-list'>" +
+                "<a href='/chapter/2?utm_source=mail'>Chapter Two</a>" +
+                "<a href='/chapter/3'>Chapter Three</a></div>",
+            root + "?page=2",
+        )
+        val requests = mutableListOf<String>()
+        val chapters = NooirWebChapterDiscovery.chapters(root, first,
+            fetchPage = { url ->
+                requests += url
+                assertEquals(root + "?page=2", url)
+                second
+            },
+            pace = {},
+        )
+        assertEquals(listOf("Chapter One", "Chapter Two", "Chapter Three"),
+            chapters.map { it.title })
+        assertEquals(listOf(root + "?page=2"), requests)
+    }
+
+    @Test fun unfinishedTocAfterSafetyLimitFailsRatherThanTruncates() {
+        val root = "https://example.org/story/chapters"
+        fun page(n: Int): org.jsoup.nodes.Document {
+            val firstId = n * 2 - 1
+            val secondId = n * 2
+            val markup = "<div class='chapter-list'>" +
+                "<a href='/chapter/" + firstId + "'>Chapter " + firstId + "</a>" +
+                "<a href='/chapter/" + secondId + "'>Chapter " + secondId + "</a></div>" +
+                "<nav class='pagination'><a href='?page=" + (n + 1) +
+                "'>Next page</a></nav>"
+            return Jsoup.parse(markup, if (n == 1) root else root + "?page=" + n)
+        }
+        val failed = runCatching {
+            NooirWebChapterDiscovery.chapters(root, page(1),
+                fetchPage = { url ->
+                    val pageNumber = java.net.URI(url).rawQuery.orEmpty()
+                        .substringAfter("page=").toIntOrNull() ?: error("Missing page number")
+                    page(pageNumber)
+                },
+                pace = {},
+            )
+        }
+        assertTrue(failed.isFailure)
+        assertTrue(failed.exceptionOrNull()?.message.orEmpty().contains("more than 12 pages"))
+    }
+
 }
