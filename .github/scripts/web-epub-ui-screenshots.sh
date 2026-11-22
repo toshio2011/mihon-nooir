@@ -74,9 +74,22 @@ tap_visible() {
   return 1
 }
 
-# Use the APK already installed by the preceding successful Android smoke job.
-adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null
-sleep 9
+# On cold Android emulators, the unrelated Pixel Launcher can raise an
+# ANR dialog over our app. Dismiss *Wait*, never force-close MihonNooir.
+recover_system_dialog() {
+  dump_ui || true
+  if [ -n "$(lookup "isn't responding")" ]; then
+    echo "Dismissing emulator Pixel Launcher ANR with Wait" >> "$out/capture-notes.txt"
+    tap_visible "Wait" 1 || true
+    sleep 5
+  fi
+}
+
+# Launch directly through ActivityManager, not by asking Pixel Launcher.
+adb shell am start -a android.intent.action.MAIN \
+  -c android.intent.category.LAUNCHER -p "$pkg" >/dev/null
+sleep 12
+for retry in 1 2 3; do recover_system_dialog; done
 capture "00-launch-state"
 dump_ui || true
 
@@ -84,6 +97,7 @@ dump_ui || true
 # Storage Access Framework folder selection before its main tabs unlock.
 # Complete this only in the throwaway emulator, never on a user's device.
 for onboarding in {1..8}; do
+  recover_system_dialog
   dump_ui || true
   if [ -n "$(lookup "Select a folder")" ]; then
     tap_visible "Select a folder" 1 || true
