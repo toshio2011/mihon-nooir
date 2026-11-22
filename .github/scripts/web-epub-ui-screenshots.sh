@@ -42,9 +42,12 @@ try:
         if m is None:
             continue
         a,b,c,d = map(int,m.groups())
-        nodes.append(((a+c)//2,(b+d)//2, a, b))
+        # Prefer an exact button label over a longer paragraph containing it.
+        priority = 0 if caption.strip() == needle else 1
+        nodes.append((priority, (a+c)//2, (b+d)//2, a, b))
     if nodes:
-        print(*nodes[0])
+        nodes.sort(key=lambda item: item[0])
+        print(*nodes[0][1:])
 except Exception:
     pass
 PY
@@ -82,8 +85,8 @@ dump_ui || true
 # Complete this only in the throwaway emulator, never on a user's device.
 for onboarding in {1..8}; do
   dump_ui || true
-  if [ -n "$(lookup "Select storage")" ]; then
-    tap_visible "Select storage" 1 || true
+  if [ -n "$(lookup "Select a folder")" ]; then
+    tap_visible "Select a folder" 1 || true
     sleep 2
     tap_visible "Download" 3 || tap_visible "Documents" 2 || true
     tap_visible "Use this folder" 2 || tap_visible "Select" 1 || true
