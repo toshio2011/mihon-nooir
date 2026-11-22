@@ -67,6 +67,27 @@ done
 grep -Fxq 'OK (5 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
+echo "Collecting page images decoded from real EPUB→XTC/XTCH outputs"
+adb root
+adb wait-for-device
+mkdir -p android-epub-xtc-previews
+adb pull \
+  /data/user/0/dev.nooir.mihontrial.foss/files/nooir_epub_xteink_previews/. \
+  android-epub-xtc-previews/
+for png in \
+  X4-xtc-cover.png \
+  X4-xtc-prose.png \
+  X4-xtc-last.png \
+  X4-xtch-cover.png \
+  X4-xtch-prose.png \
+  X4-xtch-last.png \
+  X3-xtch-cover.png \
+  X3-xtch-prose.png \
+  X4-xtc-arabic.png
+do
+  test -s "android-epub-xtc-previews/${png}"
+done
+
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root
 adb wait-for-device
