@@ -81,6 +81,14 @@ No arbitrary filesystem path is accepted. The selected source is streamed up to 
 
 Real Android document-provider and physical Folio Nooir testing are required before calling this stable.
 
+### Public-page extraction fidelity (WebToEpub engine comparison — 22 November)
+
+Independently reviewed the current WebToEpub developer branch (1.0.14.92), including parser selection, heuristic content scanning, image collection, fetch errors/backoff, chapter processing and EPUB packaging. No GPLv3 code or parser files have been copied into MihonNooir.
+
+The draft importer now ranks HTML candidates by paragraph/prose density **minus linked navigation text**, so large TOC blocks are less likely to become chapter bodies. It also attempts validated full-resolution/lazy chapter illustration alternatives (`data-original`, `data-orig-file`, `data-srcset`, `srcset`, `data-src`, ordinary `src`) in that priority, with a maximum of four HTTP attempts per illustration and the existing HTTPS/byte limits. A chapter heading matching the source heading is no longer inserted twice. Both candidate selection algorithms have pure Kotlin tests in `tests/run.sh`.
+
+This improves public HTML conversions but does **not** enable browser sessions, JavaScript-rendered chapters, protected APIs, image proxy workarounds, or WebToEpub site-specific parser coverage. Next acceptance steps are actual public-site fixtures, Android device rendering and performance checks. Further independent enhancements worth testing: configurable per-site public selectors, bounded transient retry/rate limit and multi-page public tables of contents.
+
 ### Not yet implemented
 
 Full site-specific parser compatibility, advanced cover-tile editing, complete unrestricted WebToEpub CSS/pipeline parity, background/resumable imports, automatic novel library refresh, persistent EPUB-in-place chapter merging and comprehensive real-site/device verification. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
