@@ -203,6 +203,7 @@ jobs:
           name: mihon-nooir-panel-zip-device-smoke
           path: |
             diagnostic-instrumentation.txt
+            android-epub-xtc-instrumentation.txt
             android-runtime-panel-diagnostic.zip
             android-panel-diagnostic-inspection.json
             android-panel-diagnostic-logcat.txt
