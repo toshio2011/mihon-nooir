@@ -35,6 +35,15 @@ object NooirWebNovel {
             "a[href*='/episode/'], a[href*='/part-']"
         val found = linkedMapOf<String, Chapter>()
         for (node in doc.select(selectors)) {
+            // Table-of-contents pagination controls are not book chapters,
+            // even when nested inside a container named "chapters".
+            val inPager = node.parents().any { parent ->
+                parent.className().contains("pagination", true) ||
+                    parent.className().contains("page-numbers", true) ||
+                    (parent.tagName().equals("nav", true) &&
+                        parent.attr("aria-label").contains("pagination", true))
+            }
+            if (inPager) continue
             val href = node.attr("href").trim()
             val text = node.text().trim().replace(Regex("\\s+"), " ").take(160)
             if (href.isBlank() || text.length < 2) continue
