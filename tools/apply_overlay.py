@@ -68,7 +68,13 @@ r8_rules.write_text(r8_rules.read_text() +
     "# The PDF-to-XTC/XTCH Android instrumentation invokes these separately\n" +
     "# compiled public entrypoints against the minified FOSS app APK.\n" +
     "-keep class dev.nooir.mangabridge.NooirPdfToXtc { *; }\n" +
-    "-keep class dev.nooir.bridge.XtcFormat { *; }\n")
+    "-keep class dev.nooir.bridge.XtcFormat { *; }\n" +
+    "# Independent EPUB-to-XTC/XTCH Android instrumentation calls the full\n" +
+    "# native EPUB reader, bitmap renderer and their Kotlin nested classes.\n" +
+    "-keep class dev.nooir.mangabridge.NooirEpubBook { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirEpubBook$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirEpubToXtc { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirEpubToXtc$* { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"
