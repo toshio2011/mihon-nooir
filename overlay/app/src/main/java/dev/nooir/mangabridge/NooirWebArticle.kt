@@ -44,17 +44,28 @@ object NooirWebArticle {
     internal fun load(url: String): Document {
         var current = publicHttps(url)
         repeat(4) {
-            val response = Jsoup.connect(current)
-                // Many ordinary websites return a JavaScript shell to
-                // unknown bot user-agents. Ask for the same public HTML a
-                // mobile browser receives; never attach session cookies.
-                .userAgent("Mozilla/5.0 (Linux; Android 14; Mobile) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                .header("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
-                .timeout(20000)
-                .maxBodySize(8_000_000)
-                .followRedirects(false)
-                .execute()
+            // Retry only transient HTTP statuses, with at most two bounded
+            // attempts. Honor Retry-After without waiting through long server
+            // rate limits. No bypass of login, 403, 404 or paywalls.
+            val response = (0..2).firstNotNullOfOrNull { attempt ->
+                val candidate = Jsoup.connect(current)
+                    // Ask for the same public HTML a mobile browser receives.
+                    // Do not attach browser cookies or private session tokens.
+                    .userAgent("Mozilla/5.0 (Linux; Android 14; Mobile) " +
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
+                    .timeout(20000)
+                    .maxBodySize(8_000_000)
+                    .ignoreHttpErrors(true)
+                    .followRedirects(false)
+                    .execute()
+                val retryMillis = NooirWebFetchPolicy.retryDelayMillis(
+                    candidate.statusCode(), attempt, candidate.header("Retry-After"))
+                if (retryMillis != null) {
+                    Thread.sleep(retryMillis)
+                    null
+                } else candidate
+            } ?: error("Public webpage did not respond after bounded retries")
             if (response.statusCode() in 300..399) {
                 val next = response.header("Location").orEmpty()
                 require(next.isNotBlank()) { "Article redirect missing destination" }
