@@ -58,7 +58,9 @@ adb shell am instrument -w -r \
 grep -Fq 'INSTRUMENTATION_STATUS: test=numberedTocControlsAreNotAccidentallyImportedAsChapters' android-web-toc-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=plainNextChapterLinkCannotAdvanceTocPage' android-web-toc-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=queryBasedChapterUrlsKeepTheirStoryPath' android-web-toc-instrumentation.txt
-grep -Fxq 'OK (3 tests)' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=consecutiveTocPagesMergeWithoutDuplicateChapters' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=unfinishedTocAfterSafetyLimitFailsRatherThanTruncates' android-web-toc-instrumentation.txt
+grep -Fxq 'OK (5 tests)' android-web-toc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-toc-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
