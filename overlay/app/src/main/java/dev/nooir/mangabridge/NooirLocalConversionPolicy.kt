@@ -28,10 +28,21 @@ internal object NooirLocalConversionPolicy {
     fun canConvertHere(filename: String, mimeType: String = "") =
         classify(filename, mimeType) in setOf(Input.IMAGE, Input.COMIC_ARCHIVE_CANDIDATE)
 
+    /**
+     * The EPUB pipeline only encodes real XTC/XTCH page bitmaps. No arbitrary
+     * EPUB-to-CBZ, EPUB-to-PDF or EPUB-to-EPUB re-export is implied.
+     */
+    fun canConvertTo(filename: String, mimeType: String = "", output: String): Boolean =
+        when (classify(filename, mimeType)) {
+            Input.IMAGE, Input.COMIC_ARCHIVE_CANDIDATE -> true
+            Input.EPUB -> output in setOf("XTC", "XTCH")
+            else -> false
+        }
+
     fun unsupportedHint(filename: String, mimeType: String = ""): String =
         when (classify(filename, mimeType)) {
-            Input.EPUB -> "EPUB is not converted to XTC/XTCH here yet. " +
-                "Send the original EPUB unchanged, or keep it for the future EPUB renderer."
+            Input.EPUB -> "EPUB conversion currently supports experimental XTC/XTCH " +
+                "page images only. Choose XTC or XTCH, or send the original EPUB unchanged."
             Input.PDF -> "PDF conversion uses Nooir Tools → PDF to e-reader. " +
                 "This Send & Convert screen sends PDFs unchanged."
             Input.OTHER -> "This file can be sent unchanged, but is not a supported " +
