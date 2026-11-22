@@ -197,14 +197,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           # The runner invokes each script line in a distinct shell. Keep all
           # variables, pipes and failure checks inside one tracked Bash file.
-          script: bash .github/scripts/panel-diagnostic-smoke.sh
-      - name: Capture genuine experimental Web to EPUB editor screenshots
-        if: always()
-        shell: bash
-        run: |
-          # This is diagnostic-only and must never mask existing regression
-          # checks or fail the whole APK build due to first-launch onboarding.
-          bash .github/scripts/web-epub-ui-screenshots.sh || echo "::warning::Web editor screenshot navigation was incomplete"
+          script: bash .github/scripts/panel-diagnostic-smoke.sh && (bash .github/scripts/web-epub-ui-screenshots.sh || echo "Web editor screenshot navigation was incomplete")
       - name: Upload experimental Web to EPUB emulator screenshots
         if: always()
         uses: actions/upload-artifact@v4
