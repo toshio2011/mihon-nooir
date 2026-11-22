@@ -1,6 +1,10 @@
 package dev.nooir.bridge
 
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.UUID
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
@@ -44,6 +48,11 @@ class ReflowEpubWriter private constructor(
     private var coverId: String? = null
     private var readingStyle = ReflowEpubStyle.STANDARD
     private var customCss = ""
+    // EPUB 3 modified timestamp must reflect this export, not a fixed
+    // historical date. UTC and whole seconds meet EPUB 3 requirements.
+    private val modifiedAtUtc: String = SimpleDateFormat(
+        "yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT
+    ).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
 
     /** Set once before adding text sections. The default keeps legacy exports unchanged. */
     fun setReadingStyle(style: ReflowEpubStyle) {
@@ -156,7 +165,7 @@ ${manifest.joinToString("")}</manifest>
             writeEntry("OEBPS/package.opf", """<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-$commonMetadata<meta property="dcterms:modified">2026-10-19T00:00:00Z</meta>
+$commonMetadata<meta property="dcterms:modified">${modifiedAtUtc}</meta>
 </metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 ${manifest.joinToString("")}</manifest><spine>$spine</spine></package>""".toByteArray(Charsets.UTF_8))
         }
