@@ -92,6 +92,8 @@ fun NooirNovelBatchDialog(
     var coverUrl by remember { mutableStateOf("") }
     var localCoverUri by remember { mutableStateOf("") }
     var combineCovers by remember { mutableStateOf(false) }
+    var showCoverSettings by remember { mutableStateOf(false) }
+    var showAdvancedExtraction by remember { mutableStateOf(false) }
     var collageCoverLinks by remember { mutableStateOf("") }
     var coverPreview by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewingCover by remember { mutableStateOf(false) }
@@ -462,6 +464,14 @@ fun NooirNovelBatchDialog(
                         onValueChange = { combinedDescription = it.take(1200) },
                         label = { Text("Book description (optional)") },
                         minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth())
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { showCoverSettings = !showCoverSettings },
+                    ) {
+                        Text(if (showCoverSettings) "Hide cover settings" else
+                            "Cover options · auto-detect source cover")
+                    }
+                    if (showCoverSettings) {
                     androidx.compose.foundation.layout.Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -583,6 +593,7 @@ fun NooirNovelBatchDialog(
                         }
                         if (coverPreviewMessage.isNotBlank()) Text(coverPreviewMessage)
                     }
+                    } // optional cover settings
                     OutlinedTextField(value = combinedFilename,
                         onValueChange = { combinedFilename = it.take(70) },
                         label = { Text("Combined EPUB filename (without .epub)") },
@@ -813,6 +824,14 @@ fun NooirNovelBatchDialog(
                         }
                     }
                     if (projectMessage.isNotBlank()) Text(projectMessage)
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { showAdvancedExtraction = !showAdvancedExtraction },
+                    ) {
+                        Text(if (showAdvancedExtraction) "Hide advanced extraction" else
+                            "Advanced extraction · automatic by default")
+                    }
+                    if (showAdvancedExtraction) {
                     Text("Advanced chapter text extraction (optional). Leave both blank for automatic detection. " +
                         "Use simple CSS selectors such as article, #chapter-content or .reading-content. " +
                         "No scripts, complex selectors or login-only content.")
@@ -878,6 +897,7 @@ fun NooirNovelBatchDialog(
                         Text("Extraction preview (first 800 characters):")
                         Text(extractionPreview)
                     }
+                    } // optional advanced extraction settings
                 } else {
                     Text("Optional: rename each EPUB before conversion. Leave blank to use the story title.")
                     urls.forEach { story ->
