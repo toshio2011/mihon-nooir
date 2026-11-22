@@ -34,7 +34,12 @@ internal object NooirWebChapterDiscovery {
                 NooirWebTocPagination.Candidate(node.attr("href"), isPager, next)
             }
 
-    fun chapters(storyUrl: String, page: Document): List<NooirWebNovel.Chapter> {
+    fun chapters(
+        storyUrl: String,
+        page: Document,
+        fetchPage: (String) -> Document = { NooirWebArticle.load(it) },
+        pace: (Long) -> Unit = { Thread.sleep(it) },
+    ): List<NooirWebNovel.Chapter> {
         val html = NooirWebNovel.discover(page)
         if (NooirWattpadPublic.storyId(storyUrl) != null) {
             // Wattpad's public metadata already returns a complete inventory
@@ -76,8 +81,8 @@ internal object NooirWebChapterDiscovery {
                     "Nothing was exported: paste chapter URLs manually rather than saving an incomplete book."
             }
             // No burst fetching when a site publishes multiple TOC pages.
-            Thread.sleep(1300L)
-            val loaded = NooirWebArticle.load(next)
+            pace(1300L)
+            val loaded = fetchPage(next)
             require(NooirWebTocPagination.sameCollection(page.location(), loaded.location())) {
                 "Public table-of-contents pagination redirected outside this story. " +
                     "Nothing was exported; provide chapter URLs manually."
