@@ -147,17 +147,43 @@ internal class NooirEpubBook private constructor(
             }
         }
 
+        /**
+         * Android's bundled XML parser rejects the JAXP secure-processing
+         * feature URI, unlike the desktop JDK. For untrusted EPUB metadata,
+         * prohibit DTD/ENTITY declarations in the decoded XML itself and
+         * additionally reject any entity resolver request. Apply parser
+         * security features when supported by the current runtime.
+         */
         private fun xml(bytes: ByteArray): Document {
+            val charset = when {
+                bytes.size >= 2 && bytes[0] == 0xff.toByte() && bytes[1] == 0xfe.toByte() ->
+                    Charsets.UTF_16LE
+                bytes.size >= 2 && bytes[0] == 0xfe.toByte() && bytes[1] == 0xff.toByte() ->
+                    Charsets.UTF_16BE
+                bytes.size >= 4 && bytes[0] == 0.toByte() && bytes[1] == '<'.code.toByte() ->
+                    Charsets.UTF_16BE
+                bytes.size >= 4 && bytes[0] == '<'.code.toByte() && bytes[1] == 0.toByte() ->
+                    Charsets.UTF_16LE
+                else -> Charsets.UTF_8
+            }
+            val xmlText = bytes.toString(charset)
+            require(!Regex("<!\\s*(?:DOCTYPE|ENTITY)", RegexOption.IGNORE_CASE).containsMatchIn(xmlText)) {
+                "EPUB XML DTD and entity declarations are not supported"
+            }
             val factory = DocumentBuilderFactory.newInstance().apply {
                 isNamespaceAware = true
-                setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                setFeature("http://xml.org/sax/features/external-general-entities", false)
-                setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                setXIncludeAware(false)
                 isExpandEntityReferences = false
+                runCatching { setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
+                runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+                runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
+                runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+                runCatching { setXIncludeAware(false) }
             }
-            return factory.newDocumentBuilder().parse(ByteArrayInputStream(bytes))
+            val builder = factory.newDocumentBuilder()
+            builder.setEntityResolver { _, _ ->
+                throw org.xml.sax.SAXException("External EPUB XML entities are forbidden")
+            }
+            return builder.parse(ByteArrayInputStream(bytes))
         }
     }
 
