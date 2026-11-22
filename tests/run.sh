@@ -12,6 +12,11 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirLocalConversionPoli
   tests/NooirLocalConversionPolicyTest.kt -include-runtime -d "$tmp/local-file-support.jar"
 java -jar "$tmp/local-file-support.jar"
 
+# Offline EPUB package / OPF spine parser before Android bitmap rendering.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirEpubBook.kt \
+  tests/NooirEpubBookTest.kt -include-runtime -d "$tmp/nooir-epub-import.jar"
+java -jar "$tmp/nooir-epub-import.jar"
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} tests/CoreSmokeTest.kt -include-runtime -d "$tmp/smoke.jar"
 java -jar "$tmp/smoke.jar"
 
