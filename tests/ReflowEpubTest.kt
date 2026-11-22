@@ -4,6 +4,7 @@ import dev.nooir.bridge.ReflowEpubStyle
 import dev.nooir.bridge.NooirEpubCssRules
 import dev.nooir.bridge.ReflowMetadata
 import java.io.File
+import java.time.Instant
 import java.util.zip.ZipFile
 
 fun main() {
@@ -32,6 +33,15 @@ fun main() {
             check(opf.contains("text/s00001.xhtml") && opf.contains("text/s00002.xhtml"))
             check(opf.contains("images/img00001.png"))
             check(opf.contains("Test &amp; Diagrams"))
+            val modified = Regex("""<meta property="dcterms:modified">([^<]+)</meta>""")
+                .find(opf)?.groupValues?.get(1)
+                ?: error("Missing EPUB3 dcterms:modified timestamp")
+            val ageMillis = kotlin.math.abs(
+                System.currentTimeMillis() - Instant.parse(modified).toEpochMilli()
+            )
+            check(ageMillis < 15L * 60L * 1000L) {
+                "EPUB3 modified timestamp is not current UTC: " + modified
+            }
             val nav = String(zip.getInputStream(zip.getEntry("OEBPS/nav.xhtml")).readBytes())
             val firstTitle = nav.indexOf("Chapter 1")
             val secondTitle = nav.indexOf("Scanned appendix")
