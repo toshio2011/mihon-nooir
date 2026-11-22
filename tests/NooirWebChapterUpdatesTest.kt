@@ -23,6 +23,20 @@ fun main() {
     check(reviewed.urls == listOf(latest[0].url, latest[3].url))
     // Mark all discovered links as known, even when the user skipped one.
     check(Update.findNew(latest.map { it.url }, latest).isEmpty())
+    // Keep the selected source link unchanged, but compare chapter identities
+    // after discarding only marketing trackers and hash fragments.
+    val tracked = Plan.Entry("https://EXAMPLE.org/ch1/?utm_source=mail#reader", "One")
+    check(Update.findNew(listOf(latest[0].url), listOf(tracked)).isEmpty())
+    val trackedNew = listOf(Plan.Entry("https://example.org/reader?chapter=2&utm_medium=app", "Two"),
+        Plan.Entry("https://EXAMPLE.org/reader?chapter=2&fbclid=click", "Duplicate Two"),
+        Plan.Entry("https://example.org/reader?chapter=3", "Three"))
+    val changed = Update.findNew(listOf("https://example.org/reader?chapter=1"), trackedNew)
+    check(changed.map { it.title } == listOf("Two", "Three"))
+    val addedTracked = Update.append(listOf("https://example.org/ch1"), listOf("Original One"),
+        listOf(tracked, Plan.Entry("https://example.org/ch5?utm_source=mail", "Five")))
+    check(addedTracked.titles == listOf("Original One", "Five"))
+    check(addedTracked.urls == listOf("https://example.org/ch1",
+        "https://example.org/ch5?utm_source=mail"))
     check(runCatching { Update.findNew(emptyList(), latest) }.isFailure)
     println("PASS: known-excluded chapters, updates, deduplication, preserved custom titles")
 }
