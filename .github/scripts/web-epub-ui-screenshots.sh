@@ -85,9 +85,9 @@ recover_system_dialog() {
   fi
 }
 
-# Launch directly through ActivityManager, not by asking Pixel Launcher.
-adb shell am start -a android.intent.action.MAIN \
-  -c android.intent.category.LAUNCHER -p "$pkg" >/dev/null
+# Query the launcher intent via monkey; bare ACTION_MAIN -p cannot resolve
+# a component for Mihon and fails before any real screenshot can be taken.
+adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 12
 for retry in 1 2 3; do recover_system_dialog; done
 capture "00-launch-state"
