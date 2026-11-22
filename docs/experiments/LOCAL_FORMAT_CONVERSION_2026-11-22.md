@@ -1,6 +1,6 @@
 # Nooir Tools: local file conversion capability and EPUB → XTC/XTCH design
 
-> **Experimental design and honest-input guard only. No new EPUB renderer has shipped.**
+> **Experimental first-pass native EPUB renderer is now on this draft branch, not in any public release.**
 > The current public MihonNooir v1.0.19 is unchanged. Do not merge or release without review.
 > Folio Nooir firmware, Windows desktop, and Web→EPUB draft PR #110 are separate tracks.
 
@@ -10,15 +10,17 @@
 HTTP file-transfer endpoint. This does not transcode them. Reader-side support
 still depends on the firmware.
 
-**Convert supported files**: currently takes standalone local JPEG/PNG/WebP/BMP/GIF
-images or verified image-containing CBZ/ZIP archives, then exports through the
-existing manga conversion engine to a selected reader format.
-A chosen EPUB, PDF, XTC/XTCH, DOCX or unrelated document is **not** converted
-by this path. Previously it could silently copy the source despite a selected
-XTC/XTCH output; that is misleading and is now rejected on the experimental
-branch before creating a destination file or uploading bytes. The file picker
-disables conversion if any chosen item appears unsupported. The worker remains
-the authoritative gate, including distinguishing comic ZIP from a random ZIP.
+**Convert supported files**: accepts local JPEG/PNG/WebP/BMP/GIF images or
+verified CBZ/ZIP manga and uses the existing image conversion engine.
+It now **experimentally** supports EPUB 2/3 text and illustrated books to real
+XTC or XTCH, using offline spine parsing and Android font/image rasterization.
+No EPUB-to-PDF, EPUB-to-CBZ or image-only EPUB re-export is implied.
+
+An EPUB, PDF, XTC/XTCH or unrelated document must not be silently copied
+when the user explicitly pressed Convert. Instead the input/output selector
+limits choices and the worker validates again before creating or uploading
+the output. A manga ZIP is additionally inspected for image contents.
+Original-file sending remains explicitly separate.
 
 PDF uses the existing dedicated **Nooir Tools → PDF to e-reader** pipeline for
 EPUB2/EPUB3 or XTC/XTCH output. Web source links use Web→EPUB, not this screen.
@@ -30,8 +32,8 @@ No conversion path should change file extensions without validating real bytes.
 | --- | --- | --- |
 | CBZ / supported image | XTC, XTCH, EPUB2/3, CBZ through manga exporter | Better text-heavy page handling |
 | PDF | Dedicated PDF→EPUB2/3/XTC/XTCH | Optional CBZ page export |
-| EPUB text / mixed illustrations | Send unchanged; read on supported firmware | Reflowable EPUB→XTC/XTCH page rendering and EPUB→PDF |
-| EPUB fixed-layout illustrated book | Send unchanged | Fixed-layout EPUB→XTC/XTCH and CBZ with panel-safe scaling |
+| EPUB text / mixed illustrations | Send unchanged in public release; **experimental EPUB→XTC/XTCH** in draft | Rich CSS/floats/embedded-font fidelity, EPUB→PDF |
+| EPUB fixed-layout illustrated book | Send unchanged in public release; **experimental PNG/JPEG art layout** in draft | SVG, specialized fixed-layout semantics, panel-aware CBZ |
 | XTC / XTCH | Inspect or send unchanged | Decode to CBZ/EPUB fixed-image pages; no false text recovery |
 | Other archives or documents | Send original only, if reader can handle it | Explicit adapters only after format validation |
 
@@ -69,20 +71,28 @@ explicit OCR step.
    Compare preview pixels to decoded XTC/XTCH bytes; check page/TOC/cover
    counts and physical X3/X4 readability.
 
-The first experimental milestone should be **EPUB import/inspection +
-fixed-layout/image-only EPUB → XTC/XTCH**, where source fidelity can be
-checked against existing image conversion behavior. Text reflow is the more
-substantial follow-up because CSS/layout and font rendering need proper
-pagination. Do not pretend an image-only prototype supports text novels.
+**Implementation checkpoint:** `NooirEpubBook` now bounds and reads local
+EPUB ZIP/container/OPF, ordered spine, title/author, raster cover and assets.
+`NooirEpubToXtc` renders text paragraphs and embedded PNG/JPEG/WebP/GIF/BMP
+images into e-reader canvases with font/margin/RTL settings. The shared
+`XtcCodec` writes real XTC or XTCH; the WorkManager transfer worker saves or
+uploads the resulting bytes. This is a *first-pass text-and-image renderer*,
+not a browser/CSS engine. Complicated typography, writing modes, tables,
+SVG/MathML, embedded fonts, fixed-layout SVG, art cropping and CSS floats may
+fail or appear different. Preview and physical X3/X4 acceptance remain undone.
 
-## Acceptance for this first guard PR
+## Acceptance for this experimental EPUB import PR
 
-- EPUB and PDF are never presented as supported in the local manga converter.
+- EPUB is offered **only** for XTC/XTCH via the new EPUB renderer;
+  PDF still redirects users to the existing dedicated converter.
 - Both **Convert & send** and **Convert & save** refuse unsupported input
   before creating a file or transfer. **Send originals** remains available.
 - Mixed batches do not produce deceptively named original documents.
 - ZIP input receives a second real-archive/bitmap check in the worker.
-- Pure Kotlin format classification regression passes, plus complete Android
-  compilation and device UI verification on a debug-signed test build.
+- Synthetic Kotlin package/URL safety tests pass, and Android instrumentation
+  generates genuine EPUB→XTC and EPUB→XTCH with independently decoded output.
+  Full updated Android compile/device CI is pending; real book CSS/image
+  fidelity, screenshots of this particular screen and physical XTEink testing
+  are not yet accepted.
 
 No public stable release or Folio Nooir firmware change is authorized here.
