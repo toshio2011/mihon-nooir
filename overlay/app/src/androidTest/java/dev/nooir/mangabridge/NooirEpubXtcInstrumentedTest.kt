@@ -76,6 +76,25 @@ class NooirEpubXtcInstrumentedTest {
         }
     }
 
+    @Test fun inlineIllustrationsStayBetweenTheirSurroundingWords() {
+        val xhtml = """
+            <html><body><section><h1>Chapter <em>One</em></h1>
+            <p>Before <em>the picture</em><img src="../Images/figure.png"/>
+            After <strong>the picture</strong>.</p>
+            <p>Another <span>normal paragraph</span>.</p>
+            <figure><img src="../Images/second.png"/></figure>
+            </section></body></html>
+        """.trimIndent()
+        assertEquals(listOf(
+            "HEADING:Chapter One",
+            "TEXT:Before the picture",
+            "IMAGE:../Images/figure.png",
+            "TEXT:After the picture.",
+            "TEXT:Another normal paragraph.",
+            "IMAGE:../Images/second.png",
+        ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+    }
+
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)
     @Test fun realXtchContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTCH)
 
