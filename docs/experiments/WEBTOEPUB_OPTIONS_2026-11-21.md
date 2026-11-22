@@ -91,6 +91,14 @@ Public webpage retrieval now uses a conservative three-attempt maximum for trans
 
 This improves public HTML conversions but does **not** enable browser sessions, JavaScript-rendered chapters, protected APIs, image proxy workarounds, or WebToEpub site-specific parser coverage. Next acceptance steps are actual public-site fixtures, Android device rendering and performance checks. Further independent enhancements worth testing: configurable per-site public selectors, bounded transient retry/rate limit and multi-page public tables of contents.
 
+### Numbered public table-of-contents pagination (22 November)
+
+The chapter analyzer and the normal novel converter now share bounded **multi-page public chapter discovery** for ordinary HTTPS sites. Only pagination controls that point to the next numbered TOC page on the same site and in the same collection are eligible: `?page=2`, `?paged=2`, `?page_number=2`, `?pagenum=2`, or `/page/2/`. Reading-page “Next chapter” links, unrelated page paths, private/cross-site URLs, changed non-pagination query parameters, and off-site redirects are not followed. Every additional TOC request is paced.
+
+The importer examines **at most 12 numbered TOC pages per story**, merging chapters in encounter order and deduplicating tracking-only variants. If the public TOC is still continuing at this limit, a continuation repeats existing chapters, redirects outside the collection, or has no readable chapter list, it reports a clear failure **rather than exporting a knowingly partial book**. Only a real multi-chapter TOC is eligible; pages that show fewer than two discovered chapters do not trigger this navigation.
+
+This is intentionally **not** universal pagination support: JS-only chapter lists, unnumbered “load more”, nonstandard page names and site-specific parser rules still require manual chapter URLs or future independent adapters. Missing/unsupported pagination that is not explicitly recognizable can remain undetected, so users should review the discovered chapter checklist before exporting. No protected content or session context is fetched. Pure Kotlin tests cover URL resolution, looping, redirects, same-site guards and next-chapter rejection; end-to-end real-site acceptance is still outstanding.
+
 ### Not yet implemented
 
 Full site-specific parser compatibility, advanced cover-tile editing, complete unrestricted WebToEpub CSS/pipeline parity, background/resumable imports, automatic novel library refresh, persistent EPUB-in-place chapter merging and comprehensive real-site/device verification. A browser extension has access to the page/session context; our Android importer explicitly works with **public HTTPS only** and must not bypass logins, DRM, premium chapters or other access restrictions.
