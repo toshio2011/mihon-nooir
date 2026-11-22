@@ -29,6 +29,19 @@ internal object NooirWebTocPagination {
             name in setOf("fbclid", "gclid", "mc_cid", "mc_eid") || name.startsWith("utm_")
         }.sorted()
 
+    /** Confirm a fetched page did not redirect from TOC pagination to a chapter. */
+    fun sameCollection(firstUrl: String, secondUrl: String): Boolean {
+        val first = runCatching { URI(firstUrl).normalize() }.getOrNull() ?: return false
+        val second = runCatching { URI(secondUrl).normalize() }.getOrNull() ?: return false
+        return first.scheme.equals("https", true) &&
+            second.scheme.equals("https", true) &&
+            !first.host.isNullOrBlank() && first.host.equals(second.host, true) &&
+            first.port == -1 && second.port == -1 &&
+            first.rawUserInfo == null && second.rawUserInfo == null &&
+            basePath(first) == basePath(second) &&
+            stableQuery(first) == stableQuery(second)
+    }
+
     fun next(pageUrl: String, links: List<Candidate>, visited: Set<String> = emptySet()): String? {
         val source = runCatching { URI(pageUrl).normalize() }.getOrNull() ?: return null
         if (!source.scheme.equals("https", true) || source.host.isNullOrBlank() ||
