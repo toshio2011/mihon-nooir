@@ -33,6 +33,21 @@ class NooirWebTocHtmlInstrumentedTest {
             NooirWebTocPagination.next(page.location(), candidates))
     }
 
+    @Test fun queryBasedChapterUrlsKeepTheirStoryPath() {
+        val page = Jsoup.parse(
+            """
+            <div class="chapter-list">
+              <a href="?chapter=1">Chapter One</a>
+              <a href="?chapter=2">Chapter Two</a>
+            </div>
+            """.trimIndent(), "https://example.org/story/chapters"
+        )
+        assertEquals(listOf(
+            "https://example.org/story/chapters?chapter=1",
+            "https://example.org/story/chapters?chapter=2"
+        ), NooirWebNovel.discover(page).map { it.url })
+    }
+
     @Test fun plainNextChapterLinkCannotAdvanceTocPage() {
         val page = Jsoup.parse(
             """
