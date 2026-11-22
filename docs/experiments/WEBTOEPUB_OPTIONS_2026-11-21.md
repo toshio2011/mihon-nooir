@@ -87,6 +87,8 @@ Independently reviewed the current WebToEpub developer branch (1.0.14.92), inclu
 
 The draft importer now ranks HTML candidates by paragraph/prose density **minus linked navigation text**, so large TOC blocks are less likely to become chapter bodies. It also attempts validated full-resolution/lazy chapter illustration alternatives (`data-original`, `data-orig-file`, `data-srcset`, `srcset`, `data-src`, ordinary `src`) in that priority, with a maximum of four HTTP attempts per illustration and the existing HTTPS/byte limits. A chapter heading matching the source heading is no longer inserted twice. Both candidate selection algorithms have pure Kotlin tests in `tests/run.sh`.
 
+Public webpage retrieval now uses a conservative three-attempt maximum for transient HTTP statuses (408, 429, 500, 502, 503, 504), with 0.9 s and 1.8 s default backoff. Numeric `Retry-After` headers up to eight seconds are respected; longer waits stop and report the HTTP failure instead of retrying prematurely. HTTP 403/404, logins and paid chapters never trigger retries. Redirect validation, eight-megabyte HTML limit, and the existing public-HTTPS-only policy remain. A separate pure Kotlin policy test runs in the standard host CI. This is not resumable downloading.
+
 This improves public HTML conversions but does **not** enable browser sessions, JavaScript-rendered chapters, protected APIs, image proxy workarounds, or WebToEpub site-specific parser coverage. Next acceptance steps are actual public-site fixtures, Android device rendering and performance checks. Further independent enhancements worth testing: configurable per-site public selectors, bounded transient retry/rate limit and multi-page public tables of contents.
 
 ### Not yet implemented
