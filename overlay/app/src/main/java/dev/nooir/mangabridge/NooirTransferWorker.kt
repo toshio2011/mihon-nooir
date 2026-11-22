@@ -15,6 +15,7 @@ import androidx.work.WorkerParameters
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.bridge.NooirDeviceProfiles
 import dev.nooir.bridge.NooirUpload
+import dev.nooir.bridge.XtcFormat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -37,6 +38,9 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         const val KEY_DEVICE = "device"
         const val KEY_TREE_URI = "save_tree_uri"
         const val KEY_OPTIONS = "options"
+        const val KEY_EPUB_FONT = "epub_font_px"
+        const val KEY_EPUB_MARGIN = "epub_margin_px"
+        const val KEY_EPUB_RTL = "epub_right_to_left"
         const val KEY_PHASE = "phase"
         const val KEY_PERCENT = "percent"
         const val KEY_SENT = "sent"
@@ -105,6 +109,9 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         val device = inputData.getString(KEY_DEVICE) ?: "X4"
         val treeUri = inputData.getString(KEY_TREE_URI)?.let(Uri::parse)
         val options = MangaConversionOptions.fromToken(inputData.getString(KEY_OPTIONS))
+        val epubFont = inputData.getInt(KEY_EPUB_FONT, 24).coerceIn(14, 46)
+        val epubMargin = inputData.getInt(KEY_EPUB_MARGIN, 26).coerceIn(8, 80)
+        val epubRtl = inputData.getBoolean(KEY_EPUB_RTL, false)
         val profile = runCatching { NooirDeviceProfiles.forId(device) }.getOrNull()
         if (profile == null || (treeUri == null && !profile.xteinkWifi) ||
             files.isEmpty() || (treeUri == null && host.isBlank()) ||
@@ -142,13 +149,23 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     // user requested XTC, XTCH or another conversion format.
                     // Reject BEFORE creating a destination or uploading bytes.
                     val inputMime = applicationContext.contentResolver.getType(uri).orEmpty()
-                    val mayConvert = NooirLocalConversionPolicy.canConvertHere(selected.name, inputMime)
-                    require(!conversionRequested || (selected.isManga && mayConvert)) {
+                    val kind = NooirLocalConversionPolicy.classify(selected.name, inputMime)
+                    val actual = format.resolved(device)
+                    val isEpub = kind == NooirLocalConversionPolicy.Input.EPUB
+                    val epubFormat = when (actual) {
+                        ExportFormat.XTC -> XtcFormat.XTC
+                        ExportFormat.XTCH -> XtcFormat.XTCH
+                        else -> null
+                    }
+                    val mayConvert = NooirLocalConversionPolicy.canConvertTo(
+                        selected.name, inputMime, actual.name)
+                    require(!conversionRequested || (mayConvert &&
+                        (selected.isManga || (isEpub && epubFormat != null)))) {
                         val detail = NooirLocalConversionPolicy.unsupportedHint(selected.name, inputMime)
-                            .ifBlank { "Only supported image files and image-based CBZ/ZIP archives can be converted here." }
+                            .ifBlank { "This source/output combination cannot be converted here." }
                         "Conversion not supported for ${selected.name}: " + detail
                     }
-                    val convertThis = conversionRequested && selected.isManga
+                    val convertThis = conversionRequested && (selected.isManga || isEpub)
                     val outputName = if (convertThis) NooirDestinationGuard.forManga(
                         requestedName.substringBeforeLast('.', requestedName), format, device)
                         else NooirDestinationGuard.original(requestedName)
@@ -161,7 +178,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                         val safeName = selected.name.substringBeforeLast('.', selected.name).take(70)
                             .map { c -> if (c.code < 128 && (c.isLetterOrDigit() || c == '_' || c == '-')) c else '_' }
                             .joinToString("").ifBlank { "Manga" }
-                        val mime = if (selected.isManga) format.resolved(device).mime.ifBlank { "application/octet-stream" }
+                        val mime = if (convertThis) actual.mime.ifBlank { "application/octet-stream" }
                             else resolver.getType(uri) ?: "application/octet-stream"
                         val parent = DocumentsContract.buildDocumentUriUsingTree(
                             treeUri, DocumentsContract.getTreeDocumentId(treeUri)
@@ -175,6 +192,14 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                                     applicationContext, uri, selected, format, device,
                                     saveDestination = target, options = options,
                                     outputBaseOverride = requestedName.substringBeforeLast('.', requestedName),
+                                    onStage = { step -> emit(step, index, files.size, title) },
+                                )
+                            } else if (isEpub && convertThis) {
+                                NooirEpubImportConverter.convert(
+                                    applicationContext, uri, requireNotNull(epubFormat), device,
+                                    epubFont, epubMargin, epubRtl, saveDestination = target,
+                                    outputName = outputName,
+                                    checkCancelled = { if (isStopped) throw CancellationException("EPUB conversion canceled") },
                                     onStage = { step -> emit(step, index, files.size, title) },
                                 )
                             } else {
@@ -200,6 +225,20 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                             runCatching { DocumentsContract.deleteDocument(resolver, target) }
                             throw e
                         }
+                    } else if (convert && isEpub) {
+                        NooirEpubImportConverter.convert(
+                            applicationContext, uri, requireNotNull(epubFormat), device,
+                            epubFont, epubMargin, epubRtl,
+                            sendHost = host, sendFolder = folder, outputName = outputName,
+                            checkCancelled = { if (isStopped) throw CancellationException("EPUB conversion canceled") },
+                            onStage = { step -> emit(step, index, files.size, title) },
+                            onUploadProgress = { sent, total ->
+                                if (isStopped) throw CancellationException("EPUB upload canceled")
+                                val pct = (sent * 100L / total.coerceAtLeast(1L)).toInt()
+                                emit(if (sent >= total) "Waiting for XTEink confirmation" else "Uploading",
+                                    index, files.size, title, sent, total, pct)
+                            },
+                        )
                     } else if (convert && selected.isManga) {
                         emit("Converting", index, files.size, title)
                         ImportedMangaConverter.convert(
