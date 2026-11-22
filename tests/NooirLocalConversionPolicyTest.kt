@@ -34,7 +34,7 @@ fun main() {
     check(Policy.canConvertHere("spread.zip"))
     check(Policy.canConvertHere("picture.jpeg", "image/jpeg"))
     check(Policy.canConvertHere("opaque", "image/png"))
-    check(Policy.unsupportedHint("novel.epub").contains("not converted"))
+    check(Policy.unsupportedHint("novel.epub").contains("experimental XTC/XTCH"))
     check(Policy.unsupportedHint("paper.pdf").contains("PDF to e-reader"))
-    println("PASS: original EPUB, PDF, XTC/XTCH are never misrepresented as image conversions")
+    println("PASS: EPUB only permits native XTC/XTCH raster output; unsupported formats are blocked")
 }
