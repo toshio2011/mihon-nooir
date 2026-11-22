@@ -46,6 +46,12 @@ object NooirWebNovel {
             if (inPager) continue
             val href = node.attr("href").trim()
             val text = node.text().trim().replace(Regex("\\s+"), " ").take(160)
+            val rel = node.attr("rel").split(Regex("\\s+"))
+            // A reading-page navigation arrow is not a table-of-contents
+            // entry even if its URL contains /chapter/ or /episode/.
+            val navLabel = Regex("(?i)^(?:next|previous|prev)(?:\\s+(?:chapter|part|episode|page))?\\s*[›»→]?$")
+            if (rel.any { it.equals("next", true) || it.equals("prev", true) } ||
+                navLabel.matches(text)) continue
             if (href.isBlank() || text.length < 2) continue
             val uri = runCatching { origin.resolve(href).normalize() }.getOrNull() ?: continue
             if (!uri.scheme.equals("https", ignoreCase = true) ||
