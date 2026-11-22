@@ -12,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.RandomAccessFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -98,6 +99,29 @@ class NooirEpubXtcInstrumentedTest {
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)
     @Test fun realXtchContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTCH)
 
+    @Test fun x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-epub-x3-", ".epub", cache)
+        val output = File.createTempFile("nooir-epub-x3-", ".xtch", cache)
+        try {
+            makeBook(input)
+            val count = NooirEpubToXtc.convert(input, output, XtcFormat.XTCH, "X3")
+            val finished = XtcBookPreview(output)
+            assertEquals(count, finished.pageCount)
+            assertTrue(count >= 3)
+            for (index in listOf(0, 1, count - 1)) {
+                val page = finished.page(index)
+                assertEquals(528, page.width)
+                assertEquals(792, page.height)
+                assertEquals(2, page.depth)
+                assertTrue(page.levels.any { it.toInt() == 0 })
+            }
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+
     private fun checkFormat(format: XtcFormat) {
         val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
         val input = File.createTempFile("nooir-epub-instrumentation-", ".epub", cache)
@@ -112,6 +136,28 @@ class NooirEpubXtcInstrumentedTest {
             assertEquals(count, decoded.pageCount)
             assertTrue("Cover, prose and illustration should span several pages", count >= 3)
             assertEquals(count, reported.lastOrNull())
+            // Two OPF spine sections must survive as 1-based XTC chapter
+            // entries. The separate cover occupies actual page index zero.
+            RandomAccessFile(output, "r").use { book ->
+                val header = ByteArray(56).also { book.readFully(it) }
+                val offset = (0..3).fold(0L) { total, i ->
+                    total or ((header[48 + i].toLong() and 255L) shl (i * 8))
+                }
+                assertTrue("Writer must keep chapter index", offset >= 56L)
+                val first = ByteArray(96)
+                val second = ByteArray(96)
+                book.seek(offset)
+                book.readFully(first)
+                book.readFully(second)
+                assertTrue(first.toString(Charsets.UTF_8).startsWith("First Chapter"))
+                assertTrue(second.toString(Charsets.UTF_8).startsWith("Second Chapter"))
+                val firstIndex = (first[80].toInt() and 255) or
+                    ((first[81].toInt() and 255) shl 8)
+                val secondIndex = (second[80].toInt() and 255) or
+                    ((second[81].toInt() and 255) shl 8)
+                assertEquals("Cover precedes first chapter", 2, firstIndex)
+                assertTrue("Spine order must be monotonic", secondIndex > firstIndex)
+            }
             val cover = decoded.page(0)
             assertEquals(480, cover.width)
             assertEquals(800, cover.height)
