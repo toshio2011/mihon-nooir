@@ -74,17 +74,7 @@ for required in \
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-web-epub-export-instrumentation.txt
 done
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0
-adb root
-adb wait-for-device
-adb pull \
-  /data/user/0/dev.nooir.mihontrial.foss/files/manganooir_panel_debug/latest.zip \
-  android-runtime-panel-diagnostic.zip
-test -s android-runtime-panel-diagnostic.zip
-python3 tools/panel_diagnostic_inspect.py \
-  android-runtime-panel-diagnostic.zip --json \
-  | tee android-panel-diagnostic-inspection.json
- android-web-epub-export-instrumentation.txt)" -eq 2
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-web-epub-export-instrumentation.txt)" -eq 2
 grep -Fxq 'OK (2 tests)' android-web-epub-export-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-epub-export-instrumentation.txt
 
