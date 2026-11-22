@@ -72,6 +72,12 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebChapterIdentity.
   tests/NooirWebChapterIdentityTest.kt -include-runtime -d "$tmp/web-chapter-identity.jar"
 java -jar "$tmp/web-chapter-identity.jar"
 
+# Bounded public table-of-contents pagination. Never follow next-chapter
+# links as TOC pages, accept a different host, or silently exceed the limit.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebTocPagination.kt \
+  tests/NooirWebTocPaginationTest.kt -include-runtime -d "$tmp/web-toc-pagination.jar"
+java -jar "$tmp/web-toc-pagination.jar"
+
 # Public chapter selector policy: pure Kotlin, independent of Android/Jsoup.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebExtractRules.kt \
   tests/NooirWebExtractRulesTest.kt -include-runtime -d "$tmp/web-extract-rules.jar"
