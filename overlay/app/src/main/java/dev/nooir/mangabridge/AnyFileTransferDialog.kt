@@ -349,9 +349,10 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 }
                 if (unsupportedForConversion.isNotEmpty()) {
                     val first = unsupportedForConversion.first()
-                    Text("Not convertible here: " +
-                        unsupportedForConversion.take(4).joinToString(", ") { displayNames[it] } +
-                        if (unsupportedForConversion.size > 4) " (and more)" else "")
+                    val shownNames = unsupportedForConversion.take(4)
+                        .joinToString(", ") { displayNames[it] }
+                    val extraNames = if (unsupportedForConversion.size > 4) " (and more)" else ""
+                    Text("Not convertible here: " + shownNames + extraNames)
                     Text(NooirLocalConversionPolicy.unsupportedHint(
                         displayNames[first], inputMimeTypes.getOrNull(first).orEmpty()))
                 }
