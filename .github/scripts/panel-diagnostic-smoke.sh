@@ -63,6 +63,31 @@ grep -Fq 'INSTRUMENTATION_STATUS: test=unfinishedTocAfterSafetyLimitFailsRatherT
 grep -Fxq 'OK (5 tests)' android-web-toc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-toc-instrumentation.txt
 
+echo "Exporting synthetic public HTML into real EPUB2/EPUB3 ZIP files on Android"
+adb shell am instrument -w -r \
+  -e class dev.nooir.mangabridge.NooirWebEpubEndToEndInstrumentedTest \
+  dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee android-web-epub-export-instrumentation.txt
+for required in \
+  actualHtmlExportsValidEpub2SectionsAndNcx \
+  actualHtmlExportsValidEpub3SectionsAndNavigation
+do
+  grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-web-epub-export-instrumentation.txt
+done
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0
+adb root
+adb wait-for-device
+adb pull \
+  /data/user/0/dev.nooir.mihontrial.foss/files/manganooir_panel_debug/latest.zip \
+  android-runtime-panel-diagnostic.zip
+test -s android-runtime-panel-diagnostic.zip
+python3 tools/panel_diagnostic_inspect.py \
+  android-runtime-panel-diagnostic.zip --json \
+  | tee android-panel-diagnostic-inspection.json
+ android-web-epub-export-instrumentation.txt)" -eq 2
+grep -Fxq 'OK (2 tests)' android-web-epub-export-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-epub-export-instrumentation.txt
+
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root
 adb wait-for-device
