@@ -41,6 +41,8 @@ class NooirWebTocHtmlInstrumentedTest {
               <a href="/chapter/2">Chapter 2</a>
             </div>
             <a href="/chapter/3" rel="next">Next chapter</a>
+            <a href="/chapter/4" class="next-chapter">Next chapter</a>
+            <a href="/chapter/0" rel="prev">Previous chapter</a>
             """.trimIndent(), "https://example.org/story/chapters"
         )
         assertEquals(2, NooirWebNovel.discover(page).size)
