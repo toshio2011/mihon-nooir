@@ -164,8 +164,10 @@ internal class NooirEpubBook private constructor(
     fun readXhtml(path: String): String =
         readZip(zip, path, MAX_ENTRY).toString(Charsets.UTF_8)
 
-    fun imageBytes(chapterPath: String, src: String): ByteArray {
-        val path = resolve(chapterPath, src)
+    fun imageBytes(chapterPath: String, src: String): ByteArray =
+        imageBytesAt(resolve(chapterPath, src))
+
+    fun imageBytesAt(path: String): ByteArray {
         val suffix = path.substringAfterLast('.', "").lowercase()
         require(suffix in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")) {
             "Unsupported EPUB illustration: " + suffix
