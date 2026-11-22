@@ -50,6 +50,20 @@ test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.tx
 grep -Fxq 'OK (5 tests)' diagnostic-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
+echo "Rendering public synthetic EPUB novels and images into XTC/XTCH on Android"
+adb shell am instrument -w -r \
+  -e class dev.nooir.mangabridge.NooirEpubXtcInstrumentedTest \
+  dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee android-epub-xtc-instrumentation.txt
+for required in \
+  realXtcContainsDecodedTextAndArtPages \
+  realXtchContainsDecodedTextAndArtPages
+do
+  grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
+done
+grep -Fxq 'OK (2 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
+
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root
 adb wait-for-device
