@@ -56,43 +56,72 @@ internal object NooirEpubToXtc {
     private fun blocks(xhtml: String): Pair<String, List<Block>> {
         val doc = Jsoup.parse(xhtml)
         doc.select("script,style,iframe,object,embed,form,video,audio").remove()
-        val body = doc.body()
         val out = mutableListOf<Block>()
         val ignored = setOf("nav", "script", "style", "head", "noscript", "footer")
-        val textContainer = setOf("h1", "h2", "h3", "h4", "h5", "h6",
-            "p", "li", "pre", "blockquote", "td", "th", "figcaption")
-        fun visit(node: Node) {
-            if (out.size >= 50000) error("EPUB section has too many text/image blocks")
+        // Flush at actual paragraph/section boundaries, but NOT around inline
+        // <span>/<em>/<strong>. If an image occurs inside a paragraph, flush
+        // the words before it, emit the image, then resume following words.
+        // Previously Element.text() moved all paragraph text ahead of its art.
+        val boundaries = setOf(
+            "p", "div", "section", "article", "li", "ul", "ol", "pre",
+            "blockquote", "table", "tr", "td", "th", "figure", "figcaption",
+            "h1", "h2", "h3", "h4", "h5", "h6", "hr",
+        )
+        val text = StringBuilder()
+        var textHeading = false
+
+        fun flushText() {
+            val normalized = text.toString().replace(Regex("\\s+"), " ").trim()
+            if (normalized.isNotEmpty()) {
+                require(out.size < 50_000) { "EPUB section has too many text/image blocks" }
+                out += Block.Text(normalized, textHeading)
+            }
+            text.setLength(0)
+            textHeading = false
+        }
+
+        fun visit(node: Node, heading: Boolean = false) {
+            require(out.size < 50_000) { "EPUB section has too many text/image blocks" }
             if (node is TextNode) {
-                val content = node.text().trim()
-                if (content.isNotEmpty()) out += Block.Text(content)
+                val fragment = node.wholeText
+                if (fragment.isNotBlank() && text.isBlank()) textHeading = heading
+                text.append(fragment)
                 return
             }
             val element = node as? Element ?: return
             val tag = element.normalName()
             if (tag in ignored) return
+            if (tag == "br" || tag == "hr") {
+                flushText()
+                return
+            }
             if (tag == "img" || tag == "image") {
                 val src = element.attr("src").ifBlank { element.attr("xlink:href") }
+                flushText()
                 if (src.isNotBlank()) out += Block.Image(src)
                 return
             }
-            if (tag in textContainer) {
-                val text = element.text().replace(Regex("[ \t]+"), " ").trim()
-                if (text.isNotBlank()) out += Block.Text(text, tag.startsWith("h"))
-                // EPUBs may nest an actual illustration in a paragraph.
-                element.select("img[src],image[xlink:href]").forEach { image ->
-                    val src = image.attr("src").ifBlank { image.attr("xlink:href") }
-                    if (src.isNotBlank()) out += Block.Image(src)
-                }
-                return
-            }
-            element.childNodes().forEach(::visit)
+            val isBoundary = tag in boundaries
+            if (isBoundary) flushText()
+            val isHeading = heading || tag in setOf("h1", "h2", "h3", "h4", "h5", "h6")
+            element.childNodes().forEach { visit(it, isHeading) }
+            if (isBoundary) flushText()
         }
-        body.childNodes().forEach(::visit)
+        doc.body().childNodes().forEach { visit(it) }
+        flushText()
         val heading = doc.selectFirst("h1,h2,h3")?.text()?.trim()?.take(80)
             .orEmpty().ifBlank { doc.title().trim().take(80) }
         return heading to out
     }
+
+    /** Deterministic reading-order inspection for Android EPUB fidelity QA. */
+    internal fun readingOrderForDiagnostics(xhtml: String): List<String> =
+        blocks(xhtml).second.map { block ->
+            when (block) {
+                is Block.Text -> (if (block.heading) "HEADING:" else "TEXT:") + block.text
+                is Block.Image -> "IMAGE:" + block.src
+            }
+        }
 
     private class PageCanvas(
         val width: Int, val height: Int, val format: XtcFormat,
