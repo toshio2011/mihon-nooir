@@ -68,7 +68,9 @@ internal object NooirWebTocPagination {
             val targetPage = if (fromPath != null) fromPath else fromQuery
             if (targetPage != expected) return@firstNotNullOfOrNull null
             val url = target.toASCIIString().substringBefore('#')
-            if (url in visited || url == pageUrl.substringBefore('#')) return@firstNotNullOfOrNull null
+            require(url !in visited && url != pageUrl.substringBefore('#')) {
+                "Table-of-contents pagination loop detected; nothing was exported."
+            }
             url
         }
     }
