@@ -141,11 +141,12 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     // Never silently copy EPUB/PDF/other documents while the
                     // user requested XTC, XTCH or another conversion format.
                     // Reject BEFORE creating a destination or uploading bytes.
-                    require(!conversionRequested || selected.isManga) {
-                        "Conversion not supported for ${selected.name}: " +
-                            NooirLocalConversionPolicy.unsupportedHint(
-                                selected.name, applicationContext.contentResolver.getType(uri).orEmpty())
-                            .ifBlank { "Only supported image files or image-based CBZ/ZIP archives can be converted here." }
+                    val inputMime = applicationContext.contentResolver.getType(uri).orEmpty()
+                    val mayConvert = NooirLocalConversionPolicy.canConvertHere(selected.name, inputMime)
+                    require(!conversionRequested || (selected.isManga && mayConvert)) {
+                        val detail = NooirLocalConversionPolicy.unsupportedHint(selected.name, inputMime)
+                            .ifBlank { "Only supported image files and image-based CBZ/ZIP archives can be converted here." }
+                        "Conversion not supported for ${selected.name}: " + detail
                     }
                     val convertThis = conversionRequested && selected.isManga
                     val outputName = if (convertThis) NooirDestinationGuard.forManga(
