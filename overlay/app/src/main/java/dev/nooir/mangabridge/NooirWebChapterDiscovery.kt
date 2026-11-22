@@ -83,7 +83,7 @@ internal object NooirWebChapterDiscovery {
             // No burst fetching when a site publishes multiple TOC pages.
             pace(1300L)
             val loaded = fetchPage(next)
-            require(NooirWebTocPagination.sameCollection(page.location(), loaded.location())) {
+            require(NooirWebTocPagination.sameCollection(next, loaded.location())) {
                 "Public table-of-contents pagination redirected outside this story. " +
                     "Nothing was exported; provide chapter URLs manually."
             }
