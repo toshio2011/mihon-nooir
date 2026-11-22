@@ -6,12 +6,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.nooir.bridge.XtcBookPreview
 import dev.nooir.bridge.XtcFormat
+import dev.nooir.bridge.QuantizedPage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -23,6 +25,41 @@ import java.util.zip.ZipOutputStream
  */
 @RunWith(AndroidJUnit4::class)
 class NooirEpubXtcInstrumentedTest {
+    /**
+     * Visual QA proof: these PNGs come from the independent XTC/XTCH decoder,
+     * never from the Android canvas before conversion. The device-smoke job
+     * pulls them into an artifact so page quality can be inspected separately.
+     */
+    private fun saveDecodedPage(fileName: String, page: QuantizedPage) {
+        require(fileName.matches(Regex("[A-Za-z0-9_-]+\\.png"))) {
+            "Unsafe preview filename"
+        }
+        val maxLevel = (1 shl page.depth) - 1
+        val argb = IntArray(page.levels.size) { i ->
+            val level = (page.levels[i].toInt() and 255).coerceIn(0, maxLevel)
+            val gray = level * 255 / maxLevel
+            Color.rgb(gray, gray, gray)
+        }
+        val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.setPixels(argb, 0, page.width, 0, 0, page.width, page.height)
+            val directory = File(
+                InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+                "nooir_epub_xteink_previews",
+            )
+            check(directory.isDirectory || directory.mkdirs()) {
+                "Could not create decoded EPUB preview directory"
+            }
+            FileOutputStream(File(directory, fileName)).use { stream ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                    "Could not save decoded EPUB output preview"
+                }
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     private fun makeBook(file: File, rtl: Boolean = false) {
         val image = Bitmap.createBitmap(100, 120, Bitmap.Config.ARGB_8888)
         val png = try {
@@ -114,6 +151,7 @@ class NooirEpubXtcInstrumentedTest {
                 assertEquals("XTC reading-order flag", 1, header.readUnsignedByte())
             }
             val prose = XtcBookPreview(output).page(1) // page zero is cover
+            saveDecodedPage("X4-xtc-arabic.png", prose)
             var leftInk = 0
             var rightInk = 0
             for (y in 26 until 155) for (x in 30 until 450) {
@@ -140,6 +178,8 @@ class NooirEpubXtcInstrumentedTest {
             val finished = XtcBookPreview(output)
             assertEquals(count, finished.pageCount)
             assertTrue(count >= 3)
+            saveDecodedPage("X3-xtch-cover.png", finished.page(0))
+            saveDecodedPage("X3-xtch-prose.png", finished.page(1))
             for (index in listOf(0, 1, count - 1)) {
                 val page = finished.page(index)
                 assertEquals(528, page.width)
@@ -197,6 +237,10 @@ class NooirEpubXtcInstrumentedTest {
                 cover.levels.any { it.toInt() == 0 } &&
                     cover.levels.any { (it.toInt() and 255) == if (format.depth == 1) 1 else 3 })
             val prose = decoded.page(1)
+            val label = if (format == XtcFormat.XTC) "xtc" else "xtch"
+            saveDecodedPage("X4-" + label + "-cover.png", cover)
+            saveDecodedPage("X4-" + label + "-prose.png", prose)
+            saveDecodedPage("X4-" + label + "-last.png", decoded.page(count - 1))
             assertTrue("Rendered chapter text must not be all white",
                 prose.levels.any { it.toInt() == 0 })
         } finally {
