@@ -53,11 +53,17 @@ object NooirWebNovel {
             if (rel.any { it.equals("next", true) || it.equals("prev", true) } ||
                 navLabel.matches(text)) continue
             if (href.isBlank() || text.length < 2) continue
-            val uri = runCatching { origin.resolve(href).normalize() }.getOrNull() ?: continue
+            val uri = runCatching {
+                // Java URI.resolve("?chapter=2") loses the last path segment.
+                // Query-based public chapter URLs must retain the story path.
+                if (href.startsWith("?")) URI(
+                    origin.toASCIIString().substringBefore('#').substringBefore('?') + href
+                ).normalize() else origin.resolve(href).normalize()
+            }.getOrNull() ?: continue
             if (!uri.scheme.equals("https", ignoreCase = true) ||
                 !uri.host.equals(origin.host, ignoreCase = true) ||
                 uri.port != -1 || uri.rawUserInfo != null) continue
-            if (uri.path == origin.path) continue
+            if (uri.path == origin.path && uri.rawQuery == origin.rawQuery) continue
             if (node.hasAttr("aria-disabled") ||
                 node.classNames().any { it.contains("locked", true) || it.contains("disabled", true) }) continue
             val path = uri.path.lowercase()
