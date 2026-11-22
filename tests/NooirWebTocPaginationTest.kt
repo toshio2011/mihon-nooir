@@ -26,6 +26,18 @@ fun main() {
         link("?page=2")), setOf("https://example.org/story/chapters?page=2")) == null)
     check(Pager.next("https://example.org/story/chapters?utm_source=x", listOf(
         link("?page=2&fbclid=click"))) == "https://example.org/story/chapters?page=2&fbclid=click")
+    check(Pager.sameCollection(
+        "https://example.org/story/chapters?page=2",
+        "https://example.org/story/chapters/?page=2"))
+    check(Pager.sameCollection(
+        "https://example.org/story/chapters/page/2/",
+        "https://example.org/story/chapters/page/2"))
+    check(!Pager.sameCollection(
+        "https://example.org/story/chapters?page=2",
+        "https://example.org/story/chapter/2"))
+    check(!Pager.sameCollection(
+        "https://example.org/story/chapters?page=2",
+        "https://another.example.org/story/chapters?page=2"))
     check(Pager.MAX_PAGES == 12)
     println("PASS: numbered same-site TOC pagination only; no next-chapter or cross-site traversal")
 }
