@@ -11,9 +11,9 @@ internal object NooirWebChapterUpdates {
         discovered: List<NooirWebChapterPlan.Entry>,
     ): List<NooirWebChapterPlan.Entry> {
         require(knownUrls.isNotEmpty()) { "No saved chapter inventory to compare" }
-        val known = knownUrls.map(String::trim).toSet()
-        return discovered.filterNot { it.url.trim() in known }
-            .distinctBy { it.url.trim() }
+        val known = knownUrls.map(NooirWebChapterIdentity::key).toSet()
+        return discovered.filterNot { NooirWebChapterIdentity.key(it.url) in known }
+            .distinctBy { NooirWebChapterIdentity.key(it.url) }
     }
 
     fun append(
@@ -26,10 +26,10 @@ internal object NooirWebChapterUpdates {
         }
         // When a newly discovered URL is already in the selected chapters
         // (e.g. an imported manual URL), never duplicate it in the EPUB.
-        val selected = selectedUrls.map(String::trim).toSet()
+        val selected = selectedUrls.map(NooirWebChapterIdentity::key).toSet()
         val added = newChapters.filter { it.included }
-            .filterNot { it.url.trim() in selected }
-            .distinctBy { it.url.trim() }
+            .filterNot { NooirWebChapterIdentity.key(it.url) in selected }
+            .distinctBy { NooirWebChapterIdentity.key(it.url) }
         return NooirWebChapterPlan.export(old + added)
     }
 }
