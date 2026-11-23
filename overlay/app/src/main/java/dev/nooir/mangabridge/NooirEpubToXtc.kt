@@ -295,6 +295,7 @@ internal object NooirEpubToXtc {
     fun convert(
         source: File, output: File, format: XtcFormat, device: String,
         settings: Settings = Settings(), rtl: Boolean = false,
+        autoDetectRtl: Boolean = false,
         checkCancelled: () -> Unit = {},
         onPage: (Int, Int) -> Unit = { _, _ -> },
     ): Int {
@@ -307,12 +308,13 @@ internal object NooirEpubToXtc {
             "XTCH requires a framebuffer height divisible by 8"
         }
         NooirEpubBook.open(source).use { book ->
+            val effectiveRtl = if (autoDetectRtl) book.isRightToLeft else rtl
             var pageCount = 0
             val chapters = mutableListOf<BookChapter>()
             val pages = sequence {
                 if (book.coverPath != null) {
                     checkCancelled()
-                    val cover = PageCanvas(profile.width, profile.height, format, rtl, settings)
+                    val cover = PageCanvas(profile.width, profile.height, format, effectiveRtl, settings)
                     for (page in cover.image(book.imageBytesAt(book.coverPath))) {
                         pageCount++
                         yield(page)
@@ -326,7 +328,7 @@ internal object NooirEpubToXtc {
                         "EPUB spine section " + (index + 1) + " has no readable text or illustrations"
                     }
                     val start = pageCount
-                    val renderer = PageCanvas(profile.width, profile.height, format, rtl, settings)
+                    val renderer = PageCanvas(profile.width, profile.height, format, effectiveRtl, settings)
                     for (block in blocks) {
                         checkCancelled()
                         val generated = when (block) {
@@ -352,7 +354,7 @@ internal object NooirEpubToXtc {
                     metadata = BookMetadata(title = book.title, author = book.author,
                         coverPage = if (book.coverPath != null) 0 else null),
                     chapterResolver = { chapters.toList() },
-                    direction = if (rtl) ReadingDirection.RIGHT_TO_LEFT else ReadingDirection.LEFT_TO_RIGHT,
+                    direction = if (effectiveRtl) ReadingDirection.RIGHT_TO_LEFT else ReadingDirection.LEFT_TO_RIGHT,
                     checkOutputCancelled = checkCancelled,
                     onPageEncoded = {
                         checkCancelled()

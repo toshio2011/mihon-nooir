@@ -21,6 +21,7 @@ internal object NooirEpubImportConverter {
         rightToLeft: Boolean = false,
         lineHeightPercent: Int = 118,
         fontFamily: String = "sans-serif",
+        directionMode: String? = null,
         saveDestination: Uri? = null,
         sendHost: String? = null,
         sendFolder: String = "/Books",
@@ -60,7 +61,14 @@ internal object NooirEpubImportConverter {
                     lineSpacing = lineHeightPercent.coerceIn(100, 200) / 100f,
                     fontFamily = fontFamily,
                 ),
-                rtl = rightToLeft,
+                // Null preserves legacy callers; new UI explicitly sends Auto/LTR/RTL.
+                rtl = when (directionMode) {
+                    null -> rightToLeft
+                    "rtl" -> true
+                    "ltr", "auto" -> false
+                    else -> error("Invalid EPUB reading direction mode")
+                },
+                autoDetectRtl = directionMode == "auto",
                 checkCancelled = checkCancelled,
                 onPage = { page, _ -> onStage("Rendering EPUB page " + page) },
             )

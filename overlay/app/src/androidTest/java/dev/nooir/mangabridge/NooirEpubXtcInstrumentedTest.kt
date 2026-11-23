@@ -73,6 +73,8 @@ class NooirEpubXtcInstrumentedTest {
         val longText = (1..30).joinToString(" ") { n ->
             "Paragraph " + n + " contains sample plain text for proper EPUB pagination. "
         }
+        val language = if (rtl) "ar" else "en"
+        val progression = if (rtl) "rtl" else "ltr"
         val styledText = if (emphasis) longText.replace(
             "Paragraph 1 contains sample plain text",
             "<strong>Paragraph 1 contains sample plain text</strong>",
@@ -91,14 +93,14 @@ class NooirEpubXtcInstrumentedTest {
                 <package xmlns="http://www.idpf.org/2007/opf"
                   xmlns:dc="http://purl.org/dc/elements/1.1/" version="3.0">
                   <metadata><dc:title>Original Tiny Test</dc:title>
-                    <dc:creator>Nooir QA</dc:creator></metadata>
+                    <dc:creator>Nooir QA</dc:creator><dc:language>$language</dc:language></metadata>
                   <manifest>
                     <item id="a" href="Text/one.xhtml" media-type="application/xhtml+xml"/>
                     <item id="b" href="Text/two.xhtml" media-type="application/xhtml+xml"/>
                     <item id="cover" href="Images/cover.png" media-type="image/png" properties="cover-image"/>
                     <item id="figure" href="Images/figure.png" media-type="image/png"/>
                   </manifest>
-                  <spine><itemref idref="a"/><itemref idref="b"/></spine>
+                  <spine page-progression-direction="$progression"><itemref idref="a"/><itemref idref="b"/></spine>
                 </package>
             """.trimIndent()).toByteArray(),
             "OEBPS/Text/one.xhtml" to (if (rtl)
@@ -232,6 +234,46 @@ class NooirEpubXtcInstrumentedTest {
             }
             assertTrue("Arabic glyphs should render on the right/leading edge",
                 rightInk > leftInk * 2 + 20)
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+
+    @Test fun autoDirectionUsesEpubMetadataForArabicOutput() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-rtl-auto-", ".epub", cache)
+        val output = File.createTempFile("nooir-rtl-auto-", ".xtc", cache)
+        try {
+            makeBook(input, rtl = true)
+            NooirEpubToXtc.convert(input, output, XtcFormat.XTC, "X4",
+                autoDetectRtl = true)
+            RandomAccessFile(output, "r").use { header ->
+                header.seek(8L)
+                assertEquals("Auto must preserve EPUB's right-to-left page order",
+                    1, header.readUnsignedByte())
+            }
+            assertTrue(XtcBookPreview(output).page(1).levels.any { it.toInt() == 0 })
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+
+    @Test fun explicitLtrOverridesRtlEpubMetadata() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-rtl-override-", ".epub", cache)
+        val output = File.createTempFile("nooir-rtl-override-", ".xtch", cache)
+        try {
+            makeBook(input, rtl = true)
+            NooirEpubToXtc.convert(input, output, XtcFormat.XTCH, "X4",
+                rtl = false, autoDetectRtl = false)
+            RandomAccessFile(output, "r").use { header ->
+                header.seek(8L)
+                assertEquals("Manual LTR must outrank EPUB's RTL metadata",
+                    0, header.readUnsignedByte())
+            }
+            assertEquals(2, XtcBookPreview(output).page(1).depth)
         } finally {
             input.delete()
             output.delete()

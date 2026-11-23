@@ -63,11 +63,13 @@ for required in \
   inlineEmphasisSurvivesNestedTagsAndImageBoundary \
   inlineEmphasisChangesRealEncodedXtchPage \
   x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes \
-  arabicParagraphsAlignRightAndMarkBookRtl
+  arabicParagraphsAlignRightAndMarkBookRtl \
+  autoDirectionUsesEpubMetadataForArabicOutput \
+  explicitLtrOverridesRtlEpubMetadata
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
 done
-grep -Fxq 'OK (8 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'OK (10 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
 echo "Collecting page images decoded from real EPUB→XTC/XTCH outputs"

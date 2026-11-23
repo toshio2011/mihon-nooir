@@ -41,6 +41,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         const val KEY_EPUB_FONT = "epub_font_px"
         const val KEY_EPUB_MARGIN = "epub_margin_px"
         const val KEY_EPUB_RTL = "epub_right_to_left"
+        const val KEY_EPUB_DIRECTION = "epub_direction_mode"
         const val KEY_EPUB_LINE_HEIGHT = "epub_line_height_pct"
         const val KEY_EPUB_FONT_FAMILY = "epub_font_family"
         const val KEY_PHASE = "phase"
@@ -114,6 +115,10 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         val epubFont = inputData.getInt(KEY_EPUB_FONT, 24).coerceIn(14, 46)
         val epubMargin = inputData.getInt(KEY_EPUB_MARGIN, 26).coerceIn(8, 80)
         val epubRtl = inputData.getBoolean(KEY_EPUB_RTL, false)
+        // Existing queued requests still use the legacy boolean semantics.
+        val epubDirection = inputData.getString(KEY_EPUB_DIRECTION)
+            ?.takeIf { it in setOf("auto", "ltr", "rtl") }
+            ?: if (epubRtl) "rtl" else "ltr"
         val epubLineHeight = inputData.getInt(KEY_EPUB_LINE_HEIGHT, 118).coerceIn(100, 200)
         val epubFontFamily = inputData.getString(KEY_EPUB_FONT_FAMILY)
             ?.takeIf { it in setOf("sans-serif", "serif", "monospace") } ?: "sans-serif"
@@ -204,7 +209,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                                     applicationContext, uri, requireNotNull(epubFormat), device,
                                     epubFont, epubMargin, epubRtl,
                                     lineHeightPercent = epubLineHeight, fontFamily = epubFontFamily,
-                                    saveDestination = target,
+                                    directionMode = epubDirection, saveDestination = target,
                                     outputName = outputName,
                                     checkCancelled = { if (isStopped) throw CancellationException("EPUB conversion canceled") },
                                     onStage = { step -> emit(step, index, files.size, title) },
@@ -237,7 +242,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                             applicationContext, uri, requireNotNull(epubFormat), device,
                             epubFont, epubMargin, epubRtl,
                             lineHeightPercent = epubLineHeight, fontFamily = epubFontFamily,
-                            sendHost = host, sendFolder = folder, outputName = outputName,
+                            directionMode = epubDirection, sendHost = host, sendFolder = folder, outputName = outputName,
                             checkCancelled = { if (isStopped) throw CancellationException("EPUB conversion canceled") },
                             onStage = { step -> emit(step, index, files.size, title) },
                             onUploadProgress = { sent, total ->

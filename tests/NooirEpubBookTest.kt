@@ -6,7 +6,10 @@ import java.util.zip.ZipOutputStream
 private fun fixture(
     items: List<Pair<String, String>>,
     includeEncryption: Boolean = false,
+    language: String = "en",
+    spineDirection: String? = null,
 ): File {
+    val directionAttr = spineDirection?.let { " page-progression-direction=\"$it\"" }.orEmpty()
     val result = File.createTempFile("nooir-epub-fixture-", ".epub")
     ZipOutputStream(result.outputStream()).use { out ->
         val files = linkedMapOf(
@@ -17,13 +20,13 @@ private fun fixture(
                 </container>""".trimIndent(),
             "OEBPS/content.opf" to """<?xml version="1.0" encoding="UTF-8"?>
                 <package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" version="3.0" unique-identifier="bookid">
-                <metadata><dc:title>A Tiny Story</dc:title><dc:creator>Sample Author</dc:creator></metadata>
+                <metadata><dc:title>A Tiny Story</dc:title><dc:creator>Sample Author</dc:creator><dc:language>$language</dc:language></metadata>
                 <manifest>
                   <item id="b" href="Text/b.xhtml" media-type="application/xhtml+xml"/>
                   <item id="a" href="Text/a.xhtml" media-type="application/xhtml+xml"/>
                   <item id="cover" href="Images/cover.png" media-type="image/png" properties="cover-image"/>
                 </manifest>
-                <spine><itemref idref="a"/><itemref idref="b"/></spine>
+                <spine$directionAttr><itemref idref="a"/><itemref idref="b"/></spine>
                 </package>""".trimIndent(),
             "OEBPS/Text/a.xhtml" to "<html><body><p>First chapter</p></body></html>",
             "OEBPS/Text/b.xhtml" to "<html><body><p>Second chapter</p></body></html>",
@@ -45,12 +48,29 @@ fun main() {
         NooirEpubBook.open(first).use { book ->
             check(book.title == "A Tiny Story")
             check(book.author == "Sample Author")
+            check(!book.isRightToLeft)
             check(book.coverPath == "OEBPS/Images/cover.png")
             check(book.chapters.map { it.path } ==
                 listOf("OEBPS/Text/a.xhtml", "OEBPS/Text/b.xhtml"))
             check(book.readXhtml(book.chapters[0].path).contains("First chapter"))
         }
     } finally { first.delete() }
+    for ((language, direction, expectedRtl) in listOf(
+        Triple("ar", null, true),
+        Triple("fa-IR", "ltr", false),
+        Triple("en", "rtl", true),
+        Triple("en", "default", false),
+        Triple("he", "default", true),
+    )) {
+        val sample = fixture(emptyList(), language = language, spineDirection = direction)
+        try {
+            NooirEpubBook.open(sample).use { book ->
+                check(book.isRightToLeft == expectedRtl) {
+                    "Unexpected EPUB direction: language=$language direction=$direction"
+                }
+            }
+        } finally { sample.delete() }
+    }
     check(NooirEpubBook.resolve("OEBPS/Text/one.xhtml", "../Images/book.png") ==
         "OEBPS/Images/book.png")
     for (href in listOf(

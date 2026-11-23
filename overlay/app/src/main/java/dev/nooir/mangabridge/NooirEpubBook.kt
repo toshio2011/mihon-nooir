@@ -20,6 +20,7 @@ internal class NooirEpubBook private constructor(
     val author: String,
     val chapters: List<Chapter>,
     val coverPath: String?,
+    val isRightToLeft: Boolean,
 ) : Closeable {
     data class Chapter(val path: String, val label: String)
     companion object {
@@ -102,7 +103,21 @@ internal class NooirEpubBook private constructor(
                 val title = titles.item(0)?.textContent?.trim()?.take(150).orEmpty()
                     .ifBlank { file.nameWithoutExtension.take(120) }
                 val author = creators.item(0)?.textContent?.trim()?.take(90).orEmpty()
-                return NooirEpubBook(zip, title, author, chapters, officialCover)
+                // OPF spine direction outranks dc:language. 'default'/missing
+                // direction falls back to known RTL languages, then LTR.
+                val spineNode = opf.getElementsByTagNameNS("*", "spine").item(0) as? Element
+                val declaredDirection = spineNode?.getAttribute("page-progression-direction")
+                    ?.trim()?.lowercase().orEmpty()
+                val language = opf.getElementsByTagNameNS("*", "language").item(0)
+                    ?.textContent?.trim()?.lowercase().orEmpty()
+                    .substringBefore('-').substringBefore('_')
+                val languageIsRtl = language in setOf("ar", "fa", "he", "ur", "ps", "sd", "ug", "yi")
+                val isRightToLeft = when (declaredDirection) {
+                    "rtl" -> true
+                    "ltr" -> false
+                    else -> languageIsRtl
+                }
+                return NooirEpubBook(zip, title, author, chapters, officialCover, isRightToLeft)
             } catch (failure: Throwable) {
                 zip.close()
                 throw failure

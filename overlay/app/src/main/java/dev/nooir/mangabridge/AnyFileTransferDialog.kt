@@ -18,7 +18,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -83,7 +82,11 @@ fun AnyFileTransferDialog(
     var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
     var epubFont by remember { mutableStateOf(prefs.getInt("epub_font_px", 24)) }
     var epubMargin by remember { mutableStateOf(prefs.getInt("epub_margin_px", 26)) }
-    var epubRtl by remember { mutableStateOf(prefs.getBoolean("epub_right_to_left", false)) }
+    var epubDirection by remember {
+        mutableStateOf(prefs.getString("epub_direction_mode", null)
+            ?.takeIf { it in setOf("auto", "ltr", "rtl") }
+            ?: if (prefs.getBoolean("epub_right_to_left", false)) "rtl" else "auto")
+    }
     var epubLineHeight by remember { mutableStateOf(prefs.getInt("epub_line_height_pct", 118).coerceIn(100, 200)) }
     var epubFontFamily by remember {
         mutableStateOf(prefs.getString("epub_font_family", "sans-serif")
@@ -112,7 +115,8 @@ fun AnyFileTransferDialog(
         options.save(prefs)
         prefs.edit().putInt("epub_font_px", epubFont)
             .putInt("epub_margin_px", epubMargin)
-            .putBoolean("epub_right_to_left", epubRtl)
+            .putBoolean("epub_right_to_left", epubDirection == "rtl")
+            .putString("epub_direction_mode", epubDirection)
             .putInt("epub_line_height_pct", epubLineHeight)
             .putString("epub_font_family", epubFontFamily).apply()
     }
@@ -156,7 +160,8 @@ fun AnyFileTransferDialog(
                 NooirTransferWorker.KEY_OPTIONS to options.token(),
                 NooirTransferWorker.KEY_EPUB_FONT to epubFont,
                 NooirTransferWorker.KEY_EPUB_MARGIN to epubMargin,
-                NooirTransferWorker.KEY_EPUB_RTL to epubRtl,
+                NooirTransferWorker.KEY_EPUB_RTL to (epubDirection == "rtl"),
+                NooirTransferWorker.KEY_EPUB_DIRECTION to epubDirection,
                 NooirTransferWorker.KEY_EPUB_LINE_HEIGHT to epubLineHeight,
                 NooirTransferWorker.KEY_EPUB_FONT_FAMILY to epubFontFamily,
             )).build()
@@ -430,10 +435,17 @@ fun AnyFileTransferDialog(
                         Slider(value = epubLineHeight.toFloat(), onValueChange = {
                             epubLineHeight = it.toInt().coerceIn(100, 200)
                         }, valueRange = 100f..200f)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Switch(checked = epubRtl, onCheckedChange = { epubRtl = it })
-                            Text("Right-to-left page order (for Arabic or RTL books)")
+                        Text("Book reading direction")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("Auto" to "auto", "LTR" to "ltr", "RTL" to "rtl")
+                                .forEach { (label, mode) ->
+                                    FilterChip(selected = epubDirection == mode,
+                                        onClick = { epubDirection = mode },
+                                        label = { Text(label) })
+                                }
                         }
+                        Text("Auto reads EPUB spine direction or language metadata. " +
+                            "Choose LTR/RTL to override the book when metadata is wrong.")
                         Text("These typography controls change actual exported EPUB pages, not just a preview. " +
                             "Advanced CSS, complex tables, SVG and embedded fonts are not fully preserved.")
                     }

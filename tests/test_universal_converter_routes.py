@@ -66,6 +66,7 @@ class UniversalConverterPreservationTest(unittest.TestCase):
             "NooirTransferWorker.KEY_EPUB_FONT",
             "NooirTransferWorker.KEY_EPUB_MARGIN",
             "NooirTransferWorker.KEY_EPUB_RTL",
+            "NooirTransferWorker.KEY_EPUB_DIRECTION",
             "NooirTransferWorker.KEY_EPUB_LINE_HEIGHT",
             "NooirTransferWorker.KEY_EPUB_FONT_FAMILY",
             "NooirDeviceWorkQueue.NAME",
@@ -85,9 +86,11 @@ class UniversalConverterPreservationTest(unittest.TestCase):
         importer = (BASE / "NooirEpubImportConverter.kt").read_text(encoding="utf-8")
         renderer = (BASE / "NooirEpubToXtc.kt").read_text(encoding="utf-8")
         for token in ("Reading presets", "Font family", "Line height: ",
+                      "Book reading direction", "epubDirection",
                       "epubLineHeight", "epubFontFamily"):
             self.assertIn(token, self.dialog)
         for token in ("KEY_EPUB_LINE_HEIGHT", "KEY_EPUB_FONT_FAMILY",
+                      "KEY_EPUB_DIRECTION", "directionMode = epubDirection",
                       "lineHeightPercent = epubLineHeight", "fontFamily = epubFontFamily"):
             self.assertIn(token, worker)
         self.assertIn("lineSpacing = lineHeightPercent.coerceIn(100, 200) / 100f", importer)

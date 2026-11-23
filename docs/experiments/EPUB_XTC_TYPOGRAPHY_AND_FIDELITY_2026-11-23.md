@@ -56,6 +56,21 @@ A passing synthetic test is not a real-book/physical-reader acceptance.
 - This is semantic inline styling only: arbitrary CSS, document fonts,
   tables, complex writing modes and footnote layout remain unsupported.
 
+## Third increment: EPUB-native reading order (exact-head CI pending)
+
+- Source EPUB OPF spine `page-progression-direction` takes precedence over
+  `dc:language`; `default` or missing direction derives RTL for Arabic,
+  Persian, Hebrew, Urdu, Pashto, Sindhi, Uyghur and Yiddish language tags.
+- New EPUB-specific Auto / LTR / RTL choice defaults to Auto on fresh installs;
+  existing saved explicit RTL selections migrate to RTL. The old worker flag
+  remains readable so already-queued conversions retain their prior semantics.
+- Both actual EPUB raster flow and final XTC/XTCH direction metadata use the
+  same resolved direction. Neither Windows nor original PDF/manga engines
+  receives this setting.
+- New host fixtures test language/spine precedence; Android instrumented
+  tests verify auto-RTL XTC header and manual-LTR override in actual decoded
+  XTCH output. Synthetic tests do not establish physical hardware behavior.
+
 ## Next quality increments, separately validated
 
 1. **Renderer fidelity before UI bloat**: compare source EPUB page flow,
