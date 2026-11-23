@@ -74,7 +74,12 @@ r8_rules.write_text(r8_rules.read_text() +
     "-keep class dev.nooir.mangabridge.NooirEpubBook { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirEpubBook$* { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirEpubToXtc { *; }\n" +
-    "-keep class dev.nooir.mangabridge.NooirEpubToXtc$* { *; }\n")
+    "-keep class dev.nooir.mangabridge.NooirEpubToXtc$* { *; }\n" +
+    "# The finished-book UI and separately compiled Android instrumentation\n" +
+    "# use the exact XTC/XTCH preview singleton. R8 can inline/delete this\n" +
+    "# helper while the instrumentation still resolves it by JVM class name.\n" +
+    "-keep class dev.nooir.mangabridge.NooirFinishedBookPreview { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirFinishedBookPreview$* { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"

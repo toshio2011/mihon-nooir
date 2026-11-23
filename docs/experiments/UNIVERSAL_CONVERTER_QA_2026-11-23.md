@@ -94,3 +94,21 @@ These **do not** replace a real interactive UI walkthrough or a fresh APK build.
 Never claim unimplemented input/output pairs, silently copy/rename during
 conversion, fold the WebToEpub draft into this branch without explicit review,
 or publish a new release without approval.
+
+
+## CI failure and targeted repair — 23 November 2026
+
+- Android FOSS release-equivalent APK successfully compiled on head
+  `a502ea3`, but the emulator instrumentation failed **2 of 14** cases.
+  Both new preview tests raised `NoClassDefFoundError` for
+  `NooirFinishedBookPreview`. The remaining 12 EPUB tests succeeded.
+- Root cause: R8 removes the preview helper class from the minified app
+  despite an independently compiled test APK needing its un-obfuscated
+  Java/Kotlin class. Existing XTC decoder/EPUB keep rules worked.
+- The integration overlay now adds narrow R8 rules for the preview singleton
+  and its nested `Loaded` data class. A host-level structural test ensures
+  these keep rules cannot accidentally be removed during refactors.
+- This does **not** turn off minification, change release signing,
+  change Android app identity or alter Folio Nooir firmware.
+- Exact-head smoke is required before acceptance; treat this as an
+  implementation fix rather than a completed validation.
