@@ -47,7 +47,7 @@ class UniversalConverterPreservationTest(unittest.TestCase):
             'Text("2 · Select source files")',
             'Text("3 · Reader & output format")',
             'Text("Convert to")',
-            'Text("4 · More conversion settings")',
+            '"4 · More conversion settings"',
             'Text("5 · Destination")',
         ):
             with self.subTest(text=text):
