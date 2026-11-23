@@ -51,6 +51,9 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
     val manager = remember { WorkManager.getInstance(context) }
     var chosen by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    // Input selection deliberately comes BEFORE Android's document picker.
+    // Do not infer source format solely from a provider's often-generic MIME.
+    var inputKind by remember { mutableStateOf<NooirLocalConversionPolicy.Picker?>(null) }
     var displayNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var inputMimeTypes by remember { mutableStateOf<List<String>>(emptyList()) }
     var outputNames by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -101,6 +104,17 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
         prefs.edit().putInt("epub_font_px", epubFont)
             .putInt("epub_margin_px", epubMargin)
             .putBoolean("epub_right_to_left", epubRtl).apply()
+    }
+    fun changeInputKind(next: NooirLocalConversionPolicy.Picker) {
+        if (inputKind == next) return
+        inputKind = next
+        chosen = emptyList()
+        displayNames = emptyList()
+        inputMimeTypes = emptyList()
+        outputNames = emptyList()
+        showRename = false
+        sendSettings = false
+        message = "Selected " + next.label + ". Choose source files to continue."
     }
     fun enqueue(convert: Boolean, saveTree: Uri? = null) {
         if (chosen.isEmpty()) return
@@ -158,27 +172,46 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
             if (files.size > 25) {
                 message = "Select at most 25 files per batch for now."
             } else {
-                chosen = files
-                files.forEach { file ->
-                    try {
-                        context.contentResolver.takePersistableUriPermission(
-                            file, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    } catch (_: SecurityException) {
-                        // Some providers don't offer persistent access; report if worker can't read it.
-                    }
-                }
-                displayNames = files.map { file ->
+                val names = files.map { file ->
                     context.contentResolver.query(file, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
                         null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) cursor.getString(0) else null
                     } ?: (file.lastPathSegment ?: "Document")
                 }
-                inputMimeTypes = files.map { file ->
+                val mimes = files.map { file ->
                     context.contentResolver.getType(file).orEmpty()
                 }
-                outputNames = displayNames
-                message = "Selected " + files.size + " file(s). Edit output names before starting if any already exist."
+                val kind = inputKind
+                val wrong = names.indices.filterNot { index ->
+                    kind != null && NooirLocalConversionPolicy.matchesPicker(
+                        kind, names[index], mimes[index])
+                }
+                if (wrong.isNotEmpty()) {
+                    chosen = emptyList()
+                    displayNames = emptyList()
+                    inputMimeTypes = emptyList()
+                    outputNames = emptyList()
+                    message = "These files do not match the selected input type (" +
+                        (kind?.label ?: "none") + "): " +
+                        wrong.take(3).joinToString(", ") { names[it] } +
+                        ". Change the input type, or use All files to send originals."
+                } else {
+                    chosen = files
+                    files.forEach { file ->
+                        try {
+                            context.contentResolver.takePersistableUriPermission(
+                                file, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (_: SecurityException) {
+                            // Some providers lack persistent grants; worker reports read failures.
+                        }
+                    }
+                    displayNames = names
+                    inputMimeTypes = mimes
+                    outputNames = names
+                    message = "Selected " + files.size +
+                        " " + (kind?.label ?: "source") + " file(s). Choose output and settings below."
+                }
             }
         }
     }
@@ -186,23 +219,43 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
         destination.startsWith("/") && !destination.contains("..")
     val profile = NooirDeviceProfiles.forId(device)
     val eligibleFormats = ExportFormat.entries.filter(profile::accepts).filter { candidate ->
-        displayNames.isEmpty() || displayNames.indices.all { index ->
-            NooirLocalConversionPolicy.canConvertTo(
-                displayNames[index], inputMimeTypes.getOrNull(index).orEmpty(),
-                candidate.resolved(device).name)
+        val actual = candidate.resolved(device).name
+        if (displayNames.isEmpty()) {
+            inputKind?.let { NooirLocalConversionPolicy.canPickerConvertTo(it, actual) } == true
+        } else {
+            displayNames.indices.all { index ->
+                NooirLocalConversionPolicy.canConvertTo(
+                    displayNames[index], inputMimeTypes.getOrNull(index).orEmpty(), actual)
+            }
         }
     }
-    LaunchedEffect(displayNames, inputMimeTypes, device) {
+    LaunchedEffect(displayNames, inputMimeTypes, device, inputKind) {
         if (eligibleFormats.isNotEmpty() && format !in eligibleFormats)
             format = eligibleFormats.first()
     }
-    val hasEpubInput = displayNames.indices.any { index ->
-        NooirLocalConversionPolicy.classify(
-            displayNames[index], inputMimeTypes.getOrNull(index).orEmpty()
-        ) == NooirLocalConversionPolicy.Input.EPUB
-    }
+    val hasEpubInput = inputKind == NooirLocalConversionPolicy.Picker.EPUB ||
+        displayNames.indices.any { index ->
+            NooirLocalConversionPolicy.classify(
+                displayNames[index], inputMimeTypes.getOrNull(index).orEmpty()
+            ) == NooirLocalConversionPolicy.Input.EPUB
+        }
+    val hasMangaInput = inputKind in setOf(
+        NooirLocalConversionPolicy.Picker.COMIC, NooirLocalConversionPolicy.Picker.IMAGES) ||
+        displayNames.indices.any { index ->
+            NooirLocalConversionPolicy.canConvertHere(
+                displayNames[index], inputMimeTypes.getOrNull(index).orEmpty())
+        }
     val running = workInfo?.state == WorkInfo.State.RUNNING || workInfo?.state == WorkInfo.State.ENQUEUED
-    val canQueue = chosen.isNotEmpty() && profile.xteinkWifi && valid && !running && outputNames.size == chosen.size && outputNames.all { it.isNotBlank() }
+    val inputMatches = inputKind?.let { kind ->
+        displayNames.size == chosen.size && inputMimeTypes.size == chosen.size &&
+            displayNames.indices.all { index ->
+                NooirLocalConversionPolicy.matchesPicker(
+                    kind, displayNames[index], inputMimeTypes[index])
+            }
+    } == true
+    val canQueue = chosen.isNotEmpty() && inputMatches && profile.xteinkWifi &&
+        valid && !running && outputNames.size == chosen.size &&
+        outputNames.all { it.isNotBlank() }
     val unsupportedForConversion = displayNames.indices.filterNot { index ->
         NooirLocalConversionPolicy.canConvertTo(
             displayNames[index], inputMimeTypes.getOrNull(index).orEmpty(),
@@ -210,7 +263,7 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     }
     val canConvertSelection = chosen.isNotEmpty() &&
         displayNames.size == chosen.size && inputMimeTypes.size == chosen.size &&
-        unsupportedForConversion.isEmpty() && format in eligibleFormats &&
+        unsupportedForConversion.isEmpty() && format in eligibleFormats && inputMatches &&
         outputNames.size == chosen.size &&
         outputNames.all { it.isNotBlank() }
     val progress = workInfo?.progress
@@ -229,8 +282,47 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = { choose.launch(arrayOf("*/*")) }) {
-                    Text("Choose multiple files")
+                Text("1 · Choose input file type")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        NooirLocalConversionPolicy.Picker.EPUB,
+                        NooirLocalConversionPolicy.Picker.COMIC,
+                        NooirLocalConversionPolicy.Picker.IMAGES,
+                    ).forEach { kind ->
+                        FilterChip(selected = inputKind == kind,
+                            onClick = { changeInputKind(kind) },
+                            label = { Text(kind.label) })
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        NooirLocalConversionPolicy.Picker.PDF,
+                        NooirLocalConversionPolicy.Picker.ANY,
+                    ).forEach { kind ->
+                        FilterChip(selected = inputKind == kind,
+                            onClick = { changeInputKind(kind) },
+                            label = { Text(kind.label) })
+                    }
+                }
+                if (inputKind == null) {
+                    Text("Select an input type first to filter Android's document picker.")
+                } else {
+                    Text("2 · Select source files")
+                    Button(onClick = {
+                        choose.launch(NooirLocalConversionPolicy.pickerMimeTypes(
+                            requireNotNull(inputKind)))
+                    }) { Text("Choose " + inputKind!!.label + " files") }
+                    if (inputKind != NooirLocalConversionPolicy.Picker.ANY) {
+                        TextButton(onClick = { choose.launch(arrayOf("*/*")) }) {
+                            Text("File missing from picker? Browse all")
+                        }
+                        Text("Some file providers use generic ZIP or unknown MIME types. " +
+                            "Browse all can find them; selected file types are still checked.")
+                    }
+                    if (inputKind == NooirLocalConversionPolicy.Picker.PDF) {
+                        Text("PDF conversion is currently in Nooir Tools → PDF to e-reader. " +
+                            "This screen can send PDF originals without changing them.")
+                    }
                 }
                 if (displayNames.isNotEmpty()) {
                     Text("Selected " + displayNames.size + " file(s):")
@@ -352,7 +444,17 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                     device = id
                     if (!NooirDeviceProfiles.forId(id).accepts(format)) format = ExportFormat.AUTO
                 }
-                Text("Convert to")
+                Text("3 · Convert to")
+                if (eligibleFormats.isEmpty()) {
+                    Text(when {
+                        inputKind == null -> "Choose an input type first."
+                        displayNames.isEmpty() && inputKind == NooirLocalConversionPolicy.Picker.ANY ->
+                            "Select files first; supported output formats depend on their contents."
+                        inputKind == NooirLocalConversionPolicy.Picker.PDF ->
+                            "Use the separate PDF to e-reader tool for PDF conversion."
+                        else -> "No common conversion output is supported for these files."
+                    })
+                }
                 eligibleFormats.forEach { option ->
                     FilterChip(
                         selected = format == option,
@@ -360,10 +462,12 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         label = { Text(option.label) },
                     )
                 }
-                TextButton(onClick = { sendSettings = !sendSettings }) {
-                    Text(if (sendSettings) "Hide conversion settings" else "More conversion settings")
+                if (eligibleFormats.isNotEmpty()) TextButton(
+                    onClick = { sendSettings = !sendSettings }) {
+                    Text(if (sendSettings) "Hide conversion settings"
+                         else "4 · More conversion settings")
                 }
-                if (sendSettings) {
+                if (sendSettings && eligibleFormats.isNotEmpty()) {
                     if (hasEpubInput) {
                         Text("EPUB → XTC/XTCH · experimental text and picture pagination")
                         Text("Font size: " + epubFont + " px")
@@ -381,10 +485,10 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         Text("Uses Android text layout and images in EPUB spine order. " +
                             "Advanced CSS, complex tables, SVG and embedded fonts are not fully preserved.")
                     }
-                    if (!hasEpubInput || displayNames.indices.any {
-                        NooirLocalConversionPolicy.canConvertHere(
-                            displayNames[it], inputMimeTypes.getOrNull(it).orEmpty())
-                    }) MangaConversionSettings(options, format.resolved(device), onChange = { options = it })
+                    if (hasMangaInput) {
+                        MangaConversionSettings(options, format.resolved(device),
+                            onChange = { options = it })
+                    }
                 }
                 if (!profile.xteinkWifi) Text("Direct Wi-Fi upload is only offered for compatible XTEink firmware. Save/export to the phone, then use the reader’s supported transfer method.")
                 Button(enabled = canQueue, onClick = { enqueue(false) }) {
