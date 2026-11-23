@@ -64,6 +64,7 @@ for required in \
   inlineEmphasisChangesRealEncodedXtchPage \
   responsiveAndLazyImagesMatchFinishedXtchPixels \
   responsiveImageCandidatesPreferDensityAndRetainTextOrder \
+  finishedBookViewerPixelsMatchRealXtcAndXtch \
   x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes \
   arabicParagraphsAlignRightAndMarkBookRtl \
   autoDirectionUsesEpubMetadataForArabicOutput \
@@ -71,7 +72,7 @@ for required in \
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
 done
-grep -Fxq 'OK (12 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'OK (13 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
 echo "Collecting page images decoded from real EPUB→XTC/XTCH outputs"

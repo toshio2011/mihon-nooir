@@ -32,7 +32,9 @@ fun NooirToolsHubDialog(onDismiss: () -> Unit) {
         "files" -> AnyFileTransferDialog(
             onDismiss = { tool = "converter" },
             onOpenPdfConverter = { tool = "pdf" },
+            onOpenFinishedPreview = { tool = "preview" },
         )
+        "preview" -> NooirFinishedBookPreviewDialog(onDismiss = { tool = "converter" })
         "web" -> NooirWebToReaderDialog(onDismiss = { tool = "converter" })
         "novels" -> NooirNovelBatchDialog(onDismiss = { tool = "converter" })
         "pdf" -> NooirPdfToEpubDialog(onDismiss = { tool = "converter" })
@@ -54,6 +56,12 @@ fun NooirToolsHubDialog(onDismiss: () -> Unit) {
                     }
                     Text("Select input type before browsing; then choose output and its settings. " +
                         "You can also send supported original files unchanged.")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(),
+                        onClick = { tool = "preview" }) {
+                        Text("Preview finished XTC / XTCH book")
+                    }
+                    Text("Inspect already exported page pixels from a saved XTC/XTCH file. " +
+                        "This uses the actual output, not a simulated EPUB render.")
                     OutlinedButton(modifier = Modifier.fillMaxWidth(),
                         onClick = { tool = "pdf" }) {
                         Text("PDF files · Dedicated PDF converter")

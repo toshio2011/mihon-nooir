@@ -88,6 +88,23 @@ A passing synthetic test is not a real-book/physical-reader acceptance.
   XTCH pages from normal, srcset and lazy-image variants matching pixel for
   pixel. EPUB instrumented suite now targets 12 tests.
 
+## Fifth increment: post-export finished XTC/XTCH viewer (exact-head CI pending)
+
+- In Universal Book Converter, **Preview finished XTC / XTCH book** opens
+  a read-only finished-file viewer. The local file dialog also links to it.
+- Uses the existing `XtcBookPreview` binary decoder, not a fresh EPUB render,
+  for the selected finished XTC or XTCH file. First/previous/next/last
+  navigation shows the true 1-bit or 2-bit grayscale result at real resolution.
+- Android SAF picker works with documents whose MIME/extension is generic.
+  Copies at most 256 MiB to an isolated temporary seekable file, checks codec
+  headers, decodes one page at a time and disposes temporary files on exit.
+- A new Android emulator test converts EPUB to both formats, asserts the
+  viewer bitmap equals actual independently decoded binary page pixels and
+  rejects corrupt books. The gated EPUB instrumentation count increases to 13.
+- This is **post-export** inspection, not a live pre-export simulation or
+  automatic WorkManager completion callback. It never uploads, modifies
+  the selected source, or replaces existing manga preview.
+
 ## Next quality increments, separately validated
 
 1. **Renderer fidelity before UI bloat**: compare source EPUB page flow,

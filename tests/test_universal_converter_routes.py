@@ -27,12 +27,20 @@ class UniversalConverterPreservationTest(unittest.TestCase):
             '"pdf" -> NooirPdfToEpubDialog': "dedicated PDF engine",
             '"device" -> NooirDeviceFilesDialog': "device file management",
             '"converter" -> AlertDialog': "unified source navigation",
+            '"preview" -> NooirFinishedBookPreviewDialog': "finished-book output viewer",
         }
         for token, purpose in routes.items():
             with self.subTest(route=purpose):
                 self.assertIn(token, self.hub)
         self.assertIn('Text("Universal Book Converter")', self.hub)
         self.assertIn('tool = "converter"', self.hub)
+        self.assertIn('Text("Preview finished XTC / XTCH book")', self.hub)
+        viewer = (BASE / "NooirFinishedBookPreviewDialog.kt").read_text(encoding="utf-8")
+        helper = (BASE / "NooirFinishedBookPreview.kt").read_text(encoding="utf-8")
+        self.assertIn('XtcBookPreview(file).page(index)', helper)
+        self.assertIn('NooirFinishedBookPreview.decodePage', viewer)
+        self.assertIn('ActivityResultContracts.OpenDocument()', viewer)
+        self.assertIn('onOpenFinishedPreview', self.dialog)
 
     def test_pdf_remains_a_real_specialist_not_a_fake_conversion(self):
         self.assertIn('onOpenPdfConverter = { tool = "pdf" }', self.hub)

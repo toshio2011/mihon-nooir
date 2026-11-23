@@ -231,6 +231,49 @@ class NooirEpubXtcInstrumentedTest {
         ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
     }
 
+    @Test fun finishedBookViewerPixelsMatchRealXtcAndXtch() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-viewer-source-", ".epub", cache)
+        try {
+            makeBook(input)
+            for (format in XtcFormat.entries) {
+                val output = File.createTempFile("nooir-viewer-", "." + format.extension, cache)
+                try {
+                    NooirEpubToXtc.convert(input, output, format, "X4")
+                    val decoded = XtcBookPreview(output).page(1)
+                    val bitmap = NooirFinishedBookPreview.decodePage(output, 1)
+                    try {
+                        assertEquals(decoded.width, bitmap.width)
+                        assertEquals(decoded.height, bitmap.height)
+                        val maxValue = (1 shl decoded.depth) - 1
+                        for (y in 0 until bitmap.height step 13) {
+                            for (x in 0 until bitmap.width step 11) {
+                                val level = decoded.levels[y * decoded.width + x].toInt() and 255
+                                val shade = level * 255 / maxValue
+                                assertEquals("Finished preview pixels differ from actual binary page",
+                                    Color.rgb(shade, shade, shade), bitmap.getPixel(x, y))
+                            }
+                        }
+                    } finally {
+                        bitmap.recycle()
+                    }
+                } finally {
+                    output.delete()
+                }
+            }
+            val corrupt = File.createTempFile("nooir-invalid-preview-", ".xtch", cache)
+            try {
+                corrupt.writeText("not a finished reader book")
+                assertTrue("Viewer must reject invalid books",
+                    runCatching { NooirFinishedBookPreview.decodePage(corrupt, 0) }.isFailure)
+            } finally {
+                corrupt.delete()
+            }
+        } finally {
+            input.delete()
+        }
+    }
+
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)
     @Test fun realXtchContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTCH)
 

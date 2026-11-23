@@ -48,6 +48,7 @@ import java.util.UUID
 fun AnyFileTransferDialog(
     onDismiss: () -> Unit,
     onOpenPdfConverter: (() -> Unit)? = null,
+    onOpenFinishedPreview: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -494,6 +495,13 @@ fun AnyFileTransferDialog(
                     "EPUB → XTC/XTCH rendering for text and illustrated books. " +
                     "PDF conversion remains in the separate PDF to e-reader tool. " +
                     "No input is silently copied when Convert is selected.")
+                if (onOpenFinishedPreview != null) {
+                    TextButton(onClick = onOpenFinishedPreview) {
+                        Text("Preview finished XTC / XTCH saved on phone")
+                    }
+                    Text("Save/export the book first. Preview reads finished book bytes " +
+                        "and does not start a new conversion or upload.")
+                }
                 TextButton(
                     enabled = chosen.isNotEmpty(),
                     onClick = {
