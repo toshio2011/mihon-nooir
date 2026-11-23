@@ -134,6 +134,47 @@ fun main() {
                 check(chapter.contains("p{text-indent:1em;line-height:1.5}"))
             }
         } finally { customStyled.delete() }
+        // Large, ordered WebToEpub-style batches must remain fully readable.
+        // Test native EPUB2 NCX and EPUB3 nav/spine, including Unicode prose,
+        // rather than asserting only that the ZIP writer returned successfully.
+        for (format in ReflowEpubFormat.entries) {
+            val anthology = File.createTempFile("nooir-128-chapters-", ".epub")
+            try {
+                ReflowEpubWriter.write(anthology, ReflowMetadata(
+                    title = "Kisah Bintang & النجوم", author = "Nooir QA",
+                    language = "ms",
+                ), format) { epub ->
+                    for (n in 1..128) {
+                        val title = "Bab %03d".format(n)
+                        val prose = if (n % 2 == 0)
+                            "<p>Selamat membaca bab $n, bersama bintang-bintang.</p>"
+                        else "<p>مرحبا بالعالم، الفصل $n.</p>"
+                        epub.addSection(title, "<h1>$title</h1>$prose")
+                    }
+                }
+                ZipFile(anthology).use { zip ->
+                    fun read(path: String) = zip.getInputStream(
+                        zip.getEntry(path) ?: error("Missing $path")
+                    ).bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    val opf = read("OEBPS/package.opf")
+                    check(Regex("<itemref\\b").findAll(opf).count() == 128)
+                    check(opf.contains("Kisah Bintang &amp; النجوم"))
+                    check(opf.contains("<dc:language>ms</dc:language>"))
+                    val first = read("OEBPS/text/s00001.xhtml")
+                    val middle = read("OEBPS/text/s00064.xhtml")
+                    val last = read("OEBPS/text/s00128.xhtml")
+                    check(first.contains("مرحبا بالعالم"))
+                    check(middle.contains("Selamat membaca bab 64"))
+                    check(last.contains("Selamat membaca bab 128"))
+                    val navigation = if (format == ReflowEpubFormat.EPUB2)
+                        read("OEBPS/toc.ncx") else read("OEBPS/nav.xhtml")
+                    check(Regex("Bab 0[0-9]{2}|Bab 1[0-2][0-9]").findAll(navigation).count() == 128)
+                    check(navigation.indexOf("Bab 001") < navigation.indexOf("Bab 064"))
+                    check(navigation.indexOf("Bab 064") < navigation.indexOf("Bab 128"))
+                }
+            } finally { anthology.delete() }
+        }
+
         // An inaccessible chapter must never expose a truncated combined ebook.
         val aborted = File.createTempFile("nooir-failed-merge-", ".epub")
         try {
