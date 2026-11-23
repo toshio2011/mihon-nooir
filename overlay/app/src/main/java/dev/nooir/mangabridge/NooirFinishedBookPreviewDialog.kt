@@ -36,9 +36,12 @@ import kotlinx.coroutines.withContext
 
 /** Real finished-book decoded output viewer; not a pre-export simulation. */
 @Composable
-internal fun NooirFinishedBookPreviewDialog(onDismiss: () -> Unit) {
+internal fun NooirFinishedBookPreviewDialog(
+    onDismiss: () -> Unit,
+    initialUri: Uri? = null,
+) {
     val context = LocalContext.current
-    var source by remember { mutableStateOf<Uri?>(null) }
+    var source by remember(initialUri) { mutableStateOf(initialUri) }
     var loaded by remember { mutableStateOf<NooirFinishedBookPreview.Loaded?>(null) }
     var pageIndex by remember { mutableStateOf(0) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }

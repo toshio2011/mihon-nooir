@@ -48,7 +48,7 @@ import java.util.UUID
 fun AnyFileTransferDialog(
     onDismiss: () -> Unit,
     onOpenPdfConverter: (() -> Unit)? = null,
-    onOpenFinishedPreview: (() -> Unit)? = null,
+    onOpenFinishedPreview: ((Uri?) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -496,7 +496,7 @@ fun AnyFileTransferDialog(
                     "PDF conversion remains in the separate PDF to e-reader tool. " +
                     "No input is silently copied when Convert is selected.")
                 if (onOpenFinishedPreview != null) {
-                    TextButton(onClick = onOpenFinishedPreview) {
+                    TextButton(onClick = { onOpenFinishedPreview(null) }) {
                         Text("Preview finished XTC / XTCH saved on phone")
                     }
                     Text("Save/export the book first. Preview reads finished book bytes " +
@@ -528,6 +528,16 @@ fun AnyFileTransferDialog(
                         else -> if (count > 0) "File " + item + "/" + count + " · " + phase
                             else "Queued or connecting…"
                     })
+                    val previewUri = workInfo?.outputData
+                        ?.getString(NooirTransferWorker.KEY_LAST_SAVED_PREVIEW_URI)
+                    if (previewUri != null && onOpenFinishedPreview != null) {
+                        TextButton(onClick = {
+                            onOpenFinishedPreview(Uri.parse(previewUri))
+                        }) {
+                            Text("Preview last converted book saved to phone")
+                        }
+                        Text("Opens the exact finished XTC/XTCH from this completed job.")
+                    }
                     if (running) {
                         if (percent >= 0) {
                             LinearProgressIndicator(

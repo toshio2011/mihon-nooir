@@ -101,6 +101,12 @@ A passing synthetic test is not a real-book/physical-reader acceptance.
 - A new Android emulator test converts EPUB to both formats, asserts the
   viewer bitmap equals actual independently decoded binary page pixels and
   rejects corrupt books. The gated EPUB instrumentation count increases to 13.
+- A completed **Convert & save** job now also records the last
+  successfully written XTC/XTCH SAF URI in WorkManager output data.
+  The file converter exposes a one-tap **Preview last converted book saved
+  to phone** link; it opens that exact file without a second picker.
+  Mixed-result batches retain the URI of their last successful book,
+  but never expose a failed/incomplete output.
 - This is **post-export** inspection, not a live pre-export simulation or
   automatic WorkManager completion callback. It never uploads, modifies
   the selected source, or replaces existing manga preview.

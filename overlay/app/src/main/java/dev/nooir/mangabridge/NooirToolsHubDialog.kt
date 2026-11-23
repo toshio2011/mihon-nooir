@@ -1,5 +1,6 @@
 package dev.nooir.mangabridge
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,14 +28,24 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun NooirToolsHubDialog(onDismiss: () -> Unit) {
     var tool by remember { mutableStateOf("") }
+    var previewUri by remember { mutableStateOf<Uri?>(null) }
     when (tool) {
         "queue" -> NooirActivityQueueDialog(onDismiss = { tool = "" })
         "files" -> AnyFileTransferDialog(
             onDismiss = { tool = "converter" },
             onOpenPdfConverter = { tool = "pdf" },
-            onOpenFinishedPreview = { tool = "preview" },
+            onOpenFinishedPreview = { uri ->
+                previewUri = uri
+                tool = "preview"
+            },
         )
-        "preview" -> NooirFinishedBookPreviewDialog(onDismiss = { tool = "converter" })
+        "preview" -> NooirFinishedBookPreviewDialog(
+            initialUri = previewUri,
+            onDismiss = {
+                previewUri = null
+                tool = "converter"
+            },
+        )
         "web" -> NooirWebToReaderDialog(onDismiss = { tool = "converter" })
         "novels" -> NooirNovelBatchDialog(onDismiss = { tool = "converter" })
         "pdf" -> NooirPdfToEpubDialog(onDismiss = { tool = "converter" })
@@ -57,7 +68,7 @@ fun NooirToolsHubDialog(onDismiss: () -> Unit) {
                     Text("Select input type before browsing; then choose output and its settings. " +
                         "You can also send supported original files unchanged.")
                     OutlinedButton(modifier = Modifier.fillMaxWidth(),
-                        onClick = { tool = "preview" }) {
+                        onClick = { previewUri = null; tool = "preview" }) {
                         Text("Preview finished XTC / XTCH book")
                     }
                     Text("Inspect already exported page pixels from a saved XTC/XTCH file. " +

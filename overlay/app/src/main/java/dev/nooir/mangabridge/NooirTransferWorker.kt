@@ -52,6 +52,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         const val KEY_INDEX = "index"
         const val KEY_COUNT = "count"
         const val KEY_ERROR = "error"
+        const val KEY_LAST_SAVED_PREVIEW_URI = "last_saved_preview_uri"
         const val CHANNEL_ID = "manganooir_transfer"
     }
 
@@ -139,6 +140,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         ))
         var completed = 0
+        var lastSavedPreviewUri: String? = null
         val fileErrors = mutableListOf<String>()
         try {
             withContext(Dispatchers.IO) {
@@ -237,6 +239,11 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                             runCatching { DocumentsContract.deleteDocument(resolver, target) }
                             throw e
                         }
+                        // Only expose a successfully written, final XTC/XTCH
+                        // document to the read-only preview. Never expose the
+                        // source EPUB, an incomplete file or an upload URL.
+                        if (convertThis && epubFormat != null)
+                            lastSavedPreviewUri = target.toString()
                     } else if (convert && isEpub) {
                         NooirEpubImportConverter.convert(
                             applicationContext, uri, requireNotNull(epubFormat), device,
@@ -294,8 +301,10 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     .setContentText(completed.toString() + "/" + files.size + " file(s) completed; " + fileErrors.size + " failed")
                     .setOnlyAlertOnce(true).setAutoCancel(true).build()
             )
-            return if (fileErrors.isEmpty()) Result.success(Data.Builder().putInt(KEY_COUNT, completed).build())
-                else Result.success(NooirDeviceWorkQueue.failed(Data.Builder().putInt(KEY_COUNT, completed),
+            val completedData = Data.Builder().putInt(KEY_COUNT, completed)
+            lastSavedPreviewUri?.let { completedData.putString(KEY_LAST_SAVED_PREVIEW_URI, it) }
+            return if (fileErrors.isEmpty()) Result.success(completedData.build())
+                else Result.success(NooirDeviceWorkQueue.failed(completedData,
                     KEY_ERROR, fileErrors.joinToString("\n").take(4000)))
         } catch (e: CancellationException) {
             throw e

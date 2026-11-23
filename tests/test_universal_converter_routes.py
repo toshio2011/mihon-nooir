@@ -41,6 +41,12 @@ class UniversalConverterPreservationTest(unittest.TestCase):
         self.assertIn('NooirFinishedBookPreview.decodePage', viewer)
         self.assertIn('ActivityResultContracts.OpenDocument()', viewer)
         self.assertIn('onOpenFinishedPreview', self.dialog)
+        self.assertIn('initialUri = previewUri', self.hub)
+        self.assertIn('KEY_LAST_SAVED_PREVIEW_URI', self.dialog)
+        self.assertIn('Preview last converted book saved to phone', self.dialog)
+        worker = (BASE / "NooirTransferWorker.kt").read_text(encoding="utf-8")
+        self.assertIn('lastSavedPreviewUri = target.toString()', worker)
+        self.assertIn('completedData.putString(KEY_LAST_SAVED_PREVIEW_URI', worker)
 
     def test_pdf_remains_a_real_specialist_not_a_fake_conversion(self):
         self.assertIn('onOpenPdfConverter = { tool = "pdf" }', self.hub)
