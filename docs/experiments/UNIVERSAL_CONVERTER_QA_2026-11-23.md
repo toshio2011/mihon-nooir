@@ -39,6 +39,21 @@ be a valid comic if the document lacks an archive extension.
 Structural preservation tests are in `tests/test_universal_converter_routes.py`.
 These **do not** replace a real interactive UI walkthrough or a fresh APK build.
 
+## Finished output preview UI checks — current draft
+
+- A real read-only `XtcBookPreview` viewer is reachable from the Universal
+  Converter and from the local-file conversion dialog. It supports choosing
+  finished XTC/XTCH output or opening the last successfully saved XTC/XTCH
+  via a one-tap WorkManager completion link.
+- The UI screenshot script now visits the new finished-file viewer, verifies
+  its document-picker button is accessible, captures an actual emulator screen,
+  returns to the converter, then checks the old local/PDF routes.
+- The screenshot script is a **best-effort diagnostic** in CI: any navigation
+  failure is captured in notes and must be reviewed, rather than equated
+  with the successful codec tests. The Android pixel-parity instrumentation
+  is a separate automated check. Opening a real user file and navigating
+  its decoded page images still needs interactive acceptance.
+
 ## Remaining acceptance gates before owner approval
 
 1. **Exact-commit Android CI** after the latest input-picker refinements and

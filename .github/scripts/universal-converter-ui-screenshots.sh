@@ -146,6 +146,26 @@ capture "01-universal-source-menu"
 dump_ui || true
 cp "$out/window.xml" "$out/01-source-menu.xml" || true
 
+# Verify the new decoded-output viewer is genuinely reachable in the app
+# before inspecting the original local/PDF routes. It must not start a
+# conversion or fake a sample image in the UI capture.
+if tap_visible "Preview finished XTC / XTCH book" 3; then
+  capture "01a-finished-book-preview-entry"
+  dump_ui || true
+  cp "$out/window.xml" "$out/01a-finished-book-preview.xml" || true
+  if [ -z "$(lookup "Choose finished XTC / XTCH book")" ]; then
+    echo "Preview screen opened without its real file picker" >> "$out/capture-notes.txt"
+    exit 1
+  fi
+  tap_visible "Back to converter" 3 || {
+    echo "Preview back navigation failed" >> "$out/capture-notes.txt"
+    exit 1
+  }
+else
+  echo "Finished-book viewer route unavailable" >> "$out/capture-notes.txt"
+  exit 1
+fi
+
 if ! tap_visible "Local files" 3; then
   echo "Local-file converter route missing" | tee -a "$out/capture-notes.txt"
   capture "02-local-route-blocked"
