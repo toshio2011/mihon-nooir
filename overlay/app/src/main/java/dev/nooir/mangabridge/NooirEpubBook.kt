@@ -208,6 +208,26 @@ internal class NooirEpubBook private constructor(
     fun imageBytes(chapterPath: String, src: String): ByteArray =
         imageBytesAt(resolve(chapterPath, src))
 
+    /**
+     * Use the first supported image actually present inside the EPUB package.
+     * Invalid, remote, or absent alternatives are never fetched. The chosen
+     * local resource still passes all existing decode and size constraints.
+     */
+    fun imageBytesFromCandidates(chapterPath: String, candidates: List<String>): ByteArray {
+        require(candidates.isNotEmpty() && candidates.size <= 16) {
+            "Invalid EPUB illustration candidates"
+        }
+        val extensions = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
+        for (reference in candidates) {
+            if (reference.length > 2048) continue
+            val path = runCatching { resolve(chapterPath, reference) }.getOrNull() ?: continue
+            val extension = path.substringAfterLast('.', "").lowercase()
+            if (extension !in extensions || zip.getEntry(path) == null) continue
+            return imageBytesAt(path)
+        }
+        error("EPUB illustration has no supported local raster resource")
+    }
+
     fun imageBytesAt(path: String): ByteArray {
         val suffix = path.substringAfterLast('.', "").lowercase()
         require(suffix in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")) {

@@ -56,10 +56,39 @@ internal object NooirEpubToXtc {
 
     private sealed interface Block {
         data class Text(val text: CharSequence, val heading: Boolean = false) : Block
-        data class Image(val src: String) : Block
+        data class Image(val candidates: List<String>) : Block
     }
 
     private data class InlineRange(val start: Int, val end: Int, val style: Int)
+
+    /**
+     * Prefer higher-density EPUB-local srcset candidates, then lazy attributes
+     * and finally ordinary src. Missing files fall back at ZIP lookup time.
+     * Never interpret an image URL as permission to fetch over the network.
+     */
+    private fun imageCandidates(element: Element): List<String> {
+        fun fromSrcset(key: String): List<Pair<Float, String>> =
+            element.attr(key).split(',').take(16).mapNotNull { item ->
+                val parts = item.trim().split(Regex("""\s+"""), limit = 3)
+                val path = parts.firstOrNull().orEmpty()
+                if (path.isBlank()) null else {
+                    val descriptor = parts.getOrNull(1).orEmpty().lowercase()
+                    val quality = when {
+                        descriptor.endsWith("w") ->
+                            descriptor.dropLast(1).toFloatOrNull()?.coerceIn(0f, 20000f) ?: 0f
+                        descriptor.endsWith("x") ->
+                            (descriptor.dropLast(1).toFloatOrNull() ?: 0f).coerceIn(0f, 10f) * 1000f
+                        else -> 0f
+                    }
+                    quality to path
+                }
+            }
+        val responsive = (fromSrcset("srcset") + fromSrcset("data-srcset"))
+            .sortedByDescending { it.first }.map { it.second }
+        val ordinary = listOf("data-src", "data-original", "data-lazy-src", "src", "xlink:href")
+            .map { element.attr(it).trim() }.filter { it.isNotBlank() }
+        return (responsive + ordinary).distinct().take(16)
+    }
 
     private fun blocks(xhtml: String): Pair<String, List<Block>> {
         val doc = Jsoup.parse(xhtml)
@@ -126,9 +155,9 @@ internal object NooirEpubToXtc {
                 return
             }
             if (tag == "img" || tag == "image") {
-                val src = element.attr("src").ifBlank { element.attr("xlink:href") }
+                val candidates = imageCandidates(element)
                 flushText()
-                if (src.isNotBlank()) out += Block.Image(src)
+                if (candidates.isNotEmpty()) out += Block.Image(candidates)
                 return
             }
             val isBoundary = tag in boundaries
@@ -154,7 +183,7 @@ internal object NooirEpubToXtc {
         blocks(xhtml).second.map { block ->
             when (block) {
                 is Block.Text -> (if (block.heading) "HEADING:" else "TEXT:") + block.text
-                is Block.Image -> "IMAGE:" + block.src
+                is Block.Image -> "IMAGE:" + block.candidates.first()
             }
         }
 
@@ -333,7 +362,7 @@ internal object NooirEpubToXtc {
                         checkCancelled()
                         val generated = when (block) {
                             is Block.Text -> renderer.text(block.text, block.heading)
-                            is Block.Image -> renderer.image(book.imageBytes(chapter.path, block.src))
+                            is Block.Image -> renderer.image(book.imageBytesFromCandidates(chapter.path, block.candidates))
                         }
                         for (page in generated) {
                             require(pageCount < 6000) { "EPUB requires over 6000 XTC pages; split the book" }

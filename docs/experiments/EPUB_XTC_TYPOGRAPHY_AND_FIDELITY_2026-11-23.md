@@ -71,6 +71,23 @@ A passing synthetic test is not a real-book/physical-reader acceptance.
   tests verify auto-RTL XTC header and manual-LTR override in actual decoded
   XTCH output. Synthetic tests do not establish physical hardware behavior.
 
+## Fourth increment: offline image resolution and fidelity (exact-head CI pending)
+
+- Resolve EPUB HTML `srcset` and `data-srcset` image candidates in
+  descending quality order, then `data-src`, `data-original`,
+  `data-lazy-src`, `src` and SVG `xlink:href` as fallbacks.
+- Limit candidates to 16; accept only existing safe ZIP-local raster images.
+  Broken/unavailable variants fall back instead of aborting; remote and data
+  URLs are never fetched. Oversized or undecodable selected images still
+  fail using the existing bounded decoder rather than silently disappearing.
+- Keep original prose/image ordering and the shared XTC/XTCH quantization
+  and encoder unchanged. This does not implement SVG rendering, CSS float
+  layout, arbitrary EPUB Javascript or third-party page extraction.
+- Add package-level missing/remote candidate tests and two Android
+  instrumented tests: candidate ordering in XHTML and independently decoded
+  XTCH pages from normal, srcset and lazy-image variants matching pixel for
+  pixel. EPUB instrumented suite now targets 12 tests.
+
 ## Next quality increments, separately validated
 
 1. **Renderer fidelity before UI bloat**: compare source EPUB page flow,

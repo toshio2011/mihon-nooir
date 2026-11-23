@@ -60,7 +60,10 @@ class NooirEpubXtcInstrumentedTest {
         }
     }
 
-    private fun makeBook(file: File, rtl: Boolean = false, emphasis: Boolean = false) {
+    private fun makeBook(
+        file: File, rtl: Boolean = false, emphasis: Boolean = false,
+        imageMode: String = "normal",
+    ) {
         val image = Bitmap.createBitmap(100, 120, Bitmap.Config.ARGB_8888)
         val png = try {
             image.eraseColor(Color.WHITE)
@@ -75,6 +78,13 @@ class NooirEpubXtcInstrumentedTest {
         }
         val language = if (rtl) "ar" else "en"
         val progression = if (rtl) "rtl" else "ltr"
+        val illustration = when (imageMode) {
+            "normal" -> "<img src='../Images/figure.png'/>"
+            "srcset" -> "<img src='../Images/missing.png' " +
+                "srcset='../Images/figure.png 2x, ../Images/also-missing.png 1x'/>"
+            "lazy" -> "<img src='' data-src='../Images/figure.png'/>"
+            else -> error("Invalid EPUB illustration fixture")
+        }
         val styledText = if (emphasis) longText.replace(
             "Paragraph 1 contains sample plain text",
             "<strong>Paragraph 1 contains sample plain text</strong>",
@@ -106,7 +116,7 @@ class NooirEpubXtcInstrumentedTest {
             "OEBPS/Text/one.xhtml" to (if (rtl)
                 "<html><body><p>مرحبا بالعالم، كتاب جميل للقراءة.</p></body></html>"
                 else "<html><body><h1>First Chapter</h1><p>" +
-                    styledText + "</p><img src='../Images/figure.png'/>" +
+                    styledText + "</p>" + illustration +
                     "<p>A concluding line after the illustration.</p></body></html>"
             ).toByteArray(),
             "OEBPS/Text/two.xhtml" to
@@ -176,6 +186,49 @@ class NooirEpubXtcInstrumentedTest {
             plainOutput.delete()
             styledOutput.delete()
         }
+    }
+
+    @Test fun responsiveAndLazyImagesMatchFinishedXtchPixels() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val source = File.createTempFile("nooir-epub-image-base-", ".epub", cache)
+        val baseline = File.createTempFile("nooir-image-base-", ".xtch", cache)
+        try {
+            makeBook(source)
+            val baseCount = NooirEpubToXtc.convert(source, baseline, XtcFormat.XTCH, "X4")
+            val expected = XtcBookPreview(baseline)
+            for (mode in listOf("srcset", "lazy")) {
+                val input = File.createTempFile("nooir-epub-$mode-", ".epub", cache)
+                val output = File.createTempFile("nooir-$mode-", ".xtch", cache)
+                try {
+                    makeBook(input, imageMode = mode)
+                    val count = NooirEpubToXtc.convert(input, output, XtcFormat.XTCH, "X4")
+                    val decoded = XtcBookPreview(output)
+                    assertEquals("Illustration mode $mode must preserve page count", baseCount, count)
+                    for (page in 0 until count) {
+                        assertTrue("Illustration mode $mode differs at decoded page $page",
+                            expected.page(page).levels.contentEquals(decoded.page(page).levels))
+                    }
+                } finally {
+                    input.delete()
+                    output.delete()
+                }
+            }
+        } finally {
+            source.delete()
+            baseline.delete()
+        }
+    }
+
+    @Test fun responsiveImageCandidatesPreferDensityAndRetainTextOrder() {
+        val xhtml = """
+            <html><body><p>Before <img src="../Images/low.png"
+              srcset="../Images/low.png 1x, ../Images/high.png 2x" />
+              after <img src="" data-src="../Images/lazy.png" /> end.</p></body></html>
+        """.trimIndent()
+        assertEquals(listOf(
+            "TEXT:Before", "IMAGE:../Images/high.png",
+            "TEXT:after", "IMAGE:../Images/lazy.png", "TEXT:end."
+        ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
     }
 
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)

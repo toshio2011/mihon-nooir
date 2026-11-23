@@ -53,6 +53,13 @@ fun main() {
             check(book.chapters.map { it.path } ==
                 listOf("OEBPS/Text/a.xhtml", "OEBPS/Text/b.xhtml"))
             check(book.readXhtml(book.chapters[0].path).contains("First chapter"))
+            val coverBytes = book.imageBytesFromCandidates(
+                book.chapters[0].path, listOf("../Images/not-found.png", "../Images/cover.png"))
+            check(coverBytes.toString(Charsets.UTF_8) == "FAKE IMAGE FOR PACKAGE-ONLY TEST")
+            check(runCatching {
+                book.imageBytesFromCandidates(book.chapters[0].path,
+                    listOf("https://external.invalid/image.png", "../Images/nope.png"))
+            }.isFailure)
         }
     } finally { first.delete() }
     for ((language, direction, expectedRtl) in listOf(
