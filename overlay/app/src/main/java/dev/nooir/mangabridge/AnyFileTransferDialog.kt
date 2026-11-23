@@ -84,6 +84,11 @@ fun AnyFileTransferDialog(
     var epubFont by remember { mutableStateOf(prefs.getInt("epub_font_px", 24)) }
     var epubMargin by remember { mutableStateOf(prefs.getInt("epub_margin_px", 26)) }
     var epubRtl by remember { mutableStateOf(prefs.getBoolean("epub_right_to_left", false)) }
+    var epubLineHeight by remember { mutableStateOf(prefs.getInt("epub_line_height_pct", 118).coerceIn(100, 200)) }
+    var epubFontFamily by remember {
+        mutableStateOf(prefs.getString("epub_font_family", "sans-serif")
+            ?.takeIf { it in setOf("sans-serif", "serif", "monospace") } ?: "sans-serif")
+    }
 
     LaunchedEffect(workId) {
         val current = workId ?: return@LaunchedEffect
@@ -107,7 +112,9 @@ fun AnyFileTransferDialog(
         options.save(prefs)
         prefs.edit().putInt("epub_font_px", epubFont)
             .putInt("epub_margin_px", epubMargin)
-            .putBoolean("epub_right_to_left", epubRtl).apply()
+            .putBoolean("epub_right_to_left", epubRtl)
+            .putInt("epub_line_height_pct", epubLineHeight)
+            .putString("epub_font_family", epubFontFamily).apply()
     }
     fun changeInputKind(next: NooirLocalConversionPolicy.Picker) {
         if (inputKind == next) return
@@ -150,6 +157,8 @@ fun AnyFileTransferDialog(
                 NooirTransferWorker.KEY_EPUB_FONT to epubFont,
                 NooirTransferWorker.KEY_EPUB_MARGIN to epubMargin,
                 NooirTransferWorker.KEY_EPUB_RTL to epubRtl,
+                NooirTransferWorker.KEY_EPUB_LINE_HEIGHT to epubLineHeight,
+                NooirTransferWorker.KEY_EPUB_FONT_FAMILY to epubFontFamily,
             )).build()
         // Reuse the same sequential chain as manga, URL and PDF exports.
         manager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
@@ -380,6 +389,35 @@ fun AnyFileTransferDialog(
                 if (sendSettings && eligibleFormats.isNotEmpty()) {
                     if (hasEpubInput) {
                         Text("EPUB → XTC/XTCH · experimental text and picture pagination")
+                        Text("Reading presets (or customize below)")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(
+                                "Compact" to Triple(20, 14, 110),
+                                "Balanced" to Triple(24, 26, 118),
+                                "Large" to Triple(32, 20, 135),
+                            ).forEach { (label, values) ->
+                                FilterChip(
+                                    selected = epubFont == values.first &&
+                                        epubMargin == values.second &&
+                                        epubLineHeight == values.third,
+                                    onClick = {
+                                        epubFont = values.first
+                                        epubMargin = values.second
+                                        epubLineHeight = values.third
+                                    },
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                        Text("Font family")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("Sans" to "sans-serif", "Serif" to "serif",
+                                "Mono" to "monospace").forEach { (label, family) ->
+                                FilterChip(selected = epubFontFamily == family,
+                                    onClick = { epubFontFamily = family },
+                                    label = { Text(label) })
+                            }
+                        }
                         Text("Font size: " + epubFont + " px")
                         Slider(value = epubFont.toFloat(), onValueChange = {
                             epubFont = it.toInt().coerceIn(14, 46)
@@ -388,11 +426,15 @@ fun AnyFileTransferDialog(
                         Slider(value = epubMargin.toFloat(), onValueChange = {
                             epubMargin = it.toInt().coerceIn(8, 80)
                         }, valueRange = 8f..80f)
+                        Text("Line height: " + epubLineHeight + "%")
+                        Slider(value = epubLineHeight.toFloat(), onValueChange = {
+                            epubLineHeight = it.toInt().coerceIn(100, 200)
+                        }, valueRange = 100f..200f)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Switch(checked = epubRtl, onCheckedChange = { epubRtl = it })
                             Text("Right-to-left page order (for Arabic or RTL books)")
                         }
-                        Text("Uses Android text layout and images in EPUB spine order. " +
+                        Text("These typography controls change actual exported EPUB pages, not just a preview. " +
                             "Advanced CSS, complex tables, SVG and embedded fonts are not fully preserved.")
                     }
                     if (hasMangaInput) {
