@@ -112,3 +112,23 @@ or publish a new release without approval.
   change Android app identity or alter Folio Nooir firmware.
 - Exact-head smoke is required before acceptance; treat this as an
   implementation fix rather than a completed validation.
+
+
+## 23 Nov 2026: confirmed 14-test pass; DocumentsUI navigation follow-up
+
+- Exact Android CI head `3b0da77` **passed** app compile and emulator
+  instrumentation ([Actions 45172197071](https://github.com/toshio2011/mihon-nooir/actions/runs/45172197071)):
+  **14/14** EPUB/XTC/XTCH and post-export preview tests.
+- Its independent best-effort UI capture **did not complete**. Captured
+  real DocumentsUI screen showed the picker had reopened the onboarding folder
+  `Download/Nooir_QA`, not the parent `Download` holding `NooirQA.xtch`.
+  The previous script accidentally clicked an unrelated nested `downloads`
+  folder and never returned to the app.
+- The screenshot script now explicitly opens **Show roots → Downloads** in
+  DocumentsUI. It records a drawer screenshot and demands that the actual
+  exported XTCH be selected and decoded, with page-number semantics, before
+  treating the optional UI walkthrough as complete. Missing files/screens
+  produce truthful failure notes, not success claims.
+- CI still uploads UI diagnostics and does not let a flaky onboarding picker
+  mark the **codec regression** failed. Review the capture exit code and
+  first/next-page screencaps separately for UI acceptance.

@@ -164,8 +164,24 @@ if tap_visible "Preview finished XTC / XTCH book" 3; then
   if tap_visible "Choose finished XTC / XTCH book" 2; then
     capture "01b-android-file-picker"
     dump_ui || true
+    # DocumentsUI remembers the onboarding SAF folder, which is typically
+    # Download/Nooir_QA. Tapping a visible "downloads" folder *inside*
+    # Nooir_QA is not the Android Downloads root where our test book lives.
+    # Use the system drawer's root explicitly, never a child folder guess.
     if [ -z "$(lookup "NooirQA.xtch")" ]; then
-      tap_visible "Downloads" 2 || tap_visible "Download" 2 || true
+      if ! tap_visible "Show roots" 2; then
+        echo "DocumentsUI navigation drawer unavailable" >> "$out/capture-notes.txt"
+        capture "01b-picker-navigation-blocked"
+        exit 1
+      fi
+      capture "01b-picker-roots"
+      if ! tap_visible "Downloads" 2; then
+        echo "System Downloads root unavailable in DocumentsUI" >> "$out/capture-notes.txt"
+        capture "01b-downloads-root-missing"
+        exit 1
+      fi
+      dump_ui || true
+      cp "$out/window.xml" "$out/01b-downloads-root.xml" || true
     fi
     if tap_visible "NooirQA.xtch" 2; then
       capture "01c-actual-decoded-xtch-page"
@@ -178,11 +194,13 @@ if tap_visible "Preview finished XTC / XTCH book" 3; then
         fi
       else
         echo "Picker accepted XTCH but preview page label was not accessible" >> "$out/capture-notes.txt"
+        capture "01c-preview-missing-page-label"
+        exit 1
       fi
     else
-      echo "Could not pick NooirQA.xtch from Android DocumentsUI" >> "$out/capture-notes.txt"
-      adb shell input keyevent KEYCODE_BACK
-      sleep 2
+      echo "NooirQA.xtch missing from the actual system Downloads root" >> "$out/capture-notes.txt"
+      capture "01c-downloads-book-missing"
+      exit 1
     fi
   fi
   tap_visible "Back to converter" 3 || {
