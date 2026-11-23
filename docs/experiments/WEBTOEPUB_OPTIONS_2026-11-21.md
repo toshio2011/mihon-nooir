@@ -119,3 +119,20 @@ Full site-specific parser compatibility, advanced cover-tile editing, complete u
 4. Expand public-site parser tests and safe per-site extractor profiles, respecting access terms.
 
 Do not claim feature parity with WebToEpub's extensive site-specific parser ecosystem. Do not merge or publish without review and real testing.
+
+
+### 23 November — preserve percent-encoded chapter fetch paths
+
+- A public chapter path containing `%2F` (an encoded slash) must **not**
+  become a literal `/` when producing chapter links. URI reconstruction
+  from decoded `.path` could previously change which public chapter was
+  fetched or cause a 404. Chapter discovery now preserves raw escaped URLs
+  and drops only the fragment.
+- Discovery now uses the existing comparison-only chapter identity to
+  eliminate repeated same-page entries with trackers or reordered unique
+  query parameters, while retaining the very first original fetch URL.
+  `/chapter/a%2Fb` and `/chapter/a/b` remain different chapters.
+- Added a network-free, real Android/Jsoup table-of-contents regression.
+  The gated TOC instrumentation suite now expects **six** cases. This
+  is URL correctness, not site-specific parser parity or authenticated
+  chapter support. Keep PR #110 separate and draft.

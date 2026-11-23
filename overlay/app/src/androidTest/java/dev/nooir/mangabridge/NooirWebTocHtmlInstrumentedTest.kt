@@ -48,6 +48,27 @@ class NooirWebTocHtmlInstrumentedTest {
         ), NooirWebNovel.discover(page).map { it.url })
     }
 
+    @Test fun encodedChapterPathsRemainExactAndQueryVariantsDeduplicate() {
+        val page = Jsoup.parse(
+            """
+            <div class="chapter-list">
+              <a href="/story/chapter/a%2Fb?lang=en&amp;chapter=2">Chapter Encoded</a>
+              <a href="/story/chapter/a%2Fb?chapter=2&amp;lang=en&amp;utm_source=feed">
+                Chapter Duplicate
+              </a>
+              <a href="/story/chapter/a/b?lang=en&amp;chapter=2">Chapter Distinct</a>
+            </div>
+            """.trimIndent(), "https://example.org/story/chapters",
+        )
+        val chapters = NooirWebNovel.discover(page)
+        assertEquals(listOf("Chapter Encoded", "Chapter Distinct"),
+            chapters.map { it.title })
+        assertEquals("https://example.org/story/chapter/a%2Fb?lang=en&chapter=2",
+            chapters[0].url)
+        assertEquals("https://example.org/story/chapter/a/b?lang=en&chapter=2",
+            chapters[1].url)
+    }
+
     @Test fun plainNextChapterLinkCannotAdvanceTocPage() {
         val page = Jsoup.parse(
             """

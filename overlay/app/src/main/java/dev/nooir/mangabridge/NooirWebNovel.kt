@@ -85,8 +85,14 @@ object NooirWebNovel {
                 listOf("/chapter/", "/chapter-", "/episode/", "/part-").any { path.contains(it) } ||
                 withinChapterList || visibleWattpadPart
             if (!likely) continue
-            val target = URI("https", null, uri.host, -1, uri.path, uri.query, null).toASCIIString()
-            found.putIfAbsent(target, Chapter(target, text))
+            // Preserve original percent escapes: reconstructing a URI from
+            // decoded .path turns /chapter/a%2Fb into /chapter/a/b, which can
+            // fetch a different public chapter (or 404). The prior same-origin,
+            // port and userinfo guards still apply. Only drop the fragment.
+            val target = uri.toASCIIString().substringBefore('#')
+            // Comparison-only identity handles marketing trackers and reordered
+            // unique query names. Never change the actual chapter fetch URL.
+            found.putIfAbsent(NooirWebChapterIdentity.key(target), Chapter(target, text))
         }
         return found.values.toList()
     }
