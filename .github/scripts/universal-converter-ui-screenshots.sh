@@ -157,6 +157,34 @@ if tap_visible "Preview finished XTC / XTCH book" 3; then
     echo "Preview screen opened without its real file picker" >> "$out/capture-notes.txt"
     exit 1
   fi
+  # The earlier instrumentation exports a real encoded XTCH test book
+  # to Downloads on this throwaway emulator. We try to open it via the
+  # ordinary Android picker and screenshot the decoded output, not just the
+  # empty viewer. Keep a diagnostic note if the picker is inaccessible.
+  if tap_visible "Choose finished XTC / XTCH book" 2; then
+    capture "01b-android-file-picker"
+    dump_ui || true
+    if [ -z "$(lookup "NooirQA.xtch")" ]; then
+      tap_visible "Downloads" 2 || tap_visible "Download" 2 || true
+    fi
+    if tap_visible "NooirQA.xtch" 2; then
+      capture "01c-actual-decoded-xtch-page"
+      dump_ui || true
+      cp "$out/window.xml" "$out/01c-actual-decoded-page.xml" || true
+      if [ -n "$(lookup "Page 1 of")" ]; then
+        echo "PASS: real finished XTCH opened from Android document picker" >> "$out/capture-notes.txt"
+        if tap_visible "Next" 1; then
+          capture "01d-actual-decoded-xtch-next-page"
+        fi
+      else
+        echo "Picker accepted XTCH but preview page label was not accessible" >> "$out/capture-notes.txt"
+      fi
+    else
+      echo "Could not pick NooirQA.xtch from Android DocumentsUI" >> "$out/capture-notes.txt"
+      adb shell input keyevent KEYCODE_BACK
+      sleep 2
+    fi
+  fi
   tap_visible "Back to converter" 3 || {
     echo "Preview back navigation failed" >> "$out/capture-notes.txt"
     exit 1

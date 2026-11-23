@@ -2,6 +2,7 @@ package dev.nooir.mangabridge
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.nooir.bridge.XtcBookPreview
@@ -17,6 +18,7 @@ import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.runBlocking
 
 /**
  * On-device end-to-end test: OPF EPUB spine + actual text + PNG illustration →
@@ -274,6 +276,45 @@ class NooirEpubXtcInstrumentedTest {
         }
     }
 
+    @Test fun finishedBookSafCopyKeepsOriginalAndRejectsCorruptFile() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val source = File.createTempFile("nooir-saf-original-", ".epub", context.cacheDir)
+        val output = File.createTempFile("nooir-saf-finished-", ".xtch", context.cacheDir)
+        val corrupt = File.createTempFile("nooir-saf-corrupt-", ".xtch", context.cacheDir)
+        try {
+            makeBook(source)
+            val count = NooirEpubToXtc.convert(source, output, XtcFormat.XTCH, "X4")
+            val originalBytes = output.readBytes()
+            val loaded = NooirFinishedBookPreview.open(context, Uri.fromFile(output))
+            try {
+                assertEquals(XtcFormat.XTCH, loaded.format)
+                assertEquals(count, loaded.pageCount)
+                assertTrue("Finished preview must copy to an independent file", loaded.file != output)
+                assertTrue("SAF preview copy differs from original output bytes",
+                    originalBytes.contentEquals(loaded.file.readBytes()))
+                val previewPage = NooirFinishedBookPreview.decodePage(loaded.file, 1)
+                try {
+                    assertEquals(480, previewPage.width)
+                    assertEquals(800, previewPage.height)
+                } finally {
+                    previewPage.recycle()
+                }
+            } finally {
+                loaded.file.delete()
+            }
+            assertTrue("Opening a finished-book preview changed the source file",
+                originalBytes.contentEquals(output.readBytes()))
+            corrupt.writeText("invalid saved book")
+            assertTrue("SAF viewer must reject corrupt files during opening", runCatching {
+                NooirFinishedBookPreview.open(context, Uri.fromFile(corrupt))
+            }.isFailure)
+        } finally {
+            source.delete()
+            output.delete()
+            corrupt.delete()
+        }
+    }
+
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)
     @Test fun realXtchContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTCH)
 
@@ -446,6 +487,16 @@ class NooirEpubXtcInstrumentedTest {
                     cover.levels.any { (it.toInt() and 255) == if (format.depth == 1) 1 else 3 })
             val prose = decoded.page(1)
             val label = if (format == XtcFormat.XTC) "xtc" else "xtch"
+            if (format == XtcFormat.XTCH) {
+                // Test-only finished output: the emulator UI then opens these
+                // actual bytes through Android DocumentsUI, not a mock image.
+                val qaFolder = File(
+                    InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+                    "nooir_epub_xteink_previews",
+                )
+                check(qaFolder.isDirectory || qaFolder.mkdirs())
+                output.copyTo(File(qaFolder, "NooirQA.xtch"), overwrite = true)
+            }
             saveDecodedPage("X4-" + label + "-cover.png", cover)
             saveDecodedPage("X4-" + label + "-prose.png", prose)
             saveDecodedPage("X4-" + label + "-last.png", decoded.page(count - 1))

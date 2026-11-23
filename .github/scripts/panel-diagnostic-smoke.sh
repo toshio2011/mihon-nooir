@@ -65,6 +65,7 @@ for required in \
   responsiveAndLazyImagesMatchFinishedXtchPixels \
   responsiveImageCandidatesPreferDensityAndRetainTextOrder \
   finishedBookViewerPixelsMatchRealXtcAndXtch \
+  finishedBookSafCopyKeepsOriginalAndRejectsCorruptFile \
   x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes \
   arabicParagraphsAlignRightAndMarkBookRtl \
   autoDirectionUsesEpubMetadataForArabicOutput \
@@ -72,7 +73,7 @@ for required in \
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
 done
-grep -Fxq 'OK (13 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'OK (14 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
 echo "Collecting page images decoded from real EPUB→XTC/XTCH outputs"
@@ -82,6 +83,13 @@ mkdir -p android-epub-xtc-previews
 adb pull \
   /data/user/0/dev.nooir.mihontrial.foss/files/nooir_epub_xteink_previews/. \
   android-epub-xtc-previews/
+test -s android-epub-xtc-previews/NooirQA.xtch
+# Make the real encoded XTCH fixture visible to Android DocumentsUI.
+# This is a disposable emulator, not the owner's phone or SD card.
+adb shell mkdir -p /sdcard/Download
+adb push android-epub-xtc-previews/NooirQA.xtch /sdcard/Download/NooirQA.xtch
+adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+  -d file:///sdcard/Download/NooirQA.xtch >/dev/null || true
 for png in \
   X4-xtc-cover.png \
   X4-xtc-prose.png \

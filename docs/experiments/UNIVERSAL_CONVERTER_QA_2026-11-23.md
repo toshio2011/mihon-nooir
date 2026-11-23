@@ -54,6 +54,21 @@ These **do not** replace a real interactive UI walkthrough or a fresh APK build.
   is a separate automated check. Opening a real user file and navigating
   its decoded page images still needs interactive acceptance.
 
+## Expanded real-file preview acceptance (Android emulator)
+
+- Add Android instrumentation that **opens** a finished XTCH via a file URI,
+  copies it to isolated owned cache via `NooirFinishedBookPreview.open`,
+  verifies format/page count, decoded page size, byte-for-byte immutability
+  of the source, and rejection of a corrupt file before display.
+- Save a synthetic **real encoded** `NooirQA.xtch` from the existing
+  independent-decoder test, push that exact output to the emulator's
+  Downloads directory, and let the ordinary Android DocumentsUI picker
+  choose it. UI script records actual first/next-page screencaps when
+  accessible, or an explicit failure note. No owner book is used.
+- This extends the strict EPUB instrumentation gate to **14 tests**;
+  the DocumentsUI navigation remains a best-effort screenshot diagnostic
+  until proven reliable across emulator images.
+
 ## Remaining acceptance gates before owner approval
 
 1. **Exact-commit Android CI** after the latest input-picker refinements and
