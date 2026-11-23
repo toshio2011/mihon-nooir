@@ -56,9 +56,11 @@ internal object NooirLocalConversionPolicy {
         val ext = filename.substringAfterLast('.', "").lowercase()
         val mime = mimeType.substringBefore(';').trim().lowercase()
         return when {
-            ext == "epub" || mime == "application/epub+zip" -> Input.EPUB
+            ext == "epub" || mime in setOf("application/epub+zip", "application/x-epub+zip") -> Input.EPUB
             ext == "pdf" || mime == "application/pdf" -> Input.PDF
-            ext in setOf("cbz", "zip") -> Input.COMIC_ARCHIVE_CANDIDATE
+            ext in setOf("cbz", "zip") ||
+                mime in setOf("application/vnd.comicbook+zip", "application/x-cbz") ->
+                Input.COMIC_ARCHIVE_CANDIDATE
             ext in imageExt || mime in imageMime -> Input.IMAGE
             else -> Input.OTHER
         }
@@ -73,7 +75,8 @@ internal object NooirLocalConversionPolicy {
      */
     fun canConvertTo(filename: String, mimeType: String = "", output: String): Boolean =
         when (classify(filename, mimeType)) {
-            Input.IMAGE, Input.COMIC_ARCHIVE_CANDIDATE -> true
+            Input.IMAGE, Input.COMIC_ARCHIVE_CANDIDATE ->
+                output in setOf("XTC", "XTCH", "EPUB", "EPUB2", "CBZ")
             Input.EPUB -> output in setOf("XTC", "XTCH")
             else -> false
         }
