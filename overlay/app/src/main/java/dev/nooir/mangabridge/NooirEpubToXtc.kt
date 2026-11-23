@@ -41,10 +41,13 @@ internal object NooirEpubToXtc {
         val fontPx: Int = 24,
         val marginPx: Int = 26,
         val lineSpacing: Float = 1.18f,
+        val fontFamily: String = "sans-serif",
     ) {
         init {
             require(fontPx in 14..46 && marginPx in 8..80 &&
-                lineSpacing in 1.0f..2.0f) { "Invalid EPUB rendering settings" }
+                lineSpacing in 1.0f..2.0f &&
+                fontFamily in setOf("sans-serif", "serif", "monospace")) {
+                "Invalid EPUB rendering settings" }
         }
     }
 
@@ -162,7 +165,7 @@ internal object NooirEpubToXtc {
             val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.BLACK
                 textSize = settings.fontPx * if (heading) 1.26f else 1f
-                typeface = Typeface.create("sans-serif", if (heading) Typeface.BOLD else Typeface.NORMAL)
+                typeface = Typeface.create(settings.fontFamily, if (heading) Typeface.BOLD else Typeface.NORMAL)
             }
             val text = content.replace(Regex("\\s+"), " ").trim()
             if (text.isEmpty()) return result
