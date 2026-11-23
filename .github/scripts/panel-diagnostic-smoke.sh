@@ -98,3 +98,16 @@ test -s android-runtime-panel-diagnostic.zip
 python3 tools/panel_diagnostic_inspect.py \
   android-runtime-panel-diagnostic.zip --json \
   | tee android-panel-diagnostic-inspection.json
+
+# This first CI pass records a true emulator UI walk-through separately from
+# binary correctness. If launcher/onboarding accessibility is flaky, retain
+# screenshots and failure notes rather than claiming the UI is accepted.
+echo "Capturing Universal Converter navigation and source-type UI"
+mkdir -p android-universal-converter-screenshots
+if bash .github/scripts/universal-converter-ui-screenshots.sh; then
+  echo 0 > android-universal-converter-screenshots/capture-exit-code.txt
+else
+  code=$?
+  echo "$code" > android-universal-converter-screenshots/capture-exit-code.txt
+  echo "UI capture incomplete; inspect screenshots and accessibility dump" >&2
+fi
