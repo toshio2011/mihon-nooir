@@ -66,6 +66,8 @@ class UniversalConverterPreservationTest(unittest.TestCase):
             "NooirTransferWorker.KEY_EPUB_FONT",
             "NooirTransferWorker.KEY_EPUB_MARGIN",
             "NooirTransferWorker.KEY_EPUB_RTL",
+            "NooirTransferWorker.KEY_EPUB_LINE_HEIGHT",
+            "NooirTransferWorker.KEY_EPUB_FONT_FAMILY",
             "NooirDeviceWorkQueue.NAME",
             "MangaConversionSettings(",
             "chooseFolder.launch(null)",
@@ -77,6 +79,20 @@ class UniversalConverterPreservationTest(unittest.TestCase):
                 self.assertIn(token, self.dialog)
         self.assertIn('"Send " + chosen.size + " original file(s)"', self.dialog)
         self.assertIn('"Convert & send · " + chosen.size + " file(s)"', self.dialog)
+
+    def test_epub_typography_settings_pass_through_to_export(self):
+        worker = (BASE / "NooirTransferWorker.kt").read_text(encoding="utf-8")
+        importer = (BASE / "NooirEpubImportConverter.kt").read_text(encoding="utf-8")
+        renderer = (BASE / "NooirEpubToXtc.kt").read_text(encoding="utf-8")
+        for token in ("Reading presets", "Font family", "Line height: ",
+                      "epubLineHeight", "epubFontFamily"):
+            self.assertIn(token, self.dialog)
+        for token in ("KEY_EPUB_LINE_HEIGHT", "KEY_EPUB_FONT_FAMILY",
+                      "lineHeightPercent = epubLineHeight", "fontFamily = epubFontFamily"):
+            self.assertIn(token, worker)
+        self.assertIn("lineSpacing = lineHeightPercent.coerceIn(100, 200) / 100f", importer)
+        self.assertIn("fontFamily = fontFamily", importer)
+        self.assertIn("Typeface.create(settings.fontFamily", renderer)
 
 
 if __name__ == "__main__":
