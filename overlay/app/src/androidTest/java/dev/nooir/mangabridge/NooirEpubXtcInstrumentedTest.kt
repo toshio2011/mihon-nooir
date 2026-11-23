@@ -66,6 +66,7 @@ class NooirEpubXtcInstrumentedTest {
         file: File, rtl: Boolean = false, emphasis: Boolean = false,
         imageMode: String = "normal",
         chapterEncoding: String = "utf8",
+        hiddenFallback: Boolean = false,
     ) {
         val image = Bitmap.createBitmap(100, 120, Bitmap.Config.ARGB_8888)
         val png = try {
@@ -92,9 +93,16 @@ class NooirEpubXtcInstrumentedTest {
             "Paragraph 1 contains sample plain text",
             "<strong>Paragraph 1 contains sample plain text</strong>",
         ) else longText
+        val hiddenXhtml = if (hiddenFallback)
+            "<div hidden><p>Do not render hidden alternate text</p>" +
+                "<img src='../Images/does-not-exist.png'/></div>" +
+                "<p style='display: none !important'>Invisible duplication</p>" +
+                "<div style='visibility: hidden'>Invisible chapter notes</div>" +
+                "<span style='visibility: collapse'>Invisible fallback label</span>"
+            else ""
         val chapterMarkup = if (rtl)
             "<html><body><p>مرحبا بالعالم، كتاب جميل للقراءة.</p></body></html>"
-            else "<html><body><h1>First Chapter</h1><p>" +
+            else "<html><body><h1>First Chapter</h1>" + hiddenXhtml + "<p>" +
                 styledText + "</p>" + illustration +
                 "<p>A concluding line after the illustration.</p></body></html>"
         val firstChapterBytes = when (chapterEncoding) {
@@ -159,6 +167,41 @@ class NooirEpubXtcInstrumentedTest {
             "TEXT:Another normal paragraph.",
             "IMAGE:../Images/second.png",
         ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+    }
+
+    @Test fun hiddenXhtmlDoesNotPolluteRealEncodedXtch() {
+        val xhtml = """
+            <html><body><p>Before <span hidden>invisible</span> after.</p>
+            <p style="display: none !important">Hidden duplicate chapter</p>
+            <div style="visibility: hidden"><img src="../Images/missing.png"/></div>
+            <p aria-hidden="true">Visually displayed label</p></body></html>
+        """.trimIndent()
+        assertEquals(listOf("TEXT:Before after.", "TEXT:Visually displayed label"),
+            NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val regular = File.createTempFile("nooir-epub-visible-", ".epub", cache)
+        val hidden = File.createTempFile("nooir-epub-hidden-", ".epub", cache)
+        val expected = File.createTempFile("nooir-visible-", ".xtch", cache)
+        val actual = File.createTempFile("nooir-hidden-", ".xtch", cache)
+        try {
+            makeBook(regular)
+            makeBook(hidden, hiddenFallback = true)
+            val baselineCount = NooirEpubToXtc.convert(regular, expected, XtcFormat.XTCH, "X4")
+            val actualCount = NooirEpubToXtc.convert(hidden, actual, XtcFormat.XTCH, "X4")
+            assertEquals("Hidden fallback must not add reading pages", baselineCount, actualCount)
+            val baseline = XtcBookPreview(expected)
+            val filtered = XtcBookPreview(actual)
+            for (index in 0 until baselineCount) {
+                assertTrue("Hidden XHTML changed real XTCH pixels at page $index",
+                    baseline.page(index).levels.contentEquals(filtered.page(index).levels))
+            }
+        } finally {
+            regular.delete()
+            hidden.delete()
+            expected.delete()
+            actual.delete()
+        }
     }
 
     @Test fun inlineEmphasisSurvivesNestedTagsAndImageBoundary() {

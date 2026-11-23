@@ -106,6 +106,17 @@ class UniversalConverterPreservationTest(unittest.TestCase):
         self.assertIn('"Send " + chosen.size + " original file(s)"', self.dialog)
         self.assertIn('"Convert & send · " + chosen.size + " file(s)"', self.dialog)
 
+    def test_native_epub_respects_visual_hidden_html_without_dropping_aria(self):
+        renderer = (BASE / "NooirEpubToXtc.kt").read_text(encoding="utf-8")
+        self.assertIn('element.hasAttr("hidden")', renderer)
+        self.assertIn('hiddenFromRendering(element)', renderer)
+        self.assertIn('property == "display"', renderer)
+        self.assertIn('property == "visibility"', renderer)
+        self.assertIn('"aria-hidden" is intentionally NOT excluded', renderer)
+        smoke = (ROOT / ".github/scripts/panel-diagnostic-smoke.sh").read_text(encoding="utf-8")
+        self.assertIn("hiddenXhtmlDoesNotPolluteRealEncodedXtch", smoke)
+        self.assertIn("'OK (16 tests)'", smoke)
+
     def test_finished_preview_r8_api_survives_minified_foss_build(self):
         apply = (ROOT / "tools/apply_overlay.py").read_text(encoding="utf-8")
         self.assertIn('-keep class dev.nooir.mangabridge.NooirFinishedBookPreview { *; }', apply)

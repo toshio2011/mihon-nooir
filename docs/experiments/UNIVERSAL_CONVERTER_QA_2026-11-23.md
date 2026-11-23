@@ -161,3 +161,26 @@ or publish a new release without approval.
 - Move First/Prev/Next/Last and the page counter *above* the preview image, so they are visible on the emulator's smaller screen and on handheld phones without extra scrolling. Keep the real decoded bitmap, existing page controls, back button, and temporary-file safety unchanged.
 - Strengthen the optional real UI walkthrough: verify `Page 1 of 6` and decoded-page semantics, require a successful **Next** tap, wait for asynchronous decoded `Page 2 of 6`, capture an actual second-page screenshot, and report a failure within the UI walk if any condition is missing. A green codec suite is not a substitute for the second screenshot.
 - This change is in the experimental Android preview and test harness only; no Windows, Folio firmware, release version or public Android APK is changed.
+
+
+## 24 November: explicit hidden XHTML fidelity regression
+
+- Preview UI acceptance now **passed at exact head `6fad0d8`**:
+  [Actions 45215512098](https://github.com/toshio2011/mihon-nooir/actions/runs/45215512098)
+  produced actual first- and next-page XTCH screenshots; the event log records
+  opening `NooirQA.xtch`, seeing page 1, tapping Next, decoding page 2 of 6,
+  returning to the converter, and visiting the preserved EPUB/PDF routes.
+  The full Android build and 15 EPUB tests were green.
+- EPUB XHTML extraction must not render `hidden`, inline
+  `style="display:none"` or `visibility:hidden/collapse` fallback elements:
+  they may contain duplicate prose or non-existent fallback images that would
+  otherwise break an entire conversion. Conversely, `aria-hidden="true"`
+  does NOT mean invisible and should preserve visually displayed content.
+- Added a 16th Android instrumentation test: real XTCH page count and decoded
+  pixels must be **identical** between the normal EPUB fixture and a fixture
+  with hidden duplicate text and an absent hidden illustration. Also checks
+  hidden element skipping and visible aria-hidden text in reading order.
+  The smoke gate now requires exactly 16 tests and this named regression.
+- This covers explicit XHTML visibility only: external stylesheet cascades,
+  complex CSS and JavaScript remain out of scope. No public Android release,
+  Windows source, or Folio firmware changes.

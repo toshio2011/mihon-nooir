@@ -60,6 +60,7 @@ for required in \
   realXtchContainsDecodedTextAndArtPages \
   typographyOptionsChangeActualDecodedXtchPages \
   inlineIllustrationsStayBetweenTheirSurroundingWords \
+  hiddenXhtmlDoesNotPolluteRealEncodedXtch \
   inlineEmphasisSurvivesNestedTagsAndImageBoundary \
   inlineEmphasisChangesRealEncodedXtchPage \
   responsiveAndLazyImagesMatchFinishedXtchPixels \
@@ -74,7 +75,7 @@ for required in \
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
 done
-grep -Fxq 'OK (15 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'OK (16 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
 echo "Collecting page images decoded from real EPUB→XTC/XTCH outputs"

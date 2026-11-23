@@ -90,6 +90,23 @@ internal object NooirEpubToXtc {
         return (responsive + ordinary).distinct().take(16)
     }
 
+    /**
+     * Respect actual XHTML visibility controls while extracting reading text.
+     * "aria-hidden" is intentionally NOT excluded: it hides accessibility
+     * exposure, not visual content (often icons and illustrated labels).
+     * Full external CSS cascade is outside this native renderer's scope.
+     */
+    private fun hiddenFromRendering(element: Element): Boolean {
+        if (element.hasAttr("hidden")) return true
+        return element.attr("style").split(';').any { rule ->
+            val property = rule.substringBefore(':').trim().lowercase()
+            val value = rule.substringAfter(':', "").substringBefore('!')
+                .trim().lowercase()
+            (property == "display" && value == "none") ||
+                (property == "visibility" && value in setOf("hidden", "collapse"))
+        }
+    }
+
     private fun blocks(xhtml: String): Pair<String, List<Block>> {
         val doc = Jsoup.parse(xhtml)
         doc.select("script,style,iframe,object,embed,form,video,audio").remove()
@@ -149,7 +166,7 @@ internal object NooirEpubToXtc {
             }
             val element = node as? Element ?: return
             val tag = element.normalName()
-            if (tag in ignored) return
+            if (tag in ignored || hiddenFromRendering(element)) return
             if (tag == "br" || tag == "hr") {
                 flushText()
                 return
