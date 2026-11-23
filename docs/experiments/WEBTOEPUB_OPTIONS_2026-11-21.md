@@ -136,3 +136,18 @@ Do not claim feature parity with WebToEpub's extensive site-specific parser ecos
   The gated TOC instrumentation suite now expects **six** cases. This
   is URL correctness, not site-specific parser parity or authenticated
   chapter support. Keep PR #110 separate and draft.
+
+
+### 23 Nov 2026: public chapter illustration signature validation
+
+- Validate bytes of downloaded JPEG, PNG and GIF chapter illustrations against
+  their declared MIME before adding them to the EPUB. Some CDNs return a login,
+  cache or error HTML page incorrectly labeled as `image/jpeg`.
+- Such responses now fail the current candidate and allow the existing
+  bounded `srcset`/lazy-image fallback to try another publicly accessible
+  alternative, rather than embedding broken illustration bytes.
+- The signature check is a cheap, offline byte-prefix contract (not a complete
+  media decoder); the existing 2 MiB budget, HTTPS validation, redirect policy,
+  optional downsampling and EPUB packaging remain unchanged. Added a pure
+  Kotlin unit test to `tests/run.sh`. No auth/session bypass or remote
+  redirect following is introduced.

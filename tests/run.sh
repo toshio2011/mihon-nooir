@@ -93,6 +93,10 @@ kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageCandidates.
   tests/NooirWebImageCandidatesTest.kt -include-runtime -d "$tmp/web-image-candidates.jar"
 java -jar "$tmp/web-image-candidates.jar"
 
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageSignature.kt \
+  tests/NooirWebImageSignatureTest.kt -include-runtime -d "$tmp/web-image-signature.jar"
+java -jar "$tmp/web-image-signature.jar"
+
 # Public HTML reader candidate scoring: reject link-heavy navigation blocks.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebReadability.kt \
   tests/NooirWebReadabilityTest.kt -include-runtime -d "$tmp/web-readability.jar"

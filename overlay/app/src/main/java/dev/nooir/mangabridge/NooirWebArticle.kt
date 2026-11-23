@@ -251,6 +251,12 @@ object NooirWebArticle {
                     }
                     val bytes = response.bodyAsBytes()
                     require(bytes.size in 1..2_000_000)
+                    // Some public CDNs return an HTML error body with an
+                    // image Content-Type. Never embed it as a broken picture;
+                    // fall back to the next safe srcset / lazy candidate.
+                    require(NooirWebImageSignature.valid(bytes, mime)) {
+                        "The server returned invalid " + mime + " illustration bytes"
+                    }
                     NooirWebImageOptimizer.optimize(
                         ReflowEpubWriter.ImageAsset(bytes, extension, mime), imageProfile)
                 }.getOrNull()
