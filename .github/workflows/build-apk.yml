@@ -19,7 +19,9 @@ jobs:
       - name: Checkout integration source
         uses: actions/checkout@v4
       - name: Validate Android panel smoke script syntax
-        run: bash -n .github/scripts/panel-diagnostic-smoke.sh
+        run: |
+          bash -n .github/scripts/panel-diagnostic-smoke.sh
+          bash -n .github/scripts/universal-converter-ui-screenshots.sh
       - name: Validate overlay structure
         run: python3 -m unittest discover -s tests -p "test_*.py" -v
       - name: Validate XTC, XTCH, EPUB 2, EPUB 3 and CBZ export formats
@@ -205,6 +207,9 @@ jobs:
             diagnostic-instrumentation.txt
             android-epub-xtc-instrumentation.txt
             android-epub-xtc-previews/*.png
+            android-universal-converter-screenshots/*.png
+            android-universal-converter-screenshots/*.txt
+            android-universal-converter-screenshots/*.xml
             android-runtime-panel-diagnostic.zip
             android-panel-diagnostic-inspection.json
             android-panel-diagnostic-logcat.txt
