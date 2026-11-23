@@ -1,6 +1,30 @@
 import dev.nooir.mangabridge.NooirLocalConversionPolicy as Policy
 
 fun main() {
+    // Step 1: input selection restricts Android's document picker.
+    check(Policy.pickerMimeTypes(Policy.Picker.EPUB).contains("application/epub+zip"))
+    check(Policy.pickerMimeTypes(Policy.Picker.COMIC).contains("application/zip"))
+    check(Policy.pickerMimeTypes(Policy.Picker.IMAGES).toList() == listOf("image/*"))
+    check(Policy.pickerMimeTypes(Policy.Picker.PDF).toList() == listOf("application/pdf"))
+    check(Policy.pickerMimeTypes(Policy.Picker.ANY).toList() == listOf("*/*"))
+    check(Policy.matchesPicker(Policy.Picker.EPUB, "Novel.EPUB", "application/zip"))
+    check(Policy.matchesPicker(Policy.Picker.COMIC, "Manga.CBZ", "application/zip"))
+    check(Policy.matchesPicker(Policy.Picker.IMAGES, "Artwork.png", "application/octet-stream"))
+    check(Policy.matchesPicker(Policy.Picker.PDF, "Report.pdf", "application/octet-stream"))
+    check(!Policy.matchesPicker(Policy.Picker.EPUB, "report.pdf", "application/pdf"))
+    check(!Policy.matchesPicker(Policy.Picker.COMIC, "story.epub", "application/zip"))
+    check(!Policy.matchesPicker(Policy.Picker.IMAGES, "notes.docx"))
+    check(Policy.matchesPicker(Policy.Picker.ANY, "notes.docx"))
+    // Step 2: output choices appear before file selection without claiming
+    // PDF/other imports are convertible or that EPUB produces CBZ/EPUB.
+    check(Policy.canPickerConvertTo(Policy.Picker.EPUB, "XTC"))
+    check(Policy.canPickerConvertTo(Policy.Picker.EPUB, "XTCH"))
+    check(!Policy.canPickerConvertTo(Policy.Picker.EPUB, "EPUB2"))
+    check(!Policy.canPickerConvertTo(Policy.Picker.EPUB, "CBZ"))
+    check(Policy.canPickerConvertTo(Policy.Picker.COMIC, "CBZ"))
+    check(Policy.canPickerConvertTo(Policy.Picker.IMAGES, "EPUB2"))
+    check(!Policy.canPickerConvertTo(Policy.Picker.PDF, "XTC"))
+    check(!Policy.canPickerConvertTo(Policy.Picker.ANY, "XTCH"))
     check(Policy.classify("My Novel.epub") == Policy.Input.EPUB)
     check(Policy.classify("unnamed", "application/epub+zip") == Policy.Input.EPUB)
     check(Policy.classify("paper.PDF") == Policy.Input.PDF)
