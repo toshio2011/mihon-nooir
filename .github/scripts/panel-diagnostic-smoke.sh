@@ -60,12 +60,14 @@ for required in \
   realXtchContainsDecodedTextAndArtPages \
   typographyOptionsChangeActualDecodedXtchPages \
   inlineIllustrationsStayBetweenTheirSurroundingWords \
+  inlineEmphasisSurvivesNestedTagsAndImageBoundary \
+  inlineEmphasisChangesRealEncodedXtchPage \
   x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes \
   arabicParagraphsAlignRightAndMarkBookRtl
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
 done
-grep -Fxq 'OK (6 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'OK (8 tests)' android-epub-xtc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
 
 echo "Collecting page images decoded from real EPUB→XTC/XTCH outputs"
@@ -83,6 +85,7 @@ for png in \
   X4-xtch-prose.png \
   X4-xtch-last.png \
   X4-xtch-serif-large.png \
+  X4-xtch-inline-bold.png \
   X3-xtch-cover.png \
   X3-xtch-prose.png \
   X4-xtc-arabic.png

@@ -8,6 +8,9 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.text.Layout
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.StyleSpan
 import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
 import android.text.TextPaint
@@ -52,9 +55,11 @@ internal object NooirEpubToXtc {
     }
 
     private sealed interface Block {
-        data class Text(val text: String, val heading: Boolean = false) : Block
+        data class Text(val text: CharSequence, val heading: Boolean = false) : Block
         data class Image(val src: String) : Block
     }
+
+    private data class InlineRange(val start: Int, val end: Int, val style: Int)
 
     private fun blocks(xhtml: String): Pair<String, List<Block>> {
         val doc = Jsoup.parse(xhtml)
@@ -71,24 +76,46 @@ internal object NooirEpubToXtc {
             "h1", "h2", "h3", "h4", "h5", "h6", "hr",
         )
         val text = StringBuilder()
+        val inlineRanges = mutableListOf<InlineRange>()
         var textHeading = false
 
         fun flushText() {
-            val normalized = text.toString().replace(Regex("\\s+"), " ").trim()
-            if (normalized.isNotEmpty()) {
+            // Collapse whitespace while appending nodes, not here: replacing the
+            // string after parsing would silently discard StyleSpan positions.
+            val end = if (text.isNotEmpty() && text.last() == ' ') text.length - 1 else text.length
+            if (end > 0) {
                 require(out.size < 50_000) { "EPUB section has too many text/image blocks" }
-                out += Block.Text(normalized, textHeading)
+                val styled = SpannableStringBuilder(text.substring(0, end))
+                for (range in inlineRanges) {
+                    if (range.start < end && range.end > range.start) {
+                        styled.setSpan(StyleSpan(range.style), range.start, min(range.end, end),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
+                out += Block.Text(styled, textHeading)
             }
             text.setLength(0)
+            inlineRanges.clear()
             textHeading = false
         }
 
-        fun visit(node: Node, heading: Boolean = false) {
+        fun visit(node: Node, heading: Boolean = false,
+                  inlineStyle: Int = Typeface.NORMAL) {
             require(out.size < 50_000) { "EPUB section has too many text/image blocks" }
             if (node is TextNode) {
-                val fragment = node.wholeText
-                if (fragment.isNotBlank() && text.isBlank()) textHeading = heading
-                text.append(fragment)
+                val start = text.length
+                for (c in node.wholeText) {
+                    if (c.isWhitespace() || c == '\u00a0') {
+                        if (text.isNotEmpty() && text.last() != ' ') text.append(' ')
+                    } else {
+                        if (text.isEmpty()) textHeading = heading
+                        text.append(c)
+                    }
+                }
+                if (inlineStyle != Typeface.NORMAL && text.length > start) {
+                    require(inlineRanges.size < 50_000) { "Too many inline EPUB style spans" }
+                    inlineRanges += InlineRange(start, text.length, inlineStyle)
+                }
                 return
             }
             val element = node as? Element ?: return
@@ -107,7 +134,12 @@ internal object NooirEpubToXtc {
             val isBoundary = tag in boundaries
             if (isBoundary) flushText()
             val isHeading = heading || tag in setOf("h1", "h2", "h3", "h4", "h5", "h6")
-            element.childNodes().forEach { visit(it, isHeading) }
+            val nestedStyle = inlineStyle or when (tag) {
+                "b", "strong" -> Typeface.BOLD
+                "i", "em", "cite" -> Typeface.ITALIC
+                else -> Typeface.NORMAL
+            }
+            element.childNodes().forEach { visit(it, isHeading, nestedStyle) }
             if (isBoundary) flushText()
         }
         doc.body().childNodes().forEach { visit(it) }
@@ -124,6 +156,18 @@ internal object NooirEpubToXtc {
                 is Block.Text -> (if (block.heading) "HEADING:" else "TEXT:") + block.text
                 is Block.Image -> "IMAGE:" + block.src
             }
+        }
+
+    /** Inspect semantic emphasis without relying on any pre-encode bitmap. */
+    internal fun inlineStylesForDiagnostics(xhtml: String): List<String> =
+        blocks(xhtml).second.flatMap { block ->
+            val content = (block as? Block.Text)?.text as? Spanned
+            if (content == null) emptyList() else
+                content.getSpans(0, content.length, StyleSpan::class.java).map { span ->
+                    val start = content.getSpanStart(span)
+                    val end = content.getSpanEnd(span)
+                    "${span.style}:${content.subSequence(start, end)}"
+                }
         }
 
     private class PageCanvas(
@@ -160,14 +204,14 @@ internal object NooirEpubToXtc {
             return quantized
         }
 
-        fun text(content: String, heading: Boolean): List<QuantizedPage> {
+        fun text(content: CharSequence, heading: Boolean): List<QuantizedPage> {
             val result = mutableListOf<QuantizedPage>()
             val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.BLACK
                 textSize = settings.fontPx * if (heading) 1.26f else 1f
                 typeface = Typeface.create(settings.fontFamily, if (heading) Typeface.BOLD else Typeface.NORMAL)
             }
-            val text = content.replace(Regex("\\s+"), " ").trim()
+            val text = content // Keep spans intact for Android StaticLayout.
             if (text.isEmpty()) return result
             require(text.length <= 200000) { "A single EPUB paragraph is too long to render" }
             val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)

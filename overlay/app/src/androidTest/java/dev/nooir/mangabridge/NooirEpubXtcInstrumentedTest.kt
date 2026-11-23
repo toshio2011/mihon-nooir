@@ -60,7 +60,7 @@ class NooirEpubXtcInstrumentedTest {
         }
     }
 
-    private fun makeBook(file: File, rtl: Boolean = false) {
+    private fun makeBook(file: File, rtl: Boolean = false, emphasis: Boolean = false) {
         val image = Bitmap.createBitmap(100, 120, Bitmap.Config.ARGB_8888)
         val png = try {
             image.eraseColor(Color.WHITE)
@@ -73,6 +73,10 @@ class NooirEpubXtcInstrumentedTest {
         val longText = (1..30).joinToString(" ") { n ->
             "Paragraph " + n + " contains sample plain text for proper EPUB pagination. "
         }
+        val styledText = if (emphasis) longText.replace(
+            "Paragraph 1 contains sample plain text",
+            "<strong>Paragraph 1 contains sample plain text</strong>",
+        ) else longText
         val resources = linkedMapOf(
             "mimetype" to "application/epub+zip".toByteArray(),
             "META-INF/container.xml" to ("""
@@ -100,7 +104,7 @@ class NooirEpubXtcInstrumentedTest {
             "OEBPS/Text/one.xhtml" to (if (rtl)
                 "<html><body><p>مرحبا بالعالم، كتاب جميل للقراءة.</p></body></html>"
                 else "<html><body><h1>First Chapter</h1><p>" +
-                    longText + "</p><img src='../Images/figure.png'/>" +
+                    styledText + "</p><img src='../Images/figure.png'/>" +
                     "<p>A concluding line after the illustration.</p></body></html>"
             ).toByteArray(),
             "OEBPS/Text/two.xhtml" to
@@ -134,6 +138,42 @@ class NooirEpubXtcInstrumentedTest {
             "TEXT:Another normal paragraph.",
             "IMAGE:../Images/second.png",
         ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+    }
+
+    @Test fun inlineEmphasisSurvivesNestedTagsAndImageBoundary() {
+        val xhtml = """
+            <html><body><p>Before <strong>bold <em>both</em></strong>
+            <img src="../Images/figure.png"/>After <em>soft</em>.</p></body></html>
+        """.trimIndent()
+        assertEquals(listOf(
+            "TEXT:Before bold both", "IMAGE:../Images/figure.png", "TEXT:After soft."
+        ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+        assertEquals(listOf("1:bold ", "3:both", "2:soft"),
+            NooirEpubToXtc.inlineStylesForDiagnostics(xhtml))
+    }
+
+    @Test fun inlineEmphasisChangesRealEncodedXtchPage() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val plainInput = File.createTempFile("nooir-plain-", ".epub", cache)
+        val styledInput = File.createTempFile("nooir-bold-", ".epub", cache)
+        val plainOutput = File.createTempFile("nooir-plain-", ".xtch", cache)
+        val styledOutput = File.createTempFile("nooir-bold-", ".xtch", cache)
+        try {
+            makeBook(plainInput)
+            makeBook(styledInput, emphasis = true)
+            NooirEpubToXtc.convert(plainInput, plainOutput, XtcFormat.XTCH, "X4")
+            NooirEpubToXtc.convert(styledInput, styledOutput, XtcFormat.XTCH, "X4")
+            val plain = XtcBookPreview(plainOutput).page(1)
+            val bold = XtcBookPreview(styledOutput).page(1)
+            assertTrue("Semantic bold must change final decoded e-ink pixels",
+                !plain.levels.contentEquals(bold.levels))
+            saveDecodedPage("X4-xtch-inline-bold.png", bold)
+        } finally {
+            plainInput.delete()
+            styledInput.delete()
+            plainOutput.delete()
+            styledOutput.delete()
+        }
     }
 
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)

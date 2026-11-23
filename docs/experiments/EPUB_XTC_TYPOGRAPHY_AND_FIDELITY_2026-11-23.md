@@ -42,6 +42,20 @@ engine. EPUB CSS, embedded fonts, tables/floats/MathML/SVG, linguistic
 hyphenation, custom dither strength and progress bars remain outstanding.
 A passing synthetic test is not a real-book/physical-reader acceptance.
 
+## Second increment: semantic inline emphasis (exact-head CI pending)
+
+- Preserve XHTML `<strong>`/`<b>`, `<em>`/`<i>` and `<cite>`
+  during real EPUB text pagination, including nested bold+italic content.
+- Keep heading structure and illustration order intact; split styled text
+  safely around embedded images without dropping its subsequent formatting.
+- Normalize source whitespace at text-node append time so Android spans keep
+  stable offsets, rather than flattening the formatted string after parsing.
+- Add synthetic XHTML style/order instrumentation and a second end-to-end
+  comparison against **independently decoded X4 XTCH** bytes.
+- Capture one new final decoded typography QA PNG.
+- This is semantic inline styling only: arbitrary CSS, document fonts,
+  tables, complex writing modes and footnote layout remain unsupported.
+
 ## Next quality increments, separately validated
 
 1. **Renderer fidelity before UI bloat**: compare source EPUB page flow,
