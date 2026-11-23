@@ -16,6 +16,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.OutlinedTextField
@@ -45,7 +46,10 @@ import java.util.UUID
 
 /** More -> Send & Convert files, with multi-selection and durable background work. */
 @Composable
-fun AnyFileTransferDialog(onDismiss: () -> Unit) {
+fun AnyFileTransferDialog(
+    onDismiss: () -> Unit,
+    onOpenPdfConverter: (() -> Unit)? = null,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
@@ -320,8 +324,13 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                             "Browse all can find them; selected file types are still checked.")
                     }
                     if (inputKind == NooirLocalConversionPolicy.Picker.PDF) {
-                        Text("PDF conversion is currently in Nooir Tools → PDF to e-reader. " +
-                            "This screen can send PDF originals without changing them.")
+                        Text("PDF conversion uses the dedicated PDF engine. " +
+                            "Send originals here, or open the PDF converter below.")
+                        if (onOpenPdfConverter != null) {
+                            OutlinedButton(onClick = onOpenPdfConverter) {
+                                Text("Open PDF converter")
+                            }
+                        }
                     }
                 }
                 if (displayNames.isNotEmpty()) {
