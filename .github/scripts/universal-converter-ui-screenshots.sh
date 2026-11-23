@@ -24,13 +24,17 @@ dump_ui() {
 }
 
 lookup() {
-  local needle="$1"
-  python3 - "$out/window.xml" "$needle" <<'PY'
+  local needle="$1" region="${2:-all}"
+  python3 - "$out/window.xml" "$needle" "$region" <<'PY'
 import sys, re
 import xml.etree.ElementTree as ET
 try:
     root = ET.parse(sys.argv[1]).getroot()
     needle = sys.argv[2].lower()
+    region = sys.argv[3]
+    frame = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",
+                         root.find(".//node").attrib.get("bounds", ""))
+    width = int(frame.group(3)) if frame else 1080
     nodes = []
     for node in root.iter("node"):
         caption = ((node.attrib.get("text") or "") + " " +
@@ -42,6 +46,12 @@ try:
         if m is None:
             continue
         a,b,c,d = map(int,m.groups())
+        # DocumentsUI exposes the page UNDER its open drawer as accessible
+        # nodes. The old generic lookup selected that obscured page's
+        # "Downloads" (x=765), *outside* the actual drawer (x<631).
+        # Drawer-scoped taps must originate within the visible drawer.
+        if region == "drawer" and (a+c)//2 >= width * 0.6:
+            continue
         # Prefer an exact button label over a longer paragraph containing it.
         priority = 0 if caption.strip() == needle else 1
         nodes.append((priority, (a+c)//2, (b+d)//2, a, b))
@@ -72,6 +82,22 @@ tap_visible() {
   done
   echo "Text not found: $target" | tee -a "$out/capture-notes.txt"
   return 1
+}
+
+# Only select entries physically inside the open DocumentsUI drawer.
+# A regular tap_visible() may choose a matching label behind the overlay.
+tap_drawer_root() {
+  local target="$1" coord x y left top
+  dump_ui || return 1
+  coord="$(lookup "$target" drawer)"
+  if [ -z "$coord" ]; then
+    echo "Drawer root not found inside visible drawer: $target" >> "$out/capture-notes.txt"
+    return 1
+  fi
+  read -r x y left top <<< "$coord"
+  adb shell input tap "$x" "$y"
+  sleep 2
+  echo "Tapped visible drawer root: $target ($x,$y)" >> "$out/capture-notes.txt"
 }
 
 # On cold Android emulators, the unrelated Pixel Launcher can raise an
@@ -126,6 +152,22 @@ for onboarding in {1..8}; do
   fi
 done
 
+# The fresh emulator created Nooir_QA under its selected Android SAF folder.
+# Mirror the exact REAL XTCH codec output into that folder only after
+# onboarding (before this, pre-creating it would break the folder dialog).
+# DocumentsUI remembers this destination when opening a new document.
+if adb shell test -s /sdcard/Download/NooirQA.xtch; then
+  for candidate in /sdcard/Download/Nooir_QA /sdcard/Documents/Nooir_QA; do
+    if adb shell test -d "$candidate"; then
+      adb shell cp /sdcard/Download/NooirQA.xtch "$candidate/NooirQA.xtch"
+      adb shell test -s "$candidate/NooirQA.xtch"
+      echo "Staged real finished XTCH in picker start folder: $candidate" >> "$out/capture-notes.txt"
+      adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+        -d "file://$candidate/NooirQA.xtch" >/dev/null || true
+    fi
+  done
+fi
+
 if ! tap_visible "More" 2; then
   # Bottom-right tab on Pixel 2 emulators; only a fallback if accessibility
   # text is not exposed (the diagnostic dump documents the actual screen).
@@ -164,10 +206,10 @@ if tap_visible "Preview finished XTC / XTCH book" 3; then
   if tap_visible "Choose finished XTC / XTCH book" 2; then
     capture "01b-android-file-picker"
     dump_ui || true
-    # DocumentsUI remembers the onboarding SAF folder, which is typically
-    # Download/Nooir_QA. Tapping a visible "downloads" folder *inside*
-    # Nooir_QA is not the Android Downloads root where our test book lives.
-    # Use the system drawer's root explicitly, never a child folder guess.
+    # The file should already appear inside the onboarding folder, after
+    # copying actual encoded bytes into that folder above. If this provider
+    # does not refresh its listing, explicitly choose the *visible drawer*
+    # Downloads entry; never click a "Downloads" label behind the overlay.
     if [ -z "$(lookup "NooirQA.xtch")" ]; then
       if ! tap_visible "Show roots" 2; then
         echo "DocumentsUI navigation drawer unavailable" >> "$out/capture-notes.txt"
@@ -175,11 +217,12 @@ if tap_visible "Preview finished XTC / XTCH book" 3; then
         exit 1
       fi
       capture "01b-picker-roots"
-      if ! tap_visible "Downloads" 2; then
-        echo "System Downloads root unavailable in DocumentsUI" >> "$out/capture-notes.txt"
+      if ! tap_drawer_root "Downloads"; then
+        echo "System Downloads root unavailable in visible DocumentsUI drawer" >> "$out/capture-notes.txt"
         capture "01b-downloads-root-missing"
         exit 1
       fi
+      capture "01b-system-downloads-root"
       dump_ui || true
       cp "$out/window.xml" "$out/01b-downloads-root.xml" || true
     fi

@@ -41,6 +41,12 @@ class UniversalConverterPreservationTest(unittest.TestCase):
         self.assertIn('NooirFinishedBookPreview.decodePage', viewer)
         self.assertIn('ActivityResultContracts.OpenDocument()', viewer)
         self.assertIn('onOpenFinishedPreview', self.dialog)
+        screenshots = (ROOT / ".github/scripts/universal-converter-ui-screenshots.sh").read_text(
+            encoding="utf-8")
+        self.assertIn('lookup "$target" drawer', screenshots)
+        self.assertIn('Tapped visible drawer root:', screenshots)
+        self.assertIn('Staged real finished XTCH in picker start folder:', screenshots)
+        self.assertNotIn('tap_visible "Downloads" 2', screenshots)
         self.assertIn('initialUri = previewUri', self.hub)
         self.assertIn('KEY_LAST_SAVED_PREVIEW_URI', self.dialog)
         self.assertIn('Preview last converted book saved to phone', self.dialog)

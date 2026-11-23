@@ -132,3 +132,23 @@ or publish a new release without approval.
 - CI still uploads UI diagnostics and does not let a flaky onboarding picker
   mark the **codec regression** failed. Review the capture exit code and
   first/next-page screencaps separately for UI acceptance.
+
+
+## 23 November: real DocumentsUI drawer mis-tap correction
+
+- Exact-head Android CI on `b54f2d3` [passed](https://github.com/toshio2011/mihon-nooir/actions/runs/45178888169):
+  APK, 15 EPUB XTC/XTCH tests and existing diagnostics. Separate real UI
+  capture remains incomplete.
+- The actual screenshot `01b-picker-roots.png` shows the **Downloads** drawer
+  entry inside x=0–631, but recorded navigation tapped `Downloads` at x=765,
+  a matching node behind the drawer. The next screenshot remained in
+  `Nooir_QA` with only `autobackup`, `downloads`, `local`.
+- Fix the harness: drawer-root lookup now refuses nodes outside the visible
+  left drawer; staged synthetic **real encoded** `NooirQA.xtch` is copied into
+  the onboarding destination *after folder creation* so the ordinary picker
+  should find it without navigating. The system Downloads drawer is a
+  constrained fallback. No mock image, app permissions or conversion engines
+  changed.
+- New CI must demonstrate selected finished-file first/next page screenshots;
+  the script's optional screenshot capture remains a separate UI acceptance
+  check, not proof by merely passing binary unit tests.
