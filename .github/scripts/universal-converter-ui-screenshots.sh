@@ -135,7 +135,7 @@ fi
 if ! tap_visible "Nooir Tools" 5; then
   echo "Could not reach Nooir Tools. See first-launch and accessibility dump." >> "$out/capture-notes.txt"
   capture "01-navigation-blocked"
-  exit 0
+  exit 1
 fi
 if ! tap_visible "Universal Book Converter" 5; then
   echo "Universal Converter entry not visible" | tee -a "$out/capture-notes.txt"
