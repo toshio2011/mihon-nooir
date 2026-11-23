@@ -19,6 +19,8 @@ internal object NooirEpubImportConverter {
         fontPx: Int = 24,
         marginPx: Int = 26,
         rightToLeft: Boolean = false,
+        lineHeightPercent: Int = 118,
+        fontFamily: String = "sans-serif",
         saveDestination: Uri? = null,
         sendHost: String? = null,
         sendFolder: String = "/Books",
@@ -53,7 +55,11 @@ internal object NooirEpubImportConverter {
             onStage("Paginating EPUB text and illustrations")
             val count = NooirEpubToXtc.convert(
                 input, output, format, device,
-                settings = NooirEpubToXtc.Settings(fontPx, marginPx),
+                settings = NooirEpubToXtc.Settings(
+                    fontPx = fontPx, marginPx = marginPx,
+                    lineSpacing = lineHeightPercent.coerceIn(100, 200) / 100f,
+                    fontFamily = fontFamily,
+                ),
                 rtl = rightToLeft,
                 checkCancelled = checkCancelled,
                 onPage = { page, _ -> onStage("Rendering EPUB page " + page) },
