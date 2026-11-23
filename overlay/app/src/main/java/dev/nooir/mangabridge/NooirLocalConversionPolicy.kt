@@ -7,6 +7,45 @@ package dev.nooir.mangabridge
  */
 internal object NooirLocalConversionPolicy {
     enum class Input { IMAGE, COMIC_ARCHIVE_CANDIDATE, EPUB, PDF, OTHER }
+    enum class Picker(val label: String) {
+        EPUB("EPUB"),
+        COMIC("CBZ / ZIP"),
+        IMAGES("Images"),
+        PDF("PDF"),
+        ANY("All files"),
+    }
+
+    /**
+     * Android's document providers filter by MIME, not extensions. Some
+     * providers mislabel EPUBs/CBZs as ZIP or octet-stream, so the UI offers
+     * an explicit "Browse all" escape hatch and validates selected names
+     * after selection instead of relying on MIME alone.
+     */
+    fun pickerMimeTypes(picker: Picker): Array<String> = when (picker) {
+        Picker.EPUB -> arrayOf("application/epub+zip", "application/x-epub+zip")
+        Picker.COMIC -> arrayOf("application/vnd.comicbook+zip", "application/x-cbz",
+            "application/zip", "application/x-zip-compressed")
+        Picker.IMAGES -> arrayOf("image/*")
+        Picker.PDF -> arrayOf("application/pdf")
+        Picker.ANY -> arrayOf("*/*")
+    }
+
+    fun matchesPicker(picker: Picker, filename: String, mimeType: String = ""): Boolean =
+        when (picker) {
+            Picker.EPUB -> classify(filename, mimeType) == Input.EPUB
+            Picker.COMIC -> classify(filename, mimeType) == Input.COMIC_ARCHIVE_CANDIDATE
+            Picker.IMAGES -> classify(filename, mimeType) == Input.IMAGE
+            Picker.PDF -> classify(filename, mimeType) == Input.PDF
+            Picker.ANY -> true
+        }
+
+    /** Preview valid targets even before a user opens Android's file picker. */
+    fun canPickerConvertTo(picker: Picker, output: String): Boolean = when (picker) {
+        Picker.EPUB -> output in setOf("XTC", "XTCH")
+        Picker.COMIC, Picker.IMAGES -> output in setOf("XTC", "XTCH", "EPUB", "EPUB2", "CBZ")
+        Picker.PDF, Picker.ANY -> false // ANY needs actual selected files first
+    }
+
 
     private val imageExt = setOf("jpg", "jpeg", "png", "webp", "bmp", "gif")
     private val imageMime = setOf(
