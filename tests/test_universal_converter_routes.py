@@ -1,0 +1,83 @@
+"""Structure regressions for the experimental Universal Converter navigation.
+
+These assertions intentionally do not masquerade as full Android UI tests.
+They guard preserved original routes and stop a future refactor from hiding
+specialized source engines behind a dead or misleading universal entry.
+"""
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+BASE = ROOT / "overlay/app/src/main/java/dev/nooir/mangabridge"
+
+
+class UniversalConverterPreservationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.hub = (BASE / "NooirToolsHubDialog.kt").read_text(encoding="utf-8")
+        cls.dialog = (BASE / "AnyFileTransferDialog.kt").read_text(encoding="utf-8")
+        cls.policy = (BASE / "NooirLocalConversionPolicy.kt").read_text(encoding="utf-8")
+
+    def test_all_existing_tools_remain_reachable(self):
+        routes = {
+            '"queue" -> NooirActivityQueueDialog': "activity queue",
+            '"files" -> AnyFileTransferDialog': "local files",
+            '"web" -> NooirWebToReaderDialog': "public web converter",
+            '"novels" -> NooirNovelBatchDialog': "web-novel batches",
+            '"pdf" -> NooirPdfToEpubDialog': "dedicated PDF engine",
+            '"device" -> NooirDeviceFilesDialog': "device file management",
+            '"converter" -> AlertDialog': "unified source navigation",
+        }
+        for token, purpose in routes.items():
+            with self.subTest(route=purpose):
+                self.assertIn(token, self.hub)
+        self.assertIn('Text("Universal Book Converter")', self.hub)
+        self.assertIn('tool = "converter"', self.hub)
+
+    def test_pdf_remains_a_real_specialist_not_a_fake_conversion(self):
+        self.assertIn('onOpenPdfConverter = { tool = "pdf" }', self.hub)
+        self.assertIn('onOpenPdfConverter: (() -> Unit)? = null', self.dialog)
+        self.assertIn('Text("Open PDF converter")', self.dialog)
+        self.assertIn('Picker.PDF, Picker.ANY -> false', self.policy)
+        self.assertIn('NooirTools', self.hub)
+
+    def test_input_then_output_then_settings_are_accessible(self):
+        for text in (
+            'Text("1 · Choose input file type")',
+            'Text("2 · Select source files")',
+            'Text("3 · Reader & output format")',
+            'Text("Convert to")',
+            'Text("4 · More conversion settings")',
+            'Text("5 · Destination")',
+        ):
+            with self.subTest(text=text):
+                self.assertIn(text, self.dialog)
+        self.assertIn('pickerMimeTypes(', self.dialog)
+        self.assertIn('matchesPicker(', self.dialog)
+        self.assertIn('canPickerConvertTo(', self.dialog)
+        self.assertIn('if (hasEpubInput)', self.dialog)
+        self.assertIn('if (hasMangaInput)', self.dialog)
+
+    def test_existing_transfer_routes_and_settings_not_removed(self):
+        for token in (
+            "NooirTransferWorker.KEY_URIS",
+            "NooirTransferWorker.KEY_FORMAT",
+            "NooirTransferWorker.KEY_OPTIONS",
+            "NooirTransferWorker.KEY_EPUB_FONT",
+            "NooirTransferWorker.KEY_EPUB_MARGIN",
+            "NooirTransferWorker.KEY_EPUB_RTL",
+            "NooirDeviceWorkQueue.NAME",
+            "MangaConversionSettings(",
+            "chooseFolder.launch(null)",
+            "NooirDevicePicker(device)",
+            "NooirDeviceWorkQueue.hasFailed",
+            'Text("Share selected with another app or device")',
+        ):
+            with self.subTest(feature=token):
+                self.assertIn(token, self.dialog)
+        self.assertIn('"Send " + chosen.size + " original file(s)"', self.dialog)
+        self.assertIn('"Convert & send · " + chosen.size + " file(s)"', self.dialog)
+
+
+if __name__ == "__main__":
+    unittest.main()
