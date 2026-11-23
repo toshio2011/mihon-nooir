@@ -151,3 +151,19 @@ A passing synthetic test is not a real-book/physical-reader acceptance.
   default quality modes; test X3/Lite-related paths without touching firmware.
 - Exact-head Android host checks, APK compile and instrumented emulator pass;
   UI screenshot review and physical e-reader acceptance still required.
+
+
+## Sixth increment: UTF-16 XHTML compatibility (exact-head CI pending)
+
+- Read EPUB XHTML with UTF-8 BOM or UTF-16 LE/BE BOM, plus the two
+  unambiguous no-BOM UTF-16 initial byte patterns; otherwise default
+  to UTF-8. Strip only the leading BOM after decoding.
+- The previous EPUB package metadata parser already accepted UTF-16, but
+  chapter XHTML was always decoded as UTF-8, corrupting text with
+  replacement characters for valid UTF-16 EPUB content.
+- Host regressions cover five encodings using the same multilingual
+  `Café 世界 مرحبا` content. One Android instrumentation additionally
+  checks that real finished XTC pixels from a UTF-16 XHTML chapter
+  match an otherwise-identical UTF-8 chapter page for page.
+- This fixes text encoding only; it does not claim EPUB CSS/SVG/layout
+  or custom book-font support. The 15-test emulator run must pass.

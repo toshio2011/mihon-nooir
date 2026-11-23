@@ -202,8 +202,31 @@ internal class NooirEpubBook private constructor(
         }
     }
 
-    fun readXhtml(path: String): String =
-        readZip(zip, path, MAX_ENTRY).toString(Charsets.UTF_8)
+    /**
+     * EPUB XHTML may be UTF-8 or UTF-16. The ZIP stores raw bytes, while
+     * Jsoup receives an already decoded String. Always honor BOM/endian
+     * markers instead of silently rendering U+FFFD replacement glyphs.
+     * Default to UTF-8 as mandated for ordinary EPUB 2/3 XHTML.
+     */
+    fun readXhtml(path: String): String {
+        val data = readZip(zip, path, MAX_ENTRY)
+        val charset = when {
+            data.size >= 3 && data[0] == 0xEF.toByte() &&
+                data[1] == 0xBB.toByte() && data[2] == 0xBF.toByte() -> Charsets.UTF_8
+            data.size >= 2 && data[0] == 0xFF.toByte() &&
+                data[1] == 0xFE.toByte() -> Charsets.UTF_16LE
+            data.size >= 2 && data[0] == 0xFE.toByte() &&
+                data[1] == 0xFF.toByte() -> Charsets.UTF_16BE
+            data.size >= 4 && data[0] == 0.toByte() &&
+                data[1] == '<'.code.toByte() && data[2] == 0.toByte() ->
+                    Charsets.UTF_16BE
+            data.size >= 4 && data[0] == '<'.code.toByte() &&
+                data[1] == 0.toByte() && data[3] == 0.toByte() ->
+                    Charsets.UTF_16LE
+            else -> Charsets.UTF_8
+        }
+        return data.toString(charset).removePrefix("\uFEFF")
+    }
 
     fun imageBytes(chapterPath: String, src: String): ByteArray =
         imageBytesAt(resolve(chapterPath, src))

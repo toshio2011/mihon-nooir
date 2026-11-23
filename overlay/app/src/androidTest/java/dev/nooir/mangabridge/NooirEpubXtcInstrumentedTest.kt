@@ -65,6 +65,7 @@ class NooirEpubXtcInstrumentedTest {
     private fun makeBook(
         file: File, rtl: Boolean = false, emphasis: Boolean = false,
         imageMode: String = "normal",
+        chapterEncoding: String = "utf8",
     ) {
         val image = Bitmap.createBitmap(100, 120, Bitmap.Config.ARGB_8888)
         val png = try {
@@ -91,6 +92,17 @@ class NooirEpubXtcInstrumentedTest {
             "Paragraph 1 contains sample plain text",
             "<strong>Paragraph 1 contains sample plain text</strong>",
         ) else longText
+        val chapterMarkup = if (rtl)
+            "<html><body><p>مرحبا بالعالم، كتاب جميل للقراءة.</p></body></html>"
+            else "<html><body><h1>First Chapter</h1><p>" +
+                styledText + "</p>" + illustration +
+                "<p>A concluding line after the illustration.</p></body></html>"
+        val firstChapterBytes = when (chapterEncoding) {
+            "utf8" -> chapterMarkup.toByteArray(Charsets.UTF_8)
+            "utf16le" -> byteArrayOf(0xFF.toByte(), 0xFE.toByte()) +
+                chapterMarkup.toByteArray(Charsets.UTF_16LE)
+            else -> error("Invalid EPUB chapter fixture encoding")
+        }
         val resources = linkedMapOf(
             "mimetype" to "application/epub+zip".toByteArray(),
             "META-INF/container.xml" to ("""
@@ -115,12 +127,7 @@ class NooirEpubXtcInstrumentedTest {
                   <spine page-progression-direction="$progression"><itemref idref="a"/><itemref idref="b"/></spine>
                 </package>
             """.trimIndent()).toByteArray(),
-            "OEBPS/Text/one.xhtml" to (if (rtl)
-                "<html><body><p>مرحبا بالعالم، كتاب جميل للقراءة.</p></body></html>"
-                else "<html><body><h1>First Chapter</h1><p>" +
-                    styledText + "</p>" + illustration +
-                    "<p>A concluding line after the illustration.</p></body></html>"
-            ).toByteArray(),
+            "OEBPS/Text/one.xhtml" to firstChapterBytes,
             "OEBPS/Text/two.xhtml" to
                 "<html><body><h1>Second Chapter</h1><p>Last paragraph.</p></body></html>".toByteArray(),
             "OEBPS/Images/cover.png" to png,
@@ -231,6 +238,37 @@ class NooirEpubXtcInstrumentedTest {
             "TEXT:Before", "IMAGE:../Images/high.png",
             "TEXT:after", "IMAGE:../Images/lazy.png", "TEXT:end."
         ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+    }
+
+    @Test fun utf16ChapterMatchesUtf8FinishedXtcPixels() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val utf8 = File.createTempFile("nooir-utf8-", ".epub", cache)
+        val utf16 = File.createTempFile("nooir-utf16-", ".epub", cache)
+        val output8 = File.createTempFile("nooir-utf8-", ".xtc", cache)
+        val output16 = File.createTempFile("nooir-utf16-", ".xtc", cache)
+        try {
+            makeBook(utf8)
+            makeBook(utf16, chapterEncoding = "utf16le")
+            NooirEpubBook.open(utf16).use { book ->
+                assertTrue("UTF-16 chapter has replacement characters",
+                    !book.readXhtml(book.chapters[0].path).contains('\uFFFD'))
+                assertTrue(book.readXhtml(book.chapters[0].path).contains("First Chapter"))
+            }
+            val count8 = NooirEpubToXtc.convert(utf8, output8, XtcFormat.XTC, "X4")
+            val count16 = NooirEpubToXtc.convert(utf16, output16, XtcFormat.XTC, "X4")
+            assertEquals("UTF-16 chapter must paginate like UTF-8", count8, count16)
+            val expected = XtcBookPreview(output8)
+            val actual = XtcBookPreview(output16)
+            for (index in 0 until count8) {
+                assertTrue("UTF-16 changed final decoded pixels on page $index",
+                    expected.page(index).levels.contentEquals(actual.page(index).levels))
+            }
+        } finally {
+            utf8.delete()
+            utf16.delete()
+            output8.delete()
+            output16.delete()
+        }
     }
 
     @Test fun finishedBookViewerPixelsMatchRealXtcAndXtch() {

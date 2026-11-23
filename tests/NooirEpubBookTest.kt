@@ -8,6 +8,7 @@ private fun fixture(
     includeEncryption: Boolean = false,
     language: String = "en",
     spineDirection: String? = null,
+    chapterBytes: ByteArray? = null,
 ): File {
     val directionAttr = spineDirection?.let { " page-progression-direction=\"$it\"" }.orEmpty()
     val result = File.createTempFile("nooir-epub-fixture-", ".epub")
@@ -36,7 +37,8 @@ private fun fixture(
         if (includeEncryption) files["META-INF/encryption.xml"] = "<encryption/>"
         for ((name, value) in files) {
             out.putNextEntry(ZipEntry(name))
-            out.write(value.toByteArray())
+            out.write(if (name == "OEBPS/Text/a.xhtml" && chapterBytes != null)
+                chapterBytes else value.toByteArray())
             out.closeEntry()
         }
     }
@@ -74,6 +76,30 @@ fun main() {
             NooirEpubBook.open(sample).use { book ->
                 check(book.isRightToLeft == expectedRtl) {
                     "Unexpected EPUB direction: language=$language direction=$direction"
+                }
+            }
+        } finally { sample.delete() }
+    }
+    val multilingual = "<html><body><p>Café 世界 مرحبا</p></body></html>"
+    val encodedCases = listOf(
+        "UTF-8 BOM" to (
+            byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) +
+                multilingual.toByteArray(Charsets.UTF_8)),
+        "UTF-16 LE BOM" to (
+            byteArrayOf(0xFF.toByte(), 0xFE.toByte()) +
+                multilingual.toByteArray(Charsets.UTF_16LE)),
+        "UTF-16 BE BOM" to (
+            byteArrayOf(0xFE.toByte(), 0xFF.toByte()) +
+                multilingual.toByteArray(Charsets.UTF_16BE)),
+        "UTF-16 LE inferred" to multilingual.toByteArray(Charsets.UTF_16LE),
+        "UTF-16 BE inferred" to multilingual.toByteArray(Charsets.UTF_16BE),
+    )
+    for ((label, payload) in encodedCases) {
+        val sample = fixture(emptyList(), chapterBytes = payload)
+        try {
+            NooirEpubBook.open(sample).use { book ->
+                check(book.readXhtml(book.chapters[0].path) == multilingual) {
+                    "$label XHTML was not decoded correctly"
                 }
             }
         } finally { sample.delete() }
@@ -118,5 +144,5 @@ fun main() {
         check(result.exceptionOrNull()?.message?.contains("DTD and entity") == true)
     } finally { hostileOpf.delete() }
 
-    println("PASS: EPUB package metadata, OPF spine, offline images and XXE/DTD rejection")
+    println("PASS: EPUB package, UTF-8/UTF-16 XHTML, RTL, offline images and XXE/DTD rejection")
 }
