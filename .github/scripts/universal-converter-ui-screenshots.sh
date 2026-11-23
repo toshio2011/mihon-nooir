@@ -230,13 +230,36 @@ if tap_visible "Preview finished XTC / XTCH book" 3; then
       capture "01c-actual-decoded-xtch-page"
       dump_ui || true
       cp "$out/window.xml" "$out/01c-actual-decoded-page.xml" || true
-      if [ -n "$(lookup "Page 1 of")" ]; then
-        echo "PASS: real finished XTCH opened from Android document picker" >> "$out/capture-notes.txt"
-        if tap_visible "Next" 1; then
-          capture "01d-actual-decoded-xtch-next-page"
+      if [ -n "$(lookup "Page 1 of 6")" ] &&
+         [ -n "$(lookup "Decoded XTCH page 1")" ]; then
+        echo "PASS: real finished XTCH page 1 opened from Android document picker" >> "$out/capture-notes.txt"
+        if ! tap_visible "Next" 3; then
+          echo "FAIL: finished XTCH Next control was not visible or clickable" >> "$out/capture-notes.txt"
+          capture "01d-preview-next-blocked"
+          exit 1
         fi
+        # Decode runs on Dispatchers.IO. The page counter may update before
+        # Image(bitmap) has published its accessible decoded-page semantics.
+        page_two_ready=false
+        for attempt in {1..6}; do
+          sleep 1
+          dump_ui || true
+          if [ -n "$(lookup "Page 2 of 6")" ] &&
+             [ -n "$(lookup "Decoded XTCH page 2")" ]; then
+            page_two_ready=true
+            break
+          fi
+        done
+        if [ "$page_two_ready" != true ]; then
+          echo "FAIL: finished XTCH page 2 did not become visible and decoded" >> "$out/capture-notes.txt"
+          capture "01d-preview-page-two-missing"
+          exit 1
+        fi
+        capture "01d-actual-decoded-xtch-next-page"
+        cp "$out/window.xml" "$out/01d-actual-decoded-next-page.xml" || true
+        echo "PASS: real finished XTCH page 2 decoded after Next tap" >> "$out/capture-notes.txt"
       else
-        echo "Picker accepted XTCH but preview page label was not accessible" >> "$out/capture-notes.txt"
+        echo "FAIL: picker returned but real XTCH page 1 or its decoded image was unavailable" >> "$out/capture-notes.txt"
         capture "01c-preview-missing-page-label"
         exit 1
       fi

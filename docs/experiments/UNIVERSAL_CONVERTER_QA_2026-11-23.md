@@ -152,3 +152,12 @@ or publish a new release without approval.
 - New CI must demonstrate selected finished-file first/next page screenshots;
   the script's optional screenshot capture remains a separate UI acceptance
   check, not proof by merely passing binary unit tests.
+
+
+## 23–24 November: real XTCH first-page screenshot verified; page-two gate
+
+- [Android exact-head 45205233377](https://github.com/toshio2011/mihon-nooir/actions/runs/45205233377) passed Android APK, the 15 EPUB XTC/XTCH tests and panel smoke. The screenshot artifact proves the app selected the *actual* `NooirQA.xtch` through DocumentsUI, decoded its page, and displayed `XTCH · 6 pages` / `Page 1 of 6` with an accessible `Decoded XTCH page 1` image. The emulator also reached local EPUB, PDF and dedicated PDF converter routes.
+- The **Next** screenshot was absent even though the script exit was zero: the page-navigation row sat below the 305dp preview image, outside the initially visible 550dp scrollable dialog. `tap_visible "Next" 1` could not find it and quietly continued.
+- Move First/Prev/Next/Last and the page counter *above* the preview image, so they are visible on the emulator's smaller screen and on handheld phones without extra scrolling. Keep the real decoded bitmap, existing page controls, back button, and temporary-file safety unchanged.
+- Strengthen the optional real UI walkthrough: verify `Page 1 of 6` and decoded-page semantics, require a successful **Next** tap, wait for asynchronous decoded `Page 2 of 6`, capture an actual second-page screenshot, and report a failure within the UI walk if any condition is missing. A green codec suite is not a substitute for the second screenshot.
+- This change is in the experimental Android preview and test harness only; no Windows, Folio firmware, release version or public Android APK is changed.

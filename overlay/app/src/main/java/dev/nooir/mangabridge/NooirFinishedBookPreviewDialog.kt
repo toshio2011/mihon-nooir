@@ -115,17 +115,9 @@ internal fun NooirFinishedBookPreviewDialog(
                 val current = loaded
                 if (current != null) {
                     Text(current.format.name + " · " + current.pageCount + " pages")
-                    val pageImage = bitmap
-                    if (decoding) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    if (pageImage != null && !pageImage.isRecycled) {
-                        Image(
-                            bitmap = pageImage.asImageBitmap(),
-                            contentDescription = "Decoded " + current.format.name +
-                                " page " + (pageIndex + 1),
-                            modifier = Modifier.fillMaxWidth().height(305.dp),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
+                    // Keep navigation above the tall raster preview: on smaller
+                    // devices an AlertDialog's scrollable body otherwise clips
+                    // First/Prev/Next/Last below the initial viewport.
                     Text("Page " + (pageIndex + 1) + " of " + current.pageCount)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(enabled = pageIndex > 0, onClick = { pageIndex = 0 }) {
@@ -138,6 +130,17 @@ internal fun NooirFinishedBookPreviewDialog(
                             onClick = { pageIndex++ }) { Text("Next") }
                         TextButton(enabled = pageIndex < current.pageCount - 1,
                             onClick = { pageIndex = current.pageCount - 1 }) { Text("Last") }
+                    }
+                    val pageImage = bitmap
+                    if (decoding) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    if (pageImage != null && !pageImage.isRecycled) {
+                        Image(
+                            bitmap = pageImage.asImageBitmap(),
+                            contentDescription = "Decoded " + current.format.name +
+                                " page " + (pageIndex + 1),
+                            modifier = Modifier.fillMaxWidth().height(305.dp),
+                            contentScale = ContentScale.Fit,
+                        )
                     }
                     Text("Pixels decoded from the finished book, including its true " +
                         "grayscale depth and device resolution. Original file unchanged.")
