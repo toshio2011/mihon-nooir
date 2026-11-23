@@ -291,7 +291,6 @@ fun AnyFileTransferDialog(
                     listOf(
                         NooirLocalConversionPolicy.Picker.EPUB,
                         NooirLocalConversionPolicy.Picker.COMIC,
-                        NooirLocalConversionPolicy.Picker.IMAGES,
                     ).forEach { kind ->
                         FilterChip(selected = inputKind == kind,
                             onClick = { changeInputKind(kind) },
@@ -300,6 +299,7 @@ fun AnyFileTransferDialog(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
+                        NooirLocalConversionPolicy.Picker.IMAGES,
                         NooirLocalConversionPolicy.Picker.PDF,
                         NooirLocalConversionPolicy.Picker.ANY,
                     ).forEach { kind ->
