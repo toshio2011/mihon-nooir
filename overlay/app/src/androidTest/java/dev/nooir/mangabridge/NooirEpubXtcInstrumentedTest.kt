@@ -139,6 +139,36 @@ class NooirEpubXtcInstrumentedTest {
     @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)
     @Test fun realXtchContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTCH)
 
+    @Test fun typographyOptionsChangeActualDecodedXtchPages() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-epub-style-", ".epub", cache)
+        val ordinary = File.createTempFile("nooir-xtch-style-default-", ".xtch", cache)
+        val styled = File.createTempFile("nooir-xtch-style-serif-", ".xtch", cache)
+        try {
+            makeBook(input)
+            NooirEpubToXtc.convert(input, ordinary, XtcFormat.XTCH, "X4")
+            NooirEpubToXtc.convert(input, styled, XtcFormat.XTCH, "X4",
+                settings = NooirEpubToXtc.Settings(
+                    fontPx = 32, marginPx = 20,
+                    lineSpacing = 1.35f, fontFamily = "serif",
+                ))
+            val originalPage = XtcBookPreview(ordinary).page(1)
+            val styledPage = XtcBookPreview(styled).page(1)
+            assertEquals(480, styledPage.width)
+            assertEquals(800, styledPage.height)
+            assertEquals(2, styledPage.depth)
+            assertTrue("Typography settings must change decoded pixels, not just UI labels",
+                !originalPage.levels.contentEquals(styledPage.levels))
+            assertTrue("Styled prose page should retain readable ink",
+                styledPage.levels.any { it.toInt() == 0 })
+            saveDecodedPage("X4-xtch-serif-large.png", styledPage)
+        } finally {
+            input.delete()
+            ordinary.delete()
+            styled.delete()
+        }
+    }
+
     @Test fun arabicParagraphsAlignRightAndMarkBookRtl() {
         val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
         val input = File.createTempFile("nooir-epub-arabic-", ".epub", cache)
