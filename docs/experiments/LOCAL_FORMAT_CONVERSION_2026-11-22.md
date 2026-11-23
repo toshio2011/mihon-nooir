@@ -26,6 +26,36 @@ PDF uses the existing dedicated **Nooir Tools → PDF to e-reader** pipeline for
 EPUB2/EPUB3 or XTC/XTCH output. Web source links use Web→EPUB, not this screen.
 No conversion path should change file extensions without validating real bytes.
 
+## Universal Converter UI (23 Nov draft implementation)
+
+The Nooir Tools main screen now has one **Universal Book Converter** entry.
+It routes to the existing source-specific workflows rather than combining or
+copying conversion engines:
+
+- **Local files:** choose EPUB / comic CBZ-ZIP / images / PDF / all files
+  **before** opening Android's MIME-filtered multi-document picker. ZIP and
+  octet-stream providers may misreport files, so there is an explicit
+  "Browse all" fallback; the selected filenames/MIME types are verified.
+- **Output format:** show only the formats the chosen input type and target
+  reader support, updating the options after the actual files are selected.
+  If the selected inputs have no common supported output, conversion stays
+  disabled. **Send originals** remains independent of conversion.
+- **Relevant controls:** EPUB gets font, margins and reading direction; image
+  / CBZ conversion retains the manga controls. The conversion/transfer queue
+  is below the main form, not above it.
+- **PDF:** the separate, already implemented PDF engine is reachable both from
+  the Universal Converter source menu and the local PDF selection. No fake
+  PDF conversion has been added to the manga/EPUB worker.
+- **Web:** the source menu routes public web links and novel chapter batches
+  to the existing web tools. WebToEpub-like enhancements live in **separate
+  draft PR #110** and are not implicitly merged or represented as present in
+  this branch.
+
+This is **one user entry and shared navigation**, not yet a single engine that
+can convert everything to every output. An actual unified preview UI, PDF
+pipeline adoption, rich EPUB CSS fidelity and cross-branch WebToEpub
+integration require separate testing and approval.
+
 ## Proposed input/output matrix
 
 | Input | Existing tested path | Future native conversion |
