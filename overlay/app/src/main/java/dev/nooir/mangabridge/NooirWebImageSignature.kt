@@ -2,7 +2,7 @@ package dev.nooir.mangabridge
 
 /**
  * Small, deterministic media-signature gate for public HTML chapter pictures.
- * A CDN may send a 200 HTML error document with an image/* Content-Type.
+ * A CDN may return a non-image HTML error while declaring an image media type.
  * Reject that body so the caller can try the next public image candidate.
  *
  * This checks format signatures, not full image decoding or decompression.
