@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# Experimental REAL emulator screenshots for the Android Web -> EPUB editor.
+# This script does not generate mockups or touch production data; CI uses a
+# throwaway emulator with the exact draft APK and its existing debug signer.
+set -euo pipefail
+mkdir -p android-web-epub-screenshots
+pkg=dev.nooir.mihontrial.foss
+out=android-web-epub-screenshots
+echo "Package: $pkg" > "$out/capture-notes.txt"
+echo "Emulator model: $(adb shell getprop ro.product.model | tr -d '\r')" >> "$out/capture-notes.txt"
+
+capture() {
+  local name="$1"
+  adb exec-out screencap -p > "$out/$name.png"
+  test -s "$out/$name.png"
+  echo "Captured $name.png" | tee -a "$out/capture-notes.txt"
+}
+
+dump_ui() {
+  # UIAutomator exports actual displayed Compose semantics / Android widgets.
+  adb shell uiautomator dump /sdcard/nooir-window.xml >/dev/null 2>&1 || return 1
+  adb exec-out cat /sdcard/nooir-window.xml > "$out/window.xml" || return 1
+  test -s "$out/window.xml"
+}
+
+lookup() {
+  local needle="$1"
+  python3 - "$out/window.xml" "$needle" <<'PY'
+import sys, re
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+    needle = sys.argv[2].lower()
+    nodes = []
+    for node in root.iter("node"):
+        caption = ((node.attrib.get("text") or "") + " " +
+                   (node.attrib.get("content-desc") or "")).lower()
+        if needle not in caption:
+            continue
+        m = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",
+                         node.attrib.get("bounds", ""))
+        if m is None:
+            continue
+        a,b,c,d = map(int,m.groups())
+        # Prefer an exact button label over a longer paragraph containing it.
+        priority = 0 if caption.strip() == needle else 1
+        nodes.append((priority, (a+c)//2, (b+d)//2, a, b))
+    if nodes:
+        nodes.sort(key=lambda item: item[0])
+        print(*nodes[0][1:])
+except Exception:
+    pass
+PY
+}
+
+tap_visible() {
+  local target="$1" retries="${2:-1}" coord
+  local attempt=0
+  while [ "$attempt" -lt "$retries" ]; do
+    dump_ui || return 1
+    coord="$(lookup "$target")"
+    if [ -n "$coord" ]; then
+      read -r x y left top <<< "$coord"
+      adb shell input tap "$x" "$y"
+      sleep 2
+      echo "Tapped visible text: $target ($x,$y)" >> "$out/capture-notes.txt"
+      return 0
+    fi
+    attempt=$((attempt+1))
+    adb shell input swipe 550 1370 550 520 400
+    sleep 1
+  done
+  echo "Text not found: $target" | tee -a "$out/capture-notes.txt"
+  return 1
+}
+
+# On cold Android emulators, the unrelated Pixel Launcher can raise an
+# ANR dialog over our app. Dismiss *Wait*, never force-close MihonNooir.
+recover_system_dialog() {
+  dump_ui || true
+  if [ -n "$(lookup "isn't responding")" ]; then
+    echo "Dismissing emulator Pixel Launcher ANR with Wait" >> "$out/capture-notes.txt"
+    tap_visible "Wait" 1 || true
+    sleep 5
+  fi
+}
+
+# The combined Android CI runs the Universal Converter screenshot flow
+# first, leaving its PDF dialog as the foreground Activity. A launcher intent
+# alone resumes that dialog. Restart ONLY this disposable emulator's test app
+# (without clearing its storage) before traversing the Web editor.
+adb shell am force-stop "$pkg"
+sleep 2
+# Query the launcher intent via monkey; bare ACTION_MAIN -p cannot resolve
+# a component for Mihon and fails before any real screenshot can be taken.
+adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null
+sleep 12
+for retry in 1 2 3; do recover_system_dialog; done
+capture "00-launch-state"
+dump_ui || true
+
+# Skip the onboarding loop when the previous UI walkthrough already
+# finished setup. Otherwise repeated swipes disturb the normal More tab.
+dump_ui || true
+if [ -n "$(lookup "More")" ]; then
+  echo "Existing Android onboarding complete; using main app tabs" >> "$out/capture-notes.txt"
+else
+# Mihon's first launch has multiple onboarding pages and requires a
+# Storage Access Framework folder selection before its main tabs unlock.
+# Complete this only in the throwaway emulator, never on a user's device.
+for onboarding in {1..8}; do
+  recover_system_dialog
+  dump_ui || true
+  if [ -n "$(lookup "Select a folder")" ]; then
+    tap_visible "Select a folder" 1 || true
+    sleep 2
+    tap_visible "Download" 3 || tap_visible "Documents" 2 || true
+    # Android 11+ disallows granting the Downloads/Documents root.
+    # Create and select an app-specific child folder in this throwaway AVD.
+    if dump_ui && { [ -n "$(lookup "Can't use this folder")" ] || \
+       [ -n "$(lookup "CREATE NEW FOLDER")" ]; }; then
+      tap_visible "CREATE NEW FOLDER" 2 || tap_visible "New folder" 1 || true
+      adb shell input text Nooir_QA
+      tap_visible "OK" 2 || tap_visible "CREATE" 2 || true
+      # Some document picker versions remain at the parent after creation.
+      if dump_ui && [ -n "$(lookup "Nooir_QA")" ]; then
+        tap_visible "Nooir_QA" 1 || true
+      fi
+    fi
+    tap_visible "USE THIS FOLDER" 2 || tap_visible "Select" 1 || true
+    tap_visible "ALLOW" 2 || true
+    sleep 3
+  fi
+  if tap_visible "Get started" 1; then break; fi
+  if tap_visible "Finish" 1; then break; fi
+  if ! tap_visible "Next" 1; then
+    tap_visible "Continue" 1 || tap_visible "Skip" 1 || true
+  fi
+done
+fi
+
+if ! tap_visible "More" 2; then
+  # Bottom-right tab on Pixel 2 emulators; only a fallback if accessibility
+  # text is not exposed (the diagnostic dump documents the actual screen).
+  adb shell input tap 950 1770
+  sleep 3
+fi
+if ! tap_visible "Nooir Tools" 5; then
+  echo "Could not reach Nooir Tools. See launch-state and window.xml." >> "$out/capture-notes.txt"
+  capture "01-navigation-blocked"
+  exit 1
+fi
+if ! tap_visible "Universal Book Converter" 5; then
+  echo "Could not reach Universal Book Converter. Inspect navigation XML." >> "$out/capture-notes.txt"
+  capture "01-universal-converter-blocked"
+  exit 1
+fi
+if ! tap_visible "Web novels" 4; then
+  echo "Could not open Web novels panel. See window.xml." >> "$out/capture-notes.txt"
+  capture "02-tools-menu"
+  exit 1
+fi
+
+capture "01-web-novel-editor"
+dump_ui || true
+cp "$out/window.xml" "$out/01-editor-accessibility.xml" || true
+
+# The combined-book control must be visible in the actual editor. A screenshot
+# of an unrelated dialog must never count as a successful Web-to-EPUB walk.
+if [ -z "$(lookup "Combine pasted webpages into ONE EPUB")" ]; then
+  echo "FAIL: Web editor lacks the combined-book control" >> "$out/capture-notes.txt"
+  capture "02-editor-control-missing"
+  exit 1
+fi
+echo "PASS: real Web pages & novels EPUB editor opened through Nooir Tools" >> "$out/capture-notes.txt"
+# Toggle the separate Checkbox next to the visible option, not the text node.
+coord="$(lookup "Combine pasted webpages into ONE EPUB")"
+if [ -n "$coord" ]; then
+  read -r x y left top <<< "$coord"
+  adb shell input tap "$(( left > 55 ? left - 40 : 45 ))" "$y"
+  sleep 2
+  capture "02-combined-book"
+fi
+
+for i in 1 2 3 4 5; do
+  adb shell input swipe 540 1320 540 520 380
+  sleep 2
+  capture "03-combined-settings-$i"
+done
+dump_ui || true
+cp "$out/window.xml" "$out/03-final-accessibility.xml" || true
+echo "All screenshots are raw adb exec-out screencap PNGs." >> "$out/capture-notes.txt"

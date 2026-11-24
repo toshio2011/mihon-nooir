@@ -1,0 +1,430 @@
+package dev.nooir.mangabridge
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
+import android.text.Layout
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.StyleSpan
+import android.text.StaticLayout
+import android.text.TextDirectionHeuristics
+import android.text.TextPaint
+import dev.nooir.bridge.BookChapter
+import dev.nooir.bridge.BookMetadata
+import dev.nooir.bridge.GrayscaleConverter
+import dev.nooir.bridge.NooirDeviceProfiles
+import dev.nooir.bridge.QuantizedPage
+import dev.nooir.bridge.ReadingDirection
+import dev.nooir.bridge.XtcCodec
+import dev.nooir.bridge.XtcFormat
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.Node
+import org.jsoup.nodes.TextNode
+import java.io.File
+import kotlin.math.ceil
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * First experimental native EPUB → XTC/XTCH renderer.
+ *
+ * Text is paginated with Android StaticLayout, pictures are scaled in document
+ * order and both become actual framebuffer pages for the existing XTC codec.
+ * This does NOT claim CSS/WebView-equivalent layout fidelity: custom fonts,
+ * complex tables, math, SVG, scripts and advanced floats are not replicated.
+ */
+internal object NooirEpubToXtc {
+    data class Settings(
+        val fontPx: Int = 24,
+        val marginPx: Int = 26,
+        val lineSpacing: Float = 1.18f,
+        val fontFamily: String = "sans-serif",
+    ) {
+        init {
+            require(fontPx in 14..46 && marginPx in 8..80 &&
+                lineSpacing in 1.0f..2.0f &&
+                fontFamily in setOf("sans-serif", "serif", "monospace")) {
+                "Invalid EPUB rendering settings" }
+        }
+    }
+
+    private sealed interface Block {
+        data class Text(val text: CharSequence, val heading: Boolean = false) : Block
+        data class Image(val candidates: List<String>) : Block
+    }
+
+    private data class InlineRange(val start: Int, val end: Int, val style: Int)
+
+    /**
+     * Prefer higher-density EPUB-local srcset candidates, then lazy attributes
+     * and finally ordinary src. Missing files fall back at ZIP lookup time.
+     * Never interpret an image URL as permission to fetch over the network.
+     */
+    private fun imageCandidates(element: Element): List<String> {
+        fun fromSrcset(key: String): List<Pair<Float, String>> =
+            element.attr(key).split(',').take(16).mapNotNull { item ->
+                val parts = item.trim().split(Regex("""\s+"""), limit = 3)
+                val path = parts.firstOrNull().orEmpty()
+                if (path.isBlank()) null else {
+                    val descriptor = parts.getOrNull(1).orEmpty().lowercase()
+                    val quality = when {
+                        descriptor.endsWith("w") ->
+                            descriptor.dropLast(1).toFloatOrNull()?.coerceIn(0f, 20000f) ?: 0f
+                        descriptor.endsWith("x") ->
+                            (descriptor.dropLast(1).toFloatOrNull() ?: 0f).coerceIn(0f, 10f) * 1000f
+                        else -> 0f
+                    }
+                    quality to path
+                }
+            }
+        val responsive = (fromSrcset("srcset") + fromSrcset("data-srcset"))
+            .sortedByDescending { it.first }.map { it.second }
+        val ordinary = listOf("data-src", "data-original", "data-lazy-src", "src", "xlink:href")
+            .map { element.attr(it).trim() }.filter { it.isNotBlank() }
+        return (responsive + ordinary).distinct().take(16)
+    }
+
+    /**
+     * Respect actual XHTML visibility controls while extracting reading text.
+     * "aria-hidden" is intentionally NOT excluded: it hides accessibility
+     * exposure, not visual content (often icons and illustrated labels).
+     * Full external CSS cascade is outside this native renderer's scope.
+     */
+    private fun hiddenFromRendering(element: Element): Boolean {
+        if (element.hasAttr("hidden")) return true
+        return element.attr("style").split(';').any { rule ->
+            val property = rule.substringBefore(':').trim().lowercase()
+            val value = rule.substringAfter(':', "").substringBefore('!')
+                .trim().lowercase()
+            (property == "display" && value == "none") ||
+                (property == "visibility" && value in setOf("hidden", "collapse"))
+        }
+    }
+
+    private fun blocks(xhtml: String): Pair<String, List<Block>> {
+        val doc = Jsoup.parse(xhtml)
+        doc.select("script,style,iframe,object,embed,form,video,audio").remove()
+        val out = mutableListOf<Block>()
+        val ignored = setOf("nav", "script", "style", "head", "noscript", "footer")
+        // Flush at actual paragraph/section boundaries, but NOT around inline
+        // <span>/<em>/<strong>. If an image occurs inside a paragraph, flush
+        // the words before it, emit the image, then resume following words.
+        // Previously Element.text() moved all paragraph text ahead of its art.
+        val boundaries = setOf(
+            "p", "div", "section", "article", "li", "ul", "ol", "pre",
+            "blockquote", "table", "tr", "td", "th", "figure", "figcaption",
+            "h1", "h2", "h3", "h4", "h5", "h6", "hr",
+        )
+        val text = StringBuilder()
+        val inlineRanges = mutableListOf<InlineRange>()
+        var textHeading = false
+
+        fun flushText() {
+            // Collapse whitespace while appending nodes, not here: replacing the
+            // string after parsing would silently discard StyleSpan positions.
+            val end = if (text.isNotEmpty() && text.last() == ' ') text.length - 1 else text.length
+            if (end > 0) {
+                require(out.size < 50_000) { "EPUB section has too many text/image blocks" }
+                val styled = SpannableStringBuilder(text.substring(0, end))
+                for (range in inlineRanges) {
+                    if (range.start < end && range.end > range.start) {
+                        styled.setSpan(StyleSpan(range.style), range.start, min(range.end, end),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
+                out += Block.Text(styled, textHeading)
+            }
+            text.setLength(0)
+            inlineRanges.clear()
+            textHeading = false
+        }
+
+        fun visit(node: Node, heading: Boolean = false,
+                  inlineStyle: Int = Typeface.NORMAL) {
+            require(out.size < 50_000) { "EPUB section has too many text/image blocks" }
+            if (node is TextNode) {
+                val start = text.length
+                for (c in node.wholeText) {
+                    if (c.isWhitespace() || c == '\u00a0') {
+                        if (text.isNotEmpty() && text.last() != ' ') text.append(' ')
+                    } else {
+                        if (text.isEmpty()) textHeading = heading
+                        text.append(c)
+                    }
+                }
+                if (inlineStyle != Typeface.NORMAL && text.length > start) {
+                    require(inlineRanges.size < 50_000) { "Too many inline EPUB style spans" }
+                    inlineRanges += InlineRange(start, text.length, inlineStyle)
+                }
+                return
+            }
+            val element = node as? Element ?: return
+            val tag = element.normalName()
+            if (tag in ignored || hiddenFromRendering(element)) return
+            if (tag == "br" || tag == "hr") {
+                flushText()
+                return
+            }
+            if (tag == "img" || tag == "image") {
+                val candidates = imageCandidates(element)
+                flushText()
+                if (candidates.isNotEmpty()) out += Block.Image(candidates)
+                return
+            }
+            val isBoundary = tag in boundaries
+            if (isBoundary) flushText()
+            val isHeading = heading || tag in setOf("h1", "h2", "h3", "h4", "h5", "h6")
+            val nestedStyle = inlineStyle or when (tag) {
+                "b", "strong" -> Typeface.BOLD
+                "i", "em", "cite" -> Typeface.ITALIC
+                else -> Typeface.NORMAL
+            }
+            element.childNodes().forEach { visit(it, isHeading, nestedStyle) }
+            if (isBoundary) flushText()
+        }
+        doc.body().childNodes().forEach { visit(it) }
+        flushText()
+        val heading = doc.selectFirst("h1,h2,h3")?.text()?.trim()?.take(80)
+            .orEmpty().ifBlank { doc.title().trim().take(80) }
+        return heading to out
+    }
+
+    /** Deterministic reading-order inspection for Android EPUB fidelity QA. */
+    internal fun readingOrderForDiagnostics(xhtml: String): List<String> =
+        blocks(xhtml).second.map { block ->
+            when (block) {
+                is Block.Text -> (if (block.heading) "HEADING:" else "TEXT:") + block.text
+                is Block.Image -> "IMAGE:" + block.candidates.first()
+            }
+        }
+
+    /** Inspect semantic emphasis without relying on any pre-encode bitmap. */
+    internal fun inlineStylesForDiagnostics(xhtml: String): List<String> =
+        blocks(xhtml).second.flatMap { block ->
+            val content = (block as? Block.Text)?.text as? Spanned
+            if (content == null) emptyList() else
+                content.getSpans(0, content.length, StyleSpan::class.java).map { span ->
+                    val start = content.getSpanStart(span)
+                    val end = content.getSpanEnd(span)
+                    "${span.style}:${content.subSequence(start, end)}"
+                }
+        }
+
+    private class PageCanvas(
+        val width: Int, val height: Int, val format: XtcFormat,
+        private val rtl: Boolean, private val settings: Settings,
+    ) {
+        private var bitmap = blank()
+        private var canvas = Canvas(bitmap)
+        private var y = settings.marginPx
+        private var written = false
+        private val contentWidth = width - settings.marginPx * 2
+        private val contentHeight = height - settings.marginPx * 2
+
+        init { require(contentWidth > 40 && contentHeight > 50) }
+
+        private fun blank(): Bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+            it.eraseColor(Color.WHITE)
+        }
+
+        private fun flush(): QuantizedPage {
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val gray = ByteArray(pixels.size) { i ->
+                val c = pixels[i]
+                ((Color.red(c) * 299 + Color.green(c) * 587 +
+                    Color.blue(c) * 114) / 1000).toByte()
+            }
+            val quantized = GrayscaleConverter.dither(width, height, gray, format.depth)
+            bitmap.recycle()
+            bitmap = blank()
+            canvas = Canvas(bitmap)
+            y = settings.marginPx
+            written = false
+            return quantized
+        }
+
+        fun text(content: CharSequence, heading: Boolean): List<QuantizedPage> {
+            val result = mutableListOf<QuantizedPage>()
+            val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.BLACK
+                textSize = settings.fontPx * if (heading) 1.26f else 1f
+                typeface = Typeface.create(settings.fontFamily, if (heading) Typeface.BOLD else Typeface.NORMAL)
+            }
+            val text = content // Keep spans intact for Android StaticLayout.
+            if (text.isEmpty()) return result
+            require(text.length <= 200000) { "A single EPUB paragraph is too long to render" }
+            val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
+                // ALIGN_NORMAL follows the paragraph's resolved reading direction:
+                // right edge for Arabic/RTL, left edge for Latin/LTR. Using
+                // ALIGN_OPPOSITE here incorrectly left-aligned Arabic prose.
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setTextDirection(if (rtl) TextDirectionHeuristics.FIRSTSTRONG_RTL
+                    else TextDirectionHeuristics.FIRSTSTRONG_LTR)
+                .setIncludePad(false)
+                .setLineSpacing(2f, settings.lineSpacing)
+                .build()
+            var start = 0
+            while (start < layout.lineCount) {
+                if (height - settings.marginPx - y < settings.fontPx * 1.6f) {
+                    if (written) result += flush()
+                }
+                var end = start
+                val startTop = layout.getLineTop(start)
+                while (end < layout.lineCount &&
+                    layout.getLineBottom(end) - startTop <= height - settings.marginPx - y) {
+                    end++
+                }
+                if (end == start) {
+                    if (written) { result += flush(); continue }
+                    error("Text line exceeds selected e-reader viewport")
+                }
+                val segmentHeight = layout.getLineBottom(end - 1) - startTop
+                canvas.save()
+                canvas.clipRect(settings.marginPx, y,
+                    width - settings.marginPx, y + segmentHeight)
+                canvas.translate(settings.marginPx.toFloat(), y.toFloat() - startTop)
+                layout.draw(canvas)
+                canvas.restore()
+                written = true
+                y += segmentHeight
+                start = end
+            }
+            y += if (heading) settings.fontPx else max(5, settings.fontPx / 2)
+            return result
+        }
+
+        fun image(bytes: ByteArray): List<QuantizedPage> {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            require(bounds.outWidth in 1..16000 && bounds.outHeight in 1..16000 &&
+                bounds.outWidth.toLong() * bounds.outHeight <= 70_000_000L) {
+                "EPUB illustration dimensions exceed supported bounds"
+            }
+            var sample = 1
+            while (bounds.outWidth / sample > width * 3 ||
+                bounds.outHeight / sample > height * 3) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                ?: error("Cannot decode EPUB illustration")
+            try {
+                val scale = min(contentWidth.toFloat() / decoded.width,
+                    contentHeight.toFloat() / decoded.height)
+                val dw = max(1, (decoded.width * scale).toInt())
+                val dh = max(1, (decoded.height * scale).toInt())
+                val pages = mutableListOf<QuantizedPage>()
+                if (written && y + dh > height - settings.marginPx) pages += flush()
+                val x = settings.marginPx + (contentWidth - dw) / 2
+                canvas.drawBitmap(decoded, null, Rect(x, y, x + dw, y + dh),
+                    Paint(Paint.FILTER_BITMAP_FLAG))
+                y += dh + 8
+                written = true
+                return pages
+            } finally {
+                decoded.recycle()
+            }
+        }
+
+        fun finish(): QuantizedPage? =
+            if (written) flush().also { bitmap.recycle() } else {
+                bitmap.recycle()
+                null
+            }
+    }
+
+    fun convert(
+        source: File, output: File, format: XtcFormat, device: String,
+        settings: Settings = Settings(), rtl: Boolean = false,
+        autoDetectRtl: Boolean = false,
+        checkCancelled: () -> Unit = {},
+        onPage: (Int, Int) -> Unit = { _, _ -> },
+    ): Int {
+        val profile = NooirDeviceProfiles.forId(device)
+        require(profile.accepts(if (format == XtcFormat.XTC)
+            dev.nooir.bridge.ExportFormat.XTC else dev.nooir.bridge.ExportFormat.XTCH)) {
+            "Selected reader does not accept this format"
+        }
+        require(format != XtcFormat.XTCH || profile.height % 8 == 0) {
+            "XTCH requires a framebuffer height divisible by 8"
+        }
+        NooirEpubBook.open(source).use { book ->
+            val effectiveRtl = if (autoDetectRtl) book.isRightToLeft else rtl
+            var pageCount = 0
+            val chapters = mutableListOf<BookChapter>()
+            val pages = sequence {
+                if (book.coverPath != null) {
+                    checkCancelled()
+                    val cover = PageCanvas(profile.width, profile.height, format, effectiveRtl, settings)
+                    for (page in cover.image(book.imageBytesAt(book.coverPath))) {
+                        pageCount++
+                        yield(page)
+                    }
+                    cover.finish()?.let { pageCount++; yield(it) }
+                }
+                for ((index, chapter) in book.chapters.withIndex()) {
+                    checkCancelled()
+                    val (foundTitle, blocks) = blocks(book.readXhtml(chapter.path))
+                    require(blocks.isNotEmpty()) {
+                        "EPUB spine section " + (index + 1) + " has no readable text or illustrations"
+                    }
+                    val start = pageCount
+                    val renderer = PageCanvas(profile.width, profile.height, format, effectiveRtl, settings)
+                    for (block in blocks) {
+                        checkCancelled()
+                        val generated = when (block) {
+                            is Block.Text -> renderer.text(block.text, block.heading)
+                            is Block.Image -> renderer.image(book.imageBytesFromCandidates(
+                                chapter.path, block.candidates,
+                            ) { bytes ->
+                                // Probe dimensions without allocating the full
+                                // bitmap; malformed preferred srcset images
+                                // must not block an available local fallback.
+                                val bounds = BitmapFactory.Options().apply {
+                                    inJustDecodeBounds = true
+                                }
+                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                                bounds.outWidth in 1..16000 && bounds.outHeight in 1..16000 &&
+                                    bounds.outWidth.toLong() * bounds.outHeight <= 70_000_000L
+                            })
+                        }
+                        for (page in generated) {
+                            require(pageCount < 6000) { "EPUB requires over 6000 XTC pages; split the book" }
+                            pageCount++
+                            yield(page)
+                        }
+                    }
+                    renderer.finish()?.let {
+                        require(pageCount < 6000) { "EPUB requires over 6000 XTC pages; split the book" }
+                        pageCount++
+                        yield(it)
+                    }
+                    chapters += BookChapter(foundTitle.ifBlank { chapter.label }, start, pageCount - 1)
+                }
+            }
+            output.outputStream().use { out ->
+                XtcCodec.write(format, pages, out, output.parentFile ?: source.parentFile,
+                    metadata = BookMetadata(title = book.title, author = book.author,
+                        coverPage = if (book.coverPath != null) 0 else null),
+                    chapterResolver = { chapters.toList() },
+                    direction = if (effectiveRtl) ReadingDirection.RIGHT_TO_LEFT else ReadingDirection.LEFT_TO_RIGHT,
+                    checkOutputCancelled = checkCancelled,
+                    onPageEncoded = {
+                        checkCancelled()
+                        require((output.parentFile ?: source.parentFile).usableSpace >= 32L * 1024 * 1024) {
+                            "Insufficient storage to finish EPUB conversion"
+                        }
+                        onPage(it, book.chapters.size)
+                    },
+                )
+            }
+            checkCancelled()
+            return pageCount
+        }
+    }
+}

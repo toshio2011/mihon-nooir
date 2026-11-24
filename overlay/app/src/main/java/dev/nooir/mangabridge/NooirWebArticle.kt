@@ -44,17 +44,28 @@ object NooirWebArticle {
     internal fun load(url: String): Document {
         var current = publicHttps(url)
         repeat(4) {
-            val response = Jsoup.connect(current)
-                // Many ordinary websites return a JavaScript shell to
-                // unknown bot user-agents. Ask for the same public HTML a
-                // mobile browser receives; never attach session cookies.
-                .userAgent("Mozilla/5.0 (Linux; Android 14; Mobile) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                .header("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
-                .timeout(20000)
-                .maxBodySize(8_000_000)
-                .followRedirects(false)
-                .execute()
+            // Retry only transient HTTP statuses, with at most two bounded
+            // attempts. Honor Retry-After without waiting through long server
+            // rate limits. No bypass of login, 403, 404 or paywalls.
+            val response = (0..2).firstNotNullOfOrNull { attempt ->
+                val candidate = Jsoup.connect(current)
+                    // Ask for the same public HTML a mobile browser receives.
+                    // Do not attach browser cookies or private session tokens.
+                    .userAgent("Mozilla/5.0 (Linux; Android 14; Mobile) " +
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
+                    .timeout(20000)
+                    .maxBodySize(8_000_000)
+                    .ignoreHttpErrors(true)
+                    .followRedirects(false)
+                    .execute()
+                val retryMillis = NooirWebFetchPolicy.retryDelayMillis(
+                    candidate.statusCode(), attempt, candidate.header("Retry-After"))
+                if (retryMillis != null) {
+                    Thread.sleep(retryMillis)
+                    null
+                } else candidate
+            } ?: error("Public webpage did not respond after bounded retries")
             if (response.statusCode() in 300..399) {
                 val next = response.header("Location").orEmpty()
                 require(next.isNotBlank()) { "Article redirect missing destination" }
@@ -132,10 +143,11 @@ object NooirWebArticle {
      * embedded JPEG/PNG/GIF artwork, without taking full-page screenshots.
      * Images are capped for memory/size safety; no source scripts execute.
      */
-    internal fun appendChapter(
-        doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
-        maxImages: Int = 25,
-    ) {
+    private fun readableArticle(
+        doc: Document, chapterTitle: String,
+        contentSelector: String = "", removeSelector: String = "",
+    ): Element {
+        NooirWebExtractRules.validate(contentSelector, removeSelector)
         // Keep the actual text of a publicly served WordPress/Elementor page,
         // rather than relying only on traditional <article>/<main> wrappers.
         // Strip menus and scripts before choosing the best readable candidate.
@@ -152,13 +164,22 @@ object NooirWebArticle {
                     "video,audio,canvas,svg,noscript,.advertisement,.ads,.social-share," +
                     ".newsletter,.cookie-banner,.related-posts,.sidebar").remove()
             }
-        val candidates = doc.select(contentSelectors).map(::stripped)
+        val explicit = contentSelector.trim()
+        val candidates = doc.select(if (explicit.isBlank()) contentSelectors else explicit)
+            .map(::stripped)
         val fromMarkup = candidates.maxByOrNull {
-            val paras = it.select("p").count()
-            // Prose with several paragraphs beats a large navigation menu.
-            it.text().length + paras * 60
+            // Link-heavy directories should not beat ordinary multi-paragraph prose.
+            NooirWebReadability.score(
+                textLength = it.text().length,
+                paragraphCount = it.select("p").size,
+                linkedTextLength = it.select("a").sumOf { link -> link.text().length },
+            )
         }?.takeIf { it.text().length >= 60 }
-        val structured = publicArticleBody(doc)
+        if (explicit.isNotBlank()) require(fromMarkup != null) {
+            "The custom content selector found no readable text (at least 60 characters). " +
+                "Test another selector on the public page before exporting."
+        }
+        val structured = if (explicit.isBlank()) publicArticleBody(doc) else null
         // A navigational <main> can have 100+ characters while the real
         // article is present as public JSON-LD. Prefer much richer structured
         // prose in that case; otherwise retain the HTML to preserve images.
@@ -169,6 +190,7 @@ object NooirWebArticle {
                 structured
             else -> fromMarkup
         }
+        if (removeSelector.isNotBlank()) article.select(removeSelector.trim()).remove()
         val textLength = article.text().trim().length
         require(textLength >= 60) {
             "Received the webpage '$chapterTitle' but only $textLength readable " +
@@ -177,32 +199,68 @@ object NooirWebArticle {
                 "MangaNooir does not load that session; try a direct, publicly " +
                 "readable article/chapter link or an authorized EPUB export."
         }
+        return article
+    }
+
+    /** Actual readable content selection used by EPUB export; no image downloads. */
+    internal fun previewChapterText(
+        doc: Document, chapterTitle: String,
+        contentSelector: String = "", removeSelector: String = "",
+    ): String =
+        readableArticle(doc, chapterTitle, contentSelector, removeSelector).text()
+            .replace(Regex("\\s+"), " ").trim().take(1500)
+
+    internal fun appendChapter(
+        doc: Document, epub: ReflowEpubWriter, chapterTitle: String,
+        maxImages: Int = 25,
+        contentSelector: String = "", removeSelector: String = "",
+        imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
+    ) {
+        val article = readableArticle(doc, chapterTitle, contentSelector, removeSelector)
         var images = 0
         article.select("img").forEach { img ->
-            val source = listOf("data-src", "data-original", "src")
-                .firstNotNullOfOrNull { attr -> img.attr(attr).takeIf { it.isNotBlank() } }
-            val absolute = source?.let { runCatching { URI(doc.location()).resolve(it).toString() }.getOrNull() }
-            if (absolute.isNullOrBlank() || images >= maxImages) {
+            if (images >= maxImages) {
                 img.remove()
                 return@forEach
             }
-            val asset = runCatching {
-                val verified = publicHttps(absolute)
-                val response = Jsoup.connect(verified).ignoreContentType(true)
-                    .userAgent("MangaNooir/1.0 (offline article export)")
-                    .timeout(12000).maxBodySize(2_000_000).followRedirects(false).execute()
-                require(response.statusCode() == 200) { "Image not accessible" }
-                val mime = response.contentType().orEmpty().substringBefore(';').lowercase()
-                val extension = when (mime) {
-                    "image/jpeg" -> "jpg"
-                    "image/png" -> "png"
-                    "image/gif" -> "gif"
-                    else -> error("Unsupported web image format")
-                }
-                val bytes = response.bodyAsBytes()
-                require(bytes.size in 1..2_000_000)
-                ReflowEpubWriter.ImageAsset(bytes, extension, mime)
-            }.getOrNull()
+            // CDN thumbnails, lazy-loaded placeholders and srcset images can
+            // coexist. Try the highest-quality source first and fall back to
+            // public alternatives when its response is unavailable/invalid.
+            val sources = NooirWebImageCandidates.preferred(
+                original = img.attr("data-original"),
+                lazyOriginal = img.attr("data-orig-file"),
+                dataSrcset = img.attr("data-srcset"),
+                srcset = img.attr("srcset"),
+                dataSrc = img.attr("data-src"),
+                src = img.attr("src"),
+            ).take(4)
+            val asset = sources.firstNotNullOfOrNull { source ->
+                runCatching {
+                    val absolute = URI(doc.location()).resolve(source).toString()
+                    val verified = publicHttps(absolute)
+                    val response = Jsoup.connect(verified).ignoreContentType(true)
+                        .userAgent("MangaNooir/1.0 (offline article export)")
+                        .timeout(12000).maxBodySize(2_000_000).followRedirects(false).execute()
+                    require(response.statusCode() == 200) { "Image not accessible" }
+                    val mime = response.contentType().orEmpty().substringBefore(';').lowercase()
+                    val extension = when (mime) {
+                        "image/jpeg" -> "jpg"
+                        "image/png" -> "png"
+                        "image/gif" -> "gif"
+                        else -> error("Unsupported web image format")
+                    }
+                    val bytes = response.bodyAsBytes()
+                    require(bytes.size in 1..2_000_000)
+                    // Some public CDNs return an HTML error body with an
+                    // image Content-Type. Never embed it as a broken picture;
+                    // fall back to the next safe srcset / lazy candidate.
+                    require(NooirWebImageSignature.valid(bytes, mime)) {
+                        "The server returned invalid " + mime + " illustration bytes"
+                    }
+                    NooirWebImageOptimizer.optimize(
+                        ReflowEpubWriter.ImageAsset(bytes, extension, mime), imageProfile)
+                }.getOrNull()
+            }
             if (asset == null) img.remove()
             else {
                 img.attr("src", epub.addImage(asset))
@@ -221,8 +279,11 @@ object NooirWebArticle {
             .syntax(Document.OutputSettings.Syntax.xml)
             .escapeMode(org.jsoup.nodes.Entities.EscapeMode.xhtml)
             .prettyPrint(false))
-        epub.addSection(chapterTitle,
-            "<h1>" + ReflowEpubWriter.xml(chapterTitle) + "</h1>" + fragment.body().html())
+        val headingAlreadyPresent = fragment.body().selectFirst("h1,h2,h3")?.text()
+            ?.trim()?.equals(chapterTitle.trim(), ignoreCase = true) == true
+        val prefix = if (headingAlreadyPresent) "" else
+            "<h1>" + ReflowEpubWriter.xml(chapterTitle) + "</h1>"
+        epub.addSection(chapterTitle, prefix + fragment.body().html())
     }
 
     fun convert(url: String, output: File, onStage: (String) -> Unit = {}) {

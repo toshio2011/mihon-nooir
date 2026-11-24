@@ -6,6 +6,18 @@ trap 'rm -rf "$tmp"' EXIT
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirExportPreflight.kt tests/PreflightTest.kt -include-runtime -d "$tmp/preflight.jar"
 java -jar "$tmp/preflight.jar"
 
+# Send & Convert must never claim to convert EPUB, PDF or other documents
+# through the manga-image path (and must not silently copy them as XTC).
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirLocalConversionPolicy.kt \
+  tests/NooirLocalConversionPolicyTest.kt -include-runtime -d "$tmp/local-file-support.jar"
+java -jar "$tmp/local-file-support.jar"
+
+# Offline EPUB package / OPF spine parser before Android bitmap rendering.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirEpubBook.kt \
+  tests/NooirEpubBookTest.kt -include-runtime -d "$tmp/nooir-epub-import.jar"
+java -jar "$tmp/nooir-epub-import.jar"
+
+
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,GrayscaleConverter.kt} tests/CoreSmokeTest.kt -include-runtime -d "$tmp/smoke.jar"
 java -jar "$tmp/smoke.jar"
 
@@ -42,14 +54,74 @@ java -jar "$tmp/epub2.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PdfReflowLines.kt tests/PdfReflowLinesTest.kt -include-runtime -d "$tmp/pdf-reflow.jar"
 java -jar "$tmp/pdf-reflow.jar"
 
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,ReflowEpubWriter.kt} tests/ReadableFixturesTest.kt -include-runtime -d "$tmp/readable-fixtures.jar"
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,ReflowEpubWriter.kt,NooirEpubCssRules.kt} tests/ReadableFixturesTest.kt -include-runtime -d "$tmp/readable-fixtures.jar"
 java -Djava.awt.headless=true -jar "$tmp/readable-fixtures.jar"
 
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/PageSlicePlanner.kt tests/PageSlicePlannerTest.kt -include-runtime -d "$tmp/slicing.jar"
 java -jar "$tmp/slicing.jar"
 
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{ReflowEpubWriter.kt,NooirEpubCssRules.kt} tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
 java -jar "$tmp/reflow.jar"
+
+# Single-article CreateDocument failures/cancellations must clean up only
+# newly created phone files; existing document URIs must remain untouched.
+python3 tests/test_web_article_save_cleanup.py
+
+# Combined web-book cover geometry: pure Kotlin, no Android graphics dependencies.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirCoverCollageLayout.kt \
+  tests/NooirCoverCollageLayoutTest.kt -include-runtime -d "$tmp/collage-layout.jar"
+java -jar "$tmp/collage-layout.jar"
+
+# Public novel chapter checklist: selected order must match the combined EPUB manifest.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebChapterPlan.kt \
+  tests/NooirWebChapterPlanTest.kt -include-runtime -d "$tmp/web-chapter-plan.jar"
+java -jar "$tmp/web-chapter-plan.jar"
+
+# Saved-story update detection preserves excluded chapters and user-defined order.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/{NooirWebChapterIdentity.kt,NooirWebChapterPlan.kt,NooirWebChapterUpdates.kt} \
+  tests/NooirWebChapterUpdatesTest.kt -include-runtime -d "$tmp/web-chapter-updates.jar"
+java -jar "$tmp/web-chapter-updates.jar"
+
+# Chapter URL identity must preserve meaningful chapter queries while
+# ignoring nonessential marketing links in the saved-project inventory.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebChapterIdentity.kt \
+  tests/NooirWebChapterIdentityTest.kt -include-runtime -d "$tmp/web-chapter-identity.jar"
+java -jar "$tmp/web-chapter-identity.jar"
+
+# Bounded public table-of-contents pagination. Never follow next-chapter
+# links as TOC pages, accept a different host, or silently exceed the limit.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebTocPagination.kt \
+  tests/NooirWebTocPaginationTest.kt -include-runtime -d "$tmp/web-toc-pagination.jar"
+java -jar "$tmp/web-toc-pagination.jar"
+
+# Public chapter selector policy: pure Kotlin, independent of Android/Jsoup.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebExtractRules.kt \
+  tests/NooirWebExtractRulesTest.kt -include-runtime -d "$tmp/web-extract-rules.jar"
+java -jar "$tmp/web-extract-rules.jar"
+
+# Image optimization presets are independent of Android bitmap implementations.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageProfile.kt \
+  tests/NooirWebImageProfileTest.kt -include-runtime -d "$tmp/web-image-profile.jar"
+java -jar "$tmp/web-image-profile.jar"
+
+# Public HTML image selection: lazy-load/full-resolution ordering and fallbacks.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageCandidates.kt \
+  tests/NooirWebImageCandidatesTest.kt -include-runtime -d "$tmp/web-image-candidates.jar"
+java -jar "$tmp/web-image-candidates.jar"
+
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebImageSignature.kt \
+  tests/NooirWebImageSignatureTest.kt -include-runtime -d "$tmp/web-image-signature.jar"
+java -jar "$tmp/web-image-signature.jar"
+
+# Public HTML reader candidate scoring: reject link-heavy navigation blocks.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebReadability.kt \
+  tests/NooirWebReadabilityTest.kt -include-runtime -d "$tmp/web-readability.jar"
+java -jar "$tmp/web-readability.jar"
+
+# Retry only transient public HTTP failures, never access-denied pages.
+kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirWebFetchPolicy.kt \
+  tests/NooirWebFetchPolicyTest.kt -include-runtime -d "$tmp/web-fetch-policy.jar"
+java -jar "$tmp/web-fetch-policy.jar"
 
 # Desktop uses the same source files as Android; never maintain duplicate codecs.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt tests/ConversionOptionsParityTest.kt -include-runtime -d "$tmp/options-parity.jar"
@@ -181,7 +253,7 @@ java -jar "$tmp/panel-safe-corridors.jar"
 
 # Long PDF-to-EPUB container regression. Synthetic original sections only:
 # proves that both EPUB versions can store well over 600 source pages.
-kotlinc overlay/app/src/main/java/dev/nooir/bridge/ReflowEpubWriter.kt \
+kotlinc overlay/app/src/main/java/dev/nooir/bridge/{ReflowEpubWriter.kt,NooirEpubCssRules.kt} \
   tests/PdfLargeReflowTest.kt -include-runtime -d "$tmp/pdf-long-epub.jar"
 java -Djava.awt.headless=true -jar "$tmp/pdf-long-epub.jar"
 

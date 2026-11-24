@@ -1,0 +1,703 @@
+package dev.nooir.mangabridge
+
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import dev.nooir.bridge.XtcBookPreview
+import dev.nooir.bridge.XtcFormat
+import dev.nooir.bridge.QuantizedPage
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.RandomAccessFile
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.runBlocking
+
+/**
+ * On-device end-to-end test: OPF EPUB spine + actual text + PNG illustration →
+ * bitmap pagination → real XTC / XTCH bytes → independent decoder inspection.
+ * Uses generated non-copyright test content only; never touches a network.
+ */
+@RunWith(AndroidJUnit4::class)
+class NooirEpubXtcInstrumentedTest {
+    /**
+     * Visual QA proof: these PNGs come from the independent XTC/XTCH decoder,
+     * never from the Android canvas before conversion. The device-smoke job
+     * pulls them into an artifact so page quality can be inspected separately.
+     */
+    private fun saveDecodedPage(fileName: String, page: QuantizedPage) {
+        require(fileName.matches(Regex("[A-Za-z0-9_-]+\\.png"))) {
+            "Unsafe preview filename"
+        }
+        val maxLevel = (1 shl page.depth) - 1
+        val argb = IntArray(page.levels.size) { i ->
+            val level = (page.levels[i].toInt() and 255).coerceIn(0, maxLevel)
+            val gray = level * 255 / maxLevel
+            Color.rgb(gray, gray, gray)
+        }
+        val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.setPixels(argb, 0, page.width, 0, 0, page.width, page.height)
+            val directory = File(
+                InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+                "nooir_epub_xteink_previews",
+            )
+            check(directory.isDirectory || directory.mkdirs()) {
+                "Could not create decoded EPUB preview directory"
+            }
+            FileOutputStream(File(directory, fileName)).use { stream ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                    "Could not save decoded EPUB output preview"
+                }
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun makeBook(
+        file: File, rtl: Boolean = false, emphasis: Boolean = false,
+        imageMode: String = "normal",
+        chapterEncoding: String = "utf8",
+        hiddenFallback: Boolean = false,
+    ) {
+        val image = Bitmap.createBitmap(100, 120, Bitmap.Config.ARGB_8888)
+        val png = try {
+            image.eraseColor(Color.WHITE)
+            for (y in 20..99) for (x in 12..87) image.setPixel(x, y, Color.BLACK)
+            ByteArrayOutputStream().use {
+                check(image.compress(Bitmap.CompressFormat.PNG, 100, it))
+                it.toByteArray()
+            }
+        } finally { image.recycle() }
+        val longText = (1..30).joinToString(" ") { n ->
+            "Paragraph " + n + " contains sample plain text for proper EPUB pagination. "
+        }
+        val language = if (rtl) "ar" else "en"
+        val progression = if (rtl) "rtl" else "ltr"
+        val illustration = when (imageMode) {
+            "normal" -> "<img src='../Images/figure.png'/>"
+            "srcset" -> "<img src='../Images/missing.png' " +
+                "srcset='../Images/figure.png 2x, ../Images/also-missing.png 1x'/>"
+            "lazy" -> "<img src='' data-src='../Images/figure.png'/>"
+            "corruptPreferred" -> "<img src='../Images/figure.png' " +
+                "srcset='../Images/corrupt.png 2x, ../Images/figure.png 1x'/>"
+            else -> error("Invalid EPUB illustration fixture")
+        }
+        val styledText = if (emphasis) longText.replace(
+            "Paragraph 1 contains sample plain text",
+            "<strong>Paragraph 1 contains sample plain text</strong>",
+        ) else longText
+        val hiddenXhtml = if (hiddenFallback)
+            "<div hidden><p>Do not render hidden alternate text</p>" +
+                "<img src='../Images/does-not-exist.png'/></div>" +
+                "<p style='display: none !important'>Invisible duplication</p>" +
+                "<div style='visibility: hidden'>Invisible chapter notes</div>" +
+                "<span style='visibility: collapse'>Invisible fallback label</span>"
+            else ""
+        val chapterMarkup = if (rtl)
+            "<html><body><p>مرحبا بالعالم، كتاب جميل للقراءة.</p></body></html>"
+            else "<html><body><h1>First Chapter</h1>" + hiddenXhtml + "<p>" +
+                styledText + "</p>" + illustration +
+                "<p>A concluding line after the illustration.</p></body></html>"
+        val firstChapterBytes = when (chapterEncoding) {
+            "utf8" -> chapterMarkup.toByteArray(Charsets.UTF_8)
+            "utf16le" -> byteArrayOf(0xFF.toByte(), 0xFE.toByte()) +
+                chapterMarkup.toByteArray(Charsets.UTF_16LE)
+            else -> error("Invalid EPUB chapter fixture encoding")
+        }
+        val resources = linkedMapOf(
+            "mimetype" to "application/epub+zip".toByteArray(),
+            "META-INF/container.xml" to ("""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                  <rootfiles><rootfile full-path="OEBPS/content.opf"
+                     media-type="application/oebps-package+xml"/></rootfiles>
+                </container>
+            """.trimIndent()).toByteArray(),
+            "OEBPS/content.opf" to ("""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <package xmlns="http://www.idpf.org/2007/opf"
+                  xmlns:dc="http://purl.org/dc/elements/1.1/" version="3.0">
+                  <metadata><dc:title>Original Tiny Test</dc:title>
+                    <dc:creator>Nooir QA</dc:creator><dc:language>$language</dc:language></metadata>
+                  <manifest>
+                    <item id="a" href="Text/one.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="b" href="Text/two.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="cover" href="Images/cover.png" media-type="image/png" properties="cover-image"/>
+                    <item id="figure" href="Images/figure.png" media-type="image/png"/>
+                  </manifest>
+                  <spine page-progression-direction="$progression"><itemref idref="a"/><itemref idref="b"/></spine>
+                </package>
+            """.trimIndent()).toByteArray(),
+            "OEBPS/Text/one.xhtml" to firstChapterBytes,
+            "OEBPS/Text/two.xhtml" to
+                "<html><body><h1>Second Chapter</h1><p>Last paragraph.</p></body></html>".toByteArray(),
+            "OEBPS/Images/cover.png" to png,
+            "OEBPS/Images/figure.png" to png,
+            "OEBPS/Images/corrupt.png" to
+                "<html>missing image was incorrectly served by an archive provider</html>"
+                    .toByteArray(),
+        )
+        ZipOutputStream(file.outputStream()).use { zip ->
+            for ((name, bytes) in resources) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(bytes)
+                zip.closeEntry()
+            }
+        }
+    }
+
+    @Test fun inlineIllustrationsStayBetweenTheirSurroundingWords() {
+        val xhtml = """
+            <html><body><section><h1>Chapter <em>One</em></h1>
+            <p>Before <em>the picture</em><img src="../Images/figure.png"/>
+            After <strong>the picture</strong>.</p>
+            <p>Another <span>normal paragraph</span>.</p>
+            <figure><img src="../Images/second.png"/></figure>
+            </section></body></html>
+        """.trimIndent()
+        assertEquals(listOf(
+            "HEADING:Chapter One",
+            "TEXT:Before the picture",
+            "IMAGE:../Images/figure.png",
+            "TEXT:After the picture.",
+            "TEXT:Another normal paragraph.",
+            "IMAGE:../Images/second.png",
+        ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+    }
+
+    @Test fun hiddenXhtmlDoesNotPolluteRealEncodedXtch() {
+        val xhtml = """
+            <html><body><p>Before <span hidden>invisible</span> after.</p>
+            <p style="display: none !important">Hidden duplicate chapter</p>
+            <div style="visibility: hidden"><img src="../Images/missing.png"/></div>
+            <p aria-hidden="true">Visually displayed label</p></body></html>
+        """.trimIndent()
+        assertEquals(listOf("TEXT:Before after.", "TEXT:Visually displayed label"),
+            NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val regular = File.createTempFile("nooir-epub-visible-", ".epub", cache)
+        val hidden = File.createTempFile("nooir-epub-hidden-", ".epub", cache)
+        val expected = File.createTempFile("nooir-visible-", ".xtch", cache)
+        val actual = File.createTempFile("nooir-hidden-", ".xtch", cache)
+        try {
+            makeBook(regular)
+            makeBook(hidden, hiddenFallback = true)
+            val baselineCount = NooirEpubToXtc.convert(regular, expected, XtcFormat.XTCH, "X4")
+            val actualCount = NooirEpubToXtc.convert(hidden, actual, XtcFormat.XTCH, "X4")
+            assertEquals("Hidden fallback must not add reading pages", baselineCount, actualCount)
+            val baseline = XtcBookPreview(expected)
+            val filtered = XtcBookPreview(actual)
+            for (index in 0 until baselineCount) {
+                assertTrue("Hidden XHTML changed real XTCH pixels at page $index",
+                    baseline.page(index).levels.contentEquals(filtered.page(index).levels))
+            }
+        } finally {
+            regular.delete()
+            hidden.delete()
+            expected.delete()
+            actual.delete()
+        }
+    }
+
+    @Test fun inlineEmphasisSurvivesNestedTagsAndImageBoundary() {
+        val xhtml = """
+            <html><body><p>Before <strong>bold <em>both</em></strong>
+            <img src="../Images/figure.png"/>After <em>soft</em>.</p></body></html>
+        """.trimIndent()
+        assertEquals(listOf(
+            "TEXT:Before bold both", "IMAGE:../Images/figure.png", "TEXT:After soft."
+        ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+        assertEquals(listOf("1:bold ", "3:both", "2:soft"),
+            NooirEpubToXtc.inlineStylesForDiagnostics(xhtml))
+    }
+
+    @Test fun inlineEmphasisChangesRealEncodedXtchPage() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val plainInput = File.createTempFile("nooir-plain-", ".epub", cache)
+        val styledInput = File.createTempFile("nooir-bold-", ".epub", cache)
+        val plainOutput = File.createTempFile("nooir-plain-", ".xtch", cache)
+        val styledOutput = File.createTempFile("nooir-bold-", ".xtch", cache)
+        try {
+            makeBook(plainInput)
+            makeBook(styledInput, emphasis = true)
+            NooirEpubToXtc.convert(plainInput, plainOutput, XtcFormat.XTCH, "X4")
+            NooirEpubToXtc.convert(styledInput, styledOutput, XtcFormat.XTCH, "X4")
+            val plain = XtcBookPreview(plainOutput).page(1)
+            val bold = XtcBookPreview(styledOutput).page(1)
+            assertTrue("Semantic bold must change final decoded e-ink pixels",
+                !plain.levels.contentEquals(bold.levels))
+            saveDecodedPage("X4-xtch-inline-bold.png", bold)
+        } finally {
+            plainInput.delete()
+            styledInput.delete()
+            plainOutput.delete()
+            styledOutput.delete()
+        }
+    }
+
+    @Test fun responsiveAndLazyImagesMatchFinishedXtchPixels() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val source = File.createTempFile("nooir-epub-image-base-", ".epub", cache)
+        val baseline = File.createTempFile("nooir-image-base-", ".xtch", cache)
+        try {
+            makeBook(source)
+            val baseCount = NooirEpubToXtc.convert(source, baseline, XtcFormat.XTCH, "X4")
+            val expected = XtcBookPreview(baseline)
+            for (mode in listOf("srcset", "lazy")) {
+                val input = File.createTempFile("nooir-epub-$mode-", ".epub", cache)
+                val output = File.createTempFile("nooir-$mode-", ".xtch", cache)
+                try {
+                    makeBook(input, imageMode = mode)
+                    val count = NooirEpubToXtc.convert(input, output, XtcFormat.XTCH, "X4")
+                    val decoded = XtcBookPreview(output)
+                    assertEquals("Illustration mode $mode must preserve page count", baseCount, count)
+                    for (page in 0 until count) {
+                        assertTrue("Illustration mode $mode differs at decoded page $page",
+                            expected.page(page).levels.contentEquals(decoded.page(page).levels))
+                    }
+                } finally {
+                    input.delete()
+                    output.delete()
+                }
+            }
+        } finally {
+            source.delete()
+            baseline.delete()
+        }
+    }
+
+    @Test fun invalidPreferredImageFallsBackToRealEncodedXtch() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val source = File.createTempFile("nooir-good-image-", ".epub", cache)
+        val malformed = File.createTempFile("nooir-bad-image-", ".epub", cache)
+        val normalOut = File.createTempFile("nooir-good-image-", ".xtch", cache)
+        val fallbackOut = File.createTempFile("nooir-fallback-image-", ".xtch", cache)
+        try {
+            makeBook(source)
+            makeBook(malformed, imageMode = "corruptPreferred")
+            val normalCount = NooirEpubToXtc.convert(source, normalOut, XtcFormat.XTCH, "X4")
+            val fallbackCount = NooirEpubToXtc.convert(malformed, fallbackOut, XtcFormat.XTCH, "X4")
+            assertEquals("Bad srcset image should fall back to local usable image",
+                normalCount, fallbackCount)
+            val normalDecoded = XtcBookPreview(normalOut)
+            val fallbackDecoded = XtcBookPreview(fallbackOut)
+            for (page in 0 until normalCount) {
+                assertTrue("Bad image fallback changed finished XTCH pixels at page $page",
+                    normalDecoded.page(page).levels.contentEquals(
+                        fallbackDecoded.page(page).levels))
+            }
+        } finally {
+            source.delete()
+            malformed.delete()
+            normalOut.delete()
+            fallbackOut.delete()
+        }
+    }
+
+    @Test fun responsiveImageCandidatesPreferDensityAndRetainTextOrder() {
+        val xhtml = """
+            <html><body><p>Before <img src="../Images/low.png"
+              srcset="../Images/low.png 1x, ../Images/high.png 2x" />
+              after <img src="" data-src="../Images/lazy.png" /> end.</p></body></html>
+        """.trimIndent()
+        assertEquals(listOf(
+            "TEXT:Before", "IMAGE:../Images/high.png",
+            "TEXT:after", "IMAGE:../Images/lazy.png", "TEXT:end."
+        ), NooirEpubToXtc.readingOrderForDiagnostics(xhtml))
+    }
+
+    @Test fun utf16ChapterMatchesUtf8FinishedXtcPixels() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val utf8 = File.createTempFile("nooir-utf8-", ".epub", cache)
+        val utf16 = File.createTempFile("nooir-utf16-", ".epub", cache)
+        val output8 = File.createTempFile("nooir-utf8-", ".xtc", cache)
+        val output16 = File.createTempFile("nooir-utf16-", ".xtc", cache)
+        try {
+            makeBook(utf8)
+            makeBook(utf16, chapterEncoding = "utf16le")
+            NooirEpubBook.open(utf16).use { book ->
+                assertTrue("UTF-16 chapter has replacement characters",
+                    !book.readXhtml(book.chapters[0].path).contains('\uFFFD'))
+                assertTrue(book.readXhtml(book.chapters[0].path).contains("First Chapter"))
+            }
+            val count8 = NooirEpubToXtc.convert(utf8, output8, XtcFormat.XTC, "X4")
+            val count16 = NooirEpubToXtc.convert(utf16, output16, XtcFormat.XTC, "X4")
+            assertEquals("UTF-16 chapter must paginate like UTF-8", count8, count16)
+            val expected = XtcBookPreview(output8)
+            val actual = XtcBookPreview(output16)
+            for (index in 0 until count8) {
+                assertTrue("UTF-16 changed final decoded pixels on page $index",
+                    expected.page(index).levels.contentEquals(actual.page(index).levels))
+            }
+        } finally {
+            utf8.delete()
+            utf16.delete()
+            output8.delete()
+            output16.delete()
+        }
+    }
+
+    @Test fun finishedBookViewerPixelsMatchRealXtcAndXtch() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-viewer-source-", ".epub", cache)
+        try {
+            makeBook(input)
+            for (format in XtcFormat.entries) {
+                val output = File.createTempFile("nooir-viewer-", "." + format.extension, cache)
+                try {
+                    NooirEpubToXtc.convert(input, output, format, "X4")
+                    val decoded = XtcBookPreview(output).page(1)
+                    val bitmap = NooirFinishedBookPreview.decodePage(output, 1)
+                    try {
+                        assertEquals(decoded.width, bitmap.width)
+                        assertEquals(decoded.height, bitmap.height)
+                        val maxValue = (1 shl decoded.depth) - 1
+                        for (y in 0 until bitmap.height step 13) {
+                            for (x in 0 until bitmap.width step 11) {
+                                val level = decoded.levels[y * decoded.width + x].toInt() and 255
+                                val shade = level * 255 / maxValue
+                                assertEquals("Finished preview pixels differ from actual binary page",
+                                    Color.rgb(shade, shade, shade), bitmap.getPixel(x, y))
+                            }
+                        }
+                    } finally {
+                        bitmap.recycle()
+                    }
+                } finally {
+                    output.delete()
+                }
+            }
+            val corrupt = File.createTempFile("nooir-invalid-preview-", ".xtch", cache)
+            try {
+                corrupt.writeText("not a finished reader book")
+                assertTrue("Viewer must reject invalid books",
+                    runCatching { NooirFinishedBookPreview.decodePage(corrupt, 0) }.isFailure)
+            } finally {
+                corrupt.delete()
+            }
+        } finally {
+            input.delete()
+        }
+    }
+
+    @Test fun finishedBookSafCopyKeepsOriginalAndRejectsCorruptFile() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val source = File.createTempFile("nooir-saf-original-", ".epub", context.cacheDir)
+        val output = File.createTempFile("nooir-saf-finished-", ".xtch", context.cacheDir)
+        val corrupt = File.createTempFile("nooir-saf-corrupt-", ".xtch", context.cacheDir)
+        try {
+            makeBook(source)
+            val count = NooirEpubToXtc.convert(source, output, XtcFormat.XTCH, "X4")
+            val originalBytes = output.readBytes()
+            val loaded = NooirFinishedBookPreview.open(context, Uri.fromFile(output))
+            try {
+                assertEquals(XtcFormat.XTCH, loaded.format)
+                assertEquals(count, loaded.pageCount)
+                assertTrue("Finished preview must copy to an independent file", loaded.file != output)
+                assertTrue("SAF preview copy differs from original output bytes",
+                    originalBytes.contentEquals(loaded.file.readBytes()))
+                val previewPage = NooirFinishedBookPreview.decodePage(loaded.file, 1)
+                try {
+                    assertEquals(480, previewPage.width)
+                    assertEquals(800, previewPage.height)
+                } finally {
+                    previewPage.recycle()
+                }
+            } finally {
+                loaded.file.delete()
+            }
+            assertTrue("Opening a finished-book preview changed the source file",
+                originalBytes.contentEquals(output.readBytes()))
+            corrupt.writeText("invalid saved book")
+            assertTrue("SAF viewer must reject corrupt files during opening", runCatching {
+                NooirFinishedBookPreview.open(context, Uri.fromFile(corrupt))
+            }.isFailure)
+        } finally {
+            source.delete()
+            output.delete()
+            corrupt.delete()
+        }
+    }
+
+    /**
+     * An actual Android storage-provider round trip, not a file:// shortcut:
+     * content:// EPUB input -> native conversion -> content:// XTCH output ->
+     * finished-book viewer's independent copy and real pixels.
+     */
+    @Test fun androidDocumentsProviderSaveAndPreviewFinishedXtch() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val resolver = context.contentResolver
+        val source = File.createTempFile("nooir-provider-source-", ".epub", context.cacheDir)
+        val created = mutableListOf<Uri>()
+        fun addDownload(name: String, mime: String): Uri {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + "/NooirRegression/")
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("Android Downloads provider refused a test document")
+            created += uri
+            return uri
+        }
+        try {
+            makeBook(source)
+            val suffix = System.nanoTime().toString()
+            val inputUri = addDownload("Nooir-Source-$suffix.epub", "application/epub+zip")
+            resolver.openOutputStream(inputUri, "w")?.use { sink ->
+                source.inputStream().use { it.copyTo(sink) }
+            } ?: error("Cannot write EPUB fixture through Android Downloads provider")
+            val outputUri = addDownload("Nooir-Finished-$suffix.xtch", "application/octet-stream")
+            val pageCount = NooirEpubImportConverter.convert(
+                context, inputUri, XtcFormat.XTCH, "X4",
+                saveDestination = outputUri, outputName = "Nooir-Finished.xtch",
+            )
+            assertTrue("Android provider conversion produced no readable pages", pageCount >= 3)
+            val original = resolver.openInputStream(outputUri)?.use { it.readBytes() }
+                ?: error("Cannot read saved XTCH from Android storage provider")
+            assertTrue("Saved XTCH contains no encoded bytes", original.size > 100)
+            val loaded = NooirFinishedBookPreview.open(context, outputUri)
+            try {
+                assertEquals(XtcFormat.XTCH, loaded.format)
+                assertEquals(pageCount, loaded.pageCount)
+                assertTrue("Preview copy changed saved XTCH bytes",
+                    original.contentEquals(loaded.file.readBytes()))
+                val encoded = XtcBookPreview(loaded.file).page(1)
+                val decoded = NooirFinishedBookPreview.decodePage(loaded.file, 1)
+                try {
+                    assertEquals(480, decoded.width)
+                    assertEquals(800, decoded.height)
+                    val max = (1 shl encoded.depth) - 1
+                    for (y in 0 until decoded.height step 37) {
+                        for (x in 0 until decoded.width step 29) {
+                            val level = encoded.levels[y * encoded.width + x].toInt() and 255
+                            val gray = level * 255 / max
+                            assertEquals("Saved XTCH differs from real viewer pixels",
+                                Color.rgb(gray, gray, gray), decoded.getPixel(x, y))
+                        }
+                    }
+                } finally {
+                    decoded.recycle()
+                }
+            } finally {
+                loaded.file.delete()
+            }
+            val unchanged = resolver.openInputStream(outputUri)?.use { it.readBytes() }
+                ?: error("Preview lost the original saved document")
+            assertTrue("Read-only preview modified the user's saved XTCH",
+                original.contentEquals(unchanged))
+        } finally {
+            for (uri in created.asReversed()) {
+                runCatching { resolver.delete(uri, null, null) }
+            }
+            source.delete()
+        }
+    }
+
+    @Test fun realXtcContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTC)
+    @Test fun realXtchContainsDecodedTextAndArtPages() = checkFormat(XtcFormat.XTCH)
+
+    @Test fun typographyOptionsChangeActualDecodedXtchPages() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-epub-style-", ".epub", cache)
+        val ordinary = File.createTempFile("nooir-xtch-style-default-", ".xtch", cache)
+        val styled = File.createTempFile("nooir-xtch-style-serif-", ".xtch", cache)
+        try {
+            makeBook(input)
+            NooirEpubToXtc.convert(input, ordinary, XtcFormat.XTCH, "X4")
+            NooirEpubToXtc.convert(input, styled, XtcFormat.XTCH, "X4",
+                settings = NooirEpubToXtc.Settings(
+                    fontPx = 32, marginPx = 20,
+                    lineSpacing = 1.35f, fontFamily = "serif",
+                ))
+            val originalPage = XtcBookPreview(ordinary).page(1)
+            val styledPage = XtcBookPreview(styled).page(1)
+            assertEquals(480, styledPage.width)
+            assertEquals(800, styledPage.height)
+            assertEquals(2, styledPage.depth)
+            assertTrue("Typography settings must change decoded pixels, not just UI labels",
+                !originalPage.levels.contentEquals(styledPage.levels))
+            assertTrue("Styled prose page should retain readable ink",
+                styledPage.levels.any { it.toInt() == 0 })
+            saveDecodedPage("X4-xtch-serif-large.png", styledPage)
+        } finally {
+            input.delete()
+            ordinary.delete()
+            styled.delete()
+        }
+    }
+
+    @Test fun arabicParagraphsAlignRightAndMarkBookRtl() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-epub-arabic-", ".epub", cache)
+        val output = File.createTempFile("nooir-xtc-arabic-", ".xtc", cache)
+        try {
+            makeBook(input, rtl = true)
+            NooirEpubToXtc.convert(input, output, XtcFormat.XTC, "X4", rtl = true)
+            RandomAccessFile(output, "r").use { header ->
+                header.seek(8L)
+                assertEquals("XTC reading-order flag", 1, header.readUnsignedByte())
+            }
+            val prose = XtcBookPreview(output).page(1) // page zero is cover
+            saveDecodedPage("X4-xtc-arabic.png", prose)
+            var leftInk = 0
+            var rightInk = 0
+            for (y in 26 until 155) for (x in 30 until 450) {
+                if (prose.levels[y * prose.width + x].toInt() == 0) {
+                    if (x < 160) leftInk++
+                    if (x > 320) rightInk++
+                }
+            }
+            assertTrue("Arabic glyphs should render on the right/leading edge",
+                rightInk > leftInk * 2 + 20)
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+
+    @Test fun autoDirectionUsesEpubMetadataForArabicOutput() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-rtl-auto-", ".epub", cache)
+        val output = File.createTempFile("nooir-rtl-auto-", ".xtc", cache)
+        try {
+            makeBook(input, rtl = true)
+            NooirEpubToXtc.convert(input, output, XtcFormat.XTC, "X4",
+                autoDetectRtl = true)
+            RandomAccessFile(output, "r").use { header ->
+                header.seek(8L)
+                assertEquals("Auto must preserve EPUB's right-to-left page order",
+                    1, header.readUnsignedByte())
+            }
+            assertTrue(XtcBookPreview(output).page(1).levels.any { it.toInt() == 0 })
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+
+    @Test fun explicitLtrOverridesRtlEpubMetadata() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-rtl-override-", ".epub", cache)
+        val output = File.createTempFile("nooir-rtl-override-", ".xtch", cache)
+        try {
+            makeBook(input, rtl = true)
+            NooirEpubToXtc.convert(input, output, XtcFormat.XTCH, "X4",
+                rtl = false, autoDetectRtl = false)
+            RandomAccessFile(output, "r").use { header ->
+                header.seek(8L)
+                assertEquals("Manual LTR must outrank EPUB's RTL metadata",
+                    0, header.readUnsignedByte())
+            }
+            assertEquals(2, XtcBookPreview(output).page(1).depth)
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+
+    @Test fun x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-epub-x3-", ".epub", cache)
+        val output = File.createTempFile("nooir-epub-x3-", ".xtch", cache)
+        try {
+            makeBook(input)
+            val count = NooirEpubToXtc.convert(input, output, XtcFormat.XTCH, "X3")
+            val finished = XtcBookPreview(output)
+            assertEquals(count, finished.pageCount)
+            assertTrue(count >= 3)
+            saveDecodedPage("X3-xtch-cover.png", finished.page(0))
+            saveDecodedPage("X3-xtch-prose.png", finished.page(1))
+            for (index in listOf(0, 1, count - 1)) {
+                val page = finished.page(index)
+                assertEquals(528, page.width)
+                assertEquals(792, page.height)
+                assertEquals(2, page.depth)
+                assertTrue(page.levels.any { it.toInt() == 0 })
+            }
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+
+    private fun checkFormat(format: XtcFormat) {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val input = File.createTempFile("nooir-epub-instrumentation-", ".epub", cache)
+        val output = File.createTempFile("nooir-epub-book-", "." + format.extension, cache)
+        try {
+            makeBook(input)
+            val reported = mutableListOf<Int>()
+            val count = NooirEpubToXtc.convert(input, output, format, "X4",
+                onPage = { page, _ -> reported += page })
+            val decoded = XtcBookPreview(output)
+            assertEquals(format, decoded.format)
+            assertEquals(count, decoded.pageCount)
+            assertTrue("Cover, prose and illustration should span several pages", count >= 3)
+            assertEquals(count, reported.lastOrNull())
+            // Two OPF spine sections must survive as 1-based XTC chapter
+            // entries. The separate cover occupies actual page index zero.
+            RandomAccessFile(output, "r").use { book ->
+                val header = ByteArray(56).also { book.readFully(it) }
+                val offset = (0..3).fold(0L) { total, i ->
+                    total or ((header[48 + i].toLong() and 255L) shl (i * 8))
+                }
+                assertTrue("Writer must keep chapter index", offset >= 56L)
+                val first = ByteArray(96)
+                val second = ByteArray(96)
+                book.seek(offset)
+                book.readFully(first)
+                book.readFully(second)
+                assertTrue(first.toString(Charsets.UTF_8).startsWith("First Chapter"))
+                assertTrue(second.toString(Charsets.UTF_8).startsWith("Second Chapter"))
+                val firstIndex = (first[80].toInt() and 255) or
+                    ((first[81].toInt() and 255) shl 8)
+                val secondIndex = (second[80].toInt() and 255) or
+                    ((second[81].toInt() and 255) shl 8)
+                assertEquals("Cover precedes first chapter", 2, firstIndex)
+                assertTrue("Spine order must be monotonic", secondIndex > firstIndex)
+            }
+            val cover = decoded.page(0)
+            assertEquals(480, cover.width)
+            assertEquals(800, cover.height)
+            assertEquals(format.depth, cover.depth)
+            assertTrue("Real cover contains dark and light pixels",
+                cover.levels.any { it.toInt() == 0 } &&
+                    cover.levels.any { (it.toInt() and 255) == if (format.depth == 1) 1 else 3 })
+            val prose = decoded.page(1)
+            val label = if (format == XtcFormat.XTC) "xtc" else "xtch"
+            if (format == XtcFormat.XTCH) {
+                // Test-only finished output: the emulator UI then opens these
+                // actual bytes through Android DocumentsUI, not a mock image.
+                val qaFolder = File(
+                    InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+                    "nooir_epub_xteink_previews",
+                )
+                check(qaFolder.isDirectory || qaFolder.mkdirs())
+                output.copyTo(File(qaFolder, "NooirQA.xtch"), overwrite = true)
+            }
+            saveDecodedPage("X4-" + label + "-cover.png", cover)
+            saveDecodedPage("X4-" + label + "-prose.png", prose)
+            saveDecodedPage("X4-" + label + "-last.png", decoded.page(count - 1))
+            assertTrue("Rendered chapter text must not be all white",
+                prose.levels.any { it.toInt() == 0 })
+        } finally {
+            input.delete()
+            output.delete()
+        }
+    }
+}
