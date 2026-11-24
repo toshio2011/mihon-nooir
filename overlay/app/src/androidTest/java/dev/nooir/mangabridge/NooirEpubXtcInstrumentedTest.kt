@@ -87,6 +87,8 @@ class NooirEpubXtcInstrumentedTest {
             "srcset" -> "<img src='../Images/missing.png' " +
                 "srcset='../Images/figure.png 2x, ../Images/also-missing.png 1x'/>"
             "lazy" -> "<img src='' data-src='../Images/figure.png'/>"
+            "corruptPreferred" -> "<img src='../Images/figure.png' " +
+                "srcset='../Images/corrupt.png 2x, ../Images/figure.png 1x'/>"
             else -> error("Invalid EPUB illustration fixture")
         }
         val styledText = if (emphasis) longText.replace(
@@ -140,6 +142,9 @@ class NooirEpubXtcInstrumentedTest {
                 "<html><body><h1>Second Chapter</h1><p>Last paragraph.</p></body></html>".toByteArray(),
             "OEBPS/Images/cover.png" to png,
             "OEBPS/Images/figure.png" to png,
+            "OEBPS/Images/corrupt.png" to
+                "<html>missing image was incorrectly served by an archive provider</html>"
+                    .toByteArray(),
         )
         ZipOutputStream(file.outputStream()).use { zip ->
             for ((name, bytes) in resources) {
@@ -268,6 +273,34 @@ class NooirEpubXtcInstrumentedTest {
         } finally {
             source.delete()
             baseline.delete()
+        }
+    }
+
+    @Test fun invalidPreferredImageFallsBackToRealEncodedXtch() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val source = File.createTempFile("nooir-good-image-", ".epub", cache)
+        val malformed = File.createTempFile("nooir-bad-image-", ".epub", cache)
+        val normalOut = File.createTempFile("nooir-good-image-", ".xtch", cache)
+        val fallbackOut = File.createTempFile("nooir-fallback-image-", ".xtch", cache)
+        try {
+            makeBook(source)
+            makeBook(malformed, imageMode = "corruptPreferred")
+            val normalCount = NooirEpubToXtc.convert(source, normalOut, XtcFormat.XTCH, "X4")
+            val fallbackCount = NooirEpubToXtc.convert(malformed, fallbackOut, XtcFormat.XTCH, "X4")
+            assertEquals("Bad srcset image should fall back to local usable image",
+                normalCount, fallbackCount)
+            val normalDecoded = XtcBookPreview(normalOut)
+            val fallbackDecoded = XtcBookPreview(fallbackOut)
+            for (page in 0 until normalCount) {
+                assertTrue("Bad image fallback changed finished XTCH pixels at page $page",
+                    normalDecoded.page(page).levels.contentEquals(
+                        fallbackDecoded.page(page).levels))
+            }
+        } finally {
+            source.delete()
+            malformed.delete()
+            normalOut.delete()
+            fallbackOut.delete()
         }
     }
 

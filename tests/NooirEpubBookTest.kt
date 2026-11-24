@@ -58,6 +58,15 @@ fun main() {
             val coverBytes = book.imageBytesFromCandidates(
                 book.chapters[0].path, listOf("../Images/not-found.png", "../Images/cover.png"))
             check(coverBytes.toString(Charsets.UTF_8) == "FAKE IMAGE FOR PACKAGE-ONLY TEST")
+            val accepted = book.imageBytesFromCandidates(
+                book.chapters[0].path,
+                listOf("../Images/cover.png", "../Images/cover.png"),
+            ) { candidate -> candidate.decodeToString().startsWith("FAKE IMAGE") }
+            check(accepted.contentEquals(coverBytes))
+            check(runCatching {
+                book.imageBytesFromCandidates(book.chapters[0].path,
+                    listOf("../Images/cover.png")) { false }
+            }.isFailure)
             check(runCatching {
                 book.imageBytesFromCandidates(book.chapters[0].path,
                     listOf("https://external.invalid/image.png", "../Images/nope.png"))

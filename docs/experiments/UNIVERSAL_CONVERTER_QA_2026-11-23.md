@@ -184,3 +184,12 @@ or publish a new release without approval.
 - This covers explicit XHTML visibility only: external stylesheet cascades,
   complex CSS and JavaScript remain out of scope. No public Android release,
   Windows source, or Folio firmware changes.
+
+
+## 24 November: resilient local illustration candidate fallback
+
+- The previous exact-head `56dc97b` [Android run 45221581570](https://github.com/toshio2011/mihon-nooir/actions/runs/45221581570) **passed**, including the 16 EPUB→XTC/XTCH instrumented tests and the real first/next-page XTCH preview screenshot walkthrough.
+- A real-world EPUB can list a higher-density raster image in `srcset` that exists in the ZIP but contains malformed bytes (for example a text placeholder). Previously `imageBytesFromCandidates` stopped at the first existing path and the subsequent Android bitmap decode failed the entire conversion, even when a valid local lower-density fallback existed.
+- The ZIP reader now accepts a bounded candidate-quality callback, skips unreadable or unusable local candidates, and tries the next safe one. Android checks image decode bounds and the existing 70 MP/16k-per-side limits without allocating additional full-resolution bitmaps. No network access and no silent omission of an image when *all* options fail.
+- Added one Android parity test using `srcset` containing a corrupt preferred asset and a valid fallback; the **finished XTCH page count and decoded pixels** must match the baseline real output. The Android suite is now expected to report exactly **17 tests**, with a host callback regression and route gate.
+- No changes to X3/X4 firmware, public Android release, Windows desktop or separate Web → EPUB PR #110.

@@ -379,7 +379,19 @@ internal object NooirEpubToXtc {
                         checkCancelled()
                         val generated = when (block) {
                             is Block.Text -> renderer.text(block.text, block.heading)
-                            is Block.Image -> renderer.image(book.imageBytesFromCandidates(chapter.path, block.candidates))
+                            is Block.Image -> renderer.image(book.imageBytesFromCandidates(
+                                chapter.path, block.candidates,
+                            ) { bytes ->
+                                // Probe dimensions without allocating the full
+                                // bitmap; malformed preferred srcset images
+                                // must not block an available local fallback.
+                                val bounds = BitmapFactory.Options().apply {
+                                    inJustDecodeBounds = true
+                                }
+                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                                bounds.outWidth in 1..16000 && bounds.outHeight in 1..16000 &&
+                                    bounds.outWidth.toLong() * bounds.outHeight <= 70_000_000L
+                            })
                         }
                         for (page in generated) {
                             require(pageCount < 6000) { "EPUB requires over 6000 XTC pages; split the book" }

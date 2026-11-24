@@ -236,7 +236,11 @@ internal class NooirEpubBook private constructor(
      * Invalid, remote, or absent alternatives are never fetched. The chosen
      * local resource still passes all existing decode and size constraints.
      */
-    fun imageBytesFromCandidates(chapterPath: String, candidates: List<String>): ByteArray {
+    fun imageBytesFromCandidates(
+        chapterPath: String,
+        candidates: List<String>,
+        accepts: (ByteArray) -> Boolean = { true },
+    ): ByteArray {
         require(candidates.isNotEmpty() && candidates.size <= 16) {
             "Invalid EPUB illustration candidates"
         }
@@ -246,9 +250,13 @@ internal class NooirEpubBook private constructor(
             val path = runCatching { resolve(chapterPath, reference) }.getOrNull() ?: continue
             val extension = path.substringAfterLast('.', "").lowercase()
             if (extension !in extensions || zip.getEntry(path) == null) continue
-            return imageBytesAt(path)
+            // An EPUB may advertise a higher-resolution responsive image that
+            // is an HTML placeholder, corrupt or above the bounded ZIP read
+            // limit. Try the next local candidate; never fetch remotely.
+            val bytes = try { imageBytesAt(path) } catch (_: Exception) { continue }
+            if (accepts(bytes)) return bytes
         }
-        error("EPUB illustration has no supported local raster resource")
+        error("EPUB illustration has no usable local raster resource")
     }
 
     fun imageBytesAt(path: String): ByteArray {
