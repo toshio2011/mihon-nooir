@@ -135,30 +135,7 @@ for required in \
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-web-epub-export-instrumentation.txt
 done
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0
-adb root
-adb wait-for-device
-adb pull \
-  /data/user/0/dev.nooir.mihontrial.foss/files/manganooir_panel_debug/latest.zip \
-  android-runtime-panel-diagnostic.zip
-test -s android-runtime-panel-diagnostic.zip
-python3 tools/panel_diagnostic_inspect.py \
-  android-runtime-panel-diagnostic.zip --json \
-  | tee android-panel-diagnostic-inspection.json
-
-# This first CI pass records a true emulator UI walk-through separately from
-# binary correctness. If launcher/onboarding accessibility is flaky, retain
-# screenshots and failure notes rather than claiming the UI is accepted.
-echo "Capturing Universal Converter navigation and source-type UI"
-mkdir -p android-universal-converter-screenshots
-if bash .github/scripts/universal-converter-ui-screenshots.sh; then
-  echo 0 > android-universal-converter-screenshots/capture-exit-code.txt
-else
-  code=$?
-  echo "$code" > android-universal-converter-screenshots/capture-exit-code.txt
-  echo "UI capture incomplete; inspect screenshots and accessibility dump" >&2
-fi
- android-web-epub-export-instrumentation.txt)" -eq 2
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-web-epub-export-instrumentation.txt)" -eq 2
 grep -Fxq 'OK (2 tests)' android-web-epub-export-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-epub-export-instrumentation.txt
 

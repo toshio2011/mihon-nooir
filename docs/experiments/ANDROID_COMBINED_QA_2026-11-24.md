@@ -23,3 +23,12 @@ app, or a public release.
   preview shortcut end-to-end, realistic large/illustrated CSS EPUBs, and
   real-world public chapter extraction with covers. Only the owner decides
   whether/when to create a stable-signed release.
+
+## Integration shell merge correction
+
+The first combined diagnostic run failed at `bash -n` because its source
+assembler inserted an unescaped replacement string containing the JavaScript
+replacement token `$'`. Regenerated the complete combined smoke runner by
+literal prefix/suffix slicing, retained both exact source test blocks and added
+a structure guard for the Web EPUB success-count line. No Android app source
+was modified by this correction.
