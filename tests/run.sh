@@ -51,6 +51,10 @@ java -jar "$tmp/slicing.jar"
 kotlinc overlay/app/src/main/java/dev/nooir/bridge/{ReflowEpubWriter.kt,NooirEpubCssRules.kt} tests/ReflowEpubTest.kt -include-runtime -d "$tmp/reflow.jar"
 java -jar "$tmp/reflow.jar"
 
+# Single-article CreateDocument failures/cancellations must clean up only
+# newly created phone files; existing document URIs must remain untouched.
+python3 tests/test_web_article_save_cleanup.py
+
 # Combined web-book cover geometry: pure Kotlin, no Android graphics dependencies.
 kotlinc overlay/app/src/main/java/dev/nooir/mangabridge/NooirCoverCollageLayout.kt \
   tests/NooirCoverCollageLayoutTest.kt -include-runtime -d "$tmp/collage-layout.jar"

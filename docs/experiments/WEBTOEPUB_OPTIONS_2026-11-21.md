@@ -151,3 +151,22 @@ Do not claim feature parity with WebToEpub's extensive site-specific parser ecos
   optional downsampling and EPUB packaging remain unchanged. Added a pure
   Kotlin unit test to `tests/run.sh`. No auth/session bypass or remote
   redirect following is introduced.
+
+
+### 24 Nov 2026: incomplete single-article SAF cleanup
+
+- The single-article Web → EPUB Save-to-phone picker uses Android
+  `CreateDocument`, which creates a destination file **before** its
+  background download/conversion begins. Previously a failed article download,
+  malformed page, failed copy or in-flight cancellation could leave a
+  zero-byte/partial EPUB on the phone.
+- Added a scoped `SAVE_PICKER_CREATED` WorkManager field. The worker now
+  best-effort deletes this newly created document on early invalid inputs,
+  conversion/copy failure and cancellation. It **never** deletes a previously
+  existing destination URI from other callers without that explicit marker.
+- The successful save path is untouched. The multi-chapter exporter already
+  deletes individually failed SAF documents; its guard remains intact.
+- A host structural regression now runs in `tests/run.sh`. This does not
+  guarantee cleanup if WorkManager is cancelled before the worker *starts*,
+  or a document provider rejects `deleteDocument`.
+- No public Android APK, converter encoder, Windows or Folio firmware changes.
