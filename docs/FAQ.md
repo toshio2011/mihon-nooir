@@ -1,10 +1,10 @@
 # MihonNooir FAQ
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)
 
-> **Version:** Use the official v1.0.19 APK; [installation and update instructions](GETTING_STARTED.md). Draft Android and Windows builds may differ.
+> **Version:** Use the official v1.0.20 APK; [installation and update instructions](GETTING_STARTED.md). Draft Android and Windows builds may differ.
 
 ### Where is the chapter picker?
 
@@ -16,15 +16,15 @@ Yes: select chapters first and turn on **Quick Export · fetch missing pages** i
 
 ### I can't find “Nooir Tools” under More.
 
-Check that About shows MihonNooir FOSS v1.0.19, not ordinary Mihon or a very old build. Open **More → Nooir Tools**. [Installation](GETTING_STARTED.md).
+Check that About shows MihonNooir FOSS v1.0.20, not ordinary Mihon or a very old build. Open **More → Nooir Tools**. [Installation](GETTING_STARTED.md).
 
 ### Can I send CBZ, PDF, EPUB, FB2 or other files from my phone?
 
-**More → Nooir Tools → Send & Convert files** uses Android's picker. You can send files **unchanged**; supported CBZ/image manga inputs may also be converted. A file being transferable doesn't guarantee the reader can open it. Up to **25 local files** per batch. [Quick start](NOOIR_TOOLS_QUICK_START.md)
+**More → Nooir Tools → Universal Book Converter → Local files** uses Android's picker. You can send files **unchanged**; supported CBZ/image manga and EPUB → XTC/XTCH inputs may also be converted. A file being transferable doesn't guarantee the reader can open it. Up to **25 local files** per batch. [Quick start](NOOIR_TOOLS_QUICK_START.md)
 
 ### Can I convert multiple web links into **one EPUB**?
 
-**Yes.** Open **More → Nooir Tools → Web link → EPUB → Multiple web links → one EPUB**. Paste public readable article/chapter URLs **one per line**. The lines become EPUB chapters in that order; optionally enter one book title, author, filename and chapter titles. You can reach the same combined editor from **Web novels · Batch EPUB**. [Full multi-link guide](WEB_NOVELS.md)
+**Yes.** Open **More → Nooir Tools → Universal Book Converter → Web link → Multiple web links → one EPUB**. Paste public readable article/chapter URLs **one per line**. The lines become EPUB chapters in that order; optionally enter one book title, author, filename and chapter titles. You can reach the same combined editor from **Web novels · Batch EPUB**. [Full multi-link guide](WEB_NOVELS.md)
 
 ### What about one EPUB **per novel** and “Download all chapters”?
 
@@ -68,7 +68,7 @@ The tools use background WorkManager jobs, and you can navigate away. Android ba
 
 ### Where can I get the app? Can it replace regular Mihon?
 
-Download the [official Android v1.0.19 APKs](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) under Assets. MihonNooir has its own package and can coexist with Mihon. Back up before updating; from v1.0.17 manually download the correct APK and install over the existing app. Do not uninstall or clear data if a signature conflict occurs. [Install guide](GETTING_STARTED.md).
+Download the [official Android v1.0.20 APKs](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) under Assets. MihonNooir has its own package and can coexist with Mihon. Back up before updating; from v1.0.17 manually download the correct APK and install over the existing app. Do not uninstall or clear data if a signature conflict occurs. [Install guide](GETTING_STARTED.md).
 
 ### Can I convert more than one PDF or a PDF with thousands of pages?
 
@@ -92,7 +92,7 @@ Ordinary overlapping page cuts control repeated areas in ordinary slices. **Enla
 
 ### Is Windows available?
 
-Not as an official public Windows release. Windows preview development remains separate from Android v1.0.19.
+Not as an official public Windows release. Windows preview development remains separate from Android v1.0.20.
 
 ### Is MihonNooir official, and does it include free manga?
 
@@ -101,3 +101,9 @@ No. This is an independent project based on Mihon, inspired by MangaPoint and bu
 ### My problem isn't listed. What should I report?
 
 Share your **build/commit, Android version, input format/source, XTEink model and installed firmware, destination folder and exact error message**, without posting private documents, credentials or copyrighted manga pages. [Roadmap and issues](https://github.com/toshio2011/mihon-nooir/issues/8)
+
+### How do I convert an EPUB or get the cover and synopsis for a web novel?
+
+Open **More → Nooir Tools → Universal Book Converter → Local files**. Choose the input type before browsing, then select compatible output and settings. EPUB → XTC/XTCH supports font family, font size, margin, line height and reading direction. CBZ/ZIP/images retain supported manga settings. Save to phone or send to compatible XTEink. Inspect actual output using **Universal Book Converter → Preview finished XTC / XTCH book**.
+
+Open **More → Nooir Tools → Universal Book Converter → Web novels**, paste a public story URL and tap **Analyze chapters before export**. Review detected title, author, cover and synopsis, select/reorder chapters and preview text. Choose **Use selected chapters in one EPUB** to edit book metadata, choose automatic/custom or combined covers, select EPUB2/3, adjust text styling and illustration sizes, save a local project or check for new chapters. Wattpad metadata can populate the cover and a Synopsis page plus EPUB description metadata. Public chapter listings do not guarantee readable text; no login or paywall bypass.

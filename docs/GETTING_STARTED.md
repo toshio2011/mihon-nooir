@@ -1,6 +1,6 @@
 # Getting started with MihonNooir
 
-> **Release status (19 November 2026):** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) is the latest official Android release. It uses the same persistent signing certificate as official v1.0.18 and v1.0.17. [Release notes and verification](releases/v1.0.19.md). Windows remains in development.
+> **Release status (24 November 2026):** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) is the latest official Android release. It uses the same persistent signing certificate as official v1.0.18 and v1.0.17. [Release notes and verification](releases/v1.0.20.md). Windows remains in development.
 
 [← Homepage](../README.md) · [All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi guide](WIFI_TRANSFER.md)
 
@@ -8,36 +8,36 @@ MihonNooir is an **independent, unofficial Android app based on the full Mihon r
 
 ## Step 1 — Choose the correct APK
 
-Download from the [official v1.0.19 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19), not an Actions/debug artifact or the separate QA app.
+Download from the [official v1.0.20 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20), not an Actions/debug artifact or the separate QA app.
 
 | Android device | APK |
 |---|---|
-| Most modern phones (ARM64) | [app-arm64-v8a-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-arm64-v8a-foss.apk) |
-| Architecture uncertain | [app-universal-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/app-universal-foss.apk) |
-| Other supported devices | [All APKs and checksums](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) |
+| Most modern phones (ARM64) | [app-arm64-v8a-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.20/app-arm64-v8a-foss.apk) |
+| Architecture uncertain | [app-universal-foss.apk](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.20/app-universal-foss.apk) |
+| Other supported devices | [All APKs and checksums](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) |
 
-1. Download the APK and optionally verify its SHA-256 against [SHA256SUMS.txt](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.19/SHA256SUMS.txt).
-2. Back up your existing MihonNooir library and important downloads before updating. From official v1.0.18, use the in-app updater or the manual download. From v1.0.17, use the manual download above because the old updater may select an incompatible APK.
+1. Download the APK and optionally verify its SHA-256 against [SHA256SUMS.txt](https://github.com/toshio2011/mihon-nooir/releases/download/v1.0.20/SHA256SUMS.txt).
+2. Back up your existing MihonNooir library and important downloads before updating. From official v1.0.19 or v1.0.18, use the in-app updater or the manual download. From v1.0.17, use the manual download above because the old updater may select an incompatible APK.
 3. Open the APK from Android's file manager; no ZIP extraction is required. Allow installation from the chosen file manager if prompted.
 4. If updating the official app, install **over** the existing installation. Do not uninstall or clear storage.
-5. Open MihonNooir and confirm About shows **FOSS v1.0.19**; verify your library and reading progress. It can coexist with ordinary Mihon.
+5. Open MihonNooir and confirm About shows **FOSS v1.0.20**; verify your library and reading progress. It can coexist with ordinary Mihon.
 
 > [!WARNING]
 > Older temporary-key builds, such as v1.0.12, may not update in place. If Android reports a signature or package conflict, stop and report it rather than deleting app data. No manga or source extensions are bundled.
 
-[Current release notes](releases/v1.0.19.md) · [Build/update details](UPDATES.md)
+[Current release notes](releases/v1.0.20.md) · [Build/update details](UPDATES.md)
 
 ## Step 2 — Locate the features
 
-In v1.0.19 open **More → Nooir Tools**:
+In v1.0.20 open **More → Nooir Tools**:
 
 | Tool | What it does |
 |---|---|
 | **Activity Queue** | Running, waiting, finished and failed conversion/transfer jobs |
-| **Send & Convert files** | Select local files, optionally convert supported manga, save/send |
-| **Web link → EPUB** | One public article **or multiple public pages into one EPUB** |
-| **Web novels · Batch EPUB** | Separate stories, discover **All chapters**, or combine selected chapter URLs |
-| **PDF → EPUB · Text + illustrations** | One or more PDFs into EPUB 2/3 or XTC/XTCH; selectable text in EPUB where supported |
+| **Universal Book Converter → Local files** | Choose EPUB, CBZ/ZIP or images; choose compatible output, save/send |
+| **Universal Book Converter → Web link** | One public article **or multiple public pages into one EPUB** |
+| **Universal Book Converter → Web novels** | Separate stories, discover **All chapters**, or combine selected chapter URLs |
+| **Universal Book Converter → PDF files** | One or more PDFs into EPUB 2/3 or XTC/XTCH; selectable text in EPUB where supported |
 | **Browse XTEink files** | Read-only folder browser and link to Folio Nooir's full file manager |
 
 **Where is manga export?** The **Export** icon is on the **manga details screen**, not under Nooir Tools. In the older **v1.0.1 APK**, the Nooir Tools hub **won't be there**. This is the fastest way to tell the builds apart.
@@ -72,9 +72,9 @@ The XTEink local server does **not** have authentication. Use trusted networks, 
 
 ## Step 5 — Try books from phone, web or PDF
 
-**From phone:** **More → Nooir Tools → Send & Convert files**, select up to 25 local documents per batch. Choose an original transfer or convert supported CBZ/images.
+**From phone:** **More → Nooir Tools → Universal Book Converter → Local files**, select up to 25 local documents per batch. Choose an original transfer or convert supported EPUB, CBZ/ZIP and images.
 
-**One webpage:** **More → Nooir Tools → Web link → EPUB**, paste one public HTTPS article and save it as reflowable EPUB.
+**One webpage:** **More → Nooir Tools → Universal Book Converter → Web link**, paste one public HTTPS article and save it as reflowable EPUB.
 
 **Several webpages in one book:** On the **Web link → EPUB** screen tap **Multiple web links → one EPUB**, paste direct public article/chapter URLs **one per line in reading order**, then name and export your combined EPUB.
 
@@ -100,4 +100,10 @@ The current release uses a **shared sequential WorkManager queue** for manga, fi
 
 Please verify the output on your own phone and XTEink. Automated CI does not test your installed source extensions, protected/dynamic websites, scan-heavy PDFs, reader SD-card reliability or cover cache behavior. If something goes wrong, collect your **build SHA, input/source, file type, phone version, XTEink firmware and exact error** without sharing private credentials or copyrighted book pages.
 
-[v1.0.19 release notes](releases/v1.0.19.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[v1.0.20 release notes](releases/v1.0.20.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+
+## Universal Book Converter in v1.0.20
+
+Open **More → Nooir Tools → Universal Book Converter → Local files**. Choose the input type before browsing, then select compatible output and settings. EPUB → XTC/XTCH supports font family, font size, margin, line height and reading direction. CBZ/ZIP/images retain supported manga settings. Save to phone or send to compatible XTEink. Inspect actual output using **Universal Book Converter → Preview finished XTC / XTCH book**.
+
+Open **More → Nooir Tools → Universal Book Converter → Web novels**, paste a public story URL and tap **Analyze chapters before export**. Review detected title, author, cover and synopsis, select/reorder chapters and preview text. Choose **Use selected chapters in one EPUB** to edit book metadata, choose automatic/custom or combined covers, select EPUB2/3, adjust text styling and illustration sizes, save a local project or check for new chapters. Wattpad metadata can populate the cover and a Synopsis page plus EPUB description metadata. Public chapter listings do not guarantee readable text; no login or paywall bypass.
