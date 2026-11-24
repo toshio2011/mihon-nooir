@@ -99,7 +99,10 @@ internal object NooirWebChapterDiscovery {
     fun inspect(storyUrl: String): Analysis {
         val checked = NooirWebArticle.publicHttps(storyUrl)
         val page = NooirWebArticle.load(checked)
-        val items = chapters(checked, page)
+        val wattpad = if (NooirWattpadPublic.storyId(checked) != null) {
+            runCatching { NooirWattpadPublic.storyDetails(checked) }.getOrNull()
+        } else null
+        val items = wattpad?.chapters ?: chapters(checked, page)
         require(items.isNotEmpty()) {
             "No publicly listed chapters found. Try a story table-of-contents URL, " +
             "or paste readable chapter URLs manually. Dynamic/login-only chapters are not imported."
@@ -107,11 +110,13 @@ internal object NooirWebChapterDiscovery {
         val meta = NooirWebArticle.metadata(page)
         return Analysis(
             inputUrl = storyUrl.trim(),
-            title = meta.title,
-            author = meta.author,
-            description = meta.description,
-            language = meta.language,
-            detectedCoverUrl = NooirWebCover.detectedUrl(page).orEmpty(),
+            title = wattpad?.title?.ifBlank { meta.title } ?: meta.title,
+            author = wattpad?.author?.ifBlank { meta.author } ?: meta.author,
+            description = wattpad?.synopsis?.ifBlank { meta.description } ?: meta.description,
+            language = wattpad?.language?.ifBlank { meta.language } ?: meta.language,
+            detectedCoverUrl = wattpad?.coverUrl?.ifBlank {
+                NooirWebCover.detectedUrl(page).orEmpty()
+            } ?: NooirWebCover.detectedUrl(page).orEmpty(),
             chapters = NooirWebChapterPlan.start(items.map {
                 NooirWebChapterPlan.Entry(it.url, it.title)
             }),

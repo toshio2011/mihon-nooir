@@ -170,3 +170,30 @@ Do not claim feature parity with WebToEpub's extensive site-specific parser ecos
   guarantee cleanup if WorkManager is cancelled before the worker *starts*,
   or a document provider rejects `deleteDocument`.
 - No public Android APK, converter encoder, Windows or Folio firmware changes.
+
+
+## 24 November: Wattpad story cover + synopsis fidelity
+
+- Example public story URL: `https://www.wattpad.com/story/413612349?utm_source=android`.
+  Direct story response was not accessible from the remote research environment,
+  so this is an **offline regression based on the observed public v3 JSON
+  schema**, not a claimed live export of this user's Wattpad story.
+- The previous Wattpad discovery path used the public story JSON **only for
+  chapter inventory** and took the EPUB title/author/description/cover from
+  incomplete HTML. The public JSON also exposes `title`, `description`,
+  `cover`, `user.name/username`, and `storyLanguage`.
+- Reuse those public fields for `Analyze chapters`, `Use selected chapters
+  in one EPUB`, and the regular per-story export. Story cover uses the
+  same bounded checked-image embedded cover writer as the combined book editor.
+- Add a real readable Synopsis XHTML chapter after the cover, before the first
+  text chapter. The synopsis also remains in `dc:description`, with author
+  in `dc:creator`. Expand combined-book description length from 1200 to
+  4000 characters so longer public summaries aren't unnecessarily clipped.
+- No account cookies, premium chapter access, paywall bypass, browser session,
+  or third-party scraping service is used. If the public API is unavailable,
+  existing visible-HTML discovery is retained.
+- Android emulator coverage now requires **7** Web TOC tests and **3**
+  Web EPUB tests (synthetic public story metadata and actual EPUB2/EPUB3 ZIP
+  cover, synopsis, TOC, OPF), in addition to all prior tests.
+- The exact new commit is pending CI; do not present an updated test APK
+  or assert that the user's live Wattpad story worked until verified.

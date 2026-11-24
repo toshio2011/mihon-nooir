@@ -61,7 +61,8 @@ grep -Fq 'INSTRUMENTATION_STATUS: test=queryBasedChapterUrlsKeepTheirStoryPath' 
 grep -Fq 'INSTRUMENTATION_STATUS: test=encodedChapterPathsRemainExactAndQueryVariantsDeduplicate' android-web-toc-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=consecutiveTocPagesMergeWithoutDuplicateChapters' android-web-toc-instrumentation.txt
 grep -Fq 'INSTRUMENTATION_STATUS: test=unfinishedTocAfterSafetyLimitFailsRatherThanTruncates' android-web-toc-instrumentation.txt
-grep -Fxq 'OK (6 tests)' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=wattpadPublicStoryDetailsIncludeCoverAndSynopsis' android-web-toc-instrumentation.txt
+grep -Fxq 'OK (7 tests)' android-web-toc-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-toc-instrumentation.txt
 
 echo "Exporting synthetic public HTML into real EPUB2/EPUB3 ZIP files on Android"
@@ -71,12 +72,13 @@ adb shell am instrument -w -r \
   | tee android-web-epub-export-instrumentation.txt
 for required in \
   actualHtmlExportsValidEpub2SectionsAndNcx \
-  actualHtmlExportsValidEpub3SectionsAndNavigation
+  actualHtmlExportsValidEpub3SectionsAndNavigation \
+  wattpadBookCoverAndSynopsisArePackagedInEpub2And3
 do
   grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-web-epub-export-instrumentation.txt
 done
-test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-web-epub-export-instrumentation.txt)" -eq 2
-grep -Fxq 'OK (2 tests)' android-web-epub-export-instrumentation.txt
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-web-epub-export-instrumentation.txt)" -eq 3
+grep -Fxq 'OK (3 tests)' android-web-epub-export-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-epub-export-instrumentation.txt
 
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"

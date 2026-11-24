@@ -67,8 +67,51 @@ internal object NooirWattpadPublic {
         return chapters
     }
 
-    internal fun discover(storyUrl: String): List<NooirWebNovel.Chapter> {
-        val id = storyId(storyUrl) ?: return emptyList()
+    /** Book-level fields belong to the story, never its first chapter HTML. */
+    internal data class Details(
+        val title: String,
+        val author: String,
+        val synopsis: String,
+        val coverUrl: String,
+        val language: String,
+        val chapters: List<NooirWebNovel.Chapter>,
+    )
+
+    /** Pure parser used by Android offline tests; no cookies or web requests. */
+    internal fun fromPublicStoryDetailsJson(json: String): Details {
+        val story = JSONObject(json)
+        val writer = story.optJSONObject("user") ?: story.optJSONObject("author")
+        val author = (writer?.optString("name").orEmpty().ifBlank {
+            writer?.optString("username").orEmpty()
+        }).trim().take(120)
+        val rawCover = story.optString("cover").trim().take(600)
+        // Wattpad's public API currently advertises img.wattpad.com covers.
+        // Never trust an arbitrary URL in a third-party metadata field.
+        val cover = runCatching {
+            val uri = URI(rawCover)
+            if (uri.scheme.equals("https", true) &&
+                uri.host?.lowercase() in setOf("img.wattpad.com", "www.wattpad.com") &&
+                uri.port == -1 && uri.rawUserInfo == null) uri.toASCIIString()
+            else ""
+        }.getOrDefault("")
+        val rawLanguage = story.optString("storyLanguage").trim()
+        val language = rawLanguage.takeIf {
+            it.matches(Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}"))
+        }.orEmpty()
+        return Details(
+            title = story.optString("title").trim().take(240),
+            author = author,
+            synopsis = story.optString("description").trim().take(4000),
+            coverUrl = cover,
+            language = language,
+            chapters = fromPublicStoryJson(json),
+        )
+    }
+
+    /** Only public story metadata, including normal public chapter inventory. */
+    internal fun storyDetails(storyUrl: String): Details {
+        val id = storyId(storyUrl)
+            ?: error("Use a public Wattpad story URL")
         // Public story metadata only. Avoid query-field projections that
         // may vary between Wattpad deployments or omit public part URLs.
         val endpoint = "https://www.wattpad.com/api/v3/stories/$id"
@@ -76,6 +119,7 @@ internal object NooirWattpadPublic {
             Jsoup.connect(endpoint).ignoreContentType(true)
                 .userAgent("Mozilla/5.0 (compatible; MangaNooir experimental reader)")
                 .referrer("https://www.wattpad.com/story/$id")
+                .header("Accept", "application/json")
                 .timeout(15_000).maxBodySize(MAX_METADATA_BYTES)
                 .followRedirects(false).execute()
         } catch (e: Exception) {
@@ -92,6 +136,9 @@ internal object NooirWattpadPublic {
         require(body.length in 2..MAX_METADATA_BYTES) {
             "Wattpad returned empty or oversized public chapter metadata"
         }
-        return fromPublicStoryJson(body)
+        return fromPublicStoryDetailsJson(body)
     }
+
+    internal fun discover(storyUrl: String): List<NooirWebNovel.Chapter> =
+        if (storyId(storyUrl) == null) emptyList() else storyDetails(storyUrl).chapters
 }

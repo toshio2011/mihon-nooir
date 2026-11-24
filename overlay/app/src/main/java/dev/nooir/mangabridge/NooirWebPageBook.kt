@@ -117,7 +117,7 @@ object NooirWebPageBook {
         require(language.matches(Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,3}"))) {
             "Use a valid language tag such as en, ms, ar or en-GB"
         }
-        require(bookDescription.length <= 1200 && coverUrl.length <= 600) {
+        require(bookDescription.length <= 4000 && coverUrl.length <= 600) {
             "Book description or cover URL is too long"
         }
         // Validate explicit inputs before writing. No remote request or
@@ -171,6 +171,7 @@ object NooirWebPageBook {
             } else {
                 NooirWebCover.embed(first, epub, coverUrl)
             }
+            if (bookDescription.isNotBlank()) NooirWebNovel.addSynopsis(epub, bookDescription)
             for ((index, url) in safeUrls.withIndex()) {
                 if (index > 0 && index !in preloaded) Thread.sleep(1300L)
                 onPage(index + 1, safeUrls.size, "Reading public webpage")

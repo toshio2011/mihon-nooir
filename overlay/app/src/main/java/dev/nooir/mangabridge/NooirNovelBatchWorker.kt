@@ -126,7 +126,7 @@ class NooirNovelBatchWorker(context: Context, params: WorkerParameters) : Corout
             !NooirEpubCssRules.valid(customCss) ||
             (!combinePages && (coverCollage || collageCoverUrls.isNotEmpty())) ||
             (combinePages && !NooirWebExtractRules.valid(contentSelector, removeSelector)) ||
-            (combinePages && (coverUrl.length > 600 || description.length > 1200 ||
+            (combinePages && (coverUrl.length > 600 || description.length > 4000 ||
                 localCoverUri.length > 1000 ||
                 (localCoverUri.isNotBlank() && (!localCoverUri.startsWith("content://") ||
                     coverUrl.isNotBlank() || coverCollage)) ||
