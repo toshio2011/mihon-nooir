@@ -16,6 +16,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,13 +45,21 @@ import java.util.UUID
 
 /** More -> Send & Convert files, with multi-selection and durable background work. */
 @Composable
-fun AnyFileTransferDialog(onDismiss: () -> Unit) {
+fun AnyFileTransferDialog(
+    onDismiss: () -> Unit,
+    onOpenPdfConverter: (() -> Unit)? = null,
+    onOpenFinishedPreview: ((Uri?) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("manganooir_export", Context.MODE_PRIVATE) }
     val manager = remember { WorkManager.getInstance(context) }
     var chosen by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    // Input selection deliberately comes BEFORE Android's document picker.
+    // Do not infer source format solely from a provider's often-generic MIME.
+    var inputKind by remember { mutableStateOf<NooirLocalConversionPolicy.Picker?>(null) }
     var displayNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var inputMimeTypes by remember { mutableStateOf<List<String>>(emptyList()) }
     var outputNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var showRename by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -71,6 +81,18 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
     var destination by remember { mutableStateOf(prefs.getString("destination", "/Books") ?: "/Books") }
     var sendSettings by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(MangaConversionOptions.load(prefs)) }
+    var epubFont by remember { mutableStateOf(prefs.getInt("epub_font_px", 24)) }
+    var epubMargin by remember { mutableStateOf(prefs.getInt("epub_margin_px", 26)) }
+    var epubDirection by remember {
+        mutableStateOf(prefs.getString("epub_direction_mode", null)
+            ?.takeIf { it in setOf("auto", "ltr", "rtl") }
+            ?: if (prefs.getBoolean("epub_right_to_left", false)) "rtl" else "auto")
+    }
+    var epubLineHeight by remember { mutableStateOf(prefs.getInt("epub_line_height_pct", 118).coerceIn(100, 200)) }
+    var epubFontFamily by remember {
+        mutableStateOf(prefs.getString("epub_font_family", "sans-serif")
+            ?.takeIf { it in setOf("sans-serif", "serif", "monospace") } ?: "sans-serif")
+    }
 
     LaunchedEffect(workId) {
         val current = workId ?: return@LaunchedEffect
@@ -92,9 +114,39 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
             .putString("device", device).putString("host", host.trim())
             .putString("destination", destination.trim()).apply()
         options.save(prefs)
+        prefs.edit().putInt("epub_font_px", epubFont)
+            .putInt("epub_margin_px", epubMargin)
+            .putBoolean("epub_right_to_left", epubDirection == "rtl")
+            .putString("epub_direction_mode", epubDirection)
+            .putInt("epub_line_height_pct", epubLineHeight)
+            .putString("epub_font_family", epubFontFamily).apply()
+    }
+    fun changeInputKind(next: NooirLocalConversionPolicy.Picker) {
+        if (inputKind == next) return
+        inputKind = next
+        chosen = emptyList()
+        displayNames = emptyList()
+        inputMimeTypes = emptyList()
+        outputNames = emptyList()
+        showRename = false
+        sendSettings = false
+        message = "Selected " + next.label + ". Choose source files to continue."
     }
     fun enqueue(convert: Boolean, saveTree: Uri? = null) {
         if (chosen.isEmpty()) return
+        if (convert || saveTree != null) {
+            val unsupported = displayNames.indices.filterNot { index ->
+                NooirLocalConversionPolicy.canConvertTo(
+                    displayNames[index], inputMimeTypes.getOrNull(index).orEmpty(),
+                    format.resolved(device).name)
+            }
+            if (unsupported.isNotEmpty() || displayNames.size != chosen.size) {
+                message = "Conversion not supported for: " +
+                    unsupported.take(3).joinToString(", ") { displayNames[it] } +
+                    ". Use Send originals to transfer unchanged; PDF has a separate converter."
+                return
+            }
+        }
         persist()
         val req = OneTimeWorkRequestBuilder<NooirTransferWorker>()
             .setInputData(workDataOf(
@@ -107,6 +159,12 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 NooirTransferWorker.KEY_CONVERT to convert,
                 NooirTransferWorker.KEY_TREE_URI to saveTree?.toString(),
                 NooirTransferWorker.KEY_OPTIONS to options.token(),
+                NooirTransferWorker.KEY_EPUB_FONT to epubFont,
+                NooirTransferWorker.KEY_EPUB_MARGIN to epubMargin,
+                NooirTransferWorker.KEY_EPUB_RTL to (epubDirection == "rtl"),
+                NooirTransferWorker.KEY_EPUB_DIRECTION to epubDirection,
+                NooirTransferWorker.KEY_EPUB_LINE_HEIGHT to epubLineHeight,
+                NooirTransferWorker.KEY_EPUB_FONT_FAMILY to epubFontFamily,
             )).build()
         // Reuse the same sequential chain as manga, URL and PDF exports.
         manager.enqueueUniqueWork(NooirDeviceWorkQueue.NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
@@ -133,32 +191,100 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
             if (files.size > 25) {
                 message = "Select at most 25 files per batch for now."
             } else {
-                chosen = files
-                files.forEach { file ->
-                    try {
-                        context.contentResolver.takePersistableUriPermission(
-                            file, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    } catch (_: SecurityException) {
-                        // Some providers don't offer persistent access; report if worker can't read it.
-                    }
-                }
-                displayNames = files.map { file ->
+                val names = files.map { file ->
                     context.contentResolver.query(file, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
                         null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) cursor.getString(0) else null
                     } ?: (file.lastPathSegment ?: "Document")
                 }
-                outputNames = displayNames
-                message = "Selected " + files.size + " file(s). Edit output names before starting if any already exist."
+                val mimes = files.map { file ->
+                    context.contentResolver.getType(file).orEmpty()
+                }
+                val kind = inputKind
+                val wrong = names.indices.filterNot { index ->
+                    kind != null && NooirLocalConversionPolicy.matchesPicker(
+                        kind, names[index], mimes[index])
+                }
+                if (wrong.isNotEmpty()) {
+                    chosen = emptyList()
+                    displayNames = emptyList()
+                    inputMimeTypes = emptyList()
+                    outputNames = emptyList()
+                    message = "These files do not match the selected input type (" +
+                        (kind?.label ?: "none") + "): " +
+                        wrong.take(3).joinToString(", ") { names[it] } +
+                        ". Change the input type, or use All files to send originals."
+                } else {
+                    chosen = files
+                    files.forEach { file ->
+                        try {
+                            context.contentResolver.takePersistableUriPermission(
+                                file, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (_: SecurityException) {
+                            // Some providers lack persistent grants; worker reports read failures.
+                        }
+                    }
+                    displayNames = names
+                    inputMimeTypes = mimes
+                    outputNames = names
+                    message = "Selected " + files.size +
+                        " " + (kind?.label ?: "source") + " file(s). Choose output and settings below."
+                }
             }
         }
     }
     val valid = host.trim().isNotEmpty() && !host.contains('/') &&
         destination.startsWith("/") && !destination.contains("..")
     val profile = NooirDeviceProfiles.forId(device)
+    val eligibleFormats = ExportFormat.entries.filter(profile::accepts).filter { candidate ->
+        val actual = candidate.resolved(device).name
+        if (displayNames.isEmpty()) {
+            inputKind?.let { NooirLocalConversionPolicy.canPickerConvertTo(it, actual) } == true
+        } else {
+            displayNames.indices.all { index ->
+                NooirLocalConversionPolicy.canConvertTo(
+                    displayNames[index], inputMimeTypes.getOrNull(index).orEmpty(), actual)
+            }
+        }
+    }
+    LaunchedEffect(displayNames, inputMimeTypes, device, inputKind) {
+        if (eligibleFormats.isNotEmpty() && format !in eligibleFormats)
+            format = eligibleFormats.first()
+    }
+    val hasEpubInput = inputKind == NooirLocalConversionPolicy.Picker.EPUB ||
+        displayNames.indices.any { index ->
+            NooirLocalConversionPolicy.classify(
+                displayNames[index], inputMimeTypes.getOrNull(index).orEmpty()
+            ) == NooirLocalConversionPolicy.Input.EPUB
+        }
+    val hasMangaInput = inputKind in setOf(
+        NooirLocalConversionPolicy.Picker.COMIC, NooirLocalConversionPolicy.Picker.IMAGES) ||
+        displayNames.indices.any { index ->
+            NooirLocalConversionPolicy.canConvertHere(
+                displayNames[index], inputMimeTypes.getOrNull(index).orEmpty())
+        }
     val running = workInfo?.state == WorkInfo.State.RUNNING || workInfo?.state == WorkInfo.State.ENQUEUED
-    val canQueue = chosen.isNotEmpty() && profile.xteinkWifi && valid && !running && outputNames.size == chosen.size && outputNames.all { it.isNotBlank() }
+    val inputMatches = inputKind?.let { kind ->
+        displayNames.size == chosen.size && inputMimeTypes.size == chosen.size &&
+            displayNames.indices.all { index ->
+                NooirLocalConversionPolicy.matchesPicker(
+                    kind, displayNames[index], inputMimeTypes[index])
+            }
+    } == true
+    val canQueue = chosen.isNotEmpty() && inputMatches && profile.xteinkWifi &&
+        valid && !running && outputNames.size == chosen.size &&
+        outputNames.all { it.isNotBlank() }
+    val unsupportedForConversion = displayNames.indices.filterNot { index ->
+        NooirLocalConversionPolicy.canConvertTo(
+            displayNames[index], inputMimeTypes.getOrNull(index).orEmpty(),
+            format.resolved(device).name)
+    }
+    val canConvertSelection = chosen.isNotEmpty() &&
+        displayNames.size == chosen.size && inputMimeTypes.size == chosen.size &&
+        unsupportedForConversion.isEmpty() && format in eligibleFormats && inputMatches &&
+        outputNames.size == chosen.size &&
+        outputNames.all { it.isNotBlank() }
     val progress = workInfo?.progress
     val phase = progress?.getString(NooirTransferWorker.KEY_PHASE).orEmpty()
     val item = progress?.getInt(NooirTransferWorker.KEY_INDEX, 0) ?: 0
@@ -175,8 +301,52 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = { choose.launch(arrayOf("*/*")) }) {
-                    Text("Choose multiple files")
+                Text("1 · Choose input file type")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        NooirLocalConversionPolicy.Picker.EPUB,
+                        NooirLocalConversionPolicy.Picker.COMIC,
+                    ).forEach { kind ->
+                        FilterChip(selected = inputKind == kind,
+                            onClick = { changeInputKind(kind) },
+                            label = { Text(kind.label) })
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        NooirLocalConversionPolicy.Picker.IMAGES,
+                        NooirLocalConversionPolicy.Picker.PDF,
+                        NooirLocalConversionPolicy.Picker.ANY,
+                    ).forEach { kind ->
+                        FilterChip(selected = inputKind == kind,
+                            onClick = { changeInputKind(kind) },
+                            label = { Text(kind.label) })
+                    }
+                }
+                if (inputKind == null) {
+                    Text("Select an input type first to filter Android's document picker.")
+                } else {
+                    Text("2 · Select source files")
+                    Button(onClick = {
+                        choose.launch(NooirLocalConversionPolicy.pickerMimeTypes(
+                            requireNotNull(inputKind)))
+                    }) { Text("Choose " + inputKind!!.label + " files") }
+                    if (inputKind != NooirLocalConversionPolicy.Picker.ANY) {
+                        TextButton(onClick = { choose.launch(arrayOf("*/*")) }) {
+                            Text("File missing from picker? Browse all")
+                        }
+                        Text("Some file providers use generic ZIP or unknown MIME types. " +
+                            "Browse all can find them; selected file types are still checked.")
+                    }
+                    if (inputKind == NooirLocalConversionPolicy.Picker.PDF) {
+                        Text("PDF conversion uses the dedicated PDF engine. " +
+                            "Send originals here, or open the PDF converter below.")
+                        if (onOpenPdfConverter != null) {
+                            OutlinedButton(onClick = onOpenPdfConverter) {
+                                Text("Open PDF converter")
+                            }
+                        }
+                    }
                 }
                 if (displayNames.isNotEmpty()) {
                     Text("Selected " + displayNames.size + " file(s):")
@@ -193,6 +363,160 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                     }
                 }
                 if (message.isNotBlank()) Text(message)
+                if (running) Text("Transfer in progress · status and queue details below.")
+                Text("3 · Reader & output format")
+                NooirDevicePicker(device) { id ->
+                    device = id
+                    if (!NooirDeviceProfiles.forId(id).accepts(format)) format = ExportFormat.AUTO
+                }
+                Text("Convert to")
+                if (eligibleFormats.isEmpty()) {
+                    Text(when {
+                        inputKind == null -> "Choose an input type first."
+                        displayNames.isEmpty() && inputKind == NooirLocalConversionPolicy.Picker.ANY ->
+                            "Select files first; supported output formats depend on their contents."
+                        inputKind == NooirLocalConversionPolicy.Picker.PDF ->
+                            "Use the separate PDF to e-reader tool for PDF conversion."
+                        else -> "No common conversion output is supported for these files."
+                    })
+                }
+                eligibleFormats.forEach { option ->
+                    FilterChip(
+                        selected = format == option,
+                        onClick = { format = option },
+                        label = { Text(option.label) },
+                    )
+                }
+                if (eligibleFormats.isNotEmpty()) TextButton(
+                    onClick = { sendSettings = !sendSettings }) {
+                    Text(if (sendSettings) "Hide conversion settings"
+                         else "4 · More conversion settings")
+                }
+                if (sendSettings && eligibleFormats.isNotEmpty()) {
+                    if (hasEpubInput) {
+                        Text("EPUB → XTC/XTCH · experimental text and picture pagination")
+                        Text("Reading presets (or customize below)")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(
+                                "Compact" to Triple(20, 14, 110),
+                                "Balanced" to Triple(24, 26, 118),
+                                "Large" to Triple(32, 20, 135),
+                            ).forEach { (label, values) ->
+                                FilterChip(
+                                    selected = epubFont == values.first &&
+                                        epubMargin == values.second &&
+                                        epubLineHeight == values.third,
+                                    onClick = {
+                                        epubFont = values.first
+                                        epubMargin = values.second
+                                        epubLineHeight = values.third
+                                    },
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                        Text("Font family")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("Sans" to "sans-serif", "Serif" to "serif",
+                                "Mono" to "monospace").forEach { (label, family) ->
+                                FilterChip(selected = epubFontFamily == family,
+                                    onClick = { epubFontFamily = family },
+                                    label = { Text(label) })
+                            }
+                        }
+                        Text("Font size: " + epubFont + " px")
+                        Slider(value = epubFont.toFloat(), onValueChange = {
+                            epubFont = it.toInt().coerceIn(14, 46)
+                        }, valueRange = 14f..46f)
+                        Text("Page margin: " + epubMargin + " px")
+                        Slider(value = epubMargin.toFloat(), onValueChange = {
+                            epubMargin = it.toInt().coerceIn(8, 80)
+                        }, valueRange = 8f..80f)
+                        Text("Line height: " + epubLineHeight + "%")
+                        Slider(value = epubLineHeight.toFloat(), onValueChange = {
+                            epubLineHeight = it.toInt().coerceIn(100, 200)
+                        }, valueRange = 100f..200f)
+                        Text("Book reading direction")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("Auto" to "auto", "LTR" to "ltr", "RTL" to "rtl")
+                                .forEach { (label, mode) ->
+                                    FilterChip(selected = epubDirection == mode,
+                                        onClick = { epubDirection = mode },
+                                        label = { Text(label) })
+                                }
+                        }
+                        Text("Auto reads EPUB spine direction or language metadata. " +
+                            "Choose LTR/RTL to override the book when metadata is wrong.")
+                        Text("These typography controls change actual exported EPUB pages, not just a preview. " +
+                            "Advanced CSS, complex tables, SVG and embedded fonts are not fully preserved.")
+                    }
+                    if (hasMangaInput) {
+                        MangaConversionSettings(options, format.resolved(device),
+                            onChange = { options = it })
+                    }
+                }
+                Text("5 · Destination")
+                OutlinedTextField(
+                    value = host,
+                    onValueChange = { host = it },
+                    label = { Text("XTEink hostname or IP") },
+                    singleLine = true,
+                    supportingText = { Text("Same trusted Wi-Fi. Example: 192.168.1.102 (without http://)") },
+                )
+                OutlinedTextField(
+                    value = destination,
+                    onValueChange = { destination = it },
+                    label = { Text("Destination folder on XTEink") },
+                    singleLine = true,
+                    supportingText = { Text("Use / if no Books folder exists.") },
+                )
+                if (!profile.xteinkWifi) Text("Direct Wi-Fi upload is only offered for compatible XTEink firmware. Save/export to the phone, then use the reader’s supported transfer method.")
+                Button(enabled = canQueue, onClick = { enqueue(false) }) {
+                    Text("Send " + chosen.size + " original file(s)")
+                }
+                Button(enabled = canQueue && canConvertSelection, onClick = { enqueue(true) }) {
+                    Text("Convert & send · " + chosen.size + " file(s)")
+                }
+                TextButton(enabled = canConvertSelection && !running,
+                    onClick = { persist(); chooseFolder.launch(null) }) {
+                    Text("Convert & save supported files to phone folder")
+                }
+                if (unsupportedForConversion.isNotEmpty()) {
+                    val first = unsupportedForConversion.first()
+                    val shownNames = unsupportedForConversion.take(4)
+                        .joinToString(", ") { displayNames[it] }
+                    val extraNames = if (unsupportedForConversion.size > 4) " (and more)" else ""
+                    Text("Not convertible here: " + shownNames + extraNames)
+                    Text(NooirLocalConversionPolicy.unsupportedHint(
+                        displayNames[first], inputMimeTypes.getOrNull(first).orEmpty()))
+                }
+                Text("Existing names are checked in the destination before each conversion. Rename above if needed; a conflict skips only that file and later books continue. For converted manga the selected format extension is used.")
+                Text("Convert supports images and verified comic CBZ/ZIP inputs, plus experimental " +
+                    "EPUB → XTC/XTCH rendering for text and illustrated books. " +
+                    "PDF conversion remains in the separate PDF to e-reader tool. " +
+                    "No input is silently copied when Convert is selected.")
+                if (onOpenFinishedPreview != null) {
+                    TextButton(onClick = { onOpenFinishedPreview(null) }) {
+                        Text("Preview finished XTC / XTCH saved on phone")
+                    }
+                    Text("Save/export the book first. Preview reads finished book bytes " +
+                        "and does not start a new conversion or upload.")
+                }
+                TextButton(
+                    enabled = chosen.isNotEmpty(),
+                    onClick = {
+                        val intent = Intent(if (chosen.size > 1) Intent.ACTION_SEND_MULTIPLE else Intent.ACTION_SEND).apply {
+                            type = "*/*"
+                            if (chosen.size > 1) putParcelableArrayListExtra(
+                                Intent.EXTRA_STREAM, ArrayList(chosen)
+                            ) else putExtra(Intent.EXTRA_STREAM, chosen.first())
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share selected files"))
+                    },
+                ) { Text("Share selected with another app or device") }
+                // Queue details belong after the conversion steps, so a long
+                // previous job history never hides input/output controls.
                 if (workInfo != null) {
                     Text("Transfer: " + when (workInfo?.state) {
                         WorkInfo.State.SUCCEEDED -> if (NooirDeviceWorkQueue.hasFailed(workInfo!!))
@@ -204,6 +528,16 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                         else -> if (count > 0) "File " + item + "/" + count + " · " + phase
                             else "Queued or connecting…"
                     })
+                    val previewUri = workInfo?.outputData
+                        ?.getString(NooirTransferWorker.KEY_LAST_SAVED_PREVIEW_URI)
+                    if (previewUri != null && onOpenFinishedPreview != null) {
+                        TextButton(onClick = {
+                            onOpenFinishedPreview(Uri.parse(previewUri))
+                        }) {
+                            Text("Preview last converted book saved to phone")
+                        }
+                        Text("Opens the exact finished XTC/XTCH from this completed job.")
+                    }
                     if (running) {
                         if (percent >= 0) {
                             LinearProgressIndicator(
@@ -280,64 +614,6 @@ fun AnyFileTransferDialog(onDismiss: () -> Unit) {
                     }
                     Text("Use Nooir Tools → Activity Queue to cancel the whole chain with confirmation. A failed export no longer blocks later books.")
                 }
-                OutlinedTextField(
-                    value = host,
-                    onValueChange = { host = it },
-                    label = { Text("XTEink hostname or IP") },
-                    singleLine = true,
-                    supportingText = { Text("Same trusted Wi-Fi. Example: 192.168.1.102 (without http://)") },
-                )
-                OutlinedTextField(
-                    value = destination,
-                    onValueChange = { destination = it },
-                    label = { Text("Destination folder on XTEink") },
-                    singleLine = true,
-                    supportingText = { Text("Use / if no Books folder exists.") },
-                )
-                NooirDevicePicker(device) { id ->
-                    device = id
-                    if (!NooirDeviceProfiles.forId(id).accepts(format)) format = ExportFormat.AUTO
-                }
-                Text("Manga output format")
-                ExportFormat.entries.filter(profile::accepts).forEach { option ->
-                    FilterChip(
-                        selected = format == option,
-                        onClick = { format = option },
-                        label = { Text(option.label) },
-                    )
-                }
-                TextButton(onClick = { sendSettings = !sendSettings }) {
-                    Text(if (sendSettings) "Hide conversion settings" else "More conversion settings")
-                }
-                if (sendSettings) {
-                    MangaConversionSettings(options, format.resolved(device), onChange = { options = it })
-                }
-                if (!profile.xteinkWifi) Text("Direct Wi-Fi upload is only offered for compatible XTEink firmware. Save/export to the phone, then use the reader’s supported transfer method.")
-                Button(enabled = canQueue, onClick = { enqueue(false) }) {
-                    Text("Send " + chosen.size + " original file(s)")
-                }
-                Button(enabled = canQueue, onClick = { enqueue(true) }) {
-                    Text("Convert manga & send · " + chosen.size + " file(s)")
-                }
-                TextButton(enabled = chosen.isNotEmpty() && !running,
-                    onClick = { persist(); chooseFolder.launch(null) }) {
-                    Text("Convert & save selected to phone folder")
-                }
-                Text("Existing names are checked in the destination before each conversion. Rename above if needed; a conflict skips only that file and later books continue. For converted manga the selected format extension is used.")
-                Text("Convert mode converts CBZ/images and copies unsupported documents unchanged. Each file is saved or sent separately.")
-                TextButton(
-                    enabled = chosen.isNotEmpty(),
-                    onClick = {
-                        val intent = Intent(if (chosen.size > 1) Intent.ACTION_SEND_MULTIPLE else Intent.ACTION_SEND).apply {
-                            type = "*/*"
-                            if (chosen.size > 1) putParcelableArrayListExtra(
-                                Intent.EXTRA_STREAM, ArrayList(chosen)
-                            ) else putExtra(Intent.EXTRA_STREAM, chosen.first())
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Share selected files"))
-                    },
-                ) { Text("Share selected with another app or device") }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Back to MangaNooir") } },

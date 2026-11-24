@@ -1,0 +1,231 @@
+# Universal Book Converter — preservation and quality checklist
+
+> 23 November 2026. Draft engineering QA only; **not public v1.0.19**.
+> PR #111 is independent of the advanced WebToEpub PR #110 and the
+> Windows, updater, and Folio Nooir tracks. No merge, release or flash is authorized.
+
+## Confirmed baseline — previous tested head
+
+- Android Actions run [45091994589](https://github.com/toshio2011/mihon-nooir/actions/runs/45091994589) **passed** host tests, FOSS APK build and emulator smoke on integration head `a4a97e61`.
+- The five original panel/CBZ diagnostic tests and five EPUB→XTC/XTCH Android tests all passed. Tests decode **real final book bytes**, not a mock extension change.
+- The emulator pulled **9 decoded PNGs** from the completed book files. The original Actions artifact is `mihon-nooir-panel-zip-device-smoke` (artifact ID `14782326990`).
+- Reviewed screenshot dimensions: X4 **480×800** (XTC/XTCH), X3 **528×792** (XTCH). The synthetic prose pages display legible headings and text, RTL Arabic is positioned on the leading/right side, and the simple embedded square illustration is present. The output is **not** a CSS fidelity, typography beauty, or real illustrated-book acceptance test.
+- WebToEpub-specific improvements stay in [PR #110](https://github.com/toshio2011/mihon-nooir/pull/110). Its exact-commit Android Actions run [45047980145](https://github.com/toshio2011/mihon-nooir/actions/runs/45047980145) passed synthetic web article → EPUB2 and EPUB3 file export checks and existing panel regression tests.
+
+## User flow (new draft, pending exact-commit UI acceptance)
+
+`More → Nooir Tools → Universal Book Converter` offers the existing
+source-specific engines rather than replacing them:
+
+| User source | Route/engine preserved | Currently offered output |
+| --- | --- | --- |
+| Local EPUB | AnyFileTransferDialog → NooirEpubToXtc | Experimental XTC/XTCH |
+| Image / CBZ / ZIP | Existing manga/image export | XTC/XTCH, EPUB2/3, CBZ as reader supports |
+| PDF | Original dedicated NooirPdfToEpubDialog | Its existing PDF converter choices |
+| Public web page | Original NooirWebToReaderDialog | Its currently implemented web options |
+| Web novel chapters | Original NooirNovelBatchDialog | Its currently implemented batch options |
+| Any local file | Original-file send/share | No conversion until selected source is supported |
+
+The local-file picker selects an **input type first**, asks Android to filter by
+MIME (with a Browse All fallback), checks the actual filename/MIME combination,
+then shows **compatible outputs and relevant settings**. Archive/image bytes
+receive worker-side inspection. The old background queue, progress/cancellation,
+destination safeguards, original-file send and save-to-phone remain in place.
+
+On small screens the source chips use two rows. Unknown/misreported vendor EPUB
+and CBZ MIME types are explicitly handled; generic ZIP alone is not assumed to
+be a valid comic if the document lacks an archive extension.
+
+Structural preservation tests are in `tests/test_universal_converter_routes.py`.
+These **do not** replace a real interactive UI walkthrough or a fresh APK build.
+
+## Finished output preview UI checks — current draft
+
+- A real read-only `XtcBookPreview` viewer is reachable from the Universal
+  Converter and from the local-file conversion dialog. It supports choosing
+  finished XTC/XTCH output or opening the last successfully saved XTC/XTCH
+  via a one-tap WorkManager completion link.
+- The UI screenshot script now visits the new finished-file viewer, verifies
+  its document-picker button is accessible, captures an actual emulator screen,
+  returns to the converter, then checks the old local/PDF routes.
+- The screenshot script is a **best-effort diagnostic** in CI: any navigation
+  failure is captured in notes and must be reviewed, rather than equated
+  with the successful codec tests. The Android pixel-parity instrumentation
+  is a separate automated check. Opening a real user file and navigating
+  its decoded page images still needs interactive acceptance.
+
+## Expanded real-file preview acceptance (Android emulator)
+
+- Add Android instrumentation that **opens** a finished XTCH via a file URI,
+  copies it to isolated owned cache via `NooirFinishedBookPreview.open`,
+  verifies format/page count, decoded page size, byte-for-byte immutability
+  of the source, and rejection of a corrupt file before display.
+- Save a synthetic **real encoded** `NooirQA.xtch` from the existing
+  independent-decoder test, push that exact output to the emulator's
+  Downloads directory, and let the ordinary Android DocumentsUI picker
+  choose it. UI script records actual first/next-page screencaps when
+  accessible, or an explicit failure note. No owner book is used.
+- This extends the strict EPUB instrumentation gate to **14 tests**;
+  the DocumentsUI navigation remains a best-effort screenshot diagnostic
+  until proven reliable across emulator images.
+
+## Remaining acceptance gates before owner approval
+
+1. **Exact-commit Android CI** after the latest input-picker refinements and
+   preservation test; ensure the route checks and all existing exports pass.
+2. **UI walkthrough and screenshots:** first-launch entry, source switch reset,
+   Android SAF picker filters and Browse All fallback, multi-file rename,
+   compatible output chips, source-specific settings, back navigation and
+   original-file send. Include narrow phone layouts and permission denials.
+3. **Real EPUB fidelity set:** text-heavy multilingual EPUB2/3; cover + inline
+   picture order; CSS-heavy and SVG/fixed layout rejection or faithful rendering;
+   corrupt/oversized/DRM EPUB error handling; long-book memory and cancel.
+4. **Actual Web → EPUB sites:** legal public HTML article and paginated
+   chapters, readability versus original, TOC completeness, covers, preview,
+   combined-book order; retain independently tested WebToEpub PR #110.
+5. **PDF and manga regression set:** existing PDF output selections, CBZ
+   panel/row/Auto Fit, oversized panels, RTL, renderer controls, large batch,
+   device filename conflict and interrupted transfer recovery.
+6. **Physical X3/X4 checks** only with an approved build and deliberate
+   owner-led transfer; current emulator success is not evidence of hardware
+   reader performance or firmware changes.
+
+**Policy:** preserve working features, integrate access, enhance quality.
+Never claim unimplemented input/output pairs, silently copy/rename during
+conversion, fold the WebToEpub draft into this branch without explicit review,
+or publish a new release without approval.
+
+
+## CI failure and targeted repair — 23 November 2026
+
+- Android FOSS release-equivalent APK successfully compiled on head
+  `a502ea3`, but the emulator instrumentation failed **2 of 14** cases.
+  Both new preview tests raised `NoClassDefFoundError` for
+  `NooirFinishedBookPreview`. The remaining 12 EPUB tests succeeded.
+- Root cause: R8 removes the preview helper class from the minified app
+  despite an independently compiled test APK needing its un-obfuscated
+  Java/Kotlin class. Existing XTC decoder/EPUB keep rules worked.
+- The integration overlay now adds narrow R8 rules for the preview singleton
+  and its nested `Loaded` data class. A host-level structural test ensures
+  these keep rules cannot accidentally be removed during refactors.
+- This does **not** turn off minification, change release signing,
+  change Android app identity or alter Folio Nooir firmware.
+- Exact-head smoke is required before acceptance; treat this as an
+  implementation fix rather than a completed validation.
+
+
+## 23 Nov 2026: confirmed 14-test pass; DocumentsUI navigation follow-up
+
+- Exact Android CI head `3b0da77` **passed** app compile and emulator
+  instrumentation ([Actions 45172197071](https://github.com/toshio2011/mihon-nooir/actions/runs/45172197071)):
+  **14/14** EPUB/XTC/XTCH and post-export preview tests.
+- Its independent best-effort UI capture **did not complete**. Captured
+  real DocumentsUI screen showed the picker had reopened the onboarding folder
+  `Download/Nooir_QA`, not the parent `Download` holding `NooirQA.xtch`.
+  The previous script accidentally clicked an unrelated nested `downloads`
+  folder and never returned to the app.
+- The screenshot script now explicitly opens **Show roots → Downloads** in
+  DocumentsUI. It records a drawer screenshot and demands that the actual
+  exported XTCH be selected and decoded, with page-number semantics, before
+  treating the optional UI walkthrough as complete. Missing files/screens
+  produce truthful failure notes, not success claims.
+- CI still uploads UI diagnostics and does not let a flaky onboarding picker
+  mark the **codec regression** failed. Review the capture exit code and
+  first/next-page screencaps separately for UI acceptance.
+
+
+## 23 November: real DocumentsUI drawer mis-tap correction
+
+- Exact-head Android CI on `b54f2d3` [passed](https://github.com/toshio2011/mihon-nooir/actions/runs/45178888169):
+  APK, 15 EPUB XTC/XTCH tests and existing diagnostics. Separate real UI
+  capture remains incomplete.
+- The actual screenshot `01b-picker-roots.png` shows the **Downloads** drawer
+  entry inside x=0–631, but recorded navigation tapped `Downloads` at x=765,
+  a matching node behind the drawer. The next screenshot remained in
+  `Nooir_QA` with only `autobackup`, `downloads`, `local`.
+- Fix the harness: drawer-root lookup now refuses nodes outside the visible
+  left drawer; staged synthetic **real encoded** `NooirQA.xtch` is copied into
+  the onboarding destination *after folder creation* so the ordinary picker
+  should find it without navigating. The system Downloads drawer is a
+  constrained fallback. No mock image, app permissions or conversion engines
+  changed.
+- New CI must demonstrate selected finished-file first/next page screenshots;
+  the script's optional screenshot capture remains a separate UI acceptance
+  check, not proof by merely passing binary unit tests.
+
+
+## 23–24 November: real XTCH first-page screenshot verified; page-two gate
+
+- [Android exact-head 45205233377](https://github.com/toshio2011/mihon-nooir/actions/runs/45205233377) passed Android APK, the 15 EPUB XTC/XTCH tests and panel smoke. The screenshot artifact proves the app selected the *actual* `NooirQA.xtch` through DocumentsUI, decoded its page, and displayed `XTCH · 6 pages` / `Page 1 of 6` with an accessible `Decoded XTCH page 1` image. The emulator also reached local EPUB, PDF and dedicated PDF converter routes.
+- The **Next** screenshot was absent even though the script exit was zero: the page-navigation row sat below the 305dp preview image, outside the initially visible 550dp scrollable dialog. `tap_visible "Next" 1` could not find it and quietly continued.
+- Move First/Prev/Next/Last and the page counter *above* the preview image, so they are visible on the emulator's smaller screen and on handheld phones without extra scrolling. Keep the real decoded bitmap, existing page controls, back button, and temporary-file safety unchanged.
+- Strengthen the optional real UI walkthrough: verify `Page 1 of 6` and decoded-page semantics, require a successful **Next** tap, wait for asynchronous decoded `Page 2 of 6`, capture an actual second-page screenshot, and report a failure within the UI walk if any condition is missing. A green codec suite is not a substitute for the second screenshot.
+- This change is in the experimental Android preview and test harness only; no Windows, Folio firmware, release version or public Android APK is changed.
+
+
+## 24 November: explicit hidden XHTML fidelity regression
+
+- Preview UI acceptance now **passed at exact head `6fad0d8`**:
+  [Actions 45215512098](https://github.com/toshio2011/mihon-nooir/actions/runs/45215512098)
+  produced actual first- and next-page XTCH screenshots; the event log records
+  opening `NooirQA.xtch`, seeing page 1, tapping Next, decoding page 2 of 6,
+  returning to the converter, and visiting the preserved EPUB/PDF routes.
+  The full Android build and 15 EPUB tests were green.
+- EPUB XHTML extraction must not render `hidden`, inline
+  `style="display:none"` or `visibility:hidden/collapse` fallback elements:
+  they may contain duplicate prose or non-existent fallback images that would
+  otherwise break an entire conversion. Conversely, `aria-hidden="true"`
+  does NOT mean invisible and should preserve visually displayed content.
+- Added a 16th Android instrumentation test: real XTCH page count and decoded
+  pixels must be **identical** between the normal EPUB fixture and a fixture
+  with hidden duplicate text and an absent hidden illustration. Also checks
+  hidden element skipping and visible aria-hidden text in reading order.
+  The smoke gate now requires exactly 16 tests and this named regression.
+- This covers explicit XHTML visibility only: external stylesheet cascades,
+  complex CSS and JavaScript remain out of scope. No public Android release,
+  Windows source, or Folio firmware changes.
+
+
+## 24 November: resilient local illustration candidate fallback
+
+- The previous exact-head `56dc97b` [Android run 45221581570](https://github.com/toshio2011/mihon-nooir/actions/runs/45221581570) **passed**, including the 16 EPUB→XTC/XTCH instrumented tests and the real first/next-page XTCH preview screenshot walkthrough.
+- A real-world EPUB can list a higher-density raster image in `srcset` that exists in the ZIP but contains malformed bytes (for example a text placeholder). Previously `imageBytesFromCandidates` stopped at the first existing path and the subsequent Android bitmap decode failed the entire conversion, even when a valid local lower-density fallback existed.
+- The ZIP reader now accepts a bounded candidate-quality callback, skips unreadable or unusable local candidates, and tries the next safe one. Android checks image decode bounds and the existing 70 MP/16k-per-side limits without allocating additional full-resolution bitmaps. No network access and no silent omission of an image when *all* options fail.
+- Added one Android parity test using `srcset` containing a corrupt preferred asset and a valid fallback; the **finished XTCH page count and decoded pixels** must match the baseline real output. The Android suite is now expected to report exactly **17 tests**, with a host callback regression and route gate.
+- No changes to X3/X4 firmware, public Android release, Windows desktop or separate Web → EPUB PR #110.
+
+
+## 24 November: Android content-provider EPUB → XTCH save → reopen test
+
+- The prior exact head `2047dbd` Android CI
+  [run 45304572091](https://github.com/toshio2011/mihon-nooir/actions/runs/45304572091)
+  **passed** its full 17-test EPUB XTC/XTCH instrumentation suite, minified APK
+  build, panel ZIP smoke, and real first/next XTCH preview navigation.
+- New Android instrumentation uses real Android `MediaStore.Downloads`
+  `content://` documents for EPUB source and XTCH destination; it writes
+  the synthetic public-domain-free QA fixture through the resolver, invokes
+  the existing `NooirEpubImportConverter.convert` save-to-phone path, opens
+  the final saved document through `NooirFinishedBookPreview.open`, and checks
+  the true decoder's page pixels, byte-for-byte preview immutability, page
+  counts, and cleanup of the two temporary provider records.
+- This extends the suite to **18 Android tests** and gets closer to the
+  user's actual Android storage workflow. It does not yet exercise the
+  WorkManager UI picker/enqueue path or SAF tree permission persistence:
+  those remain separate acceptance items and must not be claimed as tested.
+- No public Android release, Windows desktop code, Folio Nooir firmware,
+  or separate Web → EPUB #110 is modified.
+
+## 24 November: R8 keep rule for real provider-backed save regression
+
+- New 18th Android test **failed** at exact head `9fb498e` in
+  [Actions 45308315389](https://github.com/toshio2011/mihon-nooir/actions/runs/45308315389).
+  The five legacy panel tests passed, and 17 prior EPUB tests passed;
+  `androidDocumentsProviderSaveAndPreviewFinishedXtch` failed with
+  `NoClassDefFoundError: dev.nooir.mangabridge.NooirEpubImportConverter`.
+- Cause: the minified FOSS APK eliminated the Kotlin object from the
+  externally compiled test surface. This is distinct from a source-format or
+  provider-IO failure. Add narrowly targeted R8 `-keep` entries for
+  `NooirEpubImportConverter` and its nested classes, preserving its `INSTANCE`.
+- Verify the **exact new head** with all 18 instrumented cases before
+  concluding that provider-backed conversion/save works. No official build
+  signing or public version was touched.

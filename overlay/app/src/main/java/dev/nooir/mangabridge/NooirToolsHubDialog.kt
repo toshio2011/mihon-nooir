@@ -1,5 +1,6 @@
 package dev.nooir.mangabridge
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,13 +28,74 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun NooirToolsHubDialog(onDismiss: () -> Unit) {
     var tool by remember { mutableStateOf("") }
+    var previewUri by remember { mutableStateOf<Uri?>(null) }
     when (tool) {
         "queue" -> NooirActivityQueueDialog(onDismiss = { tool = "" })
-        "files" -> AnyFileTransferDialog(onDismiss = { tool = "" })
-        "web" -> NooirWebToReaderDialog(onDismiss = { tool = "" })
-        "novels" -> NooirNovelBatchDialog(onDismiss = { tool = "" })
-        "pdf" -> NooirPdfToEpubDialog(onDismiss = { tool = "" })
+        "files" -> AnyFileTransferDialog(
+            onDismiss = { tool = "converter" },
+            onOpenPdfConverter = { tool = "pdf" },
+            onOpenFinishedPreview = { uri ->
+                previewUri = uri
+                tool = "preview"
+            },
+        )
+        "preview" -> NooirFinishedBookPreviewDialog(
+            initialUri = previewUri,
+            onDismiss = {
+                previewUri = null
+                tool = "converter"
+            },
+        )
+        "web" -> NooirWebToReaderDialog(onDismiss = { tool = "converter" })
+        "novels" -> NooirNovelBatchDialog(onDismiss = { tool = "converter" })
+        "pdf" -> NooirPdfToEpubDialog(onDismiss = { tool = "converter" })
         "device" -> NooirDeviceFilesDialog(onDismiss = { tool = "" })
+        "converter" -> AlertDialog(
+            onDismissRequest = { tool = "" },
+            title = { Text("Universal Book Converter") },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 550.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text("Choose where your book comes from. Each source opens the right " +
+                        "converter and offers only formats it can actually produce.")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(),
+                        onClick = { tool = "files" }) {
+                        Text("Local files · EPUB, CBZ, ZIP, images")
+                    }
+                    Text("Select input type before browsing; then choose output and its settings. " +
+                        "You can also send supported original files unchanged.")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(),
+                        onClick = { previewUri = null; tool = "preview" }) {
+                        Text("Preview finished XTC / XTCH book")
+                    }
+                    Text("Inspect already exported page pixels from a saved XTC/XTCH file. " +
+                        "This uses the actual output, not a simulated EPUB render.")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(),
+                        onClick = { tool = "pdf" }) {
+                        Text("PDF files · Dedicated PDF converter")
+                    }
+                    Text("Uses our existing PDF conversion tools; " +
+                        "does not pretend the local manga converter handles PDF.")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(),
+                        onClick = { tool = "web" }) {
+                        Text("Web link · Convert a public webpage")
+                    }
+                    Text("Paste a link and choose available e-reader output formats.")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(),
+                        onClick = { tool = "novels" }) {
+                        Text("Web novels · Combine selected chapters")
+                    }
+                    Text("Use existing chapter discovery and batch conversion workflow. " +
+                        "Advanced WebToEpub editor changes remain in their separate draft.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { tool = "" }) { Text("Back to Nooir Tools") }
+            },
+        )
         else -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text("Nooir Tools") },
@@ -43,24 +105,14 @@ fun NooirToolsHubDialog(onDismiss: () -> Unit) {
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(9.dp),
                 ) {
-                    Text("Convert, send and manage books—all in one place without crowding Mihon's original settings.")
-                    Button(modifier = Modifier.fillMaxWidth(), onClick = { tool = "queue" }) {
+                    Text("Create, convert, send and manage books without crowding Mihon's settings.")
+                    Button(modifier = Modifier.fillMaxWidth(), onClick = { tool = "converter" }) {
+                        Text("Universal Book Converter")
+                    }
+                    Text("Local EPUB, CBZ, images and PDF; public web links and multi-chapter " +
+                        "novels. Choose source → output → relevant settings.")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "queue" }) {
                         Text("Activity Queue · All current jobs")
-                    }
-                    Text("Manga & local files")
-                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "files" }) {
-                        Text("Send & Convert files")
-                    }
-                    Text("Books from the web")
-                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "web" }) {
-                        Text("Web link → EPUB")
-                    }
-                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "novels" }) {
-                        Text("Web novels · Batch EPUB")
-                    }
-                    Text("Books from PDF")
-                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "pdf" }) {
-                        Text("PDF → EPUB · Text + illustrations")
                     }
                     Text("XTEink device management")
                     OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { tool = "device" }) {

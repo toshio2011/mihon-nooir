@@ -50,6 +50,66 @@ test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.tx
 grep -Fxq 'OK (5 tests)' diagnostic-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
+echo "Rendering public synthetic EPUB novels and images into XTC/XTCH on Android"
+adb shell am instrument -w -r \
+  -e class dev.nooir.mangabridge.NooirEpubXtcInstrumentedTest \
+  dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee android-epub-xtc-instrumentation.txt
+for required in \
+  realXtcContainsDecodedTextAndArtPages \
+  realXtchContainsDecodedTextAndArtPages \
+  typographyOptionsChangeActualDecodedXtchPages \
+  inlineIllustrationsStayBetweenTheirSurroundingWords \
+  hiddenXhtmlDoesNotPolluteRealEncodedXtch \
+  inlineEmphasisSurvivesNestedTagsAndImageBoundary \
+  inlineEmphasisChangesRealEncodedXtchPage \
+  responsiveAndLazyImagesMatchFinishedXtchPixels \
+  invalidPreferredImageFallsBackToRealEncodedXtch \
+  responsiveImageCandidatesPreferDensityAndRetainTextOrder \
+  finishedBookViewerPixelsMatchRealXtcAndXtch \
+  finishedBookSafCopyKeepsOriginalAndRejectsCorruptFile \
+  androidDocumentsProviderSaveAndPreviewFinishedXtch \
+  utf16ChapterMatchesUtf8FinishedXtcPixels \
+  x3RasterPagesHaveTheirOwnResolutionAndDecodableGrayPlanes \
+  arabicParagraphsAlignRightAndMarkBookRtl \
+  autoDirectionUsesEpubMetadataForArabicOutput \
+  explicitLtrOverridesRtlEpubMetadata
+do
+  grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-epub-xtc-instrumentation.txt
+done
+grep -Fxq 'OK (18 tests)' android-epub-xtc-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' android-epub-xtc-instrumentation.txt
+
+echo "Collecting page images decoded from real EPUB→XTC/XTCH outputs"
+adb root
+adb wait-for-device
+mkdir -p android-epub-xtc-previews
+adb pull \
+  /data/user/0/dev.nooir.mihontrial.foss/files/nooir_epub_xteink_previews/. \
+  android-epub-xtc-previews/
+test -s android-epub-xtc-previews/NooirQA.xtch
+# Make the real encoded XTCH fixture visible to Android DocumentsUI.
+# This is a disposable emulator, not the owner's phone or SD card.
+adb shell mkdir -p /sdcard/Download
+adb push android-epub-xtc-previews/NooirQA.xtch /sdcard/Download/NooirQA.xtch
+adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+  -d file:///sdcard/Download/NooirQA.xtch >/dev/null || true
+for png in \
+  X4-xtc-cover.png \
+  X4-xtc-prose.png \
+  X4-xtc-last.png \
+  X4-xtch-cover.png \
+  X4-xtch-prose.png \
+  X4-xtch-last.png \
+  X4-xtch-serif-large.png \
+  X4-xtch-inline-bold.png \
+  X3-xtch-cover.png \
+  X3-xtch-prose.png \
+  X4-xtc-arabic.png
+do
+  test -s "android-epub-xtc-previews/${png}"
+done
+
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root
 adb wait-for-device
@@ -60,3 +120,16 @@ test -s android-runtime-panel-diagnostic.zip
 python3 tools/panel_diagnostic_inspect.py \
   android-runtime-panel-diagnostic.zip --json \
   | tee android-panel-diagnostic-inspection.json
+
+# This first CI pass records a true emulator UI walk-through separately from
+# binary correctness. If launcher/onboarding accessibility is flaky, retain
+# screenshots and failure notes rather than claiming the UI is accepted.
+echo "Capturing Universal Converter navigation and source-type UI"
+mkdir -p android-universal-converter-screenshots
+if bash .github/scripts/universal-converter-ui-screenshots.sh; then
+  echo 0 > android-universal-converter-screenshots/capture-exit-code.txt
+else
+  code=$?
+  echo "$code" > android-universal-converter-screenshots/capture-exit-code.txt
+  echo "UI capture incomplete; inspect screenshots and accessibility dump" >&2
+fi

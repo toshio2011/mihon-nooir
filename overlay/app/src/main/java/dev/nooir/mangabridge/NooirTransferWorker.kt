@@ -15,6 +15,7 @@ import androidx.work.WorkerParameters
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.bridge.NooirDeviceProfiles
 import dev.nooir.bridge.NooirUpload
+import dev.nooir.bridge.XtcFormat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -37,6 +38,12 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         const val KEY_DEVICE = "device"
         const val KEY_TREE_URI = "save_tree_uri"
         const val KEY_OPTIONS = "options"
+        const val KEY_EPUB_FONT = "epub_font_px"
+        const val KEY_EPUB_MARGIN = "epub_margin_px"
+        const val KEY_EPUB_RTL = "epub_right_to_left"
+        const val KEY_EPUB_DIRECTION = "epub_direction_mode"
+        const val KEY_EPUB_LINE_HEIGHT = "epub_line_height_pct"
+        const val KEY_EPUB_FONT_FAMILY = "epub_font_family"
         const val KEY_PHASE = "phase"
         const val KEY_PERCENT = "percent"
         const val KEY_SENT = "sent"
@@ -45,6 +52,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         const val KEY_INDEX = "index"
         const val KEY_COUNT = "count"
         const val KEY_ERROR = "error"
+        const val KEY_LAST_SAVED_PREVIEW_URI = "last_saved_preview_uri"
         const val CHANNEL_ID = "manganooir_transfer"
     }
 
@@ -105,6 +113,16 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
         val device = inputData.getString(KEY_DEVICE) ?: "X4"
         val treeUri = inputData.getString(KEY_TREE_URI)?.let(Uri::parse)
         val options = MangaConversionOptions.fromToken(inputData.getString(KEY_OPTIONS))
+        val epubFont = inputData.getInt(KEY_EPUB_FONT, 24).coerceIn(14, 46)
+        val epubMargin = inputData.getInt(KEY_EPUB_MARGIN, 26).coerceIn(8, 80)
+        val epubRtl = inputData.getBoolean(KEY_EPUB_RTL, false)
+        // Existing queued requests still use the legacy boolean semantics.
+        val epubDirection = inputData.getString(KEY_EPUB_DIRECTION)
+            ?.takeIf { it in setOf("auto", "ltr", "rtl") }
+            ?: if (epubRtl) "rtl" else "ltr"
+        val epubLineHeight = inputData.getInt(KEY_EPUB_LINE_HEIGHT, 118).coerceIn(100, 200)
+        val epubFontFamily = inputData.getString(KEY_EPUB_FONT_FAMILY)
+            ?.takeIf { it in setOf("sans-serif", "serif", "monospace") } ?: "sans-serif"
         val profile = runCatching { NooirDeviceProfiles.forId(device) }.getOrNull()
         if (profile == null || (treeUri == null && !profile.xteinkWifi) ||
             files.isEmpty() || (treeUri == null && host.isBlank()) ||
@@ -122,6 +140,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         ))
         var completed = 0
+        var lastSavedPreviewUri: String? = null
         val fileErrors = mutableListOf<String>()
         try {
             withContext(Dispatchers.IO) {
@@ -137,7 +156,28 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     val title = selected.name.take(70)
                     val requestedName = editedNames.getOrNull(offset)?.trim().orEmpty()
                         .ifBlank { selected.name }
-                    val convertThis = selected.isManga && (convert || treeUri != null)
+                    val conversionRequested = convert || treeUri != null
+                    // Never silently copy EPUB/PDF/other documents while the
+                    // user requested XTC, XTCH or another conversion format.
+                    // Reject BEFORE creating a destination or uploading bytes.
+                    val inputMime = applicationContext.contentResolver.getType(uri).orEmpty()
+                    val kind = NooirLocalConversionPolicy.classify(selected.name, inputMime)
+                    val actual = format.resolved(device)
+                    val isEpub = kind == NooirLocalConversionPolicy.Input.EPUB
+                    val epubFormat = when (actual) {
+                        ExportFormat.XTC -> XtcFormat.XTC
+                        ExportFormat.XTCH -> XtcFormat.XTCH
+                        else -> null
+                    }
+                    val mayConvert = NooirLocalConversionPolicy.canConvertTo(
+                        selected.name, inputMime, actual.name)
+                    require(!conversionRequested || (mayConvert &&
+                        (selected.isManga || (isEpub && epubFormat != null)))) {
+                        val detail = NooirLocalConversionPolicy.unsupportedHint(selected.name, inputMime)
+                            .ifBlank { "This source/output combination cannot be converted here." }
+                        "Conversion not supported for ${selected.name}: " + detail
+                    }
+                    val convertThis = conversionRequested && (selected.isManga || isEpub)
                     val outputName = if (convertThis) NooirDestinationGuard.forManga(
                         requestedName.substringBeforeLast('.', requestedName), format, device)
                         else NooirDestinationGuard.original(requestedName)
@@ -150,7 +190,7 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                         val safeName = selected.name.substringBeforeLast('.', selected.name).take(70)
                             .map { c -> if (c.code < 128 && (c.isLetterOrDigit() || c == '_' || c == '-')) c else '_' }
                             .joinToString("").ifBlank { "Manga" }
-                        val mime = if (selected.isManga) format.resolved(device).mime.ifBlank { "application/octet-stream" }
+                        val mime = if (convertThis) actual.mime.ifBlank { "application/octet-stream" }
                             else resolver.getType(uri) ?: "application/octet-stream"
                         val parent = DocumentsContract.buildDocumentUriUsingTree(
                             treeUri, DocumentsContract.getTreeDocumentId(treeUri)
@@ -164,6 +204,16 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                                     applicationContext, uri, selected, format, device,
                                     saveDestination = target, options = options,
                                     outputBaseOverride = requestedName.substringBeforeLast('.', requestedName),
+                                    onStage = { step -> emit(step, index, files.size, title) },
+                                )
+                            } else if (isEpub && convertThis) {
+                                NooirEpubImportConverter.convert(
+                                    applicationContext, uri, requireNotNull(epubFormat), device,
+                                    epubFont, epubMargin, epubRtl,
+                                    lineHeightPercent = epubLineHeight, fontFamily = epubFontFamily,
+                                    directionMode = epubDirection, saveDestination = target,
+                                    outputName = outputName,
+                                    checkCancelled = { if (isStopped) throw CancellationException("EPUB conversion canceled") },
                                     onStage = { step -> emit(step, index, files.size, title) },
                                 )
                             } else {
@@ -189,6 +239,26 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                             runCatching { DocumentsContract.deleteDocument(resolver, target) }
                             throw e
                         }
+                        // Only expose a successfully written, final XTC/XTCH
+                        // document to the read-only preview. Never expose the
+                        // source EPUB, an incomplete file or an upload URL.
+                        if (convertThis && epubFormat != null)
+                            lastSavedPreviewUri = target.toString()
+                    } else if (convert && isEpub) {
+                        NooirEpubImportConverter.convert(
+                            applicationContext, uri, requireNotNull(epubFormat), device,
+                            epubFont, epubMargin, epubRtl,
+                            lineHeightPercent = epubLineHeight, fontFamily = epubFontFamily,
+                            directionMode = epubDirection, sendHost = host, sendFolder = folder, outputName = outputName,
+                            checkCancelled = { if (isStopped) throw CancellationException("EPUB conversion canceled") },
+                            onStage = { step -> emit(step, index, files.size, title) },
+                            onUploadProgress = { sent, total ->
+                                if (isStopped) throw CancellationException("EPUB upload canceled")
+                                val pct = (sent * 100L / total.coerceAtLeast(1L)).toInt()
+                                emit(if (sent >= total) "Waiting for XTEink confirmation" else "Uploading",
+                                    index, files.size, title, sent, total, pct)
+                            },
+                        )
                     } else if (convert && selected.isManga) {
                         emit("Converting", index, files.size, title)
                         ImportedMangaConverter.convert(
@@ -231,8 +301,10 @@ class NooirTransferWorker(context: Context, params: WorkerParameters) : Coroutin
                     .setContentText(completed.toString() + "/" + files.size + " file(s) completed; " + fileErrors.size + " failed")
                     .setOnlyAlertOnce(true).setAutoCancel(true).build()
             )
-            return if (fileErrors.isEmpty()) Result.success(Data.Builder().putInt(KEY_COUNT, completed).build())
-                else Result.success(NooirDeviceWorkQueue.failed(Data.Builder().putInt(KEY_COUNT, completed),
+            val completedData = Data.Builder().putInt(KEY_COUNT, completed)
+            lastSavedPreviewUri?.let { completedData.putString(KEY_LAST_SAVED_PREVIEW_URI, it) }
+            return if (fileErrors.isEmpty()) Result.success(completedData.build())
+                else Result.success(NooirDeviceWorkQueue.failed(completedData,
                     KEY_ERROR, fileErrors.joinToString("\n").take(4000)))
         } catch (e: CancellationException) {
             throw e
