@@ -8,7 +8,7 @@ overlay = (ROOT / "tools/apply_overlay.py").read_text()
 host = (ROOT / "tests/run.sh").read_text()
 web_ui = (ROOT / ".github/scripts/web-epub-ui-screenshots.sh").read_text()
 
-success_count = "OK (2 tests)"
+success_count = "OK (3 tests)"
 assert success_count in smoke
 assert "android-web-epub-export-instrumentation.txt" in smoke
 for token in (
