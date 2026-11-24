@@ -99,6 +99,11 @@ jobs:
           done
           (cd "$RUNNER_TEMP/uploaded" && sha256sum --strict -c SHA256SUMS.txt)
           echo 'All six draft release assets match the original verified artifact byte for byte.'
+          if [[ "$OPERATION" == stage ]]; then
+            gh release edit "$TAG" --repo "$GH_REPO" --notes-file docs/releases/v1.0.20.md
+          fi
+          test "$(gh release view "$TAG" --repo "$GH_REPO" --json body --jq .body)" = "$(cat docs/releases/v1.0.20.md)"
+          echo 'Verified draft release notes match the reviewed source.'
       - name: Publish only with explicit publish operation
         if: inputs.operation == 'publish'
         shell: bash
