@@ -11,6 +11,26 @@ import org.junit.runner.RunWith
 /** Real Android/Jsoup DOM regression, no third-party network or copyrighted text. */
 @RunWith(AndroidJUnit4::class)
 class NooirWebTocHtmlInstrumentedTest {
+    @Test fun wattpadPublicStoryDetailsIncludeCoverAndSynopsis() {
+        val link = "https://www.wattpad.com/story/413612349?" +
+            "utm_source=android&utm_medium=link&wp_uname=Toshio2011"
+        assertEquals("413612349", NooirWattpadPublic.storyId(link))
+        val details = NooirWattpadPublic.fromPublicStoryDetailsJson(
+            "{\"id\":\"413612349\",\"title\":\"The Lantern Observatory\",\"description\":\"A small town kept its lights on.\\\\n\\\\nThe lighthouse keeper waited for dawn.\",\"cover\":\"https://img.wattpad.com/cover/413612349-256-k123.jpg\",\"user\":{\"name\":\"Example Novelist\",\"username\":\"exampleauthor\"},\"storyLanguage\":\"en\",\"parts\":[{\"id\":\"1590012345\",\"title\":\"Part One\",\"url\":\"https://www.wattpad.com/1590012345-part-one\",\"draft\":false},{\"id\":\"1590012346\",\"title\":\"Part Two\",\"url\":\"https://www.wattpad.com/1590012346-part-two\",\"draft\":false}]}"
+        )
+        assertEquals("The Lantern Observatory", details.title)
+        assertEquals("Example Novelist", details.author)
+        assertTrue(details.synopsis.contains("lighthouse keeper"))
+        assertEquals("https://img.wattpad.com/cover/413612349-256-k123.jpg", details.coverUrl)
+        assertEquals("en", details.language)
+        assertEquals(2, details.chapters.size)
+        val unsafe = NooirWattpadPublic.fromPublicStoryDetailsJson(
+            "{\"id\":\"413612349\",\"title\":\"The Lantern Observatory\",\"description\":\"A small town kept its lights on.\\\\n\\\\nThe lighthouse keeper waited for dawn.\",\"cover\":\"https://img.wattpad.com/cover/413612349-256-k123.jpg\",\"user\":{\"name\":\"Example Novelist\",\"username\":\"exampleauthor\"},\"storyLanguage\":\"en\",\"parts\":[{\"id\":\"1590012345\",\"title\":\"Part One\",\"url\":\"https://www.wattpad.com/1590012345-part-one\",\"draft\":false},{\"id\":\"1590012346\",\"title\":\"Part Two\",\"url\":\"https://www.wattpad.com/1590012346-part-two\",\"draft\":false}]}".replace("https://img.wattpad.com/cover/",
+                "http://127.0.0.1/cover/")
+        )
+        assertEquals("", unsafe.coverUrl)
+    }
+
     @Test fun numberedTocControlsAreNotAccidentallyImportedAsChapters() {
         val page = Jsoup.parse(
             """

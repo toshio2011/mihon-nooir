@@ -1,5 +1,7 @@
 package dev.nooir.mangabridge
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.nooir.bridge.ReflowEpubFormat
@@ -11,6 +13,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -44,6 +47,55 @@ class NooirWebEpubEndToEndInstrumentedTest {
           <p>Nothing needed a private account or a live network request.</p>
         </article></body></html>
     """.trimIndent()
+
+    @Test fun wattpadBookCoverAndSynopsisArePackagedInEpub2And3() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bitmap = Bitmap.createBitmap(32, 48, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.rgb(100, 80, 160))
+        val png = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            .toByteArray()
+        bitmap.recycle()
+        for (format in listOf(ReflowEpubFormat.EPUB2, ReflowEpubFormat.EPUB3)) {
+            val output = File.createTempFile("nooir-wattpad-cover-", ".epub", context.cacheDir)
+            try {
+                val storyTitle = "The Lantern Observatory"
+                val synopsis = "A small town kept its lights on.\n\nThe keeper waited for dawn."
+                ReflowEpubWriter.write(
+                    output,
+                    dev.nooir.bridge.ReflowMetadata(storyTitle, "Example Novelist", synopsis, "en"),
+                    format,
+                ) { book ->
+                    NooirWebCover.embedImage(
+                        book, ReflowEpubWriter.ImageAsset(png, "png", "image/png"))
+                    NooirWebNovel.addSynopsis(book, synopsis)
+                    book.addSection("Part One", "<h1>Part One</h1><p>A safe synthetic chapter.</p>")
+                }
+                ZipFile(output).use { zip ->
+                    val opf = read(zip, "OEBPS/package.opf")
+                    assertTrue(opf.contains(storyTitle))
+                    assertTrue(opf.contains("Example Novelist"))
+                    assertTrue(opf.contains("<dc:description>A small town kept its lights on."))
+                    assertTrue(opf.contains("<dc:description>"))
+                    assertTrue(opf.contains("The keeper waited for dawn."))
+                    assertTrue(zip.getEntry("OEBPS/images/img00001.png") != null)
+                    assertEquals(3, Regex("<itemref\\b").findAll(opf).count())
+                    assertTrue(read(zip, "OEBPS/text/s00001.xhtml").contains("Book cover"))
+                    val about = read(zip, "OEBPS/text/s00002.xhtml")
+                    assertTrue(about.contains("<h1>Synopsis</h1>"))
+                    assertTrue(about.contains("The keeper waited for dawn."))
+                    val chapter = read(zip, "OEBPS/text/s00003.xhtml")
+                    assertTrue(chapter.contains("A safe synthetic chapter."))
+                    if (format == ReflowEpubFormat.EPUB2) {
+                        assertTrue(opf.contains("<meta name=\"cover\""))
+                        assertTrue(read(zip, "OEBPS/toc.ncx").contains("Synopsis"))
+                    } else {
+                        assertTrue(opf.contains("properties=\"cover-image\""))
+                        assertTrue(read(zip, "OEBPS/nav.xhtml").contains("Synopsis"))
+                    }
+                }
+            } finally { output.delete() }
+        }
+    }
 
     @Test fun actualHtmlExportsValidEpub2SectionsAndNcx() =
         verify(ReflowEpubFormat.EPUB2)

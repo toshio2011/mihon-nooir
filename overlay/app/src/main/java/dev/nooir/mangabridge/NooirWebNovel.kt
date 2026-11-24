@@ -97,6 +97,20 @@ object NooirWebNovel {
         return found.values.toList()
     }
 
+    /** Include a readable synopsis page, not only a hidden OPF description.
+     * The same safe XHTML is used for a selected multi-chapter Wattpad export. */
+    internal fun addSynopsis(epub: ReflowEpubWriter, synopsis: String) {
+        val paragraphs = synopsis.trim().replace("\r\n", "\n")
+            .split(Regex("\\n\\s*\\n"))
+            .map { it.trim().replace("\n", " ") }
+            .filter { it.isNotBlank() }
+        if (paragraphs.isEmpty()) return
+        val body = paragraphs.joinToString("") {
+            "<p>" + ReflowEpubWriter.xml(it) + "</p>"
+        }
+        epub.addSection("Synopsis", "<h1>Synopsis</h1>" + body)
+    }
+
     /** One EPUB per URL. Individual chapters become EPUB sections with a TOC. */
     fun convert(
         storyUrl: String, output: File,
@@ -112,13 +126,24 @@ object NooirWebNovel {
         require(startAt >= 1 && endAt >= startAt) { "Invalid chapter range" }
         onStage(0, 0, "Checking publicly available story")
         val page = preloadedPage ?: NooirWebArticle.load(storyUrl)
-        val meta = NooirWebArticle.metadata(page)
+        val htmlMeta = NooirWebArticle.metadata(page)
         val wattpadStory = NooirWattpadPublic.storyId(storyUrl) != null
+        val details = if (wattpadStory) {
+            runCatching { NooirWattpadPublic.storyDetails(storyUrl) }.getOrNull()
+        } else null
+        val meta = htmlMeta.copy(
+            title = details?.title?.ifBlank { htmlMeta.title } ?: htmlMeta.title,
+            author = details?.author?.ifBlank { htmlMeta.author } ?: htmlMeta.author,
+            description = details?.synopsis?.ifBlank { htmlMeta.description }
+                ?: htmlMeta.description,
+            language = details?.language?.ifBlank { htmlMeta.language }
+                ?: htmlMeta.language,
+        )
         // A Firefox WebToEpub parser can see Wattpad's chapter metadata even
         // when the story HTML has no <a> chapter links. Try only the public
         // metadata response; if it is blocked, use any truly visible HTML
         // chapter links, not a fake synopsis-only EPUB.
-        val chapterLinks = NooirWebChapterDiscovery.chapters(storyUrl, page)
+        val chapterLinks = details?.chapters ?: NooirWebChapterDiscovery.chapters(storyUrl, page)
         if (chapterLinks.isEmpty()) {
             require(startAt == 1) { "This page has no visible chapter list; use chapter 1 or a directly readable chapter link." }
             if (wattpadStory) {
@@ -141,7 +166,8 @@ object NooirWebNovel {
         ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
             epub.setReadingStyle(readingStyle)
             epub.setCustomCss(customCss)
-            NooirWebCover.embed(page, epub)
+            NooirWebCover.embed(page, epub, details?.coverUrl.orEmpty())
+            if (wattpadStory) addSynopsis(epub, meta.description)
             val total = chosen.size
             for ((i, item) in chosen.withIndex()) {
                 if (i > 0) Thread.sleep(1300L) // basic rate etiquette; no burst fetching

@@ -71,3 +71,30 @@ was modified by this correction.
 - The script is still an optional evidence capture in workflow CI: do not
   treat a green codec run alone as a Web editor acceptance result. No Web
   extractor, converter, official app, Windows, or Folio firmware source changed.
+
+
+## 24 Nov: Wattpad story metadata and complete EPUB front matter
+
+- Source Web-to-EPUB draft PR #110 at `ecbfa3cc5c9601f38349de25f248acaf18174694`; these changes
+  were copied by exact Git blob SHA into the isolated Android integration.
+  The separate Universal Converter PR #111 remains unchanged.
+- Story IDs such as the example `413612349` (including Android's
+  `utm_source` tracking parameters) use the public Wattpad v3 story
+  metadata already consulted for chapter inventory. Its story-level
+  title, author, cover URL, synopsis and language now flow into both
+  analyzed/selected chapters and ordinary novel exports.
+- Combined book EPUBs add a readable **Synopsis** TOC section
+  before chapters when a synopsis is specified; metadata also contains
+  `dc:description` and the actual cover image is marked in the OPF.
+  Per-story Wattpad export also adds this section. EPUB2 and EPUB3
+  compatibility is preserved; the description limit is 4000 characters.
+- The Android test gate now expects **7 public Web TOC tests** (including
+  a Wattpad URL-shaped synthetic metadata fixture), **3 actual Web EPUB
+  tests** (including ZIP-verified cover and synopsis in EPUB2 and EPUB3),
+  18 EPUB-to-XTC/XTCH tests and 5 prior panel tests: **33 total**.
+- This does not use private cookies, bypass paid chapters, or claim
+  a live export of user-provided Wattpad story: the public webpage and
+  story API were not reachable from the research environment. Treat
+  public API accessibility as an integration risk to test on Android.
+- Exact-head emulator CI and signed test artifact must be checked
+  before presenting this as a passed Android candidate.

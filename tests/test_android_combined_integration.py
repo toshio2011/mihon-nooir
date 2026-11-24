@@ -14,7 +14,9 @@ assert "android-web-epub-export-instrumentation.txt" in smoke
 for token in (
     "NooirEpubXtcInstrumentedTest", "NooirWebTocHtmlInstrumentedTest",
     "NooirWebEpubEndToEndInstrumentedTest", "OK (18 tests)",
-    "OK (6 tests)", "OK (2 tests)",
+    "OK (7 tests)", "OK (3 tests)",
+    "wattpadPublicStoryDetailsIncludeCoverAndSynopsis",
+    "wattpadBookCoverAndSynopsisArePackagedInEpub2And3",
 ):
     assert token in smoke, token
 for token in (
@@ -24,7 +26,8 @@ for token in (
     assert token in workflow, token
 for token in (
     "NooirEpubBook", "NooirFinishedBookPreview", "NooirWebArticle",
-    "NooirWebTocPagination", "ReflowEpubWriter",
+    "NooirWebTocPagination", "NooirWattpadPublic", "NooirWebCover",
+    "ReflowEpubWriter",
 ):
     assert "-keep class dev.nooir." in overlay and token in overlay, token
 for token in (

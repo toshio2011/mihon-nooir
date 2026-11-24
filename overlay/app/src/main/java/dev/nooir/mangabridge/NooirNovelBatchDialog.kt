@@ -337,8 +337,14 @@ fun NooirNovelBatchDialog(
                         Text("Found ${current.size} listed chapters · ${selectedCount} selected")
                         Text("Book: " + discovered.title.take(120))
                         if (discovered.author.isNotBlank()) Text("Author: " + discovered.author.take(120))
+                        if (discovered.description.isNotBlank())
+                            Text("Synopsis: " + discovered.description.take(220) +
+                                if (discovered.description.length > 220) "…" else "")
                         if (discovered.detectedCoverUrl.isNotBlank())
-                            Text("Detected cover: " + discovered.detectedCoverUrl.take(115))
+                            Text("Detected story cover: " + discovered.detectedCoverUrl.take(115))
+                        else if (NooirWattpadPublic.storyId(discovered.inputUrl) != null)
+                            Text("Wattpad cover not available from public metadata. " +
+                                "After choosing chapters, select a phone cover in Cover options.")
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             OutlinedButton(onClick = {
                                 choices = NooirWebChapterPlan.chooseAll(choices, true)
@@ -461,7 +467,7 @@ fun NooirNovelBatchDialog(
                         supportingText = { Text("Blank keeps the source page language.") },
                         singleLine = true)
                     OutlinedTextField(value = combinedDescription,
-                        onValueChange = { combinedDescription = it.take(1200) },
+                        onValueChange = { combinedDescription = it.take(4000) },
                         label = { Text("Book description (optional)") },
                         minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth())
                     OutlinedButton(

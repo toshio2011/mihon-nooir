@@ -91,6 +91,10 @@ r8_rules.write_text(r8_rules.read_text() +
     "# Limit this to the small Web TOC test surface, not broad app packages.\n" +
     "-keep class dev.nooir.mangabridge.NooirWebNovel { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirWebNovel$* { *; }\n" +
+    "# Public Wattpad story book metadata and EPUB cover Android QA.\n" +
+    "-keep class dev.nooir.mangabridge.NooirWattpadPublic { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWattpadPublic$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebCover { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirWebChapterDiscovery { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirWebChapterDiscovery$* { *; }\n" +
     "-keep class dev.nooir.mangabridge.NooirWebTocPagination { *; }\n" +
