@@ -74,6 +74,7 @@ fun NooirWebToReaderDialog(onDismiss: () -> Unit) {
                 NooirWebExportWorker.URL to url.trim(),
                 NooirWebExportWorker.OUTPUT_NAME to outputName.trim(),
                 NooirWebExportWorker.SAVE_URI to saveUri?.toString(),
+                NooirWebExportWorker.SAVE_PICKER_CREATED to (saveUri != null),
                 NooirWebExportWorker.HOST to host.trim(),
                 NooirWebExportWorker.FOLDER to folder.trim(),
             )).build()

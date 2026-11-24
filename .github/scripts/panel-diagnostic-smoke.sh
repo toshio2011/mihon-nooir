@@ -110,6 +110,58 @@ do
   test -s "android-epub-xtc-previews/${png}"
 done
 
+echo "Running synthetic public TOC HTML and next-chapter exclusion checks on Android"
+adb shell am instrument -w -r \
+  -e class dev.nooir.mangabridge.NooirWebTocHtmlInstrumentedTest \
+  dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=numberedTocControlsAreNotAccidentallyImportedAsChapters' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=plainNextChapterLinkCannotAdvanceTocPage' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=queryBasedChapterUrlsKeepTheirStoryPath' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=encodedChapterPathsRemainExactAndQueryVariantsDeduplicate' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=consecutiveTocPagesMergeWithoutDuplicateChapters' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=unfinishedTocAfterSafetyLimitFailsRatherThanTruncates' android-web-toc-instrumentation.txt
+grep -Fxq 'OK (6 tests)' android-web-toc-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-toc-instrumentation.txt
+
+echo "Exporting synthetic public HTML into real EPUB2/EPUB3 ZIP files on Android"
+adb shell am instrument -w -r \
+  -e class dev.nooir.mangabridge.NooirWebEpubEndToEndInstrumentedTest \
+  dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee android-web-epub-export-instrumentation.txt
+for required in \
+  actualHtmlExportsValidEpub2SectionsAndNcx \
+  actualHtmlExportsValidEpub3SectionsAndNavigation
+do
+  grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-web-epub-export-instrumentation.txt
+done
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0
+adb root
+adb wait-for-device
+adb pull \
+  /data/user/0/dev.nooir.mihontrial.foss/files/manganooir_panel_debug/latest.zip \
+  android-runtime-panel-diagnostic.zip
+test -s android-runtime-panel-diagnostic.zip
+python3 tools/panel_diagnostic_inspect.py \
+  android-runtime-panel-diagnostic.zip --json \
+  | tee android-panel-diagnostic-inspection.json
+
+# This first CI pass records a true emulator UI walk-through separately from
+# binary correctness. If launcher/onboarding accessibility is flaky, retain
+# screenshots and failure notes rather than claiming the UI is accepted.
+echo "Capturing Universal Converter navigation and source-type UI"
+mkdir -p android-universal-converter-screenshots
+if bash .github/scripts/universal-converter-ui-screenshots.sh; then
+  echo 0 > android-universal-converter-screenshots/capture-exit-code.txt
+else
+  code=$?
+  echo "$code" > android-universal-converter-screenshots/capture-exit-code.txt
+  echo "UI capture incomplete; inspect screenshots and accessibility dump" >&2
+fi
+ android-web-epub-export-instrumentation.txt)" -eq 2
+grep -Fxq 'OK (2 tests)' android-web-epub-export-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-epub-export-instrumentation.txt
+
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root
 adb wait-for-device

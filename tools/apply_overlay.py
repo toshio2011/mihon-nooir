@@ -79,7 +79,25 @@ r8_rules.write_text(r8_rules.read_text() +
     "# use the exact XTC/XTCH preview singleton. R8 can inline/delete this\n" +
     "# helper while the instrumentation still resolves it by JVM class name.\n" +
     "-keep class dev.nooir.mangabridge.NooirFinishedBookPreview { *; }\n" +
-    "-keep class dev.nooir.mangabridge.NooirFinishedBookPreview$* { *; }\n")
+    "-keep class dev.nooir.mangabridge.NooirFinishedBookPreview$* { *; }\n" +
+    "# Public Web-to-EPUB DOM instrumentation is compiled separately from\n" +
+    "# the minified FOSS app. Keep the exact Kotlin object INSTANCE fields,\n" +
+    "# method/default-argument entrypoints and chapter/pager value types.\n" +
+    "# Limit this to the small Web TOC test surface, not broad app packages.\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebNovel { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebNovel$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebChapterDiscovery { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebChapterDiscovery$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebTocPagination { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebTocPagination$* { *; }\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebChapterIdentity { *; }\n" +
+    "# Separate AndroidTest APK also executes the real article extractor\n" +
+    "# and EPUB2/3 writer, then inspects the resulting ZIP contents.\n" +
+    "-keep class dev.nooir.mangabridge.NooirWebArticle { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowEpubWriter { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowEpubWriter$* { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowMetadata { *; }\n" +
+    "-keep class dev.nooir.bridge.ReflowEpubStyle { *; }\n")
 
 
 vm = upstream / "app/src/main/java/eu/kanade/tachiyomi/ui/manga/MangaViewModel.kt"

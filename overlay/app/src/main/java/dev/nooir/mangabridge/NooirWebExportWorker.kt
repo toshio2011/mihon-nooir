@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -23,6 +24,8 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
         const val URL = "web_url"
         const val OUTPUT_NAME = "web_output_name"
         const val SAVE_URI = "web_save_uri"
+        // True only when the UI just created this URI via CreateDocument.
+        const val SAVE_PICKER_CREATED = "web_save_picker_created"
         const val HOST = "web_host"
         const val FOLDER = "web_folder"
         const val PHASE = "web_phase"
@@ -40,15 +43,27 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
         .setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_LOW)
         .setProgress(0, 0, true).build()
 
+    private fun deleteIncompletePickerDocument(uri: Uri?, newlyCreated: Boolean) {
+        // Never delete a pre-existing document passed in by another caller.
+        // Android's CreateDocument returns a newly created user-owned URI.
+        if (uri != null && newlyCreated) {
+            runCatching {
+                DocumentsContract.deleteDocument(applicationContext.contentResolver, uri)
+            }
+        }
+    }
+
     override suspend fun doWork(): Result {
         val link = inputData.getString(URL).orEmpty()
         val outputName = NooirDestinationGuard.filename(
             inputData.getString(OUTPUT_NAME).orEmpty().ifBlank { "Article" }, "epub")
         val destination = inputData.getString(SAVE_URI)?.let(Uri::parse)
+        val pickerCreated = inputData.getBoolean(SAVE_PICKER_CREATED, false)
         val host = inputData.getString(HOST).orEmpty()
         val folder = inputData.getString(FOLDER) ?: "/Books"
         if (link.isBlank() || (destination == null && (host.isBlank() ||
             !folder.startsWith("/") || folder.contains("..")))) {
+            deleteIncompletePickerDocument(destination, pickerCreated)
             return Result.success(NooirDeviceWorkQueue.failed(Data.Builder(), ERROR, "Missing URL or destination"))
         }
         if (Build.VERSION.SDK_INT >= 26) notices.createNotificationChannel(NotificationChannel(
@@ -95,8 +110,10 @@ class NooirWebExportWorker(context: Context, params: WorkerParameters) : Corouti
                 .setAutoCancel(true).build())
             return Result.success()
         } catch (e: CancellationException) {
+            deleteIncompletePickerDocument(destination, pickerCreated)
             throw e
         } catch (e: Exception) {
+            deleteIncompletePickerDocument(destination, pickerCreated)
             val message = e.message.orEmpty().ifBlank { "Could not export article" }
             notices.notify(notification, NotificationCompat.Builder(
                 applicationContext, NooirTransferWorker.CHANNEL_ID,
