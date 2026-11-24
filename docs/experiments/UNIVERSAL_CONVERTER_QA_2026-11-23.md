@@ -214,3 +214,18 @@ or publish a new release without approval.
   those remain separate acceptance items and must not be claimed as tested.
 - No public Android release, Windows desktop code, Folio Nooir firmware,
   or separate Web → EPUB #110 is modified.
+
+## 24 November: R8 keep rule for real provider-backed save regression
+
+- New 18th Android test **failed** at exact head `9fb498e` in
+  [Actions 45308315389](https://github.com/toshio2011/mihon-nooir/actions/runs/45308315389).
+  The five legacy panel tests passed, and 17 prior EPUB tests passed;
+  `androidDocumentsProviderSaveAndPreviewFinishedXtch` failed with
+  `NoClassDefFoundError: dev.nooir.mangabridge.NooirEpubImportConverter`.
+- Cause: the minified FOSS APK eliminated the Kotlin object from the
+  externally compiled test surface. This is distinct from a source-format or
+  provider-IO failure. Add narrowly targeted R8 `-keep` entries for
+  `NooirEpubImportConverter` and its nested classes, preserving its `INSTANCE`.
+- Verify the **exact new head** with all 18 instrumented cases before
+  concluding that provider-backed conversion/save works. No official build
+  signing or public version was touched.
