@@ -115,7 +115,8 @@ class UniversalConverterPreservationTest(unittest.TestCase):
         self.assertIn('"aria-hidden" is intentionally NOT excluded', renderer)
         smoke = (ROOT / ".github/scripts/panel-diagnostic-smoke.sh").read_text(encoding="utf-8")
         self.assertIn("hiddenXhtmlDoesNotPolluteRealEncodedXtch", smoke)
-        self.assertIn("'OK (17 tests)'", smoke)
+        self.assertIn("'OK (18 tests)'", smoke)
+        self.assertIn("androidDocumentsProviderSaveAndPreviewFinishedXtch", smoke)
         self.assertIn("invalidPreferredImageFallsBackToRealEncodedXtch", smoke)
 
     def test_finished_preview_r8_api_survives_minified_foss_build(self):

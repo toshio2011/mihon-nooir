@@ -193,3 +193,24 @@ or publish a new release without approval.
 - The ZIP reader now accepts a bounded candidate-quality callback, skips unreadable or unusable local candidates, and tries the next safe one. Android checks image decode bounds and the existing 70 MP/16k-per-side limits without allocating additional full-resolution bitmaps. No network access and no silent omission of an image when *all* options fail.
 - Added one Android parity test using `srcset` containing a corrupt preferred asset and a valid fallback; the **finished XTCH page count and decoded pixels** must match the baseline real output. The Android suite is now expected to report exactly **17 tests**, with a host callback regression and route gate.
 - No changes to X3/X4 firmware, public Android release, Windows desktop or separate Web → EPUB PR #110.
+
+
+## 24 November: Android content-provider EPUB → XTCH save → reopen test
+
+- The prior exact head `2047dbd` Android CI
+  [run 45304572091](https://github.com/toshio2011/mihon-nooir/actions/runs/45304572091)
+  **passed** its full 17-test EPUB XTC/XTCH instrumentation suite, minified APK
+  build, panel ZIP smoke, and real first/next XTCH preview navigation.
+- New Android instrumentation uses real Android `MediaStore.Downloads`
+  `content://` documents for EPUB source and XTCH destination; it writes
+  the synthetic public-domain-free QA fixture through the resolver, invokes
+  the existing `NooirEpubImportConverter.convert` save-to-phone path, opens
+  the final saved document through `NooirFinishedBookPreview.open`, and checks
+  the true decoder's page pixels, byte-for-byte preview immutability, page
+  counts, and cleanup of the two temporary provider records.
+- This extends the suite to **18 Android tests** and gets closer to the
+  user's actual Android storage workflow. It does not yet exercise the
+  WorkManager UI picker/enqueue path or SAF tree permission persistence:
+  those remain separate acceptance items and must not be claimed as tested.
+- No public Android release, Windows desktop code, Folio Nooir firmware,
+  or separate Web → EPUB #110 is modified.

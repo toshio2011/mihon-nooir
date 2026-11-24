@@ -1,8 +1,11 @@
 package dev.nooir.mangabridge
 
+import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.nooir.bridge.XtcBookPreview
@@ -426,6 +429,82 @@ class NooirEpubXtcInstrumentedTest {
             source.delete()
             output.delete()
             corrupt.delete()
+        }
+    }
+
+    /**
+     * An actual Android storage-provider round trip, not a file:// shortcut:
+     * content:// EPUB input -> native conversion -> content:// XTCH output ->
+     * finished-book viewer's independent copy and real pixels.
+     */
+    @Test fun androidDocumentsProviderSaveAndPreviewFinishedXtch() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val resolver = context.contentResolver
+        val source = File.createTempFile("nooir-provider-source-", ".epub", context.cacheDir)
+        val created = mutableListOf<Uri>()
+        fun addDownload(name: String, mime: String): Uri {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + "/NooirRegression/")
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("Android Downloads provider refused a test document")
+            created += uri
+            return uri
+        }
+        try {
+            makeBook(source)
+            val suffix = System.nanoTime().toString()
+            val inputUri = addDownload("Nooir-Source-$suffix.epub", "application/epub+zip")
+            resolver.openOutputStream(inputUri, "w")?.use { sink ->
+                source.inputStream().use { it.copyTo(sink) }
+            } ?: error("Cannot write EPUB fixture through Android Downloads provider")
+            val outputUri = addDownload("Nooir-Finished-$suffix.xtch", "application/octet-stream")
+            val pageCount = NooirEpubImportConverter.convert(
+                context, inputUri, XtcFormat.XTCH, "X4",
+                saveDestination = outputUri, outputName = "Nooir-Finished.xtch",
+            )
+            assertTrue("Android provider conversion produced no readable pages", pageCount >= 3)
+            val original = resolver.openInputStream(outputUri)?.use { it.readBytes() }
+                ?: error("Cannot read saved XTCH from Android storage provider")
+            assertTrue("Saved XTCH contains no encoded bytes", original.size > 100)
+            val loaded = NooirFinishedBookPreview.open(context, outputUri)
+            try {
+                assertEquals(XtcFormat.XTCH, loaded.format)
+                assertEquals(pageCount, loaded.pageCount)
+                assertTrue("Preview copy changed saved XTCH bytes",
+                    original.contentEquals(loaded.file.readBytes()))
+                val encoded = XtcBookPreview(loaded.file).page(1)
+                val decoded = NooirFinishedBookPreview.decodePage(loaded.file, 1)
+                try {
+                    assertEquals(480, decoded.width)
+                    assertEquals(800, decoded.height)
+                    val max = (1 shl encoded.depth) - 1
+                    for (y in 0 until decoded.height step 37) {
+                        for (x in 0 until decoded.width step 29) {
+                            val level = encoded.levels[y * encoded.width + x].toInt() and 255
+                            val gray = level * 255 / max
+                            assertEquals("Saved XTCH differs from real viewer pixels",
+                                Color.rgb(gray, gray, gray), decoded.getPixel(x, y))
+                        }
+                    }
+                } finally {
+                    decoded.recycle()
+                }
+            } finally {
+                loaded.file.delete()
+            }
+            val unchanged = resolver.openInputStream(outputUri)?.use { it.readBytes() }
+                ?: error("Preview lost the original saved document")
+            assertTrue("Read-only preview modified the user's saved XTCH",
+                original.contentEquals(unchanged))
+        } finally {
+            for (uri in created.asReversed()) {
+                runCatching { resolver.delete(uri, null, null) }
+            }
+            source.delete()
         }
     }
 
