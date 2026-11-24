@@ -74,8 +74,7 @@ class NooirWebEpubEndToEndInstrumentedTest {
                     val opf = read(zip, "OEBPS/package.opf")
                     assertTrue(opf.contains(storyTitle))
                     assertTrue(opf.contains("Example Novelist"))
-                    assertTrue(opf.contains("<dc:description>" + synopsis.replace("&", "&amp;")
-                        .replace("\n", "") .take(15).substringBefore(".") .let { "A small town kept its lights on." }))
+                    assertTrue(opf.contains("<dc:description>A small town kept its lights on."))
                     assertTrue(opf.contains("<dc:description>"))
                     assertTrue(opf.contains("The keeper waited for dawn."))
                     assertTrue(zip.getEntry("OEBPS/images/img00001.png") != null)
@@ -87,10 +86,10 @@ class NooirWebEpubEndToEndInstrumentedTest {
                     val chapter = read(zip, "OEBPS/text/s00003.xhtml")
                     assertTrue(chapter.contains("A safe synthetic chapter."))
                     if (format == ReflowEpubFormat.EPUB2) {
-                        assertTrue(opf.contains("<meta name=\\"cover\\""))
+                        assertTrue(opf.contains("<meta name=\"cover\""))
                         assertTrue(read(zip, "OEBPS/toc.ncx").contains("Synopsis"))
                     } else {
-                        assertTrue(opf.contains("properties=\\"cover-image\\""))
+                        assertTrue(opf.contains("properties=\"cover-image\""))
                         assertTrue(read(zip, "OEBPS/nav.xhtml").contains("Synopsis"))
                     }
                 }
