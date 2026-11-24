@@ -1,6 +1,6 @@
 # Web novels, multiple webpages and batch EPUBs
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 MihonNooir's first **web novel importer** is an experimental extension of [Web to E-reader](WEB_TO_READER.md). The goal is to read longer publicly available web stories as **real, reflowable EPUB books**, keeping individual chapters, a table of contents, an available cover, and inline illustrations.
 
@@ -8,7 +8,7 @@ MihonNooir's first **web novel importer** is an experimental extension of [Web t
 
 ## How to download several novels
 
-1. In MihonNooir, go to **More → Nooir Tools → Web novels · Batch EPUB**.
+1. In MihonNooir, go to **More → Nooir Tools → Universal Book Converter → Web novels**.
 2. Paste **one public HTTPS story URL per line**, up to **10 stories**. Each story becomes its **own EPUB**.
 3. Leave **Download all chapters** checked (default) to export every chapter discoverable in public HTML. Or uncheck it to supply **First / Last chapter** when you only want a range. There is no artificial 80-chapter cap. Large novels can take a long time and may exceed the 180 MiB XTEink upload limit; use Save to phone when needed.
 4. Before starting, optionally type an output name for each story; the importer checks for collisions in the selected destination folder *before* fetching its chapters. If the name exists, that story is skipped with an error, and subsequent stories continue. Tap **Download EPUBs to phone folder** and choose an Android storage folder, or connect the XTEink to Folio Nooir File Transfer and tap **Convert novels & send to XTEink**.
@@ -17,8 +17,8 @@ MihonNooir's first **web novel importer** is an experimental extension of [Web t
 
 ## Two entry points, same multi-link converter
 
-- **More → Nooir Tools → Web link → EPUB:** for ordinary public webpages/articles. Tap **Multiple web links → one EPUB** to open the shared multi-link editor, prefilled with the current article URL if available. Paste multiple public HTTPS webpages (or novel chapter URLs), one per line, and export them as one EPUB.
-- **More → Nooir Tools → Web novels · Batch EPUB:** opens the same editor in separate-story mode by default; switch on **Combine pasted webpages into ONE EPUB** for a manual chapter list.
+- **More → Nooir Tools → Universal Book Converter → Web link:** for ordinary public webpages/articles. Tap **Multiple web links → one EPUB** to open the shared multi-link editor, prefilled with the current article URL if available. Paste multiple public HTTPS webpages (or novel chapter URLs), one per line, and export them as one EPUB.
+- **More → Nooir Tools → Universal Book Converter → Web novels:** opens the same editor in separate-story mode by default; switch on **Combine pasted webpages into ONE EPUB** for a manual chapter list.
 
 Both routes ultimately use **NooirWebPageBook + NooirNovelBatchWorker** for the combined export, the same sequential Nooir Activity Queue, destination filename preflight and optional phone/XTEink upload. The default **single web article** conversion remains available on the Web Link screen, and the usual **one EPUB per novel** workflow is unchanged.
 
@@ -56,7 +56,7 @@ Combined mode has **no fixed number of pasted chapters**; the public URL list is
 
 The current implementation finds chapter links **already visible in a site's public HTML**, using common table-of-contents and chapter link markup. It then fetches each publicly accessible chapter, embeds supported images, and writes each chapter into an EPUB navigation section. Requests are spaced out; no high-concurrency crawling.
 
-**Wattpad and similar services:** this is **not yet a full Wattpad-specific importer**. The Wattpad story landing page may load its TOC dynamically in JavaScript, so generic HTML chapter discovery may fail. If the app cannot detect real chapter content, it should report an error rather than exporting a useless book description. Directly readable public chapters may work. We will need source-specific, officially permitted integrations and testing for better reliability.
+**Wattpad and similar services:** v1.0.20 can import public story metadata and discover/select chapters; cover and synopsis are supported. One story was tested on Android, but other stories may still fail if chapter text is inaccessible.
 
 **No paywall, premium chapter, access-control, or DRM bypass.** Some sites sell paid chapters; MihonNooir only imports content made accessible to it without circumventing protections. If you've legitimately purchased a book, use an authorized file export or supplied EPUB and then send that EPUB through **More → Send & Convert files**.
 
@@ -105,3 +105,7 @@ These are **code/diagnostic changes**, not a claim that both URLs are accessible
 
 **How to report:** Retry the story in the current release. Use the **Copy error details** option on the web-novel screen and share the *error text only* (no cookies or chapter content). Please record whether the failure occurred during **chapter discovery** or **fetching a particular chapter**.
 
+
+## v1.0.20 chapter and book settings
+
+Open **More → Nooir Tools → Universal Book Converter → Web novels**, paste a public story URL and tap **Analyze chapters before export**. Review detected title, author, cover and synopsis, select/reorder chapters and preview text. Choose **Use selected chapters in one EPUB** to edit book metadata, choose automatic/custom or combined covers, select EPUB2/3, adjust text styling and illustration sizes, save a local project or check for new chapters. Wattpad metadata can populate the cover and a Synopsis page plus EPUB description metadata. Public chapter listings do not guarantee readable text; no login or paywall bypass.

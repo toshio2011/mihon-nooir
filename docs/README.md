@@ -5,7 +5,7 @@
 [← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
 > [!IMPORTANT]
-> **The latest official Android release is [v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19)** (19 November 2026). See [release notes](releases/v1.0.19.md) for smarter panel detection, adjustable oversized enlargement, artwork preservation and signed upgrade verification. Existing saved-book preview, rendering styles and PDF batch conversion are retained. From official v1.0.17, manually download the correct APK and install over the existing app after backing up. Older guides may describe the versions in which a feature originated; use the latest release notes for current behavior. Windows is still in development.
+> **The latest official Android release is [v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20)** (24 November 2026). See [release notes](releases/v1.0.20.md) for Universal Book Converter, EPUB → XTC/XTCH, Web → EPUB and signed upgrade verification. Existing manga and PDF tools are retained. Windows remains in development.
 
 ## If this is your first time
 
@@ -38,7 +38,7 @@
 | [Build/update policy](UPDATES.md) | Pinned Mihon, Android signatures, release constraints |
 | [Developer handover](PROJECT_HANDOVER.md) | Project architecture and the next development steps |
 | [Illustrated-novel PDF QA checklist](PDF_ILLUSTRATED_NOVEL_QA.md) | Privacy-safe representative test requirements (not test source files) |
-| [v1.0.19 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) · [Release notes and test evidence](releases/v1.0.19.md) | Current official Android APKs, changes and upgrade verification |
+| [v1.0.20 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) · [Release notes and test evidence](releases/v1.0.20.md) | Current official Android APKs, changes and upgrade verification |
 | [Automatic Panel-by-Panel implementation status](PANEL_IMPLEMENTATION_STATUS.md) | Historical panel implementation notes; see current release notes for shipped behavior |
 | [Panel EPUB comparison QA](PANEL_EXPORT_QA.md) | Offline frame-by-frame content matching for old versus new exports, without uploading manga artwork |
 | [Roadmap #8](https://github.com/toshio2011/mihon-nooir/issues/8) | Upcoming improvements and incomplete items |

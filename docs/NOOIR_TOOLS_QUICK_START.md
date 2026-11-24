@@ -1,6 +1,6 @@
 # Nooir Tools — quick start
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← MihonNooir home](../README.md) · [All guides](README.md) · [Getting started](GETTING_STARTED.md)
 
@@ -13,10 +13,10 @@ Open **MihonNooir → More → Nooir Tools**. Inside the hub:
 | Choose | Use it for |
 |---|---|
 | **Activity Queue · All current jobs** | Watch running, waiting, completed or failed conversions/transfers |
-| **Send & Convert files** | Send files already on your phone; convert local CBZ/images when supported |
-| **Web link → EPUB** | Convert a public webpage **or multiple webpage links into one EPUB** |
-| **Web novels · Batch EPUB** | One EPUB per public novel; discover chapters or combine selected chapter URLs |
-| **PDF → EPUB · Text + illustrations** | Convert one or more PDFs into EPUB 2/3 or XTC/XTCH; keep text selectable in EPUB where feasible |
+| **Universal Book Converter → Local files** | Convert local EPUB, CBZ/ZIP or images, or send originals |
+| **Universal Book Converter → Web link** | Convert a public webpage **or multiple webpage links into one EPUB** |
+| **Universal Book Converter → Web novels** | One EPUB per public novel; discover chapters or combine selected chapter URLs |
+| **Universal Book Converter → PDF files** | Convert one or more PDFs into EPUB 2/3 or XTC/XTCH; keep text selectable in EPUB where feasible |
 | **Browse XTEink files** | Browse reader folders without editing; open its full file manager in your browser |
 
 **Manga chapter export is not inside this hub:** open a manga details page, select chapters, and use its existing Export button.
@@ -39,13 +39,13 @@ No selection + Normal Export means **all downloaded chapters** of that manga. Qu
 
 ## 2. Local files → phone or XTEink
 
-Open **More → Nooir Tools → Send & Convert files**, select documents with Android's picker, and choose whether to send originals unchanged or convert supported image/CBZ manga. You can select up to **25 files per batch**. Edit each output name before processing if it clashes with a file already on the reader or destination folder.
+Open **More → Nooir Tools → Universal Book Converter → Local files**, choose input type, select files, choose output and settings; EPUB → XTC/XTCH and supported CBZ/images can be converted or sent unchanged. You can select up to **25 files per batch**. Edit each output name before processing if it clashes with a file already on the reader or destination folder.
 
 A PDF, EPUB or other file sent **unchanged** is not automatically converted or guaranteed readable by every firmware. Use the dedicated PDF converter for mixed-content PDF → EPUB.
 
 ## 3. One web link → EPUB
 
-Open **More → Nooir Tools → Web link → EPUB**. Paste one **public HTTPS webpage** containing the readable article itself, pick an output name, then **Save article EPUB to phone** or **Convert article & send to XTEink**.
+Open **More → Nooir Tools → Universal Book Converter → Web link**. Paste one **public HTTPS webpage** containing the readable article itself, pick an output name, then **Save article EPUB to phone** or **Convert article & send to XTEink**.
 
 Text and supported inline artwork become a reflowable EPUB where extraction succeeds. A site's story overview, login-only view, script-only page, or paywalled chapter may not contain readable text in its public HTML.
 
@@ -66,7 +66,7 @@ There's no fixed pasted-chapter count for this mode; URL-list storage is bounded
 
 ## 5. PDF → EPUB / XTC / XTCH
 
-Open **More → Nooir Tools → PDF → EPUB · Text + illustrations** and choose **Choose PDF file(s) from phone**.
+Open **More → Nooir Tools → Universal Book Converter → PDF files** and choose **Choose PDF file(s) from phone**.
 
 - **EPUB 2 or EPUB 3:** select **Reflowable text + illustrations** or **Keep original pages as images**. Text is selectable where extraction succeeds; scan-only or difficult pages may remain images.
 - **XTC or XTCH:** select the device; each PDF page becomes pixels at its target resolution. Text is not selectable.
@@ -98,6 +98,12 @@ The confirmed **Cancel entire Nooir queue** action stops queued jobs too; cancel
 
 ## Compatibility and feedback
 
-[The v1.0.19 release notes](releases/v1.0.19.md) describe verified signed-upgrade and Android emulator tests. These do not prove every web source, PDF, manga panel or physical e-reader transfer works. Please include your build, input type, exact error, device and firmware; do not share credentials or copyrighted pages.
+[The v1.0.20 release notes](releases/v1.0.20.md) describe verified signed-upgrade and Android emulator tests. These do not prove every web source, PDF, manga panel or physical e-reader transfer works. Please include your build, input type, exact error, device and firmware; do not share credentials or copyrighted pages.
 
-[Current release notes](releases/v1.0.19.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+[Current release notes](releases/v1.0.20.md) · [Roadmap](https://github.com/toshio2011/mihon-nooir/issues/8)
+
+## Universal Book Converter in v1.0.20
+
+Open **More → Nooir Tools → Universal Book Converter → Local files**. Choose the input type before browsing, then select compatible output and settings. EPUB → XTC/XTCH supports font family, font size, margin, line height and reading direction. CBZ/ZIP/images retain supported manga settings. Save to phone or send to compatible XTEink. Inspect actual output using **Universal Book Converter → Preview finished XTC / XTCH book**.
+
+Open **More → Nooir Tools → Universal Book Converter → Web novels**, paste a public story URL and tap **Analyze chapters before export**. Review detected title, author, cover and synopsis, select/reorder chapters and preview text. Choose **Use selected chapters in one EPUB** to edit book metadata, choose automatic/custom or combined covers, select EPUB2/3, adjust text styling and illustration sizes, save a local project or check for new chapters. Wattpad metadata can populate the cover and a Synopsis page plus EPUB description metadata. Public chapter listings do not guarantee readable text; no login or paywall bypass.

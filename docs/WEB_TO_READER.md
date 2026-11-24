@@ -1,12 +1,12 @@
 # Web link → EPUB
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 > Conversion runs locally on Android, without AI or OCR services; specific sites may not expose readable public HTML.
 
 ## Convert a website link to EPUB
 
-1. Open **MihonNooir → More → Nooir Tools → Web link → EPUB**.
+1. Open **MihonNooir → More → Nooir Tools → Universal Book Converter → Web link**.
 2. Paste a **public HTTPS** web article URL in **Article URL**.
 3. Tap **Save article EPUB to phone**. Pick the file location in Android's save dialog.
 4. Wait for the background notification/phase to say **Article EPUB saved successfully**.
@@ -29,7 +29,7 @@ The **Web link → EPUB** screen also has a **Multiple web links → one EPUB** 
 3. Save the combined EPUB to your phone or send it to XTEink. Every URL becomes one EPUB chapter and one TOC entry.
 4. If a chapter is unreadable or requires JavaScript/login, this **one combined book fails** without saving a misleading partial EPUB; other queued jobs continue.
 
-This is not just for web novels: ordinary public webpage links work too. A **Wattpad story overview** is not a publicly readable chapter, so a story link alone may fail; use genuinely readable chapter URLs when available.
+This is not just for web novels: ordinary public webpage links work too. For a public Wattpad story overview, use the Universal Book Converter's Web novels tool and analyze chapters first. The story's metadata can be imported; chapters must still be publicly readable.
 
 [Full multi-link and web-novel guide →](WEB_NOVELS.md)
 
@@ -66,3 +66,7 @@ The extractor has automated coverage, but specific Rengkang layouts still need p
 
 No sign-in session, site protection or paid access is bypassed. If a provider offers an authorized EPUB, save it and use **Send & Convert files** instead. If the current app still cannot read an ordinary publicly visible article, send a screenshot showing its page layout and the **copied error message** (not its private content or cookies), so a specific extractor can be tested.
 
+
+## v1.0.20 chapter and book settings
+
+Open **More → Nooir Tools → Universal Book Converter → Web novels**, paste a public story URL and tap **Analyze chapters before export**. Review detected title, author, cover and synopsis, select/reorder chapters and preview text. Choose **Use selected chapters in one EPUB** to edit book metadata, choose automatic/custom or combined covers, select EPUB2/3, adjust text styling and illustration sizes, save a local project or check for new chapters. Wattpad metadata can populate the cover and a Synopsis page plus EPUB description metadata. Public chapter listings do not guarantee readable text; no login or paywall bypass.
