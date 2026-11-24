@@ -1,12 +1,12 @@
-name: Verify existing v1.0.20 draft before publication
-# One-time, isolated verification. Never create, edit, publish or delete a release.
+name: Stage and verify v1.0.20 draft before publication
+# One-time, isolated staging. Never publish, delete or overwrite existing release assets.
 on:
   push:
     branches: [release-check/v1.0.20-draft-preflight-20261124]
     paths: ['.github/workflows/v1.0.20-draft-preflight.yml']
 permissions:
   # Write-level repository access is required to see unpublished releases.
-  # No write operations are performed by these steps.
+  # Create a draft only if no matching release exists; never overwrite.
   contents: write
   actions: read
 jobs:
@@ -65,10 +65,15 @@ jobs:
           set -euo pipefail
           releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
           matches=$(jq --arg tag "$TAG" '[.[][] | select(.tag_name == $tag)]' <<< "$releases")
-          if [[ $(jq length <<< "$matches") != 1 ]]; then
-            echo 'Expected exactly one existing v1.0.20 release; no release was modified.' >&2
-            exit 1
+          count=$(jq length <<< "$matches")
+          test "$count" -le 1
+          if [[ "$count" == 0 ]]; then
+            test -z "$(git ls-remote --tags origin "refs/tags/$TAG")"
+            gh release create "$TAG" dist/*-foss.apk dist/SHA256SUMS.txt --repo "$GH_REPO" --target "$RC" --title 'MihonNooir v1.0.20 — Universal Book Converter & Web to EPUB' --notes-file docs/releases/v1.0.20.md --draft
+            releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
+            matches=$(jq --arg tag "$TAG" '[.[][] | select(.tag_name == $tag)]' <<< "$releases")
           fi
+          test "$(jq length <<< "$matches")" = 1
           release=$(jq '.[0]' <<< "$matches")
           jq -e '.draft == true and .prerelease == false and ([.assets[].name] | sort) == (["app-arm64-v8a-foss.apk","app-armeabi-v7a-foss.apk","app-universal-foss.apk","app-x86-foss.apk","app-x86_64-foss.apk","SHA256SUMS.txt"] | sort)' <<< "$release"
           mkdir -p "$RUNNER_TEMP/uploaded"
@@ -86,4 +91,4 @@ jobs:
           if [[ -n "$existing" ]]; then
             test "$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)" = "$target_sha"
           fi
-          echo 'PASS: existing unpublished release matches the exact signed artifact, source and checksums. No release changes made.'
+          echo 'PASS: unpublished release matches the exact signed artifact, source and checksums.'
