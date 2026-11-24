@@ -123,6 +123,8 @@ class UniversalConverterPreservationTest(unittest.TestCase):
         apply = (ROOT / "tools/apply_overlay.py").read_text(encoding="utf-8")
         self.assertIn('-keep class dev.nooir.mangabridge.NooirFinishedBookPreview { *; }', apply)
         self.assertIn('-keep class dev.nooir.mangabridge.NooirFinishedBookPreview$* { *; }', apply)
+        self.assertIn('-keep class dev.nooir.mangabridge.NooirEpubImportConverter { *; }', apply)
+        self.assertIn('-keep class dev.nooir.mangabridge.NooirEpubImportConverter$* { *; }', apply)
 
     def test_epub_typography_settings_pass_through_to_export(self):
         worker = (BASE / "NooirTransferWorker.kt").read_text(encoding="utf-8")

@@ -32,3 +32,17 @@ replacement token `$'`. Regenerated the complete combined smoke runner by
 literal prefix/suffix slicing, retained both exact source test blocks and added
 a structure guard for the Web EPUB success-count line. No Android app source
 was modified by this correction.
+
+## Exact-head Android emulator blocker and correction
+
+- [Integrated run 45309201227](https://github.com/toshio2011/mihon-nooir/actions/runs/45309201227)
+  compiled its one-app APK and passed the earlier panel/CBZ tests, but the new
+  18th EPUB test failed with `NoClassDefFoundError` for
+  `NooirEpubImportConverter`. The same independently reproducible failure
+  occurred in source PR #111 [run 45308315389](https://github.com/toshio2011/mihon-nooir/actions/runs/45308315389).
+- Add the same targeted R8 keep rules for the EPUB import converter's Kotlin
+  singleton and nested classes to both independent source PR #111 and this
+  integration branch. No Web → EPUB source needs altering.
+- Treat the combined Android package as NOT passed until a new emulator job
+  runs 18 EPUB tests, 6 Web TOC tests, 2 Web EPUB export tests and the existing
+  panel cases, with screenshots reviewed separately.
