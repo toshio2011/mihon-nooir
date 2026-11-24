@@ -85,6 +85,12 @@ recover_system_dialog() {
   fi
 }
 
+# The combined Android CI runs the Universal Converter screenshot flow
+# first, leaving its PDF dialog as the foreground Activity. A launcher intent
+# alone resumes that dialog. Restart ONLY this disposable emulator's test app
+# (without clearing its storage) before traversing the Web editor.
+adb shell am force-stop "$pkg"
+sleep 2
 # Query the launcher intent via monkey; bare ACTION_MAIN -p cannot resolve
 # a component for Mihon and fails before any real screenshot can be taken.
 adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null
@@ -93,6 +99,12 @@ for retry in 1 2 3; do recover_system_dialog; done
 capture "00-launch-state"
 dump_ui || true
 
+# Skip the onboarding loop when the previous UI walkthrough already
+# finished setup. Otherwise repeated swipes disturb the normal More tab.
+dump_ui || true
+if [ -n "$(lookup "More")" ]; then
+  echo "Existing Android onboarding complete; using main app tabs" >> "$out/capture-notes.txt"
+else
 # Mihon's first launch has multiple onboarding pages and requires a
 # Storage Access Framework folder selection before its main tabs unlock.
 # Complete this only in the throwaway emulator, never on a user's device.
@@ -125,6 +137,7 @@ for onboarding in {1..8}; do
     tap_visible "Continue" 1 || tap_visible "Skip" 1 || true
   fi
 done
+fi
 
 if ! tap_visible "More" 2; then
   # Bottom-right tab on Pixel 2 emulators; only a fallback if accessibility
@@ -135,19 +148,31 @@ fi
 if ! tap_visible "Nooir Tools" 5; then
   echo "Could not reach Nooir Tools. See launch-state and window.xml." >> "$out/capture-notes.txt"
   capture "01-navigation-blocked"
-  exit 0
+  exit 1
+fi
+if ! tap_visible "Universal Book Converter" 5; then
+  echo "Could not reach Universal Book Converter. Inspect navigation XML." >> "$out/capture-notes.txt"
+  capture "01-universal-converter-blocked"
+  exit 1
 fi
 if ! tap_visible "Web novels" 4; then
   echo "Could not open Web novels panel. See window.xml." >> "$out/capture-notes.txt"
   capture "02-tools-menu"
-  exit 0
+  exit 1
 fi
 
 capture "01-web-novel-editor"
 dump_ui || true
 cp "$out/window.xml" "$out/01-editor-accessibility.xml" || true
 
-# The combined-book controls are lower in this same real Compose dialog.
+# The combined-book control must be visible in the actual editor. A screenshot
+# of an unrelated dialog must never count as a successful Web-to-EPUB walk.
+if [ -z "$(lookup "Combine pasted webpages into ONE EPUB")" ]; then
+  echo "FAIL: Web editor lacks the combined-book control" >> "$out/capture-notes.txt"
+  capture "02-editor-control-missing"
+  exit 1
+fi
+echo "PASS: real Web pages & novels EPUB editor opened through Nooir Tools" >> "$out/capture-notes.txt"
 # Toggle the separate Checkbox next to the visible option, not the text node.
 coord="$(lookup "Combine pasted webpages into ONE EPUB")"
 if [ -n "$coord" ]; then

@@ -6,6 +6,7 @@ workflow = (ROOT / ".github/workflows/build-apk.yml").read_text()
 smoke = (ROOT / ".github/scripts/panel-diagnostic-smoke.sh").read_text()
 overlay = (ROOT / "tools/apply_overlay.py").read_text()
 host = (ROOT / "tests/run.sh").read_text()
+web_ui = (ROOT / ".github/scripts/web-epub-ui-screenshots.sh").read_text()
 
 success_count = "OK (2 tests)"
 assert success_count in smoke
@@ -32,4 +33,10 @@ for token in (
 ):
     assert token in host, token
 
-print("PASS: both Android QA suites coexist in the isolated build")
+assert 'adb shell am force-stop "$pkg"' in web_ui
+assert web_ui.index('tap_visible "Nooir Tools" 5') < web_ui.index(
+    'tap_visible "Universal Book Converter" 5') < web_ui.index(
+    'tap_visible "Web novels" 4')
+assert 'PASS: real Web pages & novels EPUB editor opened through Nooir Tools' in web_ui
+assert 'exit 1' in web_ui
+print("PASS: both Android QA suites and Web editor route coexist in isolated build")

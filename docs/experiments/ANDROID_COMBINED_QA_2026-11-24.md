@@ -46,3 +46,28 @@ was modified by this correction.
 - Treat the combined Android package as NOT passed until a new emulator job
   runs 18 EPUB tests, 6 Web TOC tests, 2 Web EPUB export tests and the existing
   panel cases, with screenshots reviewed separately.
+
+
+## 24 November: confirmed 31 Android tests, discovered Web screenshot navigation gap
+
+- [Exact-head integrated Android run 45311984791](https://github.com/toshio2011/mihon-nooir/actions/runs/45311984791)
+  **passed** the debug-signed FOSS APK build and 31 Android instrumentation
+  cases: 18 EPUB/XTC/XTCH (including provider-backed save/reopen), 6 Web TOC,
+  2 Web EPUB2/3 export and 5 panel diagnostics. Downloaded evidence confirms
+  the real XTCH viewer page 1 → Next → decoded page 2, and source EPUB/PDF
+  menu routes. Its arm64 debug APK SHA-256 is
+  `449025c8eeabeb328254f714b5bebaf1424ccb12e0a6b885ba206bad4341ded2`.
+- **Remaining UI screenshot gap:** the separate Web editor screenshot script
+  ran **after** the Universal Converter screenshot test on the same emulator.
+  The launcher intent reused the currently open PDF converter dialog, so
+  `More`/Nooir Tools were inaccessible. The Web screenshot archive contains
+  a PDF dialog and the `navigation-blocked` capture, not a Web editor.
+  It must NOT be claimed as a verified Web editor screenshot.
+- Fix only this combined QA screenshot script: force-stop the disposable test
+  app without clearing any onboarding/SAF data, skip redundant onboarding on
+  the already-completed app, navigate via Nooir Tools → Universal Book Converter
+  → Web novels (the actual UI nesting), require the combined-book control,
+  and exit nonzero rather than silently accepting a blocked UI.
+- The script is still an optional evidence capture in workflow CI: do not
+  treat a green codec run alone as a Web editor acceptance result. No Web
+  extractor, converter, official app, Windows, or Folio firmware source changed.
