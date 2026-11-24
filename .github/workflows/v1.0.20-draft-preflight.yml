@@ -1,0 +1,89 @@
+name: Verify existing v1.0.20 draft before publication
+# One-time, isolated verification. Never create, edit, publish or delete a release.
+on:
+  push:
+    branches: [release-check/v1.0.20-draft-preflight-20261124]
+    paths: ['.github/workflows/v1.0.20-draft-preflight.yml']
+permissions:
+  # Write-level repository access is required to see unpublished releases.
+  # No write operations are performed by these steps.
+  contents: write
+  actions: read
+jobs:
+  verify:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RC: d70032844241b0ae5e8bab693925fb4e9edca033
+      RUN_ID: '45363123609'
+      ANDROID_RUN_ID: '45363200383'
+      ARTIFACT_ID: '14905454241'
+      ARTIFACT_DIGEST: '49ae8315e0e345ced6744ed57ebc37536227d1f98a07dea741645abd74214d3f'
+      TAG: v1.0.20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm frozen source and both Android verification runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < config/version.txt)" = '1.0.20'
+          git merge-base --is-ancestor "$RC" HEAD
+          git diff --exit-code "$RC" HEAD -- . ':!README.md' ':!docs/UPDATES.md' ':!docs/releases/v1.0.20.md' ':!.github/workflows/publish-v1.0.20.yml' ':!.github/workflows/v1.0.20-draft-preflight.yml'
+          for run in "$RUN_ID" "$ANDROID_RUN_ID"; do
+            test "$(gh api "repos/$GH_REPO/actions/runs/$run" --jq .conclusion)" = success
+            test "$(gh api "repos/$GH_REPO/actions/runs/$run" --jq .head_sha)" = "$RC"
+          done
+      - name: Retrieve and validate exact signed artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          meta=$(gh api "repos/$GH_REPO/actions/artifacts/$ARTIFACT_ID")
+          jq -e --arg sha "$RC" --arg name "mihonnooir-v1.0.20-signed-upgrade-candidate" --arg digest "sha256:$ARTIFACT_DIGEST" --argjson run "$RUN_ID" '.expired == false and .name == $name and .digest == $digest and .workflow_run.id == $run and .workflow_run.head_sha == $sha' <<< "$meta"
+          gh api "repos/$GH_REPO/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/verified.zip"
+          printf '%s  %s\n' "$ARTIFACT_DIGEST" "$RUNNER_TEMP/verified.zip" | sha256sum -c -
+          python3 - "$RUNNER_TEMP/verified.zip" <<'PY'
+          import pathlib, re, sys, zipfile
+          apks = {"app-" + abi + "-foss.apk" for abi in ("arm64-v8a", "armeabi-v7a", "universal", "x86", "x86_64")}
+          names = apks | {"SHA256SUMS.txt"}
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              assert len(z.namelist()) == len(names) and set(z.namelist()) == names
+              assert z.testzip() is None
+              z.extractall("dist")
+          lines = pathlib.Path("dist/SHA256SUMS.txt").read_text().splitlines()
+          entries = [re.fullmatch(r"[0-9a-f]{64}  (?:\./)?(app-[\w-]+-foss\.apk)", line) for line in lines]
+          assert len(entries) == 5 and all(entries) and {m.group(1) for m in entries} == apks
+          PY
+          (cd dist && sha256sum --strict -c SHA256SUMS.txt)
+      - name: Verify existing authenticated draft and six assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
+          matches=$(jq --arg tag "$TAG" '[.[][] | select(.tag_name == $tag)]' <<< "$releases")
+          if [[ $(jq length <<< "$matches") != 1 ]]; then
+            echo 'Expected exactly one existing v1.0.20 release; no release was modified.' >&2
+            exit 1
+          fi
+          release=$(jq '.[0]' <<< "$matches")
+          jq -e '.draft == true and .prerelease == false and ([.assets[].name] | sort) == (["app-arm64-v8a-foss.apk","app-armeabi-v7a-foss.apk","app-universal-foss.apk","app-x86-foss.apk","app-x86_64-foss.apk","SHA256SUMS.txt"] | sort)' <<< "$release"
+          mkdir -p "$RUNNER_TEMP/uploaded"
+          while IFS=$'\t' read -r id name; do
+            gh api -H 'Accept: application/octet-stream' "repos/$GH_REPO/releases/assets/$id" > "$RUNNER_TEMP/uploaded/$name"
+            cmp "dist/$name" "$RUNNER_TEMP/uploaded/$name"
+          done < <(jq -r '.assets[] | [.id,.name] | @tsv' <<< "$release")
+          (cd "$RUNNER_TEMP/uploaded" && sha256sum --strict -c SHA256SUMS.txt)
+          target=$(jq -r .target_commitish <<< "$release")
+          target_sha=$(gh api "repos/$GH_REPO/commits/$target" --jq .sha)
+          echo "Draft target SHA: $target_sha"
+          git merge-base --is-ancestor "$RC" "$target_sha"
+          git diff --exit-code "$RC" "$target_sha" -- . ':!README.md' ':!docs/UPDATES.md' ':!docs/releases/v1.0.20.md' ':!.github/workflows/publish-v1.0.20.yml'
+          existing=$(git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          if [[ -n "$existing" ]]; then
+            test "$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)" = "$target_sha"
+          fi
+          echo 'PASS: existing unpublished release matches the exact signed artifact, source and checksums. No release changes made.'
