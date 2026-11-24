@@ -50,6 +50,37 @@ test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' diagnostic-instrumentation.tx
 grep -Fxq 'OK (5 tests)' diagnostic-instrumentation.txt
 grep -Fxq 'INSTRUMENTATION_CODE: -1' diagnostic-instrumentation.txt
 
+echo "Running synthetic public TOC HTML and next-chapter exclusion checks on Android"
+adb shell am instrument -w -r \
+  -e class dev.nooir.mangabridge.NooirWebTocHtmlInstrumentedTest \
+  dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=numberedTocControlsAreNotAccidentallyImportedAsChapters' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=plainNextChapterLinkCannotAdvanceTocPage' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=queryBasedChapterUrlsKeepTheirStoryPath' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=encodedChapterPathsRemainExactAndQueryVariantsDeduplicate' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=consecutiveTocPagesMergeWithoutDuplicateChapters' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=unfinishedTocAfterSafetyLimitFailsRatherThanTruncates' android-web-toc-instrumentation.txt
+grep -Fq 'INSTRUMENTATION_STATUS: test=wattpadPublicStoryDetailsIncludeCoverAndSynopsis' android-web-toc-instrumentation.txt
+grep -Fxq 'OK (7 tests)' android-web-toc-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-toc-instrumentation.txt
+
+echo "Exporting synthetic public HTML into real EPUB2/EPUB3 ZIP files on Android"
+adb shell am instrument -w -r \
+  -e class dev.nooir.mangabridge.NooirWebEpubEndToEndInstrumentedTest \
+  dev.nooir.mihontrial.foss.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee android-web-epub-export-instrumentation.txt
+for required in \
+  actualHtmlExportsValidEpub2SectionsAndNcx \
+  actualHtmlExportsValidEpub3SectionsAndNavigation \
+  wattpadBookCoverAndSynopsisArePackagedInEpub2And3
+do
+  grep -Fq "INSTRUMENTATION_STATUS: test=${required}" android-web-epub-export-instrumentation.txt
+done
+test "$(grep -c '^INSTRUMENTATION_STATUS_CODE: 0$' android-web-epub-export-instrumentation.txt)" -eq 3
+grep -Fxq 'OK (3 tests)' android-web-epub-export-instrumentation.txt
+grep -Fxq 'INSTRUMENTATION_CODE: -1' android-web-epub-export-instrumentation.txt
+
 echo "Reading the actual privately saved diagnostic ZIP from the emulator"
 adb root
 adb wait-for-device

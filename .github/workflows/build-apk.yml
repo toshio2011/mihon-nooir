@@ -18,8 +18,10 @@ jobs:
     steps:
       - name: Checkout integration source
         uses: actions/checkout@v4
-      - name: Validate Android panel smoke script syntax
-        run: bash -n .github/scripts/panel-diagnostic-smoke.sh
+      - name: Validate Android diagnostic and screenshot script syntax
+        run: |
+          bash -n .github/scripts/panel-diagnostic-smoke.sh
+          bash -n .github/scripts/web-epub-ui-screenshots.sh
       - name: Validate overlay structure
         run: python3 -m unittest discover -s tests -p "test_*.py" -v
       - name: Validate XTC, XTCH, EPUB 2, EPUB 3 and CBZ export formats
@@ -195,7 +197,14 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           # The runner invokes each script line in a distinct shell. Keep all
           # variables, pipes and failure checks inside one tracked Bash file.
-          script: bash .github/scripts/panel-diagnostic-smoke.sh
+          script: bash .github/scripts/panel-diagnostic-smoke.sh && (bash .github/scripts/web-epub-ui-screenshots.sh || echo "Web editor screenshot navigation was incomplete")
+      - name: Upload experimental Web to EPUB emulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihon-nooir-web-epub-emulator-screenshots
+          path: android-web-epub-screenshots/*
+          if-no-files-found: warn
       - name: Upload instrumentation results
         if: always()
         uses: actions/upload-artifact@v4
@@ -203,6 +212,8 @@ jobs:
           name: mihon-nooir-panel-zip-device-smoke
           path: |
             diagnostic-instrumentation.txt
+            android-web-toc-instrumentation.txt
+            android-web-epub-export-instrumentation.txt
             android-runtime-panel-diagnostic.zip
             android-panel-diagnostic-inspection.json
             android-panel-diagnostic-logcat.txt

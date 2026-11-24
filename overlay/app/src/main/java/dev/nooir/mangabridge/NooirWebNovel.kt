@@ -1,6 +1,8 @@
 package dev.nooir.mangabridge
 
 import dev.nooir.bridge.ReflowEpubWriter
+import dev.nooir.bridge.ReflowEpubFormat
+import dev.nooir.bridge.ReflowEpubStyle
 import org.jsoup.nodes.Document
 import org.jsoup.Jsoup
 import dev.nooir.bridge.ReflowEpubWriter.ImageAsset
@@ -33,14 +35,35 @@ object NooirWebNovel {
             "a[href*='/episode/'], a[href*='/part-']"
         val found = linkedMapOf<String, Chapter>()
         for (node in doc.select(selectors)) {
+            // Table-of-contents pagination controls are not book chapters,
+            // even when nested inside a container named "chapters".
+            val inPager = node.parents().any { parent ->
+                parent.className().contains("pagination", true) ||
+                    parent.className().contains("page-numbers", true) ||
+                    (parent.tagName().equals("nav", true) &&
+                        parent.attr("aria-label").contains("pagination", true))
+            }
+            if (inPager) continue
             val href = node.attr("href").trim()
             val text = node.text().trim().replace(Regex("\\s+"), " ").take(160)
+            val rel = node.attr("rel").split(Regex("\\s+"))
+            // A reading-page navigation arrow is not a table-of-contents
+            // entry even if its URL contains /chapter/ or /episode/.
+            val navLabel = Regex("(?i)^(?:next|previous|prev)(?:\\s+(?:chapter|part|episode|page))?\\s*[›»→]?$")
+            if (rel.any { it.equals("next", true) || it.equals("prev", true) } ||
+                navLabel.matches(text)) continue
             if (href.isBlank() || text.length < 2) continue
-            val uri = runCatching { origin.resolve(href).normalize() }.getOrNull() ?: continue
+            val uri = runCatching {
+                // Java URI.resolve("?chapter=2") loses the last path segment.
+                // Query-based public chapter URLs must retain the story path.
+                if (href.startsWith("?")) URI(
+                    origin.toASCIIString().substringBefore('#').substringBefore('?') + href
+                ).normalize() else origin.resolve(href).normalize()
+            }.getOrNull() ?: continue
             if (!uri.scheme.equals("https", ignoreCase = true) ||
                 !uri.host.equals(origin.host, ignoreCase = true) ||
                 uri.port != -1 || uri.rawUserInfo != null) continue
-            if (uri.path == origin.path) continue
+            if (uri.path == origin.path && uri.rawQuery == origin.rawQuery) continue
             if (node.hasAttr("aria-disabled") ||
                 node.classNames().any { it.contains("locked", true) || it.contains("disabled", true) }) continue
             val path = uri.path.lowercase()
@@ -62,33 +85,30 @@ object NooirWebNovel {
                 listOf("/chapter/", "/chapter-", "/episode/", "/part-").any { path.contains(it) } ||
                 withinChapterList || visibleWattpadPart
             if (!likely) continue
-            val target = URI("https", null, uri.host, -1, uri.path, uri.query, null).toASCIIString()
-            found.putIfAbsent(target, Chapter(target, text))
+            // Preserve original percent escapes: reconstructing a URI from
+            // decoded .path turns /chapter/a%2Fb into /chapter/a/b, which can
+            // fetch a different public chapter (or 404). The prior same-origin,
+            // port and userinfo guards still apply. Only drop the fragment.
+            val target = uri.toASCIIString().substringBefore('#')
+            // Comparison-only identity handles marketing trackers and reordered
+            // unique query names. Never change the actual chapter fetch URL.
+            found.putIfAbsent(NooirWebChapterIdentity.key(target), Chapter(target, text))
         }
         return found.values.toList()
     }
 
-    /** Optional metadata cover. Failure is nonfatal and doesn't fetch extra pages. */
-    private fun embedCover(doc: Document, epub: ReflowEpubWriter) {
-        val original = doc.selectFirst("meta[property=og:image]")?.attr("content")
-            ?.takeIf { it.isNotBlank() } ?: return
-        runCatching {
-            val candidate = URI(doc.location()).resolve(original).toString()
-            val url = NooirWebArticle.publicHttps(candidate)
-            val response = Jsoup.connect(url).ignoreContentType(true)
-                .timeout(12000).maxBodySize(1_500_000).followRedirects(false).execute()
-            require(response.statusCode() == 200)
-            val mime = response.contentType().orEmpty().substringBefore(';').lowercase()
-            val ext = when (mime) {
-                "image/jpeg" -> "jpg"
-                "image/png" -> "png"
-                else -> error("Not a supported book cover")
-            }
-            val bytes = response.bodyAsBytes()
-            require(bytes.size in 1..1_500_000)
-            val image = epub.addImage(ImageAsset(bytes, ext, mime), isCover = true)
-            epub.addSection("Cover", """<figure><img src="$image" alt="Book cover"/></figure>""")
+    /** Include a readable synopsis page, not only a hidden OPF description.
+     * The same safe XHTML is used for a selected multi-chapter Wattpad export. */
+    internal fun addSynopsis(epub: ReflowEpubWriter, synopsis: String) {
+        val paragraphs = synopsis.trim().replace("\r\n", "\n")
+            .split(Regex("\\n\\s*\\n"))
+            .map { it.trim().replace("\n", " ") }
+            .filter { it.isNotBlank() }
+        if (paragraphs.isEmpty()) return
+        val body = paragraphs.joinToString("") {
+            "<p>" + ReflowEpubWriter.xml(it) + "</p>"
         }
+        epub.addSection("Synopsis", "<h1>Synopsis</h1>" + body)
     }
 
     /** One EPUB per URL. Individual chapters become EPUB sections with a TOC. */
@@ -96,26 +116,34 @@ object NooirWebNovel {
         storyUrl: String, output: File,
         startAt: Int = 1, endAt: Int = Int.MAX_VALUE,
         preloadedPage: Document? = null,
+        epubFormat: ReflowEpubFormat = ReflowEpubFormat.EPUB3,
+        readingStyle: ReflowEpubStyle = ReflowEpubStyle.STANDARD,
+        customCss: String = "",
+        includeImages: Boolean = true,
+        imageProfile: NooirWebImageProfile = NooirWebImageProfile.ORIGINAL,
         onStage: (Int, Int, String) -> Unit = { _, _, _ -> },
     ): Result {
         require(startAt >= 1 && endAt >= startAt) { "Invalid chapter range" }
         onStage(0, 0, "Checking publicly available story")
         val page = preloadedPage ?: NooirWebArticle.load(storyUrl)
-        val meta = NooirWebArticle.metadata(page)
+        val htmlMeta = NooirWebArticle.metadata(page)
         val wattpadStory = NooirWattpadPublic.storyId(storyUrl) != null
+        val details = if (wattpadStory) {
+            runCatching { NooirWattpadPublic.storyDetails(storyUrl) }.getOrNull()
+        } else null
+        val meta = htmlMeta.copy(
+            title = details?.title?.ifBlank { htmlMeta.title } ?: htmlMeta.title,
+            author = details?.author?.ifBlank { htmlMeta.author } ?: htmlMeta.author,
+            description = details?.synopsis?.ifBlank { htmlMeta.description }
+                ?: htmlMeta.description,
+            language = details?.language?.ifBlank { htmlMeta.language }
+                ?: htmlMeta.language,
+        )
         // A Firefox WebToEpub parser can see Wattpad's chapter metadata even
         // when the story HTML has no <a> chapter links. Try only the public
         // metadata response; if it is blocked, use any truly visible HTML
         // chapter links, not a fake synopsis-only EPUB.
-        val htmlChapters = discover(page)
-        val chapterLinks = if (wattpadStory) {
-            runCatching { NooirWattpadPublic.discover(storyUrl) }.getOrElse { err ->
-                if (htmlChapters.isNotEmpty()) htmlChapters
-                else error("Wattpad chapter discovery failed: " +
-                    (err.message ?: "public story metadata unavailable") +
-                    " No EPUB was generated.")
-            }
-        } else htmlChapters
+        val chapterLinks = details?.chapters ?: NooirWebChapterDiscovery.chapters(storyUrl, page)
         if (chapterLinks.isEmpty()) {
             require(startAt == 1) { "This page has no visible chapter list; use chapter 1 or a directly readable chapter link." }
             if (wattpadStory) {
@@ -135,8 +163,11 @@ object NooirWebNovel {
         // "All chapters" means every chapter discoverable from public HTML, without a count limit.
         // Failed chapters stop this book rather than silently creating a truncated EPUB.
         // Never silently omit undiscovered chapters or pretend locked text is readable.
-        ReflowEpubWriter.write(output, meta) { epub ->
-            embedCover(page, epub)
+        ReflowEpubWriter.write(output, meta, epubFormat) { epub ->
+            epub.setReadingStyle(readingStyle)
+            epub.setCustomCss(customCss)
+            NooirWebCover.embed(page, epub, details?.coverUrl.orEmpty())
+            if (wattpadStory) addSynopsis(epub, meta.description)
             val total = chosen.size
             for ((i, item) in chosen.withIndex()) {
                 if (i > 0) Thread.sleep(1300L) // basic rate etiquette; no burst fetching
@@ -145,7 +176,9 @@ object NooirWebNovel {
                     else NooirWebArticle.load(item.url)
                 // Even if a source returns HTTP 200 to a sign-in/paywall message,
                 // the extractor will reject pages without article text.
-                NooirWebArticle.appendChapter(chapterDoc, epub, item.title, maxImages = 8)
+                NooirWebArticle.appendChapter(chapterDoc, epub, item.title,
+                    maxImages = if (includeImages) 8 else 0,
+                    imageProfile = imageProfile)
                 onStage(i + 1, total, "Saved chapter " + (i + 1) + "/" + total)
             }
         }
