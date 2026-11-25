@@ -286,6 +286,26 @@ class SuwayomiClient(
         }
     }
 
+    /** Explicit reader action only; never rewind the server's existing progress.
+     * The server mutation has no compare-and-set support, so concurrent remote writes
+     * between read and update remain possible. Do not use as background sync.
+     */
+    fun saveOnlineProgress(opened: SuwayomiOnlineChapter, page: Int): Int {
+        require(opened.syncConflict == null) { "Resolve server sync conflict before saving" }
+        require(page in 0 until opened.pageCount)
+        val existing = graphql("query NooirProgress { chapter(id: "+opened.chapterId+") { id mangaId pageCount lastPageRead } }").obj("chapter")
+        require(existing.int("id")==opened.chapterId && existing.int("mangaId")==opened.mangaId &&
+            existing.int("pageCount")==opened.pageCount) { "Chapter changed; reopen it before saving" }
+        val previous=existing.int("lastPageRead")
+        require(previous in 0..opened.pageCount)
+        if(previous>=page)return previous
+        val changed=graphql("mutation NooirSaveProgress { updateChapter(input: { id: "+opened.chapterId+
+            ", patch: { lastPageRead: "+page+" } }) { chapter { id mangaId lastPageRead } } }").obj("updateChapter").obj("chapter")
+        require(changed.int("id")==opened.chapterId && changed.int("mangaId")==opened.mangaId &&
+            changed.int("lastPageRead")==page) { "Server did not confirm saved position" }
+        return page
+    }
+
     fun manga(id: Int): SuwayomiManga {
         require(id > 0) { "Invalid manga ID" }
         val query = """
