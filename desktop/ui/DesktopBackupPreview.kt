@@ -79,7 +79,7 @@ object DesktopBackupPreview {
                                 val ticket=transport.beginRestore(file,recovery)
                                 val state=transport.await(ticket)
                                 "Server restore status: "+state+"\nRecovery backup: "+recovery.absolutePath+
-                                    if(state=="SUCCESS") "\nReview missing sources in Suwayomi." else "\nCheck local WebUI before retrying; partial changes may exist."
+                                    if(state=="SUCCESS") "\nServer reports completion; review library records and missing sources in Suwayomi. Individual records may fail." else "\nCheck local WebUI before retrying; partial changes may exist."
                             }
                         }catch(e:Exception){JOptionPane.showMessageDialog(owner,"Backup validation failed. No restore was requested.","Restore",JOptionPane.ERROR_MESSAGE)}
                     }

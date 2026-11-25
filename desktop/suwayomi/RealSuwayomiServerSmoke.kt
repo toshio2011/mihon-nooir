@@ -75,6 +75,7 @@ object RealSuwayomiServerSmoke {
             check(!api.setMangaInLibrary(card.id, false))
             check(api.library(0, 100).mangas.none { it.id == card.id })
             println("PASS: real pinned Suwayomi Local source search, chapter discovery, library membership and four ordered page decodes")
+            verifyBackupRoundTrip(root, endpoint, api)
             println("No third-party extensions, external manga, user credentials or normal data directory used.")
         } finally {
             manager.close()
@@ -82,4 +83,50 @@ object RealSuwayomiServerSmoke {
         check(!manager.running) { "Managed Suwayomi process survived close()" }
         println("PASS: MihonNooir shut down only its own managed Suwayomi server")
     }
+    private fun verifyBackupRoundTrip(root: Path, endpoint: String, api: SuwayomiClient) {
+        val backup = DesktopBackupTransport(endpoint)
+        val input = root.resolve("synthetic-android.tachibk").toFile()
+        val recovery = root.resolve("before-synthetic-restore.tachibk").toFile()
+        val exported = root.resolve("synthetic-desktop.tachibk").toFile()
+        val duplicateRecovery = root.resolve("before-repeat-restore.tachibk").toFile()
+        val repeated = root.resolve("after-repeat-restore.tachibk").toFile()
+        // Independently encoded Android wire fixture: deliberately distinct category ID/order,
+        // negative source hash, and real chapter flags. No external URLs or extensions.
+        val source = -456789123L
+        val title = "Nooir Synthetic Backup Round Trip"
+        val category = "Nooir Synthetic Category"
+        fun v(n:Long):ByteArray {
+            var x=n; val b=java.io.ByteArrayOutputStream()
+            while(x ushr 7!=0L) { b.write((x.toInt() and 127) or 128); x=x ushr 7 }
+            b.write(x.toInt());return b.toByteArray()
+        }
+        fun num(n:Int,x:Long)=v(n*8L)+v(x)
+        fun msg(n:Int,x:ByteArray)=v(n*8L+2)+v(x.size.toLong())+x
+        fun str(n:Int,x:String)=msg(n,x.toByteArray(Charsets.UTF_8))
+        val chapterUrl="/synthetic/chapter/1"
+        val chapter=msg(16,str(1,chapterUrl)+str(2,"Chapter 1")+num(4,1)+num(5,1)+num(6,7)+num(10,1))
+        val history=msg(104,str(1,chapterUrl)+num(2,1700000000000L))
+        val manga=msg(1,num(1,source)+str(2,"/synthetic/manga")+str(3,title)+chapter+num(17,4)+history)
+        val cat=msg(2,str(1,category)+num(2,4)+num(3,99))
+        val src=msg(101,str(1,"Synthetic missing source")+num(2,source))
+        java.util.zip.GZIPOutputStream(input.outputStream()).use{it.write(manga+cat+src)}
+        check(backup.validate(input).missingSources.any{it.id==source}) { "Missing signed source was not reported" }
+        check(backup.await(backup.beginRestore(input,recovery))=="SUCCESS") { "Pinned server restore failed or status unknown" }
+        check(recovery.isFile && recovery.length()>0)
+        check(api.library(0,100).mangas.count{it.title==title}==1) { "Restore reported success but synthetic title missing or duplicated" }
+        backup.export(exported,includeExtensionStores=true)
+        val summary=DesktopBackupInspector.inspect(exported)
+        check(summary.favorites==1 && summary.categories>=1 && summary.chapters==1 &&
+            summary.read==1 && summary.bookmarks==1 && summary.progressed==1 && summary.history==1 &&
+            source in summary.referencedSourceIds) { "Exported library did not preserve the expected synthetic chapter metadata" }
+        check(backup.await(backup.beginRestore(input,duplicateRecovery))=="SUCCESS")
+        check(api.library(0,100).mangas.count{it.title==title}==1) { "Repeated import duplicated library title" }
+        backup.export(repeated,includeExtensionStores=true)
+        val after=DesktopBackupInspector.inspect(repeated)
+        check(after.favorites==summary.favorites && after.chapters==summary.chapters &&
+            after.read==summary.read && after.bookmarks==summary.bookmarks && after.progressed==summary.progressed &&
+            after.history==summary.history) { "Repeat restore changed expected record counts" }
+        println("PASS: real pinned server Android fixture validation, recovery backup, library restore/export, missing signed source, chapter flags and repeated import")
+    }
+
 }
