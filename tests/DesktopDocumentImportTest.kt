@@ -78,7 +78,22 @@ fun main() {
             canceled={hybridProcessed>=1},progress={n,_->hybridProcessed=n}) }.isFailure)
         check(!hybridCanceled.exists() && mixedBytes.contentEquals(mixed.readBytes()))
         check(runCatching { DesktopPdfImport.exportReflow(mixed,root.resolve("invalid.xtc"),ExportFormat.XTC,device,opts) }.isFailure)
-        println("PASS: hybrid PDF EPUB2/3, text-only reflow, graphic/scan fallback and cancellation")
+        val hybridDest=root.resolve("hybrid-batch").apply { mkdir() }
+        val hybridRoot=root.resolve("hybrid-queue").toPath()
+        val hybridQueue=DesktopConversionQueue(hybridRoot)
+        val corruptPdf=root.resolve("corrupt.pdf").apply { writeText("Not a PDF") }
+        check(runCatching { hybridQueue.enqueue(listOf(mixed),hybridDest,ExportFormat.XTC,"X4",opts,pdfReflow=true) }.isFailure)
+        check(hybridQueue.enqueue(listOf(corruptPdf,mixed),hybridDest,ExportFormat.EPUB2,"X4",opts,pdfReflow=true)==2)
+        val hybridReload=DesktopConversionQueue(hybridRoot)
+        check(hybridReload.list().all { it.pdfReflow })
+        hybridReload.runPending({false})
+        check(hybridReload.list().map { it.state }==listOf(ConversionJobState.FAILED,ConversionJobState.COMPLETED))
+        check(!hybridDest.resolve("corrupt.epub").exists())
+        ZipFile(hybridDest.resolve("mixed-layout.epub")).use { zip ->
+            val first=zip.getInputStream(zip.getEntry("OEBPS/text/s00001.xhtml")).bufferedReader().use { it.readText() }
+            check(first.contains("Original selectable text") && !first.contains("<img "))
+        }
+        println("PASS: hybrid PDF EPUB2/3, text-only reflow, graphic/scan fallback, cancellation and durable batch failure isolation")
         val big=root.resolve("long.pdf")
         PDDocument().use { doc ->
             repeat(1001) { doc.addPage(PDPage(PDRectangle(32f,32f))) }
