@@ -44,7 +44,7 @@ internal object DesktopWebImportScreen {
                 if (columnIndex == 0) java.lang.Boolean::class.java else String::class.java
         }
         val table = JTable(model).apply {
-            selectionMode = ListSelectionModel.SINGLE_SELECTION
+            setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
             rowHeight = 25
             columnModel.getColumn(0).maxWidth=70
             preferredScrollableViewportSize=Dimension(640,240)
