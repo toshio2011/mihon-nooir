@@ -67,6 +67,39 @@ fun main() {
         check(projects.list().single()==updated)
         projects.delete(updated.id)
         check(projects.list().isEmpty()&&cover.isFile&&root.resolve("EPUB2.epub").isFile)
+        // Exercise the same staged export path used by the real Swing editor.
+        val canceledFile=root.resolve("cancel-web.epub")
+        val session=DesktopWebExportSession()
+        check(runCatching {
+            session.export(canceledFile){temp,checkpoint ->
+                ReflowEpubWriter.write(temp,ReflowMetadata("Canceled book"),ReflowEpubFormat.EPUB3){writer->
+                    writer.addSection("One","<p>Original synthetic text</p>")
+                    check(session.requestCancel())
+                    checkpoint()
+                }
+            }
+        }.exceptionOrNull() is java.util.concurrent.CancellationException)
+        check(!canceledFile.exists() && root.listFiles().orEmpty().none{it.name.startsWith(".nooir-web-")})
+        val late=root.resolve("late-conflict.epub")
+        check(runCatching {
+            DesktopWebExportSession().export(late){temp,_ ->
+                temp.writeText("staged output")
+                late.writeText("existing destination")
+            }
+        }.isFailure)
+        check(late.readText()=="existing destination")
+        val finished=root.resolve("finished-web.epub")
+        val complete=DesktopWebExportSession()
+        complete.export(finished){temp,checkpoint ->
+            checkpoint()
+            ReflowEpubWriter.write(temp,ReflowMetadata("Finished book"),ReflowEpubFormat.EPUB3){writer->
+                writer.addSection("One","<p>Original synthetic text</p>")
+            }
+        }
+        check(!complete.requestCancel() && finished.isFile)
+        ZipFile(finished).use{check(it.getEntry("mimetype")!=null)}
+        check(root.listFiles().orEmpty().none{it.name.startsWith(".nooir-web-")})
+        println("PASS: staged web export cancellation, cleanup, late destination conflict and successful publication")
         println("PASS: durable web projects, excluded chapter preservation, new chapter checks, overwrite-safe settings and book retention")
         println("PASS: shared HTML extraction, Wattpad public metadata/restriction parsing, actual EPUB2/3 cover, synopsis, reordered chapters and private URL rejection")
     }finally{root.deleteRecursively()}

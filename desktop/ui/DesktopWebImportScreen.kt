@@ -8,7 +8,7 @@ import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridLayout
 import java.io.File
-import java.nio.file.Files
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutionException
 import javax.swing.*
 import javax.swing.table.DefaultTableModel
@@ -19,8 +19,8 @@ internal object DesktopWebImportScreen {
         val dialog = JDialog(SwingUtilities.getWindowAncestor(parent), "Web pages & novels → EPUB",
             java.awt.Dialog.ModalityType.MODELESS)
         dialog.defaultCloseOperation = WindowConstants.DO_NOTHING_ON_CLOSE
-        val urls = JTextArea(4, 40)
-        val title = JTextField(30)
+        val urls = JTextArea(4, 40).apply { name="web-source-urls" }
+        val title = JTextField(30).apply { name="web-book-title" }
         val author = JTextField(25)
         val description = JTextArea(3,40).apply { lineWrap=true; wrapStyleWord=true }
         val language = JTextField("en", 8)
@@ -44,6 +44,7 @@ internal object DesktopWebImportScreen {
                 if (columnIndex == 0) java.lang.Boolean::class.java else String::class.java
         }
         val table = JTable(model).apply {
+            name="web-chapter-table"
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
             rowHeight = 25
             columnModel.getColumn(0).maxWidth=70
@@ -59,6 +60,8 @@ internal object DesktopWebImportScreen {
         val none = JButton("Select none")
         val export = JButton("Export selected to EPUB")
         val close = JButton("Close")
+        val cancelExport = JButton("Cancel export").apply { isEnabled = false }
+        var activeExport: DesktopWebExportSession? = null
         val projects = DesktopWebProjects()
         val saveProject = JButton("Save project")
         val openProject = JButton("Open project")
@@ -85,7 +88,12 @@ internal object DesktopWebImportScreen {
                 override fun doInBackground(): T = task()
                 override fun done() {
                     busy=false;controls.forEach{it.isEnabled=true}
-                    try { complete(get()) } catch(e: Exception) { fail(e) }
+                    activeExport=null;cancelExport.isEnabled=false
+                    try { complete(get()) } catch(e: Exception) {
+                        val cause=(e as? ExecutionException)?.cause ?: e
+                        if(cause is CancellationException) status.text="Export canceled; no book was published"
+                        else fail(e)
+                    }
                 }
             }.execute()
         }
@@ -108,6 +116,7 @@ internal object DesktopWebImportScreen {
                 projectId="";projectName="";sourceUrl=info.inputUrl;known=info.chapters.map{it.url}
                 title.text=info.title;author.text=info.author;description.text=info.description
                 language.text=info.language.ifBlank{"en"};cover.text=info.detectedCoverUrl
+                localCover=null;localLabel.text="No local cover selected";collage.isSelected=false
                 display(info.chapters);status.text="Discovered "+info.chapters.size+" public chapters"
             }
         }
@@ -218,6 +227,12 @@ internal object DesktopWebImportScreen {
                 }else{status.text="New chapters not added; inventory unchanged"}
             }
         }
+        cancelExport.addActionListener {
+            if(activeExport?.requestCancel()==true) {
+                cancelExport.isEnabled=false
+                status.text="Cancel requested — finishing current bounded web operation"
+            }
+        }
         export.addActionListener {
             try {
                 val plan=NooirWebChapterPlan.export(entries())
@@ -238,18 +253,25 @@ internal object DesktopWebImportScreen {
                 require(target.extension.equals("epub",true) && !target.exists() && target.parentFile.isDirectory){
                     "Choose a new .epub filename; existing files are never overwritten"
                 }
+                val session=DesktopWebExportSession()
+                activeExport=session
+                cancelExport.isEnabled=true
                 work("Exporting public chapters...",{
-                    val temp=File.createTempFile(".nooir-web-",".epub",target.parentFile)
-                    try {
-                        val result=NooirWebPageBook.convert(plan.urls,temp,bookTitle,bookAuthor,plan.titles,
+                    session.export(target){temp,checkpoint ->
+                        checkpoint()
+                        NooirWebPageBook.convert(plan.urls,temp,bookTitle,bookAuthor,plan.titles,
                             coverUrl=coverUrl,localCover=local?.let{NooirWebCover.loadLocal(it)},
                             collageCover=combine,bookDescription=desc,bookLanguage=lang,
                             epubFormat=epubFormat,readingStyle=readingStyle,customCss=custom,
                             includeImages=images,imageProfile=imgProfile,contentSelector=selector,removeSelector=remove,
-                            onPage={n,total,message->SwingUtilities.invokeLater{status.text="$n / $total · "+message.take(120)}})
-                        Files.move(temp.toPath(),target.toPath())
-                        result
-                    } finally {temp.delete()}
+                            onPage={n,total,message->
+                                checkpoint()
+                                SwingUtilities.invokeLater{
+                                    if(activeExport===session && cancelExport.isEnabled)
+                                        status.text="$n / $total · "+message.take(120)
+                                }
+                            })
+                    }
                 }) { result ->
                     status.text="Saved "+result.pages+" chapters: "+target.name
                     JOptionPane.showMessageDialog(dialog,status.text)
@@ -284,7 +306,7 @@ internal object DesktopWebImportScreen {
         dialog.add(JScrollPane(fields),BorderLayout.CENTER)
         dialog.add(JPanel(BorderLayout()).apply{
             add(status,BorderLayout.CENTER)
-            add(JPanel(FlowLayout(FlowLayout.RIGHT)).apply{add(export);add(close)},BorderLayout.SOUTH)
+            add(JPanel(FlowLayout(FlowLayout.RIGHT)).apply{add(export);add(cancelExport);add(close)},BorderLayout.SOUTH)
         },BorderLayout.SOUTH)
         val bounds=java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
         dialog.setSize(minOf(900,bounds.width-24),minOf(760,bounds.height-24))
