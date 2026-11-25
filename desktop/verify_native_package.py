@@ -84,7 +84,9 @@ else:
     actual_arch = java_arch(runtime)
     cp = os.pathsep.join(str(x) for x in (package / "qa/viewer-smoke.jar", app_jar, app_jar.parent / "lib/*"))
     with tempfile.TemporaryDirectory(prefix="nooir-native-qa-") as root:
-        env = dict(os.environ, MIHONNOIR_DATA_DIR=root)
+        env = dict(os.environ)
+        env["MIHONNOOIR_DATA_DIR"] = root
+        assert env["MIHONNOOIR_DATA_DIR"] == root and not os.listdir(root)
         for test in ("DesktopConversionQueueTestKt", "DesktopDocumentImportTestKt"):
             run(runtime, "-Djava.awt.headless=true", "-cp", cp, "dev.nooir.desktop.ui." + test, env=env, timeout=900)
         gui = [runtime, "-Djava.awt.headless=false", "-Dnooir.test.offlineLibrary=true",
