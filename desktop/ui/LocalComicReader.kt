@@ -130,7 +130,7 @@ internal object LocalComicReader {
  * Painting happens on demand without creating gigantic scaled preview images.
  * At most two source pages are kept decoded for a single active spread.
  */
-private class ReaderCanvas : JComponent() {
+internal class ReaderCanvas : JComponent() {
     private var pages: List<BufferedImage> = emptyList()
     private var visualRightToLeft = true
     private var scale = 1.0
@@ -163,7 +163,9 @@ private class ReaderCanvas : JComponent() {
             12_000.0 / naturalWidth, 12_000.0 / naturalHeight)
         val w = (naturalWidth * scale).toInt().coerceIn(1, 12_000) + padding * 2
         val h = (naturalHeight * scale).toInt().coerceIn(1, 12_000) + padding * 2
-        val size = Dimension(w, h)
+        // Fill the viewport when the source is smaller: fitted pages should
+        // sit in the center, not stick to the left edge on a wide monitor.
+        val size = Dimension(maxOf(w, viewport.width), maxOf(h, viewport.height))
         if (preferredSize != size) {
             preferredSize = size
             revalidate()
@@ -180,7 +182,10 @@ private class ReaderCanvas : JComponent() {
             g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
                 RenderingHints.VALUE_INTERPOLATION_BILINEAR)
             val ordered = if (visualRightToLeft) pages.reversed() else pages
-            var x = padding
+            val scaledGap = (gap * scale).toInt().coerceAtLeast(1)
+            val drawnWidth = ordered.sumOf { (it.width * scale).toInt().coerceAtLeast(1) } +
+                maxOf(0, ordered.size - 1) * scaledGap
+            var x = padding + ((width - padding * 2 - drawnWidth) / 2).coerceAtLeast(0)
             for (img in ordered) {
                 val w = (img.width * scale).toInt().coerceAtLeast(1)
                 val h = (img.height * scale).toInt().coerceAtLeast(1)
@@ -286,9 +291,7 @@ private class LocalComicWindow(
 
     init {
         defaultCloseOperation = DISPOSE_ON_CLOSE
-        minimumSize = Dimension(600, 440)
-        setSize(1080, 760)
-        setLocationRelativeTo(null)
+        DesktopWindowSizing.fit(this, Dimension(1080, 760), Dimension(600, 440))
         readerArea.add(scroller, BorderLayout.CENTER)
         add(readerArea, BorderLayout.CENTER)
         // Two rows prevent a crowded toolbar from clipping on smaller laptops.
@@ -305,7 +308,8 @@ private class LocalComicWindow(
             add(sizing); add(JLabel("Zoom")); add(zoom)
         }
         add(JPanel(GridLayout(2, 1)).apply {
-            add(navigation); add(displayModes)
+            add(DesktopWindowSizing.toolbar(navigation))
+            add(DesktopWindowSizing.toolbar(displayModes))
         }, BorderLayout.NORTH)
         add(status, BorderLayout.SOUTH)
         previous.addActionListener { move(-1) }

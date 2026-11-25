@@ -128,7 +128,14 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
             self.assertTrue((root/'app/src/main/java/dev/nooir/bridge/PanelWhitespaceCrop.kt').exists())
             desktop_cli = (ROOT/'desktop/cli/NooirDesktopCli.kt').read_text()
             self.assertIn('PanelWhitespaceCrop.trim(region)', desktop_cli)
-            self.assertIn('detectedPanels.map { trimDetectedPanel(src, it) }', desktop_cli)
+            # Windows now carries the same protected sparse-panel state as
+            # Android. Ensure trimming and safe slicing both honor that state.
+            self.assertRegex(desktop_cli, r'detectedPanels\.map\s*\{\s*if\s*\(it\.preserveWhole\)\s*it\s*else\s*it\.copy\(region\s*=\s*trimDetectedPanel\(src,\s*it\.region\)\)\s*\}')
+            self.assertRegex(desktop_cli, r'if\s*\(panels\[index\]\.preserveWhole\)\s*listOf\(fit\.region\)')
+            self.assertRegex(desktop_cli, r'if\s*\(panel\.preserveWhole\)\s*listOf\(panel\.region\)')
+            self.assertIn('PanelReadableSliceRefiner.refineRows(', desktop_cli)
+            self.assertIn('PanelReadableSliceRefiner.refineRows(', panel_src)
+            self.assertIn('val enlargeOversizedSplits: Boolean = true', (root/'app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt').read_text())
             self.assertTrue((root/'app/src/main/java/dev/nooir/bridge/PanelSafeSlicePlanner.kt').exists())
             # Diagnostics must be explicitly opted into, kept outside the
             # book/archive output and available through a user-chosen SAF URI.
