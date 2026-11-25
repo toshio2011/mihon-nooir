@@ -47,6 +47,27 @@ fun main() {
         }
         check(runCatching{NooirWebArticle.publicHttps("https://127.0.0.1/")}.isFailure)
         check(runCatching{NooirWebArticle.publicHttps("http://example.org/")}.isFailure)
+        val storage=root.resolve("projects").toPath()
+        val projects=DesktopWebProjects(storage)
+        val entries=listOf(NooirWebChapterPlan.Entry("https://example.org/one","One",false),
+            NooirWebChapterPlan.Entry("https://example.org/two","Two",true))
+        val saved=projects.save(DesktopWebProjects.Project(name="Original novel",source="https://example.org/story",
+            known=entries.map{it.url},chapters=entries,title="Original novel",author="QA",description="Synopsis",
+            language="en",coverUrl="",localCover=cover.absolutePath,collage=false,epub2=true,
+            style="COMPACT",imageProfile="BALANCED",includeImages=true,css="",selector="",remove=""))
+        check(saved.id.isNotBlank()&&DesktopWebProjects(storage).list().single()==saved)
+        val fresh=entries+NooirWebChapterPlan.Entry("https://example.org/three","Three")
+        val additions=NooirWebChapterUpdates.findNew(saved.known,fresh)
+        check(additions.map{it.title}==listOf("Three"))
+        val updated=projects.save(saved.copy(known=fresh.map{it.url},chapters=saved.chapters+additions))
+        check(DesktopWebProjects(storage).list().single()==updated)
+        check(!updated.chapters.first().included)
+        check(NooirWebChapterUpdates.findNew(updated.known,fresh).isEmpty())
+        check(runCatching{projects.save(saved.copy(coverUrl="https://example.org/cover.png"))}.isFailure)
+        check(projects.list().single()==updated)
+        projects.delete(updated.id)
+        check(projects.list().isEmpty()&&cover.isFile&&root.resolve("EPUB2.epub").isFile)
+        println("PASS: durable web projects, excluded chapter preservation, new chapter checks, overwrite-safe settings and book retention")
         println("PASS: shared HTML extraction, Wattpad public metadata/restriction parsing, actual EPUB2/3 cover, synopsis, reordered chapters and private URL rejection")
     }finally{root.deleteRecursively()}
 }
