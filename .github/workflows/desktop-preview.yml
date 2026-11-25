@@ -154,7 +154,7 @@ jobs:
           app="$PWD/build/desktop/mihonnooir-desktop-preview.jar"
           mkdir -p build/windows-gui-qa
           kotlinc -classpath "$app:$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar:$PWD/build/desktop/lib/jsoup-1.21.2.jar:$PWD/build/desktop/lib/json-20250517.jar" -Xfriend-paths="$app" \
-            tests/DesktopXtcViewerSwingSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWebEpubTest.kt tests/DesktopInstalledDataTest.kt \
+            tests/DesktopXtcViewerSwingSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWebEpubTest.kt tests/DesktopInstalledDataTest.kt tests/DesktopLiveWebAcceptance.kt \
             -d build/windows-gui-qa/viewer-smoke.jar
           test -s build/windows-gui-qa/viewer-smoke.jar
       - name: Retain GUI acceptance test separately from distributable code
@@ -578,3 +578,31 @@ jobs:
           path: package/native-dist/
           if-no-files-found: error
           retention-days: 14
+
+  live-web-acceptance:
+    # Explicit, same-repository development test only. Never run on forks,
+    # arbitrary input URLs, routine PRs or the public release workflow.
+    if: github.event_name == 'pull_request' && github.head_ref == 'desktop/live-web-acceptance-20261125' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: build-jvm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-desktop-preview-jvm
+          path: live/input
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: live/qa
+      - name: Verify a public-domain article and public Wattpad story availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true -cp 'live/input/mihonnooir-desktop-preview.jar:live/input/lib/*:live/qa/viewer-smoke.jar' \
+            dev.nooir.desktop.ui.DesktopLiveWebAcceptanceKt
+      # Deliberately do not upload books, source HTML, cookies, or chapter text.
