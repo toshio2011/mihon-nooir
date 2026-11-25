@@ -81,7 +81,7 @@ fun main() {
                         val labels = onSwingThread {
                             descendants(dialog).filterIsInstance<JLabel>()
                         }
-                        val details = labels.first { it.text.startsWith(format.name + " · page") }
+                        val details = labels.first { it.text.orEmpty().startsWith(format.name + " · page") }
                         val scroll = onSwingThread {
                             descendants(dialog).filterIsInstance<JScrollPane>().first()
                         }
@@ -183,7 +183,7 @@ private fun verifyCorruptBookError(
             if (warning != null) {
                 val errorShown = onSwingThread {
                     descendants(warning).filterIsInstance<JLabel>().any {
-                        it.text.contains("Cannot read saved XTC/XTCH book:")
+                        it.text.orEmpty().contains("Cannot read saved XTC/XTCH book:")
                     }
                 }
                 check(errorShown) { "Corrupt source did not show the expected error" }
@@ -219,8 +219,8 @@ private fun awaitPage(
     val deadline = System.nanoTime() + 10_000_000_000L
     while (System.nanoTime() < deadline) {
         val passed = onSwingThread {
-            dialog.isDisplayable && details.text.contains("page $page / 3") &&
-                details.text.contains(mode) && preview.icon is ImageIcon
+            dialog.isDisplayable && details.text.orEmpty().contains("page $page / 3") &&
+                details.text.orEmpty().contains(mode) && preview.icon is ImageIcon
         }
         if (passed) return
         Thread.sleep(30)
@@ -314,7 +314,7 @@ private fun verifyOfflineLibrary(folder: File) {
         verifyFitsWorkArea(main)
         awaitUi("offline main startup without backend") {
             descendants(main).filterIsInstance<JLabel>().any {
-                it.text.startsWith("Offline ready")
+                it.text.orEmpty().startsWith("Offline ready")
             }
         }
         val tabs = onSwingThread {
@@ -500,7 +500,7 @@ private fun verifyExtensionSetup(main: JFrame) {
     awaitUi("extension setup closes without a browser") { !dialog.isShowing }
     onSwingThread { Unit }
     check(onSwingThread {
-        descendants(main).filterIsInstance<JLabel>().any { it.text.startsWith("Offline ready") }
+        descendants(main).filterIsInstance<JLabel>().any { it.text.orEmpty().startsWith("Offline ready") }
     }) { "Cancelling setup must not connect to the backend" }
 
     // Reject remote endpoints at the actual UI boundary, without making a request.
@@ -509,14 +509,14 @@ private fun verifyExtensionSetup(main: JFrame) {
     awaitUi("invalid extension setup address warning") {
         Window.getWindows().filterIsInstance<JDialog>().any {
             it.isShowing && descendants(it).filterIsInstance<JLabel>().any { label ->
-                label.text.contains("localhost Suwayomi server only")
+                label.text.orEmpty().contains("localhost Suwayomi server only")
             }
         }
     }
     val errorDialog = onSwingThread {
         Window.getWindows().filterIsInstance<JDialog>().single {
             it.isShowing && descendants(it).filterIsInstance<JLabel>().any { label ->
-                label.text.contains("localhost Suwayomi server only")
+                label.text.orEmpty().contains("localhost Suwayomi server only")
             }
         }
     }
@@ -594,7 +594,7 @@ private fun verifyOnlineReading(main: JFrame) {
     }
     server.start()
     try {
-        val endpoint = onSwingThread { descendants(main).filterIsInstance<JTextField>().single { it.text.startsWith("http://127.0.0.1:") } }
+        val endpoint = onSwingThread { descendants(main).filterIsInstance<JTextField>().single { it.text.orEmpty().startsWith("http://127.0.0.1:") } }
         onSwingThread { endpoint.text = "http://127.0.0.1:${server.address.port}"; findButton(main,"Connect / reload sources").doClick() }
         awaitUi("online fixture manga loaded") {
             descendants(main).filterIsInstance<JList<*>>().any {
@@ -816,7 +816,7 @@ private fun verifyToolbarReachable(button: JButton) {
 private fun awaitReaderPage(frame: JFrame, page: Int) {
     awaitUi("reader decoded page $page") {
         descendants(frame).filterIsInstance<JLabel>().any {
-            it.text.startsWith("Page $page / 4")
+            it.text.orEmpty().startsWith("Page $page / 4")
         }
     }
 }
