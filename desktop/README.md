@@ -335,3 +335,7 @@ Current native packages are Windows x64 (Intel/AMD) portable ZIP and per-user MS
 ## Cross-platform desktop development targets
 
 The same compiled desktop JAR is now used for a native package CI matrix: Windows x64 (existing MSI/ZIP), Windows ARM64, Linux x64/ARM64 and macOS x64/ARM64. Every new target must build a native app image with a verified matching Java 21 architecture, pass packaged conversion and real pinned Suwayomi tests, then retain an unsigned portable archive with checksum. Linux and Windows ARM also exercise the packaged Swing QA. macOS GUI, platform installer formats, signing/notarization, native updater integration and physical-machine checks remain release gates. The Windows x64 update button is hidden on incompatible platforms. No Android or firmware source changes. These targets are not yet supported releases; see CI results for individual evidence.
+
+### Web EPUB desktop port: image adapters
+
+The first offline dependency layer for Web → EPUB now compiles the released chapter-plan, chapter-update, cover geometry and image-profile sources unchanged. Desktop ImageIO substitutes for Android Bitmap on illustration scaling and combined-cover rendering. Tests check bounded decoding, 2–4 cover layouts, output pixels, resizing, chapter order and update identity. This is not yet the public web converter UI, HTTP integration or Wattpad feature; those remain pending. Fresh CI required.
