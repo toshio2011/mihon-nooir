@@ -4,6 +4,8 @@ import dev.nooir.bridge.*
 import dev.nooir.mangabridge.MangaConversionOptions
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.io.IOUtils
+import org.apache.pdfbox.contentstream.operator.Operator
+import org.apache.pdfbox.pdfparser.PDFStreamParser
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
@@ -28,14 +30,28 @@ internal object DesktopPdfImport {
     fun export(input: File, output: File, format: ExportFormat, device: String,
         options: MangaConversionOptions, textCompanion: Boolean = false,
         canceled: () -> Boolean = { false }, progress: (Int, Int) -> Unit = { _, _ -> }): Int {
+        return exportInternal(input, output, format, device, options,
+            if (textCompanion) PdfMode.COMPANION else PdfMode.ORIGINAL, canceled, progress)
+    }
+
+    fun exportReflow(input: File, output: File, format: ExportFormat, device: String,
+        options: MangaConversionOptions, canceled: () -> Boolean = { false },
+        progress: (Int, Int) -> Unit = { _, _ -> }): Int =
+        exportInternal(input, output, format, device, options, PdfMode.REFLOW, canceled, progress)
+
+    private enum class PdfMode { ORIGINAL, COMPANION, REFLOW }
+
+    private fun exportInternal(input: File, output: File, format: ExportFormat, device: String,
+        options: MangaConversionOptions, mode: PdfMode, canceled: () -> Boolean,
+        progress: (Int, Int) -> Unit): Int {
         val source = input.canonicalFile
         val target = output.canonicalFile
         require(source.isFile && source.extension.equals("pdf", true))
         require(target != source && !target.exists() && target.parentFile.isDirectory)
         val actual = format.resolved(device)
         require(target.extension.equals(actual.extension, true))
-        require(!textCompanion || actual in setOf(ExportFormat.EPUB, ExportFormat.EPUB2)) {
-            "Selectable text companion requires EPUB output"
+        require(mode == PdfMode.ORIGINAL || actual in setOf(ExportFormat.EPUB, ExportFormat.EPUB2)) {
+            "Reflow or selectable text companion requires EPUB output"
         }
         val profile = NooirDeviceProfiles.forId(device)
         val temp = File.createTempFile(".nooir-pdf-", ".tmp", target.parentFile)
@@ -52,28 +68,32 @@ internal object DesktopPdfImport {
                 val metadata = ExtendedMetadata(title = title,
                     direction = if (options.rightToLeft) ReadingDirection.RIGHT_TO_LEFT else ReadingDirection.LEFT_TO_RIGHT)
                 fun checkCancel() { if (canceled()) throw java.util.concurrent.CancellationException("Conversion canceled") }
-                if (textCompanion) {
+                if (mode != PdfMode.ORIGINAL) {
                     val stripper = PDFTextStripper().apply { sortByPosition = true }
                     ReflowEpubWriter.write(temp, ReflowMetadata(title),
                         if (actual == ExportFormat.EPUB2) ReflowEpubFormat.EPUB2 else ReflowEpubFormat.EPUB3) { writer ->
                         for (i in 0 until total) {
                             checkCancel()
-                            val image = frame(doc, renderer, i, profile.width, profile.height)
-                            val png = try {
-                                ByteArrayOutputStream().use { out ->
-                                    check(ImageIO.write(image, "png", out))
-                                    out.toByteArray()
-                                }
-                            } finally { image.flush() }
-                            val href = writer.addImage(ReflowEpubWriter.ImageAsset(png,"png","image/png"))
                             stripper.startPage = i + 1
                             stripper.endPage = i + 1
                             val text = stripper.getText(doc).trim()
-                            val paragraphs = text.lineSequence().filter { it.isNotBlank() }
-                                .joinToString("") { "<p>" + ReflowEpubWriter.xml(it) + "</p>" }
-                            writer.addSection("Page " + (i+1),
-                                "<div><img src=\"$href\" alt=\"Original page ${i+1}\"/></div>" +
-                                (if (paragraphs.isEmpty()) "" else "<h2>Extracted text</h2>$paragraphs"))
+                            val reflow = mode == PdfMode.REFLOW && canReflow(doc, i, text, ::checkCancel)
+                            val paragraphs = if (reflow) reflowParagraphs(text)
+                                else text.lineSequence().filter { it.isNotBlank() }
+                                    .joinToString("") { "<p>" + ReflowEpubWriter.xml(it) + "</p>" }
+                            val body = if (reflow) paragraphs else {
+                                val image = frame(doc, renderer, i, profile.width, profile.height)
+                                val png = try {
+                                    ByteArrayOutputStream().use { out ->
+                                        check(ImageIO.write(image, "png", out))
+                                        out.toByteArray()
+                                    }
+                                } finally { image.flush() }
+                                val href = writer.addImage(ReflowEpubWriter.ImageAsset(png,"png","image/png"))
+                                "<div><img src=\"$href\" alt=\"Original page " + (i+1) + "\"/></div>" +
+                                    (if (paragraphs.isEmpty()) "" else "<h2>Extracted text</h2>$paragraphs")
+                            }
+                            writer.addSection("Page " + (i+1), body)
                             progress(i+1,total)
                         }
                     }
@@ -108,6 +128,33 @@ internal object DesktopPdfImport {
             return written
         } finally { temp.delete() }
     }
+
+    /** Unknown drawing operators, artwork, forms and scans retain a page image.
+     * This deliberately does not claim semantic reading order for multi-column text. */
+    private fun canReflow(doc: PDDocument, index: Int, text: String, checkCancel: () -> Unit): Boolean {
+        if (text.length < 16 || text.count { it.isLetterOrDigit() } < 12 ||
+            text.any { it == '\uFFFD' || Character.isISOControl(it) && !it.isWhitespace() }) return false
+        val page = doc.getPage(index)
+        if (page.rotation % 360 != 0 || page.annotations.isNotEmpty()) return false
+        val plain = setOf("BT","ET","Tf","Td","TD","Tm","T*","Tj","TJ","'","\"",
+            "Tc","Tw","Tz","TL","Ts","q","Q","cm","g","G","rg","RG","k","K",
+            "BMC","BDC","EMC","MP","DP")
+        val parser = PDFStreamParser(page)
+        try {
+            var count = 0
+            while (true) {
+                if (++count % 1024 == 0) checkCancel()
+                val token = parser.parseNextToken() ?: break
+                if (count > 1_000_000 || token is Operator && token.name !in plain) return false
+            }
+            return true
+        } finally { parser.close() }
+    }
+
+    private fun reflowParagraphs(text: String): String =
+        text.split(Regex("\\r?\\n\\s*\\r?\\n")).map { paragraph ->
+            paragraph.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+        }.filter { it.isNotBlank() }.joinToString("") { "<p>" + ReflowEpubWriter.xml(it) + "</p>" }
 
     private fun frame(doc: PDDocument, renderer: PDFRenderer, i: Int, w: Int, h: Int): BufferedImage {
         val page = doc.getPage(i)
