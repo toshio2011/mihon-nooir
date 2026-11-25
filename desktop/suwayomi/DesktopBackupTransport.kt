@@ -65,7 +65,54 @@ class DesktopBackupTransport(endpoint: String) {
             v.list("missingTrackers").map { it.asObject().str("name") })
     }
     fun validate(file:File):Validation=validateBytes(input(file))
-    fun export(target:File) {
+    /** Read only the configured stores and cached extension catalog. Never refresh repositories here. */
+    fun extensionStores():List<DesktopBackupExtensions.Store> {
+        val stores=mutableListOf<DesktopBackupExtensions.Store>()
+        var offset=0
+        while(true){
+            val page=json("query NooirBackupStores { extensionStores(first: 100, offset: $offset) { totalCount nodes { name badgeLabel signingKey contactWebsite contactDiscord indexUrl isLegacy extensionListUrl } } }").obj("extensionStores")
+            val total=page.int("totalCount");require(total in 0..1000)
+            val rows=page.list("nodes");require(rows.size<=100 && offset+rows.size<=total)
+            rows.forEach { raw ->
+                val s=raw.asObject()
+                stores.add(DesktopBackupExtensions.Store(s.str("indexUrl"),s.str("name"),s.str("badgeLabel"),
+                    s.str("signingKey"),s.str("contactWebsite"),s["contactDiscord"] as? String,
+                    s["isLegacy"] as? Boolean ?: error("Missing isLegacy"),s["extensionListUrl"] as? String))
+            }
+            offset+=rows.size
+            if(offset==total)break
+            require(rows.isNotEmpty()) { "Incomplete extension store listing" }
+        }
+        require(stores.map{it.indexUrl}.toSet().size==stores.size) { "Duplicate extension store listing" }
+        return stores
+    }
+    fun extensionCatalog():List<DesktopBackupExtensions.Extension> {
+        val all=mutableListOf<DesktopBackupExtensions.Extension>()
+        var offset=0
+        while(true){
+            val page=json("query NooirBackupCatalog { extensions(first: 50, offset: $offset) { totalCount nodes { pkgName name storeIndexUrl isInstalled isObsolete source { nodes { id } } } } }").obj("extensions")
+            val total=page.int("totalCount");require(total in 0..20_000)
+            val rows=page.list("nodes");require(rows.size<=50 && offset+rows.size<=total)
+            rows.forEach{raw->
+                val e=raw.asObject()
+                val ids=e.obj("source").list("nodes").map{it.asObject().long("id")}.toSet()
+                all.add(DesktopBackupExtensions.Extension(e.str("pkgName"),e.str("name"),e["storeIndexUrl"] as? String,
+                    e["isInstalled"] as? Boolean ?: error("Missing install status"),
+                    e["isObsolete"] as? Boolean ?: error("Missing obsolete status"),ids))
+            }
+            offset+=rows.size
+            if(offset==total)break
+            require(rows.isNotEmpty()) { "Incomplete extension catalog" }
+        }
+        require(all.map{it.pkgName}.toSet().size==all.size) { "Duplicate extension package" }
+        return all
+    }
+    fun extensionPlan(file:File):DesktopBackupExtensions.Plan {
+        val summary=DesktopBackupInspector.inspect(file)
+        val missing=validate(file).missingSources.map{it.id}.toSet()
+        return DesktopBackupExtensions.plan(summary,extensionStores(),extensionCatalog(),missing)
+    }
+    fun export(target:File, includeExtensionStores:Boolean=false) {
         require(!target.exists()) { "Choose a new backup filename" }
         val parent=target.absoluteFile.parentFile
         require(parent.isDirectory) { "Backup destination folder is missing" }
@@ -73,7 +120,9 @@ class DesktopBackupTransport(endpoint: String) {
         require(path.matches(Regex("/api/graphql/files/backup/[A-Za-z0-9_.-]+\\.tachibk")) && !path.contains("..")) {
             "Unexpected backup download path"
         }
-        val bytes=response(builder(path).GET().build(),maxBackup)
+        val raw=response(builder(path).GET().build(),maxBackup)
+        DesktopBackupInspector.inspect(raw.inputStream(),allowEmpty=true)
+        val bytes=if(includeExtensionStores) DesktopBackupExtensions.withStores(raw,extensionStores()) else raw
         DesktopBackupInspector.inspect(bytes.inputStream(),allowEmpty=true)
         val temp=Files.createTempFile(parent.toPath(),".nooir-backup-",".tmp")
         try {

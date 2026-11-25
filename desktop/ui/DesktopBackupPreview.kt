@@ -14,7 +14,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
 /** Read-only preview; restore/export remain explicitly delegated to the local WebUI. */
 object DesktopBackupPreview {
     fun show(owner: Component, endpoint: String, openWebUi: () -> Unit) {
-        val actions = arrayOf("Inspect backup…", "Create library backup…", "Restore library…", "Open Suwayomi backup tools", "Cancel")
+        val actions = arrayOf("Inspect backup…", "Create portable backup…", "Restore library…", "Review missing extensions…", "Open Suwayomi backup tools", "Cancel")
         when (JOptionPane.showOptionDialog(owner,
             "Inspect an Android or desktop backup locally, or use the local Suwayomi WebUI to restore/export library data.\nRepository installation requires separate review.",
             "Backup & restore", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, actions, actions[0])) {
@@ -53,8 +53,8 @@ object DesktopBackupPreview {
             1 -> {
                 val target=choose(owner,true,"mihonnooir-desktop.tachibk") ?: return
                 runTask(owner,"Create backup") {
-                    DesktopBackupTransport(endpoint).export(target)
-                    "Backup saved to "+target.absolutePath+"\nLibrary data only; repositories and Nooir settings not yet included."
+                    DesktopBackupTransport(endpoint).export(target,includeExtensionStores=true)
+                    "Backup saved to "+target.absolutePath+"\nLibrary and configured extension-store metadata included. APKs and Nooir settings are not included."
                 }
             }
             2 -> {
@@ -85,7 +85,24 @@ object DesktopBackupPreview {
                     }
                 }.execute()
             }
-            3 -> openWebUi()
+            3 -> {
+                val file=choose(owner,false,"")?:return
+                runTask(owner,"Extension migration review"){
+                    val plan=DesktopBackupTransport(endpoint).extensionPlan(file)
+                    buildString{
+                        appendLine("Repository comparison (no network refresh or installation):")
+                        plan.stores.forEach{appendLine(it.backup.name+": "+it.state.name)}
+                        appendLine("\nSource comparison:")
+                        plan.sources.forEach{row->
+                            appendLine(row.name+" ("+row.id+"): "+row.state.name)
+                            row.candidates.forEach{appendLine("  "+it.name+" / "+it.pkgName)}
+                        }
+                        appendLine("\nReview missing or conflicting repositories in the local WebUI. No changes made.")
+                        appendLine("Catalog entries can be incomplete until you explicitly refresh configured repositories.")
+                    }
+                }
+            }
+            4 -> openWebUi()
         }
     }
     private fun choose(owner:Component,save:Boolean,name:String):File? {
@@ -106,7 +123,7 @@ object DesktopBackupPreview {
             override fun doInBackground()=task()
             override fun done(){
                 dialog.dispose()
-                try{JOptionPane.showMessageDialog(owner,get(),title,JOptionPane.INFORMATION_MESSAGE)}
+                try{val report=JTextArea(get(),16,62).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0};JOptionPane.showMessageDialog(owner,JScrollPane(report),title,JOptionPane.INFORMATION_MESSAGE)}
                 catch(e:Exception){JOptionPane.showMessageDialog(owner,"Operation failed or status unknown. Check the local WebUI before retrying. Any saved recovery file is retained.",title,JOptionPane.ERROR_MESSAGE)}
             }
         }.execute()
