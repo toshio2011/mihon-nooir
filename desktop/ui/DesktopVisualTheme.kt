@@ -56,13 +56,57 @@ internal object DesktopVisualTheme {
         UIManager.put("defaultFont", Font("SansSerif", Font.PLAIN, 13))
     }
 
+    /** Flat, local button painter. Keep Swing's model, keyboard bindings and accessible role. */
+    fun action(button: JButton, primary: Boolean = false, navigation: Boolean = false) {
+        button.setUI(object : javax.swing.plaf.basic.BasicButtonUI() {
+            override fun paint(g: java.awt.Graphics, c: JComponent) {
+                val b = c as JButton
+                val model = b.model
+                val graphics = g.create() as Graphics2D
+                try {
+                    graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                    graphics.color = when {
+                        !b.isEnabled -> surface
+                        model.isPressed && model.isArmed -> selected.darker()
+                        model.isRollover -> selected
+                        primary -> selected
+                        navigation -> surface
+                        else -> elevated
+                    }
+                    graphics.fillRoundRect(0, 0, b.width, b.height, 10, 10)
+                    if (b.isFocusOwner) {
+                        graphics.color = accent
+                        graphics.drawRoundRect(1, 1, (b.width - 3).coerceAtLeast(0), (b.height - 3).coerceAtLeast(0), 9, 9)
+                    }
+                } finally { graphics.dispose() }
+                super.paint(g, c)
+            }
+            override fun paintText(g: java.awt.Graphics, b: javax.swing.AbstractButton,
+                textRect: java.awt.Rectangle, text: String) {
+                val metrics = g.getFontMetrics(b.font)
+                g.color = if (b.isEnabled) b.foreground else muted.darker()
+                javax.swing.plaf.basic.BasicGraphicsUtils.drawStringUnderlineCharAt(g, text,
+                    b.displayedMnemonicIndex, textRect.x, textRect.y + metrics.ascent)
+            }
+        })
+        button.isOpaque = false
+        button.isContentAreaFilled = false
+        button.isBorderPainted = false
+        button.isFocusPainted = false // focus outline painted above
+        button.isRolloverEnabled = true
+        button.foreground = if (primary) foreground else muted
+        button.border = EmptyBorder(8, 12, 8, 12)
+        button.font = Font("SansSerif", if (primary) Font.BOLD else Font.PLAIN, 13)
+    }
+
     fun nav(button: JButton, primary: Boolean = false) {
+        action(button, primary, navigation = true)
         button.font = Font("SansSerif", if (primary) Font.BOLD else Font.PLAIN, 13)
         button.background = if (primary) selected else surface
         button.foreground = if (primary) foreground else muted
         button.border = EmptyBorder(10, 14, 10, 14)
         button.isFocusPainted = false
-        button.isOpaque = true
+        button.isOpaque = false
         button.horizontalAlignment = SwingConstants.LEFT
         button.alignmentX = Component.LEFT_ALIGNMENT
         button.maximumSize = Dimension(Int.MAX_VALUE, 42)
@@ -113,11 +157,7 @@ internal object DesktopVisualTheme {
                     c.selectionBackground = selected
                     c.selectionForeground = foreground
                 }
-                is JButton -> if (c.background != selected) {
-                    c.foreground = foreground
-                    c.isFocusPainted = false
-                    c.margin = Insets(7, 10, 7, 10)
-                }
+                is JButton -> if (c.isContentAreaFilled) action(c)
             }
             if (c is java.awt.Container) c.components.forEach(::visit)
         }
@@ -138,10 +178,10 @@ internal class DesktopMangaCoverCache : AutoCloseable {
             g.color = DesktopVisualTheme.elevated
             g.fillRect(0, 0, width, height)
             g.color = DesktopVisualTheme.divider
-            g.fillRoundRect(12, 18, 40, 53, 8, 8)
+            g.fillRoundRect(28, 38, 40, 53, 8, 8)
             g.color = DesktopVisualTheme.accent
-            g.fillRect(17, 27, 30, 3)
-            g.fillRect(17, 39, 22, 3)
+            g.fillRect(33, 47, 30, 3)
+            g.fillRect(33, 59, 22, 3)
         }
     })
     private inline fun Graphics2D.useGraphics(block: (Graphics2D) -> Unit) {
