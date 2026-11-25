@@ -1,6 +1,6 @@
 # Landscape, portrait, Auto Fit and overlapping page cuts
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 
 
@@ -13,7 +13,7 @@ Inspired by the setting ideas from [MangaPoint](https://github.com/W1seGit/Manga
 ## Choose the settings
 
 1. In MihonNooir, open a manga, **long-press** a chapter, and select the chapters you want.
-2. Tap **Export** in the manga toolbar (or open **More → Nooir Tools → Send & Convert files** for local CBZ/images).
+2. Tap **Export** in the manga toolbar (or open **More → Nooir Tools → Universal Book Converter → Local files** for local CBZ/images).
 3. Expand **More conversion settings**.
 4. Choose **Include separate series cover** if you want the actual cover ahead of the first selected manga page; disable it to read directly from the chapter.
 5. Choose **Reading segmentation**: Page, Row by Row or Panel by Panel. Pick **Portrait**, **Landscape**, or **Auto Fit** (available with row/panel detection).
@@ -54,7 +54,7 @@ v1.0.19's Panel-mode detector also rechecks accepted regions for suspicious weak
 
 **Show full page before splits** provides an optional original-page overview; **Keep first page of each chapter whole** is independent. See [Panel Auto Fit](PANEL_AUTO_FIT.md) and [conversion settings](CONVERSION.md).
 
-The configurable **Enlarge oversized splits** option is shipped in Android v1.0.19 and is on by default in Row by Row and Panel by Panel. Minimum screen fill defaults to 50% (25–80%); this is a guideline for eligible poorly fitting views, not a promise to split every panel below that threshold. The detector tries supported natural boundaries first, then uses a separate 12% protective overlap when both resulting views improve scale. Ordinary overlap remains independent. Auto Fit may preserve a wide illustration without extra zoom; fixed Landscape can produce different frame counts. Manual crop coordinates, advanced zoom/tiling and other proposed controls are not guaranteed available.
+The configurable **Enlarge oversized splits** option is retained in Android v1.0.20 and is on by default in Row by Row and Panel by Panel. Minimum screen fill defaults to 50% (25–80%); this is a guideline for eligible poorly fitting views, not a promise to split every panel below that threshold. The detector tries supported natural boundaries first, then uses a separate 12% protective overlap when both resulting views improve scale. Ordinary overlap remains independent. Auto Fit may preserve a wide illustration without extra zoom; fixed Landscape can produce different frame counts. Manual crop coordinates, advanced zoom/tiling and other proposed controls are not guaranteed available.
 
 The separate [PDF converter](PDF_TO_EPUB.md) uses its own text/image mode, not manga panel segmentation.
 

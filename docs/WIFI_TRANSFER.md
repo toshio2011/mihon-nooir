@@ -7,7 +7,7 @@ MihonNooir can send converted manga to XTEink readers with a **compatible HTTP/W
 > [!WARNING]
 > Folio Nooir's web server has **no authentication** and serves local HTTP. Use a trusted private network or the reader's short-lived hotspot. Turn off File Transfer when finished.
 
-> **Version note:** The instructions apply to [Android v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19). A compatible reader File Transfer server is required. [Getting started](GETTING_STARTED.md).
+> **Version note:** The instructions apply to [Android v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20). A compatible reader File Transfer server is required. [Getting started](GETTING_STARTED.md).
 
 ## Option A — Use your home Wi-Fi
 
@@ -43,11 +43,14 @@ No router nearby? You can connect your phone directly to the reader.
 
 ### From your phone files
 
-Open **More → Nooir Tools → Send & Convert files**, select up to **25 files**, then choose:
+Open **More → Nooir Tools → Universal Book Converter → Local files**. Choose input type, select up to **25 files**, choose the target reader and output format, then use the appropriate action:
 
-- **Send originals** — copy the selected files unchanged.
-- **Convert manga & send** — convert recognized CBZ/image manga; pass other documents through unchanged.
-- **Share selected** — invoke the Android share sheet for other installed apps/services.
+- **Send original file(s)** — copy the chosen files unchanged.
+- **Convert & send** — convert supported CBZ/ZIP/images, or EPUB to XTC/XTCH, then upload. Unsupported inputs are not silently copied.
+- **Convert & save supported files to phone folder** — local output without a Wi-Fi transfer.
+- **Share selected with another app or device** — use Android's share sheet.
+
+For PDF conversion, open **Universal Book Converter → PDF files**. Direct Wi-Fi sending requires a compatible XTEink target. Check output names before conversion, and preview a saved XTC/XTCH book before sending if desired.
 
 The current release uses one **sequential** WorkManager queue for manga, phone files, PDF, web and novel transfers. You may navigate Back or switch apps; check progress under **More → Nooir Tools → Activity Queue** or in the Android foreground notification. **Conversion** and **uploading** are different stages:
 
