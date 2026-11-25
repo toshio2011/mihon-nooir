@@ -11,3 +11,7 @@ Create library backup and Restore library now use the pinned localhost GraphQL A
 ## Stage 3 — portable extension metadata and source review (pending CI)
 
 Explicit portable backup includes configured extension stores using Mihon's field 106 with index URL, name, badge, signing identity, contacts, legacy flag and extension list URL. This is not an APK backup. Native restore still uses library-only flags; review missing extensions compares exact signed source IDs with cached catalog and configured store signing identity. No automatic refresh, repository registration or extension installation yet. Missing catalog source IDs are unresolved, not inferred from names. A matched stored signing key is not independent proof of trust. Actual Android import and real backend catalog acceptance remain release gates.
+
+## Stage 4 — real pinned-server acceptance (pending CI)
+
+The existing packaged-runtime real Suwayomi smoke now exports an empty library and a synthetic Local manga, validates the portable backup, removes membership, restores with a mandatory recovery snapshot, re-exports and verifies duplicate import does not duplicate the title. This checks actual GraphQL multipart, generated backup download, status polling and restore against the pinned server without user data. It does not yet verify Android device restore, missing third-party sources, chapter progress, or repository installs.
