@@ -59,10 +59,19 @@ internal object DesktopWebImportScreen {
         val none = JButton("Select none")
         val export = JButton("Export selected to EPUB")
         val close = JButton("Close")
+        val projects = DesktopWebProjects()
+        val saveProject = JButton("Save project")
+        val openProject = JButton("Open project")
+        val deleteProject = JButton("Delete project")
+        val checkUpdates = JButton("Check new chapters")
+        var projectId = ""
+        var projectName = ""
+        var sourceUrl = ""
+        var known = emptyList<String>()
         var busy=false
         val controls = listOf<JComponent>(urls,title,author,description,language,cover,localPick,
             clearCover,collage,format,style,imageProfile,includeImages,css,contentSelector,removeSelector,
-            table,analyze,manual,preview,up,down,reverse,all,none,export,close)
+            table,analyze,manual,preview,up,down,reverse,all,none,export,close,saveProject,openProject,deleteProject,checkUpdates)
         fun fail(e: Throwable) {
             val cause=(e as? ExecutionException)?.cause ?: e
             status.text=(cause.message ?: "Web import failed").take(180)
@@ -96,6 +105,7 @@ internal object DesktopWebImportScreen {
             val link=inputUrls().singleOrNull()
             if(link==null) { fail(IllegalArgumentException("Enter one public story overview URL"));return@addActionListener }
             work("Analyzing public story...",{NooirWebChapterDiscovery.inspect(link)}) { info ->
+                projectId="";projectName="";sourceUrl=info.inputUrl;known=info.chapters.map{it.url}
                 title.text=info.title;author.text=info.author;description.text=info.description
                 language.text=info.language.ifBlank{"en"};cover.text=info.detectedCoverUrl
                 display(info.chapters);status.text="Discovered "+info.chapters.size+" public chapters"
@@ -107,6 +117,7 @@ internal object DesktopWebImportScreen {
                     NooirWebChapterPlan.Entry(url,"Chapter "+(i+1))
                 })
                 NooirWebChapterPlan.export(items)
+                projectId="";projectName="";sourceUrl="";known=items.map{it.url}
                 display(items)
                 status.text="Added "+items.size+" links; edit titles and order before exporting"
             } catch(e:Exception){fail(e)}
@@ -143,6 +154,70 @@ internal object DesktopWebImportScreen {
             }
         }
         clearCover.addActionListener{localCover=null;localLabel.text="No local cover selected"}
+        fun chooseProject():DesktopWebProjects.Project? {
+            val items=projects.list()
+            if(items.isEmpty()){status.text="No saved web projects";return null}
+            return JOptionPane.showInputDialog(dialog,"Choose a saved project","Web projects",
+                JOptionPane.PLAIN_MESSAGE,null,items.toTypedArray(),items.first()) as? DesktopWebProjects.Project
+        }
+        saveProject.addActionListener{
+            try{
+                val name=JOptionPane.showInputDialog(dialog,"Project name",projectName.ifBlank{title.text.take(100)})?.trim()
+                    ?: return@addActionListener
+                val saved=projects.save(DesktopWebProjects.Project(projectId,name,sourceUrl,known,entries(),
+                    title.text,author.text,description.text,language.text,cover.text.trim(),
+                    localCover?.absolutePath.orEmpty(),collage.isSelected,
+                    format.selectedItem==ReflowEpubFormat.EPUB2,(style.selectedItem as ReflowEpubStyle).name,
+                    (imageProfile.selectedItem as NooirWebImageProfile).name,includeImages.isSelected,
+                    css.text,contentSelector.text,removeSelector.text))
+                projectId=saved.id;projectName=saved.name;status.text="Saved project: "+saved.name
+            }catch(e:Exception){fail(e)}
+        }
+        openProject.addActionListener{
+            try{
+                val p=chooseProject() ?: return@addActionListener
+                if(JOptionPane.showConfirmDialog(dialog,"Replace the current editor contents with "+p.name+"?",
+                    "Open project",JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return@addActionListener
+                projectId=p.id;projectName=p.name;sourceUrl=p.source;known=p.known
+                urls.text=p.source.ifBlank{p.chapters.joinToString("\n"){it.url}}
+                display(p.chapters)
+                title.text=p.title;author.text=p.author;description.text=p.description;language.text=p.language
+                cover.text=p.coverUrl;localCover=p.localCover.takeIf{it.isNotBlank()}?.let{File(it)}
+                localLabel.text=localCover?.let{if(it.isFile)it.name else "Missing cover: choose again"} ?: "No local cover selected"
+                collage.isSelected=p.collage;format.selectedItem=if(p.epub2)ReflowEpubFormat.EPUB2 else ReflowEpubFormat.EPUB3
+                style.selectedItem=ReflowEpubStyle.parse(p.style);imageProfile.selectedItem=NooirWebImageProfile.parse(p.imageProfile)
+                includeImages.isSelected=p.includeImages;css.text=p.css;contentSelector.text=p.selector;removeSelector.text=p.remove
+                status.text="Opened project: "+p.name
+            }catch(e:Exception){fail(e)}
+        }
+        deleteProject.addActionListener{
+            try{
+                val p=chooseProject() ?: return@addActionListener
+                if(JOptionPane.showConfirmDialog(dialog,"Delete project settings only? Exported books and local covers are untouched.",
+                    p.name,JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION){
+                    projects.delete(p.id)
+                    if(projectId==p.id){projectId="";projectName=""}
+                    status.text="Deleted project settings: "+p.name
+                }
+            }catch(e:Exception){fail(e)}
+        }
+        checkUpdates.addActionListener{
+            val story=sourceUrl;val inventory=known.toList();val current=entries()
+            if(story.isBlank()||inventory.isEmpty()){
+                status.text="Analyze a story or open a saved story project first";return@addActionListener
+            }
+            work("Checking public chapter inventory...",{NooirWebChapterDiscovery.inspect(story)}){ info ->
+                val additions=NooirWebChapterUpdates.findNew(inventory,info.chapters)
+                    .filterNot{item->current.any{NooirWebChapterIdentity.key(it.url)==NooirWebChapterIdentity.key(item.url)}}
+                if(additions.isEmpty()){status.text="No new public chapters found"}
+                else if(JOptionPane.showConfirmDialog(dialog,"Append "+additions.size+" new chapters to this checklist?",
+                    "New chapters",JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION){
+                    display(current+additions)
+                    known=(inventory+info.chapters.map{it.url}).distinctBy(NooirWebChapterIdentity::key)
+                    status.text="Appended "+additions.size+" chapters. Save project to retain changes."
+                }else{status.text="New chapters not added; inventory unchanged"}
+            }
+        }
         export.addActionListener {
             try {
                 val plan=NooirWebChapterPlan.export(entries())
@@ -190,6 +265,7 @@ internal object DesktopWebImportScreen {
             fun field(label:String,component:Component){
                 add(JPanel(BorderLayout(8,3)).apply{add(JLabel(label),BorderLayout.NORTH);add(component,BorderLayout.CENTER)})
             }
+            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply{listOf(saveProject,openProject,deleteProject,checkUpdates).forEach{add(it)}})
             field("Story URL or one public chapter URL per line",JScrollPane(urls))
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply{add(analyze);add(manual)})
             field("Chapters (check, edit titles, reorder)",JScrollPane(table))
