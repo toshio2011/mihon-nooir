@@ -120,3 +120,7 @@ java -Djava.awt.headless=true -cp "$tmp/windows-reader-bookmarks-tests.jar" Read
 kotlinc desktop/storage/DesktopDataHome.kt tests/DesktopDataHomeTest.kt \
   -include-runtime -d "$tmp/windows-storage-root-tests.jar"
 java -jar "$tmp/windows-storage-root-tests.jar"
+
+# Read-only Android/Suwayomi backup preview; synthetic fixtures only.
+kotlinc desktop/suwayomi/DesktopBackupInspector.kt tests/DesktopBackupInspectorTest.kt -include-runtime -d "$tmp/desktop-backup-inspector.jar"
+java -jar "$tmp/desktop-backup-inspector.jar"
