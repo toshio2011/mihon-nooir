@@ -28,7 +28,7 @@ test -s build/desktop/lib/pdfbox-app-3.0.8.jar
 sha512sum -c desktop/pdfbox-runtime.sha512
 kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,PanelReadableSliceRefiner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt,NooirEpubCssRules.kt} \
-  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+  overlay/app/src/main/java/dev/nooir/mangabridge/{MangaConversionSettingsCore.kt,NooirEpubBook.kt} \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt tests/DesktopXtcViewerSwingSmokeTest.kt \
   tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopReaderTransferTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWindowsUpdatesTest.kt \

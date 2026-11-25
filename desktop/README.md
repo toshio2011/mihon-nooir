@@ -315,3 +315,7 @@ update or replace the existing Android v1.0.17 app.
 ## Cover-led browsing and conversion hub — next Windows iteration
 
 The manga browser defaults to a wrapping portrait cover grid with a Detailed list alternative. Both views retain the original source, selection and chapter workflow; no new server request is made merely to switch layouts. The Universal Book Converter entry point groups existing comic import, PDF/image EPUB import, durable batch jobs and actual XTC/XTCH preview. Batch selection now starts with a file-type filter, including PDF-only and image-EPUB-only batches. These are UI integration changes, not claims of text-EPUB pagination or Web-to-EPUB parity. Fresh packaged GUI acceptance and screenshots are required.
+
+## Experimental text EPUB to XTC/XTCH
+
+A separate native text-and-illustrations import mode uses the released Android EPUB package reader and XTC encoder with Java2D text pagination. Choose font, size, margin, line height and reading direction. Existing image-comic conversion stays available. No network resources, scripts, DRM or external entities are loaded. This is initial native pagination, not full CSS/style or complex layout fidelity. Batch integration, inline styling, responsive art/cover metadata, real-book comparisons and complete GUI validation remain open. Fresh Windows CI is required.

@@ -96,6 +96,29 @@ fun main() {
         val rejected=root.resolve("prose.xtc")
         check(runCatching { DesktopImageEpubImport.export(comic("prose.epub",true),rejected,ExportFormat.XTC,device,comicOpts) }.isFailure)
         check(!rejected.exists() && original.readBytes().contentEquals(sourceBytes))
+        // Real text EPUB2/3 from the shared writer, then inspect saved XTC/XTCH.
+        val proseDevice=NooirDeviceProfiles.custom(240,320)
+        for (epubFormat in dev.nooir.bridge.ReflowEpubFormat.values()) {
+            val bookFile=root.resolve("text-" + epubFormat.name + ".epub")
+            dev.nooir.bridge.ReflowEpubWriter.write(bookFile,dev.nooir.bridge.ReflowMetadata("Original novel"),epubFormat) { writer ->
+                writer.addSection("Chapter one","<h1>Chapter one</h1><p>" + "Original words for offline reading. ".repeat(100) + "</p>")
+                writer.addSection("Chapter two","<h1>Chapter two</h1><p>Another chapter.</p>")
+            }
+            val bytes=bookFile.readBytes()
+            val small=root.resolve(epubFormat.name+"-small.xtc")
+            val large=root.resolve(epubFormat.name+"-large.xtch")
+            val smallCount=DesktopTextEpubImport.export(bookFile,small,ExportFormat.XTC,proseDevice,
+                DesktopTextEpubImport.Settings(14,8),comicOpts)
+            val largeCount=DesktopTextEpubImport.export(bookFile,large,ExportFormat.XTCH,proseDevice,
+                DesktopTextEpubImport.Settings(28,12),comicOpts)
+            check(smallCount > 1 && largeCount > smallCount)
+            check(XtcBookPreview(small).pageCount==smallCount && XtcBookPreview(large).pageCount==largeCount)
+            check(XtcBookPreview(small).page(0).levels.any { it.toInt()==0 })
+            val stopped=root.resolve(epubFormat.name+"-stopped.xtc")
+            check(runCatching { DesktopTextEpubImport.export(bookFile,stopped,ExportFormat.XTC,proseDevice,
+                DesktopTextEpubImport.Settings(14,8),comicOpts,{ true }) }.isFailure)
+            check(!stopped.exists() && bytes.contentEquals(bookFile.readBytes()))
+        }
         val dest=root.resolve("batch").apply { mkdir() }
         val queueRoot=root.resolve("queue-state").toPath()
         val queue=DesktopConversionQueue(queueRoot)
