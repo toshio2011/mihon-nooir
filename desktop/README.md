@@ -1,3 +1,28 @@
+# MihonNooir for Windows — integrated development preview
+
+> **Development track, not a public release.** Android v1.0.19 stays stable. This branch consolidates the Windows preview with the exact released v1.0.19 shared panel geometry and settings; no Android production source or firmware changes. Preview version: 0.1.0. Fresh integrated CI and physical PC/reader acceptance are required.
+
+## Set up Mihon-compatible extensions (optional)
+
+Windows uses the pinned official Suwayomi backend, which runs compatible Mihon/Tachiyomi extensions. Extension setup is separate from Android; MihonNooir neither bundles sources nor automatically imports APKs or repository URLs from the phone.
+
+1. Choose **Download & start Suwayomi** and explicitly approve the verified official server download, or start/connect to an existing supported local instance.
+2. In **Installed sources**, choose **Manage extensions…**, then open the local Suwayomi browser interface.
+3. Use Suwayomi's extension repository settings to add a compatible repository you trust, then install the extensions you choose. See [Suwayomi's extension setup instructions](https://github.com/Suwayomi/Suwayomi-Server/blob/master/docs/Getting-Extensions.md).
+4. Return to MihonNooir and choose **Connect / reload sources**. Select an installed source, search/browse titles and export authorized content.
+
+This is a browser handoff, not a native extension-store implementation. No repository is preconfigured; individual extensions can be incompatible with the pinned backend, require authentication, or stop working. Only trusted local servers and explicitly selected extensions should be used. Local CBZ/ZIP reading and conversion work without any extension or server.
+
+## Windows preview workflow
+
+- Local CBZ/ZIP/image-folder library and reader, with optional Suwayomi browsing/download and local copy.
+- Convert local manga or supported documents to EPUB 2/3, XTC, XTCH or CBZ. A persistent conversion queue handles local jobs; PDF original-page conversion and image-only EPUB import have explicit format limits.
+- Panel by Panel and Row by Row, Auto Fit, saved conversion settings, adjustable oversized enlargement and the released shared detector. Defaults: enlargement on, 50% minimum screen fill; ordinary overlap remains separate. A desktop raster result need not be pixel-identical to Android.
+- Inspect actual saved XTC/XTCH output; explicit XTEINK LAN sending with receiver verification is separate from local conversion.
+- Development packages: portable ZIP and per-user unsigned MSI, bundled runtime, Windows-only update channel. Public Windows publication and production Authenticode signing remain separate gates.
+
+Back up the desktop data folder before installing/replacing a preview. See [release gates](../docs/WINDOWS_INTEGRATED_RELEASE_GATES_2026-11-18.md), [document import](../docs/WINDOWS_DOCUMENT_IMPORT_2026-11-18.md), [settings persistence](../docs/WINDOWS_CONVERSION_SETTINGS_PERSISTENCE_2026-11-18.md), [packaging](../docs/WINDOWS_PACKAGING_AND_UPDATES_2026-11-18.md) and [Wi-Fi transfer](../docs/WINDOWS_WIFI_TRANSFER_2026-11-18.md). The older feature notes below are development history, not a public-release promise.
+
 ## Optional data folder on another drive (Windows preview)
 
 Large offline CBZs, saved chapters, the verified Suwayomi server JAR/cache, reading metadata and queues normally live under `%USERPROFILE%\\.mihonnooir` (often on C:). **Nothing is moved or deleted automatically.** To keep *new preview data* on another disk, start the app from PowerShell with an opt-in environment override:

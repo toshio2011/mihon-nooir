@@ -1,6 +1,7 @@
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopUiModel
+import dev.nooir.desktop.ui.DesktopConversionSettingsStore
 import dev.nooir.desktop.ui.DesktopXtcPreviewSizing
 import dev.nooir.desktop.ui.LocalComicPages
 import dev.nooir.desktop.ui.LatestPageLoadGate
@@ -26,6 +27,35 @@ import javax.imageio.ImageIO
 import dev.nooir.desktop.suwayomi.SuwayomiChapter
 
 fun main() {
+    val positionRoot = Files.createTempDirectory("nooir-online-position-")
+    try {
+        val c = dev.nooir.desktop.suwayomi.SuwayomiOnlineChapter(17,9,3,3,0,null)
+        val store = dev.nooir.desktop.ui.OnlineReadingPositionStore(positionRoot)
+        val endpoint = "http://127.0.0.1:4567"
+        check(store.load(endpoint,c,"Manga","Chapter 1")==null)
+        store.save(endpoint,c,"Manga","Chapter 1",1)
+        check(dev.nooir.desktop.ui.OnlineReadingPositionStore(positionRoot).load(endpoint,c,"Manga","Chapter 1")==1)
+        check(store.load("http://127.0.0.1:4568",c,"Manga","Chapter 1")==null)
+        check(store.load(endpoint,c.copy(chapterId=18),"Manga","Chapter 1")==null)
+        check(store.load(endpoint,c.copy(pageCount=4),"Manga","Chapter 1")==null)
+        check(runCatching { store.save(endpoint,c,"Manga","Chapter 1",3) }.isFailure)
+        val file = positionRoot.resolve("online-reading-v1").toFile().listFiles()!!.single()
+        file.writeText("invalid")
+        check(runCatching { store.save(endpoint,c,"Manga","Chapter 1",2) }.isFailure)
+        check(file.readText()=="invalid")
+        println("PASS: online local positions persist, isolate endpoint/chapter/count and preserve damaged metadata")
+    } finally { positionRoot.toFile().deleteRecursively() }
+    check(DesktopUiModel.extensionSetupUri(" http://127.0.0.1:4567 ").toString()=="http://127.0.0.1:4567/")
+    check(DesktopUiModel.extensionSetupUri("https://localhost:8443/").toString()=="https://localhost:8443/")
+    for (url in listOf("https://example.com:4567", "file:///tmp/test", "http://localhost",
+        "http://localhost:0", "http://localhost:65536", "http://user:pass@localhost:4567",
+        "http://localhost:4567/?token=secret", "http://localhost:4567/#fragment",
+        "http://localhost:4567/api", "http://localhost:4567@evil.example:4567",
+        "http://localhost.evil.example:4567", "http://127.0.0.2:4567", "not a URL")) {
+        check(runCatching { DesktopUiModel.extensionSetupUri(url) }.isFailure) { "Unsafe extension setup URL accepted: $url" }
+    }
+    println("PASS: explicit local extension setup URI policy")
+    verifyConversionSettingsStorage()
     // Fast page turns must decode only one page/spread at a time. The newest
     // page replaces any pending request without piling up huge bitmaps.
     val decodeGate = LatestPageLoadGate<Int>()
@@ -462,4 +492,36 @@ fun main() {
     // In headless CI we compile/load the real Swing GUI, but do not instantiate a JFrame.
     check(Class.forName("dev.nooir.desktop.ui.MangaNooirDesktop") != null)
     println("Desktop GUI model tests passed: chapter selection, two-page RTL paging, across-chapter offline navigation, formats and headless GUI")
+}
+
+private fun verifyConversionSettingsStorage() {
+    val root = Files.createTempDirectory("nooir-settings-qa")
+    try {
+        val store = DesktopConversionSettingsStore(root)
+        val file = root.resolve(DesktopConversionSettingsStore.FILE_NAME)
+        check(store.load() == MangaConversionOptions.preset("Manga") && !Files.exists(file))
+        val desired = MangaConversionOptions.preset("Manga").copy(preset="Custom",
+            panelMode="ROW_BY_ROW", orientation="AUTO_FIT", minimumScreenFillPercent=65,
+            enlargeOversizedSplits=false, overlapPercent=13, renderAlgorithm="ATKINSON")
+        store.save(desired.copy(allowMissingCover=true,skipUnavailableChapters=true,panelDiagnostics=true))
+        check(DesktopConversionSettingsStore(root).load()==desired) { "Settings must survive new store instance; one-job permissions must not persist" }
+        check(DesktopConversionSettingsStore(root.resolve("other")).load()==MangaConversionOptions.preset("Manga"))
+        val old = Files.readString(file).lines().first() + "\n" + desired.token().split('|').take(22).joinToString("|") + "\n"
+        Files.writeString(file,old)
+        check(store.load()==desired.copy(enlargeOversizedSplits=true,minimumScreenFillPercent=50))
+        store.save(desired)
+        check(store.load()==desired)
+        for (bad in listOf("unknown format", old.replace("|AUTO_FIT|","|INVALID|"),
+                "x".repeat(4097), "")) {
+            Files.writeString(file,bad)
+            val bytes=Files.readAllBytes(file)
+            check(runCatching { store.load() }.isFailure)
+            check(runCatching { store.save(desired) }.isFailure)
+            check(Files.readAllBytes(file).contentEquals(bytes)) { "Invalid settings must be preserved" }
+            Files.delete(file)
+            store.save(desired)
+        }
+        check(Files.list(root).use { it.count() } == 1L)
+        println("PASS: local conversion settings roundtrip, isolation, 22-field migration, corrupt-file refusal and no persistent per-job consent")
+    } finally { root.toFile().deleteRecursively() }
 }
