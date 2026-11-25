@@ -286,6 +286,23 @@ class SuwayomiClient(
         }
     }
 
+    /** Explicit opt-in checkpoint. Never writes read/bookmark flags or intentionally rewinds.
+     * The pinned API has no compare-and-set; concurrent writers must be avoided. */
+    fun saveReadingProgress(chapter: SuwayomiOnlineChapter, page: Int): Int {
+        require(chapter.syncConflict == null && page in 0 until chapter.pageCount) { "Resolve reading conflict first" }
+        val before=graphql("query NooirProgressBefore { chapter(id: "+chapter.chapterId+") { id mangaId pageCount lastPageRead } }").obj("chapter")
+        require(before.int("id")==chapter.chapterId && before.int("mangaId")==chapter.mangaId &&
+            before.int("pageCount")==chapter.pageCount) { "Chapter changed; reopen before saving" }
+        val prior=before.int("lastPageRead")
+        require(prior in 0..chapter.pageCount)
+        if(prior>=page)return prior
+        val after=graphql("mutation NooirSaveProgress { updateChapter(input: { id: "+chapter.chapterId+
+            ", patch: { lastPageRead: "+page+" } }) { chapter { id mangaId lastPageRead } } }").obj("updateChapter").obj("chapter")
+        require(after.int("id")==chapter.chapterId && after.int("mangaId")==chapter.mangaId &&
+            after.int("lastPageRead")==page) { "Server did not confirm saved progress" }
+        return page
+    }
+
     fun manga(id: Int): SuwayomiManga {
         require(id > 0) { "Invalid manga ID" }
         val query = """

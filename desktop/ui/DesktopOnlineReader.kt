@@ -22,6 +22,7 @@ import javax.swing.JComponent
 import javax.swing.JFrame
 import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.JOptionPane
 import javax.swing.JScrollPane
 import javax.swing.JSpinner
 import javax.swing.KeyStroke
@@ -53,6 +54,8 @@ internal class DesktopOnlineReader(
     private val zoom = JSpinner(SpinnerNumberModel(100, 50, 200, 10))
     private val rtl = JCheckBox("Right to left", true)
     private val resume = JButton("Resume server position")
+    private val saveServer = JButton("Save progress to server").apply { isEnabled=false }
+    private var savingServer=false
     private val status = JLabel("Opening page…")
     private val note = JLabel()
     private val positionNote = JLabel("Local position will be saved after a page displays.")
@@ -77,7 +80,7 @@ internal class DesktopOnlineReader(
         add(JPanel(BorderLayout()).apply {
             add(JPanel(java.awt.GridLayout(2,1)).apply { add(status); add(positionNote) }, BorderLayout.NORTH)
             add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 3)).apply {
-                add(note); add(resume)
+                add(note); add(resume); add(saveServer)
             }), BorderLayout.SOUTH)
         }, BorderLayout.SOUTH)
         refreshNote()
@@ -99,6 +102,7 @@ internal class DesktopOnlineReader(
         zoom.addChangeListener { paintPage() }
         rtl.addActionListener { paintPage() }
         resume.addActionListener { requestPage(chapter.lastPageRead.coerceIn(0,chapter.pageCount-1)) }
+        saveServer.addActionListener { saveServerPosition() }
         close.addActionListener { dispose() }
         bind("LEFT", "reader-left") { requestPage(index + if (rtl.isSelected) 1 else -1) }
         bind("RIGHT", "reader-right") { requestPage(index + if (rtl.isSelected) -1 else 1) }
@@ -126,18 +130,19 @@ internal class DesktopOnlineReader(
     private fun refreshNote() {
         note.text = if (chapter.syncConflict != null)
             "Server sync conflict: Windows uses its own local position; no server write-back."
-        else "Online session — local Windows resume only; no server progress write-back."
+        else "Local resume is automatic; server progress is saved only on request."
         resume.isVisible = chapter.syncConflict == null && chapter.lastPageRead > 0
     }
 
     private fun updateChapterButtons() {
         val at = sequence.indexOfFirst { it.id == chapter.chapterId }
+        saveServer.isEnabled = !savingServer && !switching && !pageBusy && activeImage!=null && chapter.syncConflict==null
         previousChapter.isEnabled = !switching && !pageBusy && at > 0
         nextChapter.isEnabled = !switching && !pageBusy && at >= 0 && at < sequence.lastIndex
     }
 
     private fun switchChapter(direction: Int) {
-        if (disposed || switching || pageBusy) return
+        if (disposed || switching || pageBusy || savingServer) return
         val at = sequence.indexOfFirst { it.id == chapter.chapterId }
         if (at < 0) return
         val chosen = sequence.getOrNull(at+direction) ?: return
@@ -171,6 +176,29 @@ internal class DesktopOnlineReader(
         }.execute()
     }
 
+    private fun saveServerPosition() {
+        if(disposed || savingServer || pageBusy || switching || activeImage==null || chapter.syncConflict!=null)return
+        if(JOptionPane.showConfirmDialog(this,
+            "Save this page to the local server for portable backups? Avoid reading on another connected client at the same time. The server may sync to a configured reading-progress service.",
+            "Save progress",JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)return
+        val target=chapter
+        val page=index
+        savingServer=true
+        updateChapterButtons()
+        object:SwingWorker<Int,Void>(){
+            override fun doInBackground()=client.saveReadingProgress(target,page)
+            override fun done(){
+                savingServer=false
+                if(disposed)return
+                try {
+                    val saved=get()
+                    positionNote.text=if(saved>page) "Server already has a later position; kept it." else "Server position confirmed. Local position retained."
+                }catch(e:Exception){positionNote.text="Server save failed or status unknown. Local position retained."}
+                updateChapterButtons()
+            }
+        }.execute()
+    }
+
     private fun bind(key: String, name: String, action: () -> Unit) {
         rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(key), name)
         rootPane.actionMap.put(name, object : AbstractAction() {
@@ -191,7 +219,7 @@ internal class DesktopOnlineReader(
     }
 
     private fun requestPage(target: Int) {
-        if (disposed || switching || target !in 0 until chapter.pageCount) return
+        if (disposed || switching || savingServer || target !in 0 until chapter.pageCount) return
         index = target
         releaseImage()
         val request = Request(++generation, target)

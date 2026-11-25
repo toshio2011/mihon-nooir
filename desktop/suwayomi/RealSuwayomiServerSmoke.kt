@@ -72,6 +72,25 @@ object RealSuwayomiServerSmoke {
                     }
                 }
             }
+            // Explicit server progress and real pinned-server backup API.
+            val opened=api.openOnlineChapter(manga.id,manga.chapters.first().id)
+            check(api.saveReadingProgress(opened,1)==1)
+            check(api.saveReadingProgress(opened,0)==1) { "Earlier page must not intentionally rewind server progress" }
+            val backup=DesktopBackupTransport(endpoint)
+            val portable=root.resolve("portable-test.tachibk").toFile()
+            backup.export(portable,includeExtensionStores=true)
+            val summary=DesktopBackupInspector.inspect(portable)
+            check(summary.favorites==1 && summary.chapters==2 && summary.progressed>=1) { "Portable backup missing synthetic progress" }
+            backup.validate(portable)
+            check(!api.setMangaInLibrary(card.id, false))
+            check(api.library(0,100).mangas.none{it.id==card.id})
+            val recovery=root.resolve("recovery-test.tachibk").toFile()
+            val ticket=backup.beginRestore(portable,recovery)
+            check(backup.await(ticket)=="SUCCESS") { "Real server restore did not report success" }
+            check(recovery.isFile && api.library(0,100).mangas.any{it.id==card.id})
+            val restored=api.openOnlineChapter(manga.id,manga.chapters.first().id)
+            check(restored.lastPageRead>=1) { "Server progress absent after restore" }
+            println("PASS: real pinned-server portable backup, validation, recovery and library restore; explicit progress checkpoint")
             check(!api.setMangaInLibrary(card.id, false))
             check(api.library(0, 100).mangas.none { it.id == card.id })
             println("PASS: real pinned Suwayomi Local source search, chapter discovery, library membership and four ordered page decodes")

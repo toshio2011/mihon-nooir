@@ -11,3 +11,7 @@ Create library backup and Restore library now use the pinned localhost GraphQL A
 ## Stage 3 — portable extension metadata and source review (pending CI)
 
 Explicit portable backup includes configured extension stores using Mihon's field 106 with index URL, name, badge, signing identity, contacts, legacy flag and extension list URL. This is not an APK backup. Native restore still uses library-only flags; review missing extensions compares exact signed source IDs with cached catalog and configured store signing identity. No automatic refresh, repository registration or extension installation yet. Missing catalog source IDs are unresolved, not inferred from names. A matched stored signing key is not independent proof of trust. Actual Android import and real backend catalog acceptance remain release gates.
+
+## Stage 4 — real-server acceptance and explicit progress checkpoint
+
+Native online reader offers an explicit Save progress to server action after a page has decoded. It keeps local resume independent, checks current server position and chapter identity, skips known conflicts and does not intentionally rewind, mark chapters read or change bookmarks. The API has no atomic compare-and-set; avoid concurrent writers. A configured server may forward progress to its sync service. The real pinned-server smoke now exercises portable export, validation, recovery and restore in a synthetic disposable root. This is same-server restore acceptance, not a fresh-device or Android round trip. All new behavior pending CI.
