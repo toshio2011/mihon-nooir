@@ -126,5 +126,9 @@ kotlinc desktop/suwayomi/DesktopBackupInspector.kt tests/DesktopBackupInspectorT
 java -jar "$tmp/desktop-backup-inspector.jar"
 
 # Localhost-only backup transport contract; synthetic protocol fixture.
-kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt} tests/DesktopBackupTransportTest.kt -include-runtime -d "$tmp/desktop-backup-transport.jar"
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt} tests/DesktopBackupTransportTest.kt -include-runtime -d "$tmp/desktop-backup-transport.jar"
 java --add-modules jdk.httpserver -jar "$tmp/desktop-backup-transport.jar"
+
+# Synthetic Android-compatible extension store round trip and exact-ID review.
+kotlinc desktop/suwayomi/{DesktopBackupInspector.kt,DesktopBackupExtensions.kt} tests/DesktopBackupExtensionsTest.kt -include-runtime -d "$tmp/desktop-backup-extensions.jar"
+java -jar "$tmp/desktop-backup-extensions.jar"
