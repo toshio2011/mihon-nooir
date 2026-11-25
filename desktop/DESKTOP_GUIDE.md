@@ -48,3 +48,7 @@ The Windows x64-only update control is not offered on incompatible platforms. No
 ## Preview acceptance notes
 
 Native GUI validation is now required for both macOS architectures as well as Windows and Linux. The new acceptance checks verify user data from a separate portable app copy and installer payload; actual Linux package-manager upgrade and macOS Gatekeeper/notarization tests remain separate. Windows x64 MSI acceptance uses a synthetic predecessor rather than an earlier public version. These are development gates, not a claim that the newest installer candidates have already passed.
+
+### Compact displays
+
+The Web → EPUB editor has three tabs. On narrow windows, scroll the individual action rows horizontally to reach hidden buttons; the export and cancellation actions remain in a dedicated bottom row. The chapter table and the book/settings forms scroll independently.

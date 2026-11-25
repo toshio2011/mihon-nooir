@@ -367,3 +367,7 @@ All matrix targets now require real display-capable Swing acceptance, including 
 ### Desktop UI polish
 
 The web editor now separates Chapters, Book details and Export settings into tabs, with persistent project actions, status and export controls. The main navigation and web editor use flat, rounded button surfaces with hover, disabled and keyboard-focus states; cover placeholders are centered. Native GUI tests retain chapter selections across tabs and capture each editor section. Changes are pending fresh CI and visual inspection; screenshots from the previous verified build do not show this styling yet.
+
+### Compact web editor acceptance
+
+All project, chapter, cover and export button rows use the existing horizontally scrollable toolbar helper rather than wrapping into clipped rows on small displays. The dialog opens within the usable work area, and the GUI suite shrinks it to a compact laptop-sized window and checks that every relevant action can be scrolled fully into view. Pending CI. The native installer payload matrix passed at PR #127; native interactive macOS acceptance remains under correction.

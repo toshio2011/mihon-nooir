@@ -297,9 +297,10 @@ internal object DesktopWebImportScreen {
             })
             add(Box.createVerticalStrut(10))
         }
-        fun actions(vararg buttons:JButton): JPanel = JPanel(FlowLayout(FlowLayout.LEFT,6,4)).apply{
-            isOpaque=false;buttons.forEach{add(it)}
-        }
+        fun actions(vararg buttons:JButton): JScrollPane =
+            DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT,6,4)).apply{
+                isOpaque=false;buttons.forEach{add(it)}
+            })
         val chapters=JPanel(BorderLayout(0,8)).apply{
             border=BorderFactory.createEmptyBorder(12,14,12,14)
             add(JPanel(BorderLayout(0,5)).apply{
@@ -319,10 +320,11 @@ internal object DesktopWebImportScreen {
             field("Synopsis / description",JScrollPane(description))
             field("Language",language)
             field("Public cover URL (blank = auto detect)",cover)
-            add(JPanel(BorderLayout(8,0)).apply{
+            add(JPanel(BorderLayout(0,3)).apply{
                 isOpaque=false
-                add(actions(localPick,clearCover),BorderLayout.WEST)
-                add(localLabel,BorderLayout.CENTER)
+                add(localLabel,BorderLayout.NORTH)
+                add(actions(localPick,clearCover),BorderLayout.CENTER)
+                maximumSize=Dimension(Int.MAX_VALUE,preferredSize.height)
             })
             add(collage)
             add(Box.createVerticalGlue())
@@ -356,10 +358,13 @@ internal object DesktopWebImportScreen {
         dialog.add(JPanel(BorderLayout()).apply{
             border=BorderFactory.createEmptyBorder(5,12,8,12)
             add(status,BorderLayout.CENTER)
-            add(JPanel(FlowLayout(FlowLayout.RIGHT)).apply{add(export);add(cancelExport);add(close)},BorderLayout.SOUTH)
+            add(actions(export,cancelExport,close),BorderLayout.SOUTH)
         },BorderLayout.SOUTH)
         val bounds=java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
-        dialog.setSize(minOf(900,bounds.width-24),minOf(760,bounds.height-24))
-        dialog.setLocationRelativeTo(parent);dialog.isVisible=true
+        val width=minOf(900,(bounds.width-24).coerceAtLeast(1))
+        val height=minOf(760,(bounds.height-24).coerceAtLeast(1))
+        dialog.minimumSize=Dimension(minOf(600,width),minOf(420,height))
+        dialog.setBounds(bounds.x+(bounds.width-width)/2,bounds.y+(bounds.height-height)/2,width,height)
+        dialog.isVisible=true
     }
 }

@@ -462,7 +462,26 @@ private fun verifyWebEditor(main: JFrame) {
         captureWindow(dialog,"web-export-settings")
         onSwingThread { tabs.selectedIndex=0 }
         check(onSwingThread { table.rowCount==3 && bookTitle.text=="Original QA novel" })
-        println("PASS: native web editor manual links, editable titles, selection, reorder and idle cancellation controls")
+        onSwingThread {
+            val work=GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+            dialog.setSize(minOf(620,work.width-24),minOf(520,work.height-24))
+            dialog.setLocation(work.x+(work.width-dialog.width)/2,work.y+(work.height-dialog.height)/2)
+            dialog.validate()
+        }
+        fun reachable(label:String) {
+            val control=onSwingThread { descendants(dialog).filterIsInstance<JButton>().single{it.text==label} }
+            verifyToolbarReachable(control)
+        }
+        for(label in listOf("Save project","Open project","Delete project","Check new chapters",
+            "Analyze story chapters","Use pasted chapter/page URLs","Preview selected chapter",
+            "Move up","Move down","Reverse order","Select all","Select none",
+            "Export selected to EPUB","Cancel export","Close")) reachable(label)
+        captureWindow(dialog,"web-editor-compact")
+        onSwingThread { tabs.selectedIndex=1;dialog.validate() }
+        reachable("Choose local JPEG/PNG")
+        reachable("Clear local cover")
+        check(onSwingThread { bookTitle.text=="Original QA novel" })
+        println("PASS: native web editor manual links, editable titles, selection, reorder, idle cancellation controls and compact toolbar reachability")
     } finally { onSwingThread { dialog.dispose() } }
 }
 
