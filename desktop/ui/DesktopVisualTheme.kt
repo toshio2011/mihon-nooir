@@ -249,7 +249,7 @@ internal class DesktopMangaCardRenderer(
                 BorderFactory.createLineBorder(if (cellHasFocus || isSelected) DesktopVisualTheme.accent else DesktopVisualTheme.divider),
                 EmptyBorder(6, 7, 6, 7)))
         title.text = value.title.take(if (grid) 40 else 110)
-        accessibleContext.accessibleName = value.title
+        getAccessibleContext()?.accessibleName = value.title
         title.foreground = DesktopVisualTheme.foreground
         byline.text = value.author?.take(if (grid) 30 else 90).orEmpty().ifBlank { "Manga" }
         byline.foreground = DesktopVisualTheme.muted
