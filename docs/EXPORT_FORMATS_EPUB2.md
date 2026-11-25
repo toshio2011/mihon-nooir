@@ -1,6 +1,6 @@
 # MihonNooir: EPUB 2 Classic, EPUB 3 Modern, XTC Fast, XTCH High Quality
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 
 
@@ -37,7 +37,7 @@ A future optional, explicitly versioned `book.nooir.json` sidecar could carry sy
 
 ## Inspect a saved book
 
-In v1.0.19, open **Export → Inspect an exported XTC / XTCH file** and select the completed book to inspect actual decoded page data. The existing live manga preview remains separate; neither is a substitute for checking the book on the physical reader.
+In v1.0.20, open **More → Nooir Tools → Universal Book Converter → Preview finished XTC / XTCH book**, or **Export → Inspect an exported XTC / XTCH file** and select the completed book to inspect actual decoded page data. The existing live manga preview remains separate; neither is a substitute for checking the book on the physical reader.
 
 ## Test status and reconversion
 
@@ -45,7 +45,7 @@ The CI workflow builds synthetic, freely redistributable EPUB 2, XTC and XTCH bo
 
 Reconvert existing manga only to **obtain EPUB 2** or to strip a prior private XTC/XTCH JSON trailer for portability. EPUB 3 exports and otherwise working reader files need not automatically be regenerated. Existing MihonNooir preferences and web/PDF converters remain separate.
 
-[Technical XTC synopsis and cover notes](XTC_METADATA.md) · [Orientation / overlap](ORIENTATION_OVERLAP.md) · [Release notes](releases/v1.0.19.md)
+[Technical XTC synopsis and cover notes](XTC_METADATA.md) · [Orientation / overlap](ORIENTATION_OVERLAP.md) · [Release notes](releases/v1.0.20.md)
 
 ## EPUB section grouping (experimental option)
 

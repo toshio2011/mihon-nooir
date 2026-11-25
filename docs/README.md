@@ -1,6 +1,6 @@
 # MihonNooir — user guides
 
-**Developer handover:** [Current v1.0.19 checkpoint and historical development notes](PROJECT_HANDOVER.md). Historical snapshots describe their own dated branches, not the latest public app.
+**Developer handover:** [Historical development checkpoints](PROJECT_HANDOVER.md). Historical snapshots describe their own dated branches, not the latest public app.
 
 [← Repository homepage](../README.md) · [Reader diagnostic samples](READER_INTEROP_DIAGNOSTICS.md) · [Start with Nooir Tools](NOOIR_TOOLS_QUICK_START.md) · [Frequently asked questions](FAQ.md)
 
@@ -10,7 +10,7 @@
 ## If this is your first time
 
 1. [**Install MihonNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.
-2. [**Nooir Tools: six features explained**](NOOIR_TOOLS_QUICK_START.md) — walkthrough of the six tools.
+2. [**Nooir Tools: quick start**](NOOIR_TOOLS_QUICK_START.md) — walkthrough of the Universal Book Converter, queue and reader tools.
 3. [**Connect your phone and XTEink over Wi-Fi**](WIFI_TRANSFER.md) — trusted LAN/hotspot and recipient confirmation.
 4. [**FAQ and troubleshooting**](FAQ.md) — solve common mistakes without digging through code.
 
@@ -25,7 +25,7 @@
 | Convert one public webpage/article to EPUB | [Web link → EPUB](WEB_TO_READER.md) |
 | **Combine multiple webpages into one EPUB** | [Multi-link EPUB / web novels](WEB_NOVELS.md#combine-individual-webpages-into-one-epub) |
 | Turn all discoverable public web-novel chapters into EPUB | [Web novels, batch import and All chapters](WEB_NOVELS.md) |
-| Convert PDFs with **selectable text + illustrations**, or original pages to XTC/XTCH | [PDF guide](PDF_TO_EPUB.md) · [v1.0.19 notes](releases/v1.0.19.md) |
+| Convert PDFs with **selectable text + illustrations**, or original pages to XTC/XTCH | [PDF guide](PDF_TO_EPUB.md) · [v1.0.20 notes](releases/v1.0.20.md) |
 | Compare e-ink rendering styles and inspect saved XTC/XTCH files | [Conversion and both previews](CONVERSION.md#two-different-previews) |
 | Send phone files or monitor conversions | [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) |
 | See queue history, rename an existing destination file, fix missing cover | [Queue / XTEink files / covers](DEVICE_FILES_AND_QUEUE.md) |
