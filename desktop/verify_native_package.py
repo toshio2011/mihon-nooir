@@ -11,7 +11,9 @@ import tempfile
 p = argparse.ArgumentParser()
 p.add_argument("--platform", choices=("linux", "macos", "windows"), required=True)
 p.add_argument("--arch", choices=("x64", "arm64"), required=True)
-p.add_argument("--server-only", action="store_true")
+mode = p.add_mutually_exclusive_group()
+mode.add_argument("--server-only", action="store_true")
+mode.add_argument("--installers-only", action="store_true")
 args = p.parse_args()
 package = pathlib.Path("package").resolve()
 app_name = "MihonNooir-Preview"
@@ -56,7 +58,82 @@ def sha256(path):
             digest.update(block)
     return digest.hexdigest()
 
-if args.server_only:
+def verify_installer_runtime(root):
+    relative = app_jar.relative_to(app)
+    # Linux packages may place the app under /opt or another package root.
+    candidates = list(root.rglob(input_jar))
+    assert len(candidates) == 1, candidates
+    extracted_jar = candidates[0]
+    assert sha256(extracted_jar) == sha256(app_jar)
+    installed_app = extracted_jar
+    for _ in relative.parts:
+        installed_app = installed_app.parent
+    installed_runtime = installed_app / runtime.relative_to(app)
+    assert java_arch(installed_runtime)
+    for name in ("pdfbox-app-3.0.8.jar", "imageio-webp-3.15.3.jar", "jsoup-1.21.2.jar", "json-20250517.jar"):
+        original = app_jar.parent / "lib" / name
+        actual = extracted_jar.parent / "lib" / name
+        assert sha256(original) == sha256(actual), name
+    cp = os.pathsep.join(str(x) for x in (package / "qa/viewer-smoke.jar",
+        extracted_jar, extracted_jar.parent / "lib/*"))
+    with tempfile.TemporaryDirectory(prefix="nooir-installer-qa-") as isolated:
+        env = dict(os.environ, MIHONNOOIR_DATA_DIR=isolated)
+        run(installed_runtime, "-Djava.awt.headless=true", "-cp", cp,
+            "dev.nooir.desktop.ui.DesktopWebEpubTestKt", env=env, timeout=300)
+
+def installers():
+    assert app.is_dir() and runtime.is_file() and app_jar.is_file()
+    assert args.platform in ("linux", "macos")
+    version = pathlib.Path("desktop/windows-version.txt").read_text().strip()
+    bundle_version = "1." + version.split(".", 1)[1] if args.platform == "macos" and version.startswith("0.") else version
+    dist = package / "native-dist"
+    assert dist.is_dir()
+    stage = package / "native-installers"
+    stage.mkdir()
+    for kind in (("deb", "rpm") if args.platform == "linux" else ("dmg",)):
+        out = stage / kind
+        out.mkdir()
+        cmd = [jdk / "bin/jpackage", "--type", kind, "--name", app_name,
+               "--app-version", bundle_version, "--app-image", app, "--dest", out,
+               "--vendor", "MihonNooir", "--description", "MihonNooir experimental desktop preview"]
+        if args.platform == "linux":
+            cmd += ["--linux-package-name", "mihonnooir-preview", "--linux-shortcut"]
+        else:
+            cmd += ["--mac-package-identifier", "dev.nooir.desktop.preview"]
+        run(*cmd, timeout=600)
+        files = list(out.glob("*." + kind))
+        assert len(files) == 1 and files[0].stat().st_size > 0, files
+        candidate = files[0]
+        with tempfile.TemporaryDirectory(prefix="nooir-native-install-") as folder:
+            dest = pathlib.Path(folder)
+            if kind == "deb":
+                info = subprocess.check_output(["dpkg-deb", "-f", str(candidate), "Architecture"], text=True).strip()
+                assert info == ("amd64" if args.arch == "x64" else "arm64"), info
+                run("dpkg-deb", "-x", candidate, dest)
+                verify_installer_runtime(dest)
+            elif kind == "rpm":
+                info = subprocess.check_output(["rpm", "-qp", "--qf", "%{ARCH}", str(candidate)], text=True).strip()
+                assert info == ("x86_64" if args.arch == "x64" else "aarch64"), info
+                # Avoid shell interpolation and check BOTH extraction commands.
+                with subprocess.Popen(["rpm2cpio", str(candidate)], stdout=subprocess.PIPE) as src:
+                    extract = subprocess.run(["cpio", "-idm", "--quiet"], stdin=src.stdout, cwd=dest, check=True)
+                    src.stdout.close()
+                    assert src.wait() == 0
+                verify_installer_runtime(dest)
+            else:
+                run("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", dest, candidate)
+                try:
+                    verify_installer_runtime(dest)
+                finally:
+                    run("hdiutil", "detach", dest)
+        target = dist / ("MihonNooir-Desktop-" + version + "-" + args.platform + "-" + args.arch + "." + kind)
+        shutil.move(candidate, target)
+        (dist / (target.name + ".sha256")).write_text(sha256(target) + "  " + target.name + "\n", encoding="ascii")
+        print("PASS: native installer payload, architecture and packaged web EPUB QA:", target.name)
+
+if args.installers_only:
+    installers()
+elif args.server_only:
     server = package / "Suwayomi-Server-v2.4.2366.jar"
     assert sha256(server) == "af9feb20af9d7ebe9e30769e6c6ebc7fc7ab1c447388d42e0280b1da5fe07bfd"
     java_arch(runtime)
