@@ -40,6 +40,7 @@ import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.JSplitPane
 import javax.swing.JTextField
+import javax.swing.JTabbedPane
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
 import javax.swing.SwingWorker
@@ -115,10 +116,15 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val localReader = JButton("Read local comic")
     private val inspectBinary = JButton("Inspect XTC / XTCH output")
     private val localLibrary = JButton("Local library")
+    private val conversionJobs = JButton("Conversion jobs")
+    private val sendReader = JButton("Send to XTEINK")
+    private val documentImport = JButton("Import PDF / EPUB")
+    private val checkWindowsUpdates = JButton("Windows updates")
     private val startServer = JButton("Start local Suwayomi")
     private val getServer = JButton("Download & start Suwayomi")
     private val stopServer = JButton("Stop managed server")
     private val managedServer = SuwayomiProcessManager()
+    private val conversionSettingsStore = DesktopConversionSettingsStore()
     private var options = MangaConversionOptions.preset("Manga")
     private val next = JButton("Next page")
     private val previous = JButton("Previous")
@@ -142,22 +148,29 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private var browsing = "library"
     private var currentManga: SuwayomiManga? = null
     private var selectedSource: SuwayomiSource? = null
+    private var compactTabs: JTabbedPane? = null
 
     init {
+        try {
+            options = conversionSettingsStore.load()
+        } catch (e: Exception) {
+            status.text = "Offline ready — saved conversion settings unreadable; using defaults. Original preserved."
+        }
         defaultCloseOperation = DISPOSE_ON_CLOSE
-        minimumSize = Dimension(980, 600)
-        setSize(1280, 760)
-        setLocationRelativeTo(null)
+        DesktopWindowSizing.fit(this, Dimension(1280, 760), Dimension(600, 440))
+        // A narrow work area (including high DPI) uses tabs instead of
+        // squeezing three list columns and their controls into tiny panes.
+        val compact = width < 1100
 
         val connect = JButton("Connect / reload sources")
         val header = JPanel(BorderLayout()).apply {
-            add(JPanel(FlowLayout(FlowLayout.LEFT, 10, 8)).apply {
+            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
+                add(localLibrary); add(localReader); add(localImport); add(conversionJobs); add(documentImport); add(inspectBinary); add(sendReader)
+            }), BorderLayout.NORTH)
+            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
                 add(JLabel("Suwayomi:")); add(endpoint); add(connect); add(library)
-                add(startServer); add(stopServer)
-            }, BorderLayout.NORTH)
-            add(JPanel(FlowLayout(FlowLayout.LEFT, 10, 6)).apply {
-                add(localLibrary); add(localImport); add(localReader); add(inspectBinary); add(getServer)
-            }, BorderLayout.SOUTH)
+                add(startServer); add(stopServer); add(getServer); add(checkWindowsUpdates)
+            }), BorderLayout.SOUTH)
         }
         add(header, BorderLayout.NORTH)
 
@@ -188,9 +201,9 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
         val browsePanel = JPanel(BorderLayout(4, 4)).apply {
             border = BorderFactory.createTitledBorder("Browse manga")
-            add(mangaActions, BorderLayout.NORTH)
+            add(DesktopWindowSizing.toolbar(mangaActions), BorderLayout.NORTH)
             add(JScrollPane(mangaList), BorderLayout.CENTER)
-            add(paging, BorderLayout.SOUTH)
+            add(DesktopWindowSizing.toolbar(paging), BorderLayout.SOUTH)
         }
 
         chapterList.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
@@ -205,47 +218,73 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
         val exportOptions = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
                 add(JLabel("Format:")); add(format)
                 add(JLabel("Device:")); add(device); add(conversionSettings)
-            })
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply { add(downloadMissing) })
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                add(refresh); add(export); add(saveOffline)
-                add(queueOffline); add(offlineJobs)
+            }))
+            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
+                add(downloadMissing); add(refresh); add(export)
+            }))
+            add(DesktopWindowSizing.toolbar(JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
+                add(saveOffline); add(queueOffline); add(offlineJobs)
                 add(queueRemote); add(queueAllRemote); add(remoteJobs)
-            })
+            }))
         }
         val chapterPanel = JPanel(BorderLayout(4, 4)).apply {
             border = BorderFactory.createTitledBorder("Chapters — Ctrl/Shift to select")
             add(JPanel(BorderLayout()).apply {
-                add(details, BorderLayout.NORTH); add(selection, BorderLayout.SOUTH)
+                add(details, BorderLayout.NORTH)
+                add(DesktopWindowSizing.toolbar(selection), BorderLayout.SOUTH)
             }, BorderLayout.NORTH)
             add(JScrollPane(chapterList), BorderLayout.CENTER)
             add(exportOptions, BorderLayout.SOUTH)
         }
-        val left = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sourcePanel, browsePanel).apply {
-            resizeWeight = 0.32
-            dividerLocation = 260
+        if (compact) {
+            val tabs = JTabbedPane().apply {
+                addTab("Sources", sourcePanel)
+                addTab("Browse", browsePanel)
+                addTab("Chapters", chapterPanel)
+            }
+            compactTabs = tabs
+            add(tabs, BorderLayout.CENTER)
+        } else {
+            listOf(sourcePanel, browsePanel, chapterPanel).forEach {
+                it.minimumSize = Dimension(100, 100)
+            }
+            val left = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sourcePanel, browsePanel).apply {
+                resizeWeight = 0.32
+                dividerLocation = (this@DesktopWindow.width * 0.20).toInt()
+            }
+            add(JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, chapterPanel).apply {
+                resizeWeight = 0.62
+                dividerLocation = (this@DesktopWindow.width * 0.60).toInt()
+            }, BorderLayout.CENTER)
         }
-        add(JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, chapterPanel).apply {
-            resizeWeight = 0.62
-            dividerLocation = 770
-        }, BorderLayout.CENTER)
         add(JPanel(BorderLayout()).apply {
             border = BorderFactory.createEmptyBorder(8, 12, 8, 12)
             add(status, BorderLayout.CENTER)
-            add(JLabel("● downloaded   ○ not downloaded"), BorderLayout.EAST)
+            status.toolTipText = "● downloaded   ○ not downloaded"
+            if (!compact) add(JLabel("● downloaded   ○ not downloaded"), BorderLayout.EAST)
         }, BorderLayout.SOUTH)
 
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
-            conversionSettings, localImport, localReader, localLibrary, inspectBinary,
-            startServer, stopServer, getServer)
+            conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, inspectBinary, sendReader,
+            startServer, stopServer, getServer, checkWindowsUpdates)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
-            DesktopConversionDialog.show(this, options)?.let { options = it }
+            DesktopConversionDialog.show(this, options)?.let { proposed ->
+                try {
+                    conversionSettingsStore.save(proposed)
+                    options = proposed
+                    status.text = "Conversion settings saved for next launch."
+                } catch (e: Exception) {
+                    showError("Could not save conversion settings. Existing file and previously selected options are unchanged. " +
+                        "Check storage or back up/move " + DesktopConversionSettingsStore.FILE_NAME +
+                        " in the app data folder before retrying. " + (e.message ?: ""))
+                }
+            }
         }
         connect.addActionListener { loadSources() }
         startServer.addActionListener { startManagedServer() }
@@ -286,6 +325,10 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         localImport.addActionListener { exportLocal() }
         localReader.addActionListener { openLocalReader() }
         localLibrary.addActionListener { LocalLibraryScreen.open() }
+        conversionJobs.addActionListener { DesktopConversionQueueScreen.open() }
+        sendReader.addActionListener { DesktopReaderTransferScreen.open(this) }
+        documentImport.addActionListener { DesktopDocumentImportScreen.open(this) }
+        checkWindowsUpdates.addActionListener { DesktopWindowsUpdateScreen.open(this) }
         setPaging()
         stopServer.isEnabled = false
         // Do not connect automatically on startup: a local-library-only user
@@ -469,6 +512,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             currentManga = null
             details.text = "Select a manga to view its chapters"
             items.forEach { manga.addElement(it) }
+            compactTabs?.selectedIndex = 1
             setPaging()
         })
     }
@@ -487,6 +531,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             result.chapters.sortedWith(compareBy<SuwayomiChapter> {
                 if (it.chapterNumber >= 0) it.chapterNumber else Double.MAX_VALUE
             }.thenByDescending { it.sourceOrder }).forEach { chapters.addElement(it) }
+            compactTabs?.selectedIndex = 2
         })
     }
 

@@ -286,9 +286,7 @@ private class LocalComicWindow(
 
     init {
         defaultCloseOperation = DISPOSE_ON_CLOSE
-        minimumSize = Dimension(600, 440)
-        setSize(1080, 760)
-        setLocationRelativeTo(null)
+        DesktopWindowSizing.fit(this, Dimension(1080, 760), Dimension(600, 440))
         readerArea.add(scroller, BorderLayout.CENTER)
         add(readerArea, BorderLayout.CENTER)
         // Two rows prevent a crowded toolbar from clipping on smaller laptops.
@@ -305,7 +303,8 @@ private class LocalComicWindow(
             add(sizing); add(JLabel("Zoom")); add(zoom)
         }
         add(JPanel(GridLayout(2, 1)).apply {
-            add(navigation); add(displayModes)
+            add(DesktopWindowSizing.toolbar(navigation))
+            add(DesktopWindowSizing.toolbar(displayModes))
         }, BorderLayout.NORTH)
         add(status, BorderLayout.SOUTH)
         previous.addActionListener { move(-1) }
