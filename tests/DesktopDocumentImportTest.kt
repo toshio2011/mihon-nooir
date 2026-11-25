@@ -133,6 +133,30 @@ fun main() {
         check(XtcBookPreview(dest.resolve("comic.xtc")).pageCount==2)
         check(!dest.resolve("prose.xtc").exists())
         check(original.readBytes().contentEquals(sourceBytes))
+        // New settings survive process restart; old eight-column jobs remain unchanged.
+        val novelRoot=root.resolve("novel-queue").toPath()
+        val novelDest=root.resolve("novel-output").apply { mkdir() }
+        val novelQueue=DesktopConversionQueue(novelRoot)
+        val smallSettings=DesktopTextEpubImport.Settings(14,8,118,"Serif","Auto")
+        val largeSettings=DesktopTextEpubImport.Settings(28,24,150,"SansSerif","Left to right")
+        val novels=dev.nooir.bridge.ReflowEpubFormat.values().map { root.resolve("text-" + it.name + ".epub") }
+        val broken=root.resolve("broken.epub").apply { writeText("Not an EPUB") }
+        check(runCatching { novelQueue.enqueue(listOf(novels.first()),novelDest,ExportFormat.EPUB,"X4",comicOpts,smallSettings) }.isFailure)
+        check(runCatching { novelQueue.enqueue(listOf(pdf),novelDest,ExportFormat.XTC,"X4",comicOpts,smallSettings) }.isFailure)
+        check(novelQueue.enqueue(listOf(novels.first(), broken),novelDest,ExportFormat.XTC,"X4",comicOpts,smallSettings)==2)
+        check(novelQueue.enqueue(listOf(novels.last()),novelDest,ExportFormat.XTCH,"X4",comicOpts,largeSettings)==1)
+        val restartedNovelQueue=DesktopConversionQueue(novelRoot)
+        check(restartedNovelQueue.list().map { it.textEpub } == listOf(smallSettings,smallSettings,largeSettings))
+        var started=0
+        restartedNovelQueue.runPending({started>=1}) {started++}
+        check(restartedNovelQueue.list().map { it.state } == listOf(ConversionJobState.COMPLETED,ConversionJobState.PENDING,ConversionJobState.PENDING))
+        DesktopConversionQueue(novelRoot).runPending({false})
+        check(novelQueue.list().map { it.state } == listOf(ConversionJobState.COMPLETED,ConversionJobState.FAILED,ConversionJobState.COMPLETED))
+        check(XtcBookPreview(novelDest.resolve(novels.first().nameWithoutExtension+".xtc")).pageCount>1)
+        check(XtcBookPreview(novelDest.resolve(novels.last().nameWithoutExtension+".xtch")).pageCount>1)
+        check(!novelDest.resolve("broken.xtc").exists())
+        check(reloaded.list().all { it.textEpub == null })
+        println("PASS: text EPUB durable typography, restart/pause/resume, unsupported output rejection, failed book isolation and actual XTC/XTCH")
         println("PASS: Windows PDF all formats, selectable companion text, 1001 pages, cancel cleanup, EPUB spine order and prose refusal")
         println("PASS: mixed PDF/image EPUB durable queue, continued after unsupported EPUB, actual output and no accidental overwrite")
     } finally { root.deleteRecursively() }
