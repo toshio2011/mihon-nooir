@@ -383,7 +383,7 @@ private class DesktopWindow : JFrame("MihonNooir — Desktop preview") {
         }
         connect.addActionListener { loadSources() }
         manageExtensions.addActionListener { openExtensionSetup() }
-        backupRestore.addActionListener { DesktopBackupPreview.show(this) { openSuwayomiUi.doClick() } }
+        backupRestore.addActionListener { DesktopBackupPreview.show(this, endpoint.text) { openSuwayomiUi.doClick() } }
         openSuwayomiUi.addActionListener {
             try {
                 val target = DesktopUiModel.extensionSetupUri(endpoint.text)

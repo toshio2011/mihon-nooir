@@ -64,7 +64,7 @@ object DesktopBackupInspector {
         require(file.isFile && file.length() in 1L..MAX_COMPRESSED.toLong()) { "Backup exceeds compressed size limit or is missing" }
         return file.inputStream().use { inspect(it) }
     }
-    fun inspect(input: InputStream): Summary {
+    fun inspect(input: InputStream, allowEmpty: Boolean = false): Summary {
         val compressed = input.readNBytes(MAX_COMPRESSED+1)
         require(compressed.size <= MAX_COMPRESSED) { "Backup exceeds compressed size limit" }
         val data = GZIPInputStream(compressed.inputStream()).use { it.readNBytes(MAX_EXPANDED+1) }
@@ -124,7 +124,7 @@ object DesktopBackupInspector {
                 }
             }
         }
-        require(mangas>0 || categories>0 || sources.isNotEmpty() || stores.isNotEmpty() ||
+        require((allowEmpty && data.isEmpty()) || mangas>0 || categories>0 || sources.isNotEmpty() || stores.isNotEmpty() ||
             preferences>0 || sourcePreferences>0) { "No recognized backup records" }
         return Summary(mangas,favorites,categories,chapters,read,bookmarks,progressed,history,
             preferences,sourcePreferences,sources.values.toList(),stores.values.toList(),refs)
