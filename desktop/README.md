@@ -319,3 +319,7 @@ The manga browser defaults to a wrapping portrait cover grid with a Detailed lis
 ## Experimental text EPUB to XTC/XTCH
 
 A separate native text-and-illustrations import mode uses the released Android EPUB package reader and XTC encoder with Java2D text pagination. Choose font, size, margin, line height and reading direction. Existing image-comic conversion stays available. No network resources, scripts, DRM or external entities are loaded. This is initial native pagination, not full CSS/style or complex layout fidelity. Batch integration, inline styling, responsive art/cover metadata, real-book comparisons and complete GUI validation remain open. Fresh Windows CI is required.
+
+### Text EPUB batch jobs
+
+Choose **Universal Book Converter → Batch conversion jobs → Add local books → Text EPUB / novels**. The file picker filters EPUB, and the output list is XTC/XTCH only. Typography is saved per job, so restarting or retrying retains the selected settings. Existing image EPUB and mixed jobs retain their previous conversion behavior. Older preview versions cannot read queue records containing the new optional typography column; back up the data folder before downgrading. No output is overwritten. Tests are pending fresh CI.

@@ -22,6 +22,7 @@ internal data class DesktopConversionJob(
     val id: String, val input: String, val output: String,
     val format: ExportFormat, val device: String, val token: String,
     val state: ConversionJobState, val error: String = "",
+    val textEpub: DesktopTextEpubImport.Settings? = null,
 ) {
     fun args(): Array<String> = arrayOf(
         "--input", input, "--output", output, "--format", format.name,
@@ -45,6 +46,19 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
         private val decoder = Base64.getUrlDecoder()
         private fun enc(s: String) = encoder.encodeToString(s.toByteArray(StandardCharsets.UTF_8))
         private fun dec(s: String) = String(decoder.decode(s), StandardCharsets.UTF_8)
+        // Optional ninth column. Legacy eight-column jobs keep their exact
+        // image-comic behavior. Older previews reject, rather than misrun,
+        // rows containing new typography settings.
+        private fun typographyToken(settings: DesktopTextEpubImport.Settings): String =
+            listOf(settings.fontPx, settings.marginPx, settings.lineHeight,
+                settings.family, settings.direction).joinToString("|")
+
+        private fun typographyFromToken(token: String): DesktopTextEpubImport.Settings {
+            val parts = token.split('|')
+            require(parts.size == 5) { "Damaged typography settings; original preserved" }
+            return DesktopTextEpubImport.Settings(parts[0].toInt(), parts[1].toInt(),
+                parts[2].toInt(), parts[3], parts[4])
+        }
     }
 
     private val index = folder.resolve("conversion-queue-v1.tsv")
@@ -67,16 +81,19 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
         }
         return lines.drop(1).map { line ->
             val p = line.split('\t')
-            require(p.size == 8) { "Damaged conversion job; original preserved" }
+            require(p.size in 8..9) { "Damaged conversion job; original preserved" }
             DesktopConversionJob(p[0], dec(p[1]), dec(p[2]), ExportFormat.valueOf(p[3]),
-                p[4], dec(p[5]), ConversionJobState.valueOf(p[6]), dec(p[7])).also { job ->
+                p[4], dec(p[5]), ConversionJobState.valueOf(p[6]), dec(p[7]),
+                p.getOrNull(8)?.let { typographyFromToken(dec(it)) }).also { job ->
                 require(runCatching { UUID.fromString(job.id) }.isSuccess &&
                     File(job.input).isAbsolute && File(job.output).isAbsolute &&
                     job.input.length <= 4096 && job.output.length <= 4096 &&
                     job.token.length in 1..4096 && job.error.length <= 400 &&
                     job.device.length in 1..80 &&
                     job.format != ExportFormat.AUTO &&
-                    File(job.output).extension.equals(job.format.extension, true)) {
+                    File(job.output).extension.equals(job.format.extension, true) &&
+                    (job.textEpub == null || File(job.input).extension.equals("epub", true) &&
+                        job.format in setOf(ExportFormat.XTC, ExportFormat.XTCH))) {
                     "Invalid conversion job; original preserved"
                 }
             }
@@ -89,8 +106,9 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
         val data = buildString {
             append(HEADER).append('\n')
             jobs.forEach { j ->
-                append(listOf(j.id, enc(j.input), enc(j.output), j.format.name, j.device,
-                    enc(j.token), j.state.name, enc(j.error.take(400))).joinToString("\t")).append('\n')
+                val columns = listOf(j.id, enc(j.input), enc(j.output), j.format.name, j.device,
+                    enc(j.token), j.state.name, enc(j.error.take(400)))
+                append((columns + listOfNotNull(j.textEpub?.let { enc(typographyToken(it)) })).joinToString("\t")).append('\n')
             }
         }
         require(data.toByteArray(StandardCharsets.UTF_8).size <= MAX_BYTES)
@@ -106,9 +124,12 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
     fun list(): List<DesktopConversionJob> = transaction { read().toList() }
 
     fun enqueue(inputs: List<File>, target: File, format: ExportFormat, device: String,
-        options: MangaConversionOptions): Int = transaction {
+        options: MangaConversionOptions, textEpub: DesktopTextEpubImport.Settings? = null): Int = transaction {
         require(inputs.isNotEmpty() && inputs.size <= MAX_JOBS)
         require(format != ExportFormat.AUTO && NooirDeviceProfiles.forId(device).accepts(format))
+        require(textEpub == null || format in setOf(ExportFormat.XTC, ExportFormat.XTCH)) {
+            "Text EPUB batches require XTC or XTCH output"
+        }
         require(device.matches(Regex("[A-Za-z0-9._-]{1,80}"))) { "Invalid device profile ID" }
         val directory = target.canonicalFile
         require(directory.isDirectory) { "Choose an existing output folder" }
@@ -120,6 +141,9 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             val source = selected.canonicalFile
             require(source.isDirectory || source.isFile && source.extension.lowercase() in setOf("zip", "cbz", "pdf", "epub")) {
                 "Choose an image folder, CBZ/ZIP, PDF or image-based EPUB"
+            }
+            require(textEpub == null || source.isFile && source.extension.equals("epub", true)) {
+                "Choose only EPUB files for a text EPUB batch"
             }
             val output = File(directory, DesktopUiModel.suggestedFile(source.nameWithoutExtension, format)).canonicalFile
             require(output.parentFile == directory && source != output && !output.exists()) {
@@ -133,7 +157,8 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             }
             require(source.path.length <= 4096 && output.path.length <= 4096)
             DesktopConversionJob(UUID.randomUUID().toString(), source.path, output.path, format,
-                device, options.copy(panelDiagnostics = false).token(), ConversionJobState.PENDING)
+                device, options.copy(panelDiagnostics = false).token(), ConversionJobState.PENDING,
+                textEpub = textEpub)
         }
         write(jobs + added)
         added.size
@@ -204,6 +229,8 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
                         when {
                             input.isFile && input.extension.equals("pdf", true) ->
                                 DesktopPdfImport.export(input, output, job.format, job.device, options)
+                            job.textEpub != null ->
+                                DesktopTextEpubImport.export(input, output, job.format, job.device, job.textEpub, options)
                             input.isFile && input.extension.equals("epub", true) ->
                                 DesktopImageEpubImport.export(input, output, job.format, job.device, options)
                             else -> NooirDesktopCli.main(job.args())
