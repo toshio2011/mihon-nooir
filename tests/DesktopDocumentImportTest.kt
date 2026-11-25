@@ -46,6 +46,39 @@ fun main() {
             val first=zip.getInputStream(zip.getEntry("OEBPS/text/s00001.xhtml")).bufferedReader().use { it.readText() }
             check(first.contains("Original selectable text") && first.contains("<img "))
         }
+        // Simple prose, vector artwork plus prose, and a scan-like graphics page.
+        val mixed=root.resolve("mixed-layout.pdf")
+        PDDocument().use { doc ->
+            repeat(3) { i ->
+                val page=PDPage(PDRectangle(180f,240f)); doc.addPage(page)
+                PDPageContentStream(doc,page).use { stream ->
+                    if (i != 2) {
+                        stream.beginText();stream.setFont(PDType1Font(Standard14Fonts.FontName.HELVETICA),12f)
+                        stream.newLineAtOffset(12f,200f);stream.showText("Original selectable text");stream.endText()
+                    }
+                    if (i != 0) { stream.addRect(12f,30f,100f,60f);stream.fill() }
+                }
+            }
+            doc.save(mixed)
+        }
+        val mixedBytes=mixed.readBytes()
+        for (format in listOf(ExportFormat.EPUB2,ExportFormat.EPUB)) {
+            val hybrid=root.resolve("hybrid-"+format.name+".epub")
+            check(DesktopPdfImport.exportReflow(mixed,hybrid,format,device,opts)==3)
+            ZipFile(hybrid).use { zip ->
+                fun section(i:Int)=zip.getInputStream(zip.getEntry("OEBPS/text/s%05d.xhtml".format(i))).bufferedReader().use { it.readText() }
+                check(section(1).contains("Original selectable text") && !section(1).contains("<img "))
+                check(section(2).contains("Original selectable text") && section(2).contains("<img "))
+                check(section(3).contains("<img ") && !section(3).contains("Extracted text"))
+            }
+        }
+        val hybridCanceled=root.resolve("hybrid-canceled.epub")
+        var hybridProcessed=0
+        check(runCatching { DesktopPdfImport.exportReflow(mixed,hybridCanceled,ExportFormat.EPUB,device,opts,
+            canceled={hybridProcessed>=1},progress={n,_->hybridProcessed=n}) }.isFailure)
+        check(!hybridCanceled.exists() && mixedBytes.contentEquals(mixed.readBytes()))
+        check(runCatching { DesktopPdfImport.exportReflow(mixed,root.resolve("invalid.xtc"),ExportFormat.XTC,device,opts) }.isFailure)
+        println("PASS: hybrid PDF EPUB2/3, text-only reflow, graphic/scan fallback and cancellation")
         val big=root.resolve("long.pdf")
         PDDocument().use { doc ->
             repeat(1001) { doc.addPage(PDPage(PDRectangle(32f,32f))) }

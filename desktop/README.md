@@ -323,3 +323,7 @@ A separate native text-and-illustrations import mode uses the released Android E
 ### Text EPUB batch jobs
 
 Choose **Universal Book Converter → Batch conversion jobs → Add local books → Text EPUB / novels**. The file picker filters EPUB, and the output list is XTC/XTCH only. Typography is saved per job, so restarting or retrying retains the selected settings. Existing image EPUB and mixed jobs retain their previous conversion behavior. Older preview versions cannot read queue records containing the new optional typography column; back up the data folder before downgrading. No output is overwritten. Tests are pending fresh CI.
+
+### PDF hybrid reflow (experimental)
+
+The single-document converter now has three explicit PDF modes: original pages (all existing outputs), reflowable text + image fallback (EPUB2/3), and original pages + selectable text (EPUB2/3). Plain text drawing commands can be exported as text paragraphs; pages containing drawings, forms, inline images, annotations or unknown paint operations preserve a rendered page plus available extracted text. Scans remain images; no OCR. Multi-column text and complex reading order are not guaranteed. Batch reflow integration and real illustrated-document checks remain pending. Fresh CI required.

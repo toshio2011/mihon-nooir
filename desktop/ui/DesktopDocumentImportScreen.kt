@@ -25,8 +25,8 @@ internal object DesktopDocumentImportScreen {
         if (!pdf && !source.extension.equals("epub",true)) return
         val format = JComboBox(arrayOf("EPUB2","EPUB","XTC","XTCH","CBZ"))
         val profile = JComboBox(NooirDeviceProfiles.builtins.map { it.id }.toTypedArray())
-        val text = JCheckBox("PDF: include extracted text after each original page")
-        text.isEnabled = pdf
+        val pdfMode = JComboBox(arrayOf("Original pages", "Reflowable text + image fallback", "Original pages + selectable text"))
+        pdfMode.isEnabled = pdf
         val epubMode = JComboBox(arrayOf("Text + illustrations (XTC/XTCH)", "Image comic (existing converter)"))
         val font = JComboBox(arrayOf("Serif", "SansSerif", "Monospaced"))
         val fontPx = JSpinner(SpinnerNumberModel(24,14,46,1))
@@ -41,7 +41,8 @@ internal object DesktopDocumentImportScreen {
                 else "EPUB: choose text pagination or existing image comic mode; no DRM bypass"))
             add(JLabel("Export format")); add(format)
             add(JLabel("Reader profile")); add(profile)
-            if (pdf) { add(JLabel("Rendering")); add(rendering); add(color); add(text) }
+            if (pdf) { add(JLabel("PDF mode (reflow/companion require EPUB)")); add(pdfMode)
+                add(JLabel("Rendering")); add(rendering); add(color) }
             else {
                 add(JLabel("EPUB mode")); add(epubMode)
                 add(JLabel("Text font / size (pixels)")); add(font); add(fontPx)
@@ -54,8 +55,8 @@ internal object DesktopDocumentImportScreen {
         val outputFormat = ExportFormat.valueOf(format.selectedItem as String)
         val device = profile.selectedItem as String
         if (!NooirDeviceProfiles.forId(device).accepts(outputFormat) ||
-            (text.isSelected && outputFormat !in setOf(ExportFormat.EPUB,ExportFormat.EPUB2))) {
-            JOptionPane.showMessageDialog(parent,"Choose a compatible device/format; selectable text companion needs EPUB.")
+            (pdf && pdfMode.selectedIndex != 0 && outputFormat !in setOf(ExportFormat.EPUB,ExportFormat.EPUB2))) {
+            JOptionPane.showMessageDialog(parent,"Choose a compatible device/format; reflow and text companion need EPUB.")
             return
         }
         val prose = !pdf && epubMode.selectedIndex == 0
@@ -80,6 +81,7 @@ internal object DesktopDocumentImportScreen {
             return
         }
         if (!active.compareAndSet(false,true)) return
+        val selectedPdfMode = pdfMode.selectedIndex
         val canceled = AtomicBoolean(false)
         val status = JProgressBar().apply { isStringPainted = true; isIndeterminate = true; string = "Preparing document" }
         val stop = JButton(if (pdf || prose) "Cancel conversion" else "Cancel import before conversion")
@@ -91,8 +93,10 @@ internal object DesktopDocumentImportScreen {
         }
         stop.addActionListener { canceled.set(true); stop.isEnabled=false; status.string = "Cancellation requested" }
         object : SwingWorker<Int,Pair<Int,Int>>() {
-            override fun doInBackground(): Int = if (pdf) DesktopPdfImport.export(source,target,outputFormat,device,
-                options,text.isSelected,{ canceled.get() }) { n,total -> publish(n to total) }
+            override fun doInBackground(): Int = if (pdf && selectedPdfMode == 1)
+                DesktopPdfImport.exportReflow(source,target,outputFormat,device,options,{ canceled.get() }) { n,total -> publish(n to total) }
+                else if (pdf) DesktopPdfImport.export(source,target,outputFormat,device,
+                options,selectedPdfMode == 2,{ canceled.get() }) { n,total -> publish(n to total) }
                 else if (prose) DesktopTextEpubImport.export(source,target,outputFormat,device,typography,options,{ canceled.get() })
                 else DesktopImageEpubImport.export(source,target,outputFormat,device,options,{ canceled.get() })
             override fun process(chunks: MutableList<Pair<Int,Int>>) {
@@ -104,7 +108,7 @@ internal object DesktopDocumentImportScreen {
                 active.set(false); dialog.dispose()
                 try {
                     val count=get()
-                    JOptionPane.showMessageDialog(parent,"Converted $count source page(s). Output: " + target.name)
+                    JOptionPane.showMessageDialog(parent,"Converted $count page(s). Output: " + target.name)
                 } catch(e: Exception) {
                     val cause=(e as? ExecutionException)?.cause ?: e
                     JOptionPane.showMessageDialog(parent,cause.message ?: "Document conversion failed",
