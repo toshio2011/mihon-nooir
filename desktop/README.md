@@ -339,3 +339,7 @@ The same compiled desktop JAR is now used for a native package CI matrix: Window
 ### Web EPUB desktop port: image adapters
 
 The first offline dependency layer for Web → EPUB now compiles the released chapter-plan, chapter-update, cover geometry and image-profile sources unchanged. Desktop ImageIO substitutes for Android Bitmap on illustration scaling and combined-cover rendering. Tests check bounded decoding, 2–4 cover layouts, output pixels, resizing, chapter order and update identity. This is not yet the public web converter UI, HTTP integration or Wattpad feature; those remain pending. Fresh CI required.
+
+### Desktop public Web → EPUB (experimental)
+
+Open Universal Book Converter → Web → EPUB. Analyze one public story URL or enter readable public chapter/page URLs, select and reorder chapters, preview text, edit metadata, choose EPUB2/3 and cover/image/reading options, then export a new file. The released Android HTML, Wattpad metadata and EPUB writing code is compiled unchanged, with JVM cover and image adapters. Public HTTPS only, no account cookies or restricted chapter access. Jsoup 1.21.2 and JSON 20250517 are pinned desktop Maven dependencies with strict repository checksum validation; exact independent artifact digest locks remain a release gate. Offline fixture tests exercise actual EPUB2/3, not live site compatibility. Saved project storage, chapter update UI, cancellation and real Wattpad/GUI acceptance remain pending.

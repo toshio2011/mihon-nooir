@@ -79,7 +79,7 @@ else:
         cmd += ["--mac-package-identifier", "dev.nooir.desktop.preview"]
     run(*cmd)
     assert launcher.is_file() and app_jar.is_file() and runtime.is_file()
-    for library in ("pdfbox-app-3.0.8.jar", "imageio-webp-3.15.3.jar"):
+    for library in ("pdfbox-app-3.0.8.jar", "imageio-webp-3.15.3.jar", "jsoup-1.21.2.jar", "json-20250517.jar"):
         assert (app_jar.parent / "lib" / library).is_file(), library
     actual_arch = java_arch(runtime)
     cp = os.pathsep.join(str(x) for x in (package / "qa/viewer-smoke.jar", app_jar, app_jar.parent / "lib/*"))
@@ -87,7 +87,7 @@ else:
         env = dict(os.environ)
         env["MIHONNOOIR_DATA_DIR"] = root
         assert env["MIHONNOOIR_DATA_DIR"] == root and not os.listdir(root)
-        for test in ("DesktopConversionQueueTestKt", "DesktopDocumentImportTestKt"):
+        for test in ("DesktopConversionQueueTestKt", "DesktopDocumentImportTestKt", "DesktopWebEpubTestKt"):
             run(runtime, "-Djava.awt.headless=true", "-cp", cp, "dev.nooir.desktop.ui." + test, env=env, timeout=900)
         gui = [runtime, "-Djava.awt.headless=false", "-Dnooir.test.offlineLibrary=true",
                "-Dnooir.test.screenshotDir=" + str(qa / "screenshots"),

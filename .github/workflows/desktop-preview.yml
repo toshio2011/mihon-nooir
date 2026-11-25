@@ -81,6 +81,16 @@ jobs:
             https://downloads.apache.org/pdfbox/3.0.8/pdfbox-app-3.0.8.jar \
             --output build/desktop/lib/pdfbox-app-3.0.8.jar
           sha512sum -c desktop/pdfbox-runtime.sha512
+      - name: Resolve pinned desktop web HTML and JSON dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -C -f desktop/web-runtime.pom \
+            org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies \
+            -DincludeScope=runtime -DoutputDirectory="$PWD/build/desktop/lib"
+          test -s build/desktop/lib/jsoup-1.21.2.jar
+          test -s build/desktop/lib/json-20250517.jar
+          sha256sum build/desktop/lib/jsoup-1.21.2.jar build/desktop/lib/json-20250517.jar
       - name: Compile portable desktop UI and shared Android conversion core
         shell: bash
         run: |
@@ -88,9 +98,9 @@ jobs:
           command -v kotlinc
           grep -Fxq '    const val CURRENT_VERSION = "'"$(cat desktop/windows-version.txt)"'"' desktop/ui/DesktopWindowsUpdates.kt
           mkdir -p build/desktop
-          kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" \
+          kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar:$PWD/build/desktop/lib/jsoup-1.21.2.jar:$PWD/build/desktop/lib/json-20250517.jar" \
             overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,PanelReadableSliceRefiner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt,NooirEpubCssRules.kt} \
-            overlay/app/src/main/java/dev/nooir/mangabridge/{MangaConversionSettingsCore.kt,NooirEpubBook.kt,NooirCoverCollageLayout.kt,NooirWebImageProfile.kt,NooirWebChapterPlan.kt,NooirWebChapterIdentity.kt,NooirWebChapterUpdates.kt} \
+            overlay/app/src/main/java/dev/nooir/mangabridge/{MangaConversionSettingsCore.kt,NooirEpubBook.kt,NooirCoverCollageLayout.kt,NooirWebImageProfile.kt,NooirWebChapterPlan.kt,NooirWebChapterIdentity.kt,NooirWebChapterUpdates.kt,NooirWebArticle.kt,NooirWebNovel.kt,NooirWebPageBook.kt,NooirWebChapterDiscovery.kt,NooirWebTocPagination.kt,NooirWebExtractRules.kt,NooirWebFetchPolicy.kt,NooirWebImageCandidates.kt,NooirWebImageSignature.kt,NooirWebReadability.kt,NooirWattpadPublic.kt} \
             desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
       - name: Bundle pinned pure-Java WebP decoder in the standalone Windows JAR
@@ -139,8 +149,8 @@ jobs:
           # test inspect the same internal dialog API used by the production toolbar.
           app="$PWD/build/desktop/mihonnooir-desktop-preview.jar"
           mkdir -p build/windows-gui-qa
-          kotlinc -classpath "$app:$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" -Xfriend-paths="$app" \
-            tests/DesktopXtcViewerSwingSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopInstalledDataTest.kt \
+          kotlinc -classpath "$app:$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar:$PWD/build/desktop/lib/jsoup-1.21.2.jar:$PWD/build/desktop/lib/json-20250517.jar" -Xfriend-paths="$app" \
+            tests/DesktopXtcViewerSwingSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWebEpubTest.kt tests/DesktopInstalledDataTest.kt \
             -d build/windows-gui-qa/viewer-smoke.jar
           test -s build/windows-gui-qa/viewer-smoke.jar
       - name: Retain GUI acceptance test separately from distributable code
@@ -386,7 +396,7 @@ jobs:
           $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
           $qa = 'package/qa/viewer-smoke.jar'
           $cp = "$jar;$qa"
-          foreach ($test in @('DesktopConversionQueueTestKt','DesktopDocumentImportTestKt')) {
+          foreach ($test in @('DesktopConversionQueueTestKt','DesktopDocumentImportTestKt','DesktopWebEpubTestKt')) {
             & $java '-Djava.awt.headless=true' '-cp' $cp "dev.nooir.desktop.ui.$test"
             if ($LASTEXITCODE -ne 0) { throw "Packaged Windows $test failed ($LASTEXITCODE)" }
           }
