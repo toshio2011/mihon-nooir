@@ -99,6 +99,66 @@ internal object DesktopVisualTheme {
         button.font = Font("SansSerif", if (primary) Font.BOLD else Font.PLAIN, 13)
     }
 
+    /** Local dark tab chrome; retain Swing selection and keyboard navigation. */
+    fun tabs(tabs: javax.swing.JTabbedPane) {
+        tabs.setUI(object : javax.swing.plaf.basic.BasicTabbedPaneUI() {
+            override fun installDefaults() {
+                super.installDefaults()
+                tabInsets = Insets(9, 15, 9, 15)
+                selectedTabPadInsets = Insets(0, 0, 0, 0)
+                contentBorderInsets = Insets(1, 0, 0, 0)
+            }
+            override fun paintTabBackground(g: java.awt.Graphics, tabPlacement: Int,
+                tabIndex: Int, x: Int, y: Int, w: Int, h: Int, isSelected: Boolean) {
+                g.color = if (isSelected) selected else surface
+                g.fillRect(x, y, w, h)
+                if (isSelected) {
+                    g.color = accent
+                    g.fillRect(x, y + h - 3, w, 3)
+                }
+            }
+            override fun paintTabBorder(g: java.awt.Graphics, tabPlacement: Int,
+                tabIndex: Int, x: Int, y: Int, w: Int, h: Int, isSelected: Boolean) {}
+            override fun paintContentBorder(g: java.awt.Graphics, tabPlacement: Int, selectedIndex: Int) {}
+            override fun paintFocusIndicator(g: java.awt.Graphics, tabPlacement: Int,
+                rects: Array<java.awt.Rectangle>, tabIndex: Int, iconRect: java.awt.Rectangle,
+                textRect: java.awt.Rectangle, isSelected: Boolean) {
+                if (tabPane.hasFocus() && isSelected) {
+                    val r = rects[tabIndex]
+                    g.color = accent
+                    g.drawRect(r.x + 2, r.y + 2, (r.width - 5).coerceAtLeast(0), (r.height - 5).coerceAtLeast(0))
+                }
+            }
+        })
+        tabs.background = background
+        tabs.foreground = foreground
+        tabs.font = Font("SansSerif", Font.BOLD, 13)
+    }
+
+    fun table(table: javax.swing.JTable) {
+        table.background = surface
+        table.foreground = foreground
+        table.selectionBackground = selected
+        table.selectionForeground = foreground
+        table.fillsViewportHeight = true
+        table.showHorizontalLines = true
+        table.showVerticalLines = false
+        table.gridColor = divider
+        table.rowHeight = 30
+        table.intercellSpacing = Dimension(0, 1)
+        // Header styling only; keep the Boolean renderer/editor and editable titles.
+        table.tableHeader.defaultRenderer = javax.swing.table.TableCellRenderer { _, value, _, _, _, _ ->
+            JLabel(value?.toString().orEmpty()).apply {
+                isOpaque = true
+                background = elevated
+                foreground = muted
+                font = Font("SansSerif", Font.BOLD, 12)
+                border = EmptyBorder(8, 9, 8, 9)
+            }
+        }
+        table.tableHeader.preferredSize = Dimension(table.tableHeader.preferredSize.width, 34)
+    }
+
     fun nav(button: JButton, primary: Boolean = false) {
         action(button, primary, navigation = true)
         button.font = Font("SansSerif", if (primary) Font.BOLD else Font.PLAIN, 13)
