@@ -124,3 +124,7 @@ java -jar "$tmp/windows-storage-root-tests.jar"
 # Read-only Android/Suwayomi backup preview; synthetic fixtures only.
 kotlinc desktop/suwayomi/DesktopBackupInspector.kt tests/DesktopBackupInspectorTest.kt -include-runtime -d "$tmp/desktop-backup-inspector.jar"
 java -jar "$tmp/desktop-backup-inspector.jar"
+
+# Localhost-only backup transport contract; synthetic protocol fixture.
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt} tests/DesktopBackupTransportTest.kt -include-runtime -d "$tmp/desktop-backup-transport.jar"
+java --add-modules jdk.httpserver -jar "$tmp/desktop-backup-transport.jar"
