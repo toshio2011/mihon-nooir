@@ -334,6 +334,8 @@ private fun verifyOfflineLibrary(folder: File) {
         verifyExtensionSetup(main)
         verifyToolbarReachable(findButton(main, "Open full Suwayomi WebUI"))
         verifyToolbarReachable(findButton(main, "Universal Book Converter"))
+        check(onSwingThread { !findButton(main,"Connect / reload sources").isContentAreaFilled &&
+            !findButton(main,"Search").isContentAreaFilled }) { "Main toolbar must use the flat desktop theme" }
         verifyWebEditor(main)
         if (tabs != null) onSwingThread { tabs.selectedIndex = 1 }
         verifyToolbarReachable(findButton(main, "Search"))

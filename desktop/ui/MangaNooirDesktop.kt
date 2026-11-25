@@ -453,6 +453,12 @@ private class DesktopWindow : JFrame("MihonNooir — Desktop preview") {
             }
         }
         checkWindowsUpdates.addActionListener { if (windowsX64) DesktopWindowsUpdateScreen.open(this) }
+        // The sidebar already uses flat navigation buttons. Apply the same
+        // painter to the remaining toolbar/reader controls after construction,
+        // keeping their original action listeners, enabled state and focus.
+        controls.filter { it.isContentAreaFilled }.forEach {
+            DesktopVisualTheme.action(it, primary = it === connect || it === searchButton || it === readOnline || it === export)
+        }
         setPaging()
         stopServer.isEnabled = false
         // Inputs keep native focus and selection behavior; the navigation and cover cards are themed.
