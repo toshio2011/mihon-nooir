@@ -1,3 +1,28 @@
+# MihonNooir for Windows — integrated development preview
+
+> **Development track, not a public release.** Android v1.0.20 stays stable. This branch consolidates the Windows preview with the exact released v1.0.20 shared panel geometry and settings; no Android production source or firmware changes. Preview version: 0.1.0. Integrated CI run 45538883269 passed JVM, native Windows packaging, MSI state retention, GUI and real empty-server checks. New Local source and full page-contract tests require fresh CI; physical PC/reader acceptance is still required.
+
+## Set up Mihon-compatible extensions (optional)
+
+Windows uses the pinned official Suwayomi backend, which runs compatible Mihon/Tachiyomi extensions. Extension setup is separate from Android; MihonNooir neither bundles sources nor automatically imports APKs or repository URLs from the phone.
+
+1. Choose **Download & start Suwayomi** and explicitly approve the verified official server download, or start/connect to an existing supported local instance.
+2. In **Installed sources**, choose **Manage extensions…**, then open the local Suwayomi browser interface.
+3. Use Suwayomi's extension repository settings to add a compatible repository you trust, then install the extensions you choose. See [Suwayomi's extension setup instructions](https://github.com/Suwayomi/Suwayomi-Server/blob/master/docs/Getting-Extensions.md).
+4. Return to MihonNooir and choose **Connect / reload sources**. Select an installed source, search/browse titles and export authorized content.
+
+This is a browser handoff, not a native extension-store implementation. No repository is preconfigured; individual extensions can be incompatible with the pinned backend, require authentication, or stop working. Only trusted local servers and explicitly selected extensions should be used. Local CBZ/ZIP reading and conversion work without any extension or server.
+
+## Windows preview workflow
+
+- Local CBZ/ZIP/image-folder library and reader, with optional Suwayomi browsing/download and local copy.
+- Convert local manga or supported documents to EPUB 2/3, XTC, XTCH or CBZ. A persistent conversion queue handles local jobs; PDF original-page conversion and image-only EPUB import have explicit format limits.
+- Panel by Panel and Row by Row, Auto Fit, saved conversion settings, adjustable oversized enlargement and the released shared detector. Defaults: enlargement on, 50% minimum screen fill; ordinary overlap remains separate. A desktop raster result need not be pixel-identical to Android.
+- Inspect actual saved XTC/XTCH output; explicit XTEINK LAN sending with receiver verification is separate from local conversion.
+- Development packages: portable ZIP and per-user unsigned MSI, bundled runtime, Windows-only update channel. Public Windows publication and production Authenticode signing remain separate gates.
+
+Back up the desktop data folder before installing/replacing a preview. See [release gates](../docs/WINDOWS_INTEGRATED_RELEASE_GATES_2026-11-18.md), [document import](../docs/WINDOWS_DOCUMENT_IMPORT_2026-11-18.md), [settings persistence](../docs/WINDOWS_CONVERSION_SETTINGS_PERSISTENCE_2026-11-18.md), [packaging](../docs/WINDOWS_PACKAGING_AND_UPDATES_2026-11-18.md) and [Wi-Fi transfer](../docs/WINDOWS_WIFI_TRANSFER_2026-11-18.md). The older feature notes below are development history, not a public-release promise.
+
 ## Optional data folder on another drive (Windows preview)
 
 Large offline CBZs, saved chapters, the verified Suwayomi server JAR/cache, reading metadata and queues normally live under `%USERPROFILE%\\.mihonnooir` (often on C:). **Nothing is moved or deleted automatically.** To keep *new preview data* on another disk, start the app from PowerShell with an opt-in environment override:
@@ -286,3 +311,63 @@ This is an unmerged experiment. Real user WebP CBZs, animated WebP,
 high-memory stress, app GUI click-through and Windows install/launch behavior
 must be verified before approval. Do not ship this experiment as a public
 update or replace the existing Android v1.0.17 app.
+
+## Cover-led browsing and conversion hub — next Windows iteration
+
+The manga browser defaults to a wrapping portrait cover grid with a Detailed list alternative. Both views retain the original source, selection and chapter workflow; no new server request is made merely to switch layouts. The Universal Book Converter entry point groups existing comic import, PDF/image EPUB import, durable batch jobs and actual XTC/XTCH preview. Batch selection now starts with a file-type filter, including PDF-only and image-EPUB-only batches. These are UI integration changes, not claims of text-EPUB pagination or Web-to-EPUB parity. Fresh packaged GUI acceptance and screenshots are required.
+
+## Experimental text EPUB to XTC/XTCH
+
+A separate native text-and-illustrations import mode uses the released Android EPUB package reader and XTC encoder with Java2D text pagination. Choose font, size, margin, line height and reading direction. Existing image-comic conversion stays available. No network resources, scripts, DRM or external entities are loaded. This is initial native pagination, not full CSS/style or complex layout fidelity. Batch integration, inline styling, responsive art/cover metadata, real-book comparisons and complete GUI validation remain open. Fresh Windows CI is required.
+
+### Text EPUB batch jobs
+
+Choose **Universal Book Converter → Batch conversion jobs → Add local books → Text EPUB / novels**. The file picker filters EPUB, and the output list is XTC/XTCH only. Typography is saved per job, so restarting or retrying retains the selected settings. Existing image EPUB and mixed jobs retain their previous conversion behavior. Older preview versions cannot read queue records containing the new optional typography column; back up the data folder before downgrading. No output is overwritten. Tests are pending fresh CI.
+
+### PDF hybrid reflow (experimental)
+
+The single-document converter now has three explicit PDF modes: original pages (all existing outputs), reflowable text + image fallback (EPUB2/3), and original pages + selectable text (EPUB2/3). Plain text drawing commands can be exported as text paragraphs; pages containing drawings, forms, inline images, annotations or unknown paint operations preserve a rendered page plus available extracted text. Scans remain images; no OCR. Multi-column text and complex reading order are not guaranteed. Batch reflow is available via the explicit PDF reflow to EPUB category; it persists the mode and retains existing original-page jobs. Older previews reject the new mode record. Real illustrated-document checks remain pending. Fresh CI required.
+
+### Desktop installation compatibility
+
+Current native packages are Windows x64 (Intel/AMD) portable ZIP and per-user MSI, containing a bundled Java 21 runtime. They do not need Android, an Android emulator or a separately installed Java runtime. Windows runner acceptance does not establish compatibility with every Windows version or physical PC; Windows 10 and ARM64 need separate validation. Native macOS/Linux installers and 32-bit Windows packages are not provided. The JVM-based desktop code is a potential cross-platform foundation, not a cross-platform release. Offline reading and local conversion do not require Suwayomi; online manga browsing uses a supported local Suwayomi server and user-configured sources.
+
+## Cross-platform desktop development targets
+
+The same compiled desktop JAR is now used for a native package CI matrix: Windows x64 (existing MSI/ZIP), Windows ARM64, Linux x64/ARM64 and macOS x64/ARM64. Every new target must build a native app image with a verified matching Java 21 architecture, pass packaged conversion and real pinned Suwayomi tests, then retain an unsigned portable archive with checksum. Linux and Windows ARM also exercise the packaged Swing QA. macOS GUI, platform installer formats, signing/notarization, native updater integration and physical-machine checks remain release gates. The Windows x64 update button is hidden on incompatible platforms. No Android or firmware source changes. These targets are not yet supported releases; see CI results for individual evidence.
+
+### Web EPUB desktop port: image adapters
+
+The first offline dependency layer for Web → EPUB now compiles the released chapter-plan, chapter-update, cover geometry and image-profile sources unchanged. Desktop ImageIO substitutes for Android Bitmap on illustration scaling and combined-cover rendering. Tests check bounded decoding, 2–4 cover layouts, output pixels, resizing, chapter order and update identity. This is not yet the public web converter UI, HTTP integration or Wattpad feature; those remain pending. Fresh CI required.
+
+### Desktop public Web → EPUB (experimental)
+
+Open Universal Book Converter → Web → EPUB. Analyze one public story URL or enter readable public chapter/page URLs, select and reorder chapters, preview text, edit metadata, choose EPUB2/3 and cover/image/reading options, then export a new file. The released Android HTML, Wattpad metadata and EPUB writing code is compiled unchanged, with JVM cover and image adapters. Public HTTPS only, no account cookies or restricted chapter access. Jsoup 1.21.2 and JSON 20250517 are pinned desktop Maven dependencies with strict repository checksum validation; exact independent artifact digest locks remain a release gate. Offline fixture tests exercise actual EPUB2/3, not live site compatibility. Saved project storage, chapter update UI, cancellation and real Wattpad/GUI acceptance remain pending.
+
+### Saved web projects and new chapters
+
+The desktop web editor saves a local project under the existing app data root, keeping full chapter order and included/excluded flags, known public inventory, metadata, cover reference, format, image and CSS options. Open or delete settings explicitly; exported books and original cover files are untouched. Check new chapters reuses the released Android chapter identity logic; confirmed additions are appended and saved only when requested. The 24-project/1 MB bounded library uses a file lock and atomic replacement. Local cover references are paths, not copied images; moving the original cover requires selecting it again. New exports always require a new filename. Pending CI and interactive verification.
+
+### Web export safety and GUI acceptance
+
+Web export now has cooperative cancellation checked at shared-engine progress boundaries and a synchronized final publication point. A canceled or failed export removes its staging file and never publishes partial output. It does not promise immediate interruption of a currently running HTTP/image operation; controls remain busy until the operation unwinds. A late filename conflict preserves the existing file. Native Swing smoke now exercises the real manual chapter editor without network and captures `web-chapter-editor.png`. CI and live-site acceptance remain pending.
+
+## Integrated desktop preview checkpoint — 25 November 2026
+
+[CI run 45563098681](https://github.com/toshio2011/mihon-nooir/actions/runs/45563098681), commit `14db64e9083f2c1b2c44e62adf116d3a8d973e8e`, passed all eight jobs, covering native Windows x64/ARM64, Linux x64/ARM64 and macOS x64/ARM64. Packaged document and web conversion tests and the real pinned Suwayomi fixture passed. Windows and Linux additionally exercised the Swing GUI; macOS interactive GUI is still a release gate. The web editor's synthetic extraction, metadata, cover, synopsis, selection, persistence and cancellation regression tests passed; this is not evidence of live Wattpad compatibility.
+
+The next candidate adds digest verification for Jsoup and JSON against bytes observed in the successful CI runs, plus Linux DEB/RPM and macOS DMG generation and extracted/mounted payload testing. These new installer candidates require fresh CI. Windows ARM64 retains a portable ZIP until a native installer is validated. Installer payload checks are not installation/upgrade tests, and unsigned macOS packages are not notarized. No public release is authorized by this checkpoint.
+
+See [Desktop user guide](DESKTOP_GUIDE.md) for the current development workflow.
+
+### Native desktop acceptance and user-state preservation
+
+All matrix targets now require real display-capable Swing acceptance, including both macOS architectures (fresh CI required; no headless fallback or skip). Each portable app is separately copied and its packaged runtime must reopen an isolated user-data fixture with identical file hashes. Extracted/mounted DEB, RPM and DMG payloads must do the same. Windows x64's existing synthetic MSI upgrade/uninstall/reinstall also now includes saved web projects. These checks do not establish OS package-manager upgrades on Linux/macOS or native Windows ARM MSI support. No user data is used and no public release is made.
+
+### Desktop UI polish
+
+The web editor now separates Chapters, Book details and Export settings into tabs, with persistent project actions, status and export controls. The main navigation and web editor use flat, rounded button surfaces with hover, disabled and keyboard-focus states; cover placeholders are centered. Native GUI tests retain chapter selections across tabs and capture each editor section. Changes are pending fresh CI and visual inspection; screenshots from the previous verified build do not show this styling yet.
+
+The first polished build (run 45568945862, commit 54dba21a) captured 57 real Windows screenshots at three scales and passed Linux x64/ARM64 and Windows ARM64 native acceptance. macOS GUI reached the corrupt-book warning but the test incorrectly assumed every native JLabel contained text; nullable label text is now handled without skipping the warning assertion. The subsequent polish applies the flat painter to the main toolbar buttons too. Fresh CI is required for these final changes; the previous Windows packaging job was superseded by a newer commit, not a verified full acceptance result.
+
+The first polished screenshots revealed a high-DPI layout problem: at 150% the chapter list could be squeezed out of the visible editor. Compact displays now use a shorter URL input, smaller margins, one-line scrollable control strips and a title-free compact header. Native acceptance additionally checks a usable chapter viewport and scroll reachability rather than merely verifying the table model. New screenshots/CI required.

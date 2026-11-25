@@ -61,7 +61,7 @@ object SuwayomiBrowseCli {
                     "Manga browsing uses --source-id and --page, not source pagination"
                 }
                 val sourceId = flags["--source-id"]?.toLongOrNull()
-                    ?.takeIf { it != 0L } ?: error("Missing nonzero --source-id (use --mode sources first)")
+                    ?: error("Missing or invalid --source-id (use --mode sources first)")
                 val page = flags["--page"]?.toIntOrNull() ?: 1
                 val mode = when (flags["--mode"]) {
                     "popular" -> SuwayomiBrowseMode.POPULAR

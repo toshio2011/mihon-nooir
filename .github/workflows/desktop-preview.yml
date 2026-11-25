@@ -14,6 +14,8 @@ on:
       - 'tests/DesktopPanelExportTest.kt'
       - 'tests/PanelDetectionCoreTest.kt'
       - 'tests/DesktopWebpSmokeTest.kt'
+      - 'tests/Desktop*.kt'
+      - 'tests/test_overlay.py'
       - 'desktop/webp-runtime.pom'
       - 'desktop/webp-runtime.sha256'
       - 'tests/run.sh'
@@ -21,7 +23,7 @@ on:
       - '.github/workflows/desktop-preview.yml'
   push:
     # Keep this isolated full-Windows branch testable before the workflow is merged.
-    branches: [main, feature/windows-full-v1.0.16, integration/windows-full-current-main]
+    branches: [windows/integrated-v1.0.20-20261125]
     paths:
       - 'desktop/**'
       - 'overlay/app/src/main/java/dev/nooir/bridge/**'
@@ -34,6 +36,8 @@ on:
       - 'tests/DesktopPanelExportTest.kt'
       - 'tests/PanelDetectionCoreTest.kt'
       - 'tests/DesktopWebpSmokeTest.kt'
+      - 'tests/Desktop*.kt'
+      - 'tests/test_overlay.py'
       - 'desktop/webp-runtime.pom'
       - 'desktop/webp-runtime.sha256'
       - 'tests/run.sh'
@@ -56,71 +60,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # This cross-platform visual experiment is based on the Android
-          # preview PR. Keep Android changes from that base completely intact;
-          # the standalone Windows PR retains its own strict main comparison.
-          base="${{ github.event.pull_request.base.ref || 'main' }}"
-          git fetch --no-tags origin "refs/heads/$base:refs/remotes/origin/$base"
-          changed=$(git diff --name-only "origin/$base...HEAD")
-          # Android-only RC: allow the reviewed Android changes only on this
-          # same-repository PR, require the exact tested source blobs, and
-          # keep the desktop build itself running without relaxing Windows PRs.
-          if [[ "${{ github.event.pull_request.head.repo.full_name }}" == 'toshio2011/mihon-nooir' &&
-                "${{ github.event.pull_request.head.ref }}" == 'release-candidate/android-only-v1.0.19-20261119' && "$base" == 'main' ]]; then
-            test -z "$(git diff --name-only "origin/$base...HEAD" -- desktop/)"
-            for entry in \
-              '4e0fe5a549b4e397b9f06b5996d2f9c883b1c522 overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' \
-              'ccaf39b4649ef5096b58e96bf861485297bceabc overlay/app/src/main/java/dev/nooir/bridge/PanelReadableSliceRefiner.kt' \
-              'a1a148f1c60dcad5938c27a0ed3cbe47dac87509 overlay/app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt' \
-              'e5f7bc985c5a4f615fb2e797bad2161bed16eabf overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt' \
-              '65fdfe0fc8b6bb9fa46b5a5fe63bb589c8352437 overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt'; do
-              read -r expected file <<< "$entry"
-              test "$(git hash-object "$file")" = "$expected"
-            done
-            changed=$(printf '%s\n' "$changed" | grep -v -F -x \
-              -e 'overlay/app/src/main/java/dev/nooir/bridge/PanelReadableSliceRefiner.kt' \
-              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/AndroidPageSource.kt' \
-              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionOptions.kt' \
-              -e 'overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt' || true)
-            echo 'PASS: Android-only RC source blobs match reviewed implementation; desktop production unchanged'
-          fi
-          # The visual integration may use shared core from the Android base,
-          # but must not modify Android files relative to that base.
-          # Narrow allowlist only for THIS draft integration's shared panel
-          # core, minified-test ABI keep rules in tools/apply_overlay.py,
-          # saved-binary Android preview temp-file lifecycle, and its
-          # dedicated instrumentation, plus the PR #85-only long PDF
-          # emulator CI trigger (build-apk.yml). Every other Android/UI/release path
-          # must match the PR #83 source baseline exactly.
-          protected=$(printf '%s\n' "$changed" |
-            grep -E '^(overlay/|tools/|config/|tests/run\.sh$|\.github/workflows/(build-apk|release-apk|verify-v1\.0\.18-signing)\.yml$)' |
-            grep -v -F -x -e 'overlay/app/src/main/java/dev/nooir/bridge/PanelDetectionCore.kt' \
-                         -e 'overlay/app/src/main/java/dev/nooir/mangabridge/NooirXtcBinaryPreviewDialog.kt' \
-                         -e 'overlay/app/src/androidTest/java/dev/nooir/mangabridge/PanelDiagnosticArchiveInstrumentedTest.kt' \
-                         -e 'tools/apply_overlay.py' \
-                         -e '.github/workflows/build-apk.yml' \
-                         -e 'config/version.txt' \
-                         -e 'tests/run.sh' \
-                         -e 'overlay/data/src/main/java/tachiyomi/data/release/NooirReleaseApkSelector.kt' \
-                         -e '.github/workflows/verify-v1.0.18-signing.yml' || true)
-          if [ -n "$protected" ]; then
-            printf 'STOP: protected Android paths changed:\n%s\n' "$protected" >&2
-            exit 1
-          fi
-          echo 'PASS: only approved shared detector, binary-preview lifecycle and Android instrumentation differ; protected release paths untouched'
+          # Strict frozen public Android baseline; only Windows-owned files and reviewed test adapters may differ.
+          # Main advanced only by the twelve reviewed Android documentation files.
+          # Keep the original released-source guard independently of the integration base.
+          released=72baf818aa4d26b5d33cffae8259200913a3a781
+          base=4b6307961b2712d4b1c02e61190e26511135489f
+          git diff --exit-code "$released" "$base" -- overlay/ config/ tools/ .github/workflows/build-apk.yml .github/workflows/release-apk.yml .github/workflows/publish-v1.0.20.yml .github/workflows/verify-v1.0.20-signing.yml
+          git merge-base --is-ancestor "$base" HEAD
+          changed=$(git diff --name-only "$base" HEAD)
+          unexpected=$(printf '%s\n' "$changed" | grep -v -E '^(desktop/|docs/WINDOWS[^/]*\.md$|tests/(Desktop[^/]*\.kt|Windows[^/]*\.kt|SuwayomiBrowseTest\.kt|run_windows_full\.sh|run\.sh|test_overlay\.py)$|\.github/workflows/desktop-preview\.yml$|$)' || true)
+          test -z "$unexpected" || { printf 'STOP: unexpected changes:\n%s\n' "$unexpected" >&2; exit 1; }
+          git diff --exit-code "$base" HEAD -- overlay/ config/ tools/ .github/workflows/build-apk.yml .github/workflows/release-apk.yml .github/workflows/publish-v1.0.20.yml .github/workflows/verify-v1.0.20-signing.yml
+          echo 'PASS: exact released Android v1.0.20 source and signing/release workflows preserved'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+      - name: Download checksum-pinned Windows-only Apache PDFBox
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/desktop/lib
+          curl --fail --location --retry 2 --max-time 180 \
+            https://downloads.apache.org/pdfbox/3.0.8/pdfbox-app-3.0.8.jar \
+            --output build/desktop/lib/pdfbox-app-3.0.8.jar
+          sha512sum -c desktop/pdfbox-runtime.sha512
+      - name: Resolve pinned desktop web HTML and JSON dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -C -f desktop/web-runtime.pom \
+            org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies \
+            -DincludeScope=runtime -DoutputDirectory="$PWD/build/desktop/lib"
+          test -s build/desktop/lib/jsoup-1.21.2.jar
+          test -s build/desktop/lib/json-20250517.jar
+          sha256sum -c desktop/web-runtime.sha256
       - name: Compile portable desktop UI and shared Android conversion core
         shell: bash
         run: |
           set -euo pipefail
           command -v kotlinc
+          grep -Fxq '    const val CURRENT_VERSION = "'"$(cat desktop/windows-version.txt)"'"' desktop/ui/DesktopWindowsUpdates.kt
           mkdir -p build/desktop
-          kotlinc \
-            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
-            overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+          kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar:$PWD/build/desktop/lib/jsoup-1.21.2.jar:$PWD/build/desktop/lib/json-20250517.jar" \
+            overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,PanelReadableSliceRefiner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt,NooirEpubCssRules.kt} \
+            overlay/app/src/main/java/dev/nooir/mangabridge/{MangaConversionSettingsCore.kt,NooirEpubBook.kt,NooirCoverCollageLayout.kt,NooirWebImageProfile.kt,NooirWebChapterPlan.kt,NooirWebChapterIdentity.kt,NooirWebChapterUpdates.kt,NooirWebArticle.kt,NooirWebNovel.kt,NooirWebPageBook.kt,NooirWebChapterDiscovery.kt,NooirWebTocPagination.kt,NooirWebExtractRules.kt,NooirWebFetchPolicy.kt,NooirWebImageCandidates.kt,NooirWebImageSignature.kt,NooirWebReadability.kt,NooirWattpadPublic.kt} \
             desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt desktop/storage/*.kt \
             -include-runtime -d build/desktop/mihonnooir-desktop-preview.jar
       - name: Bundle pinned pure-Java WebP decoder in the standalone Windows JAR
@@ -161,6 +145,25 @@ jobs:
             sudo apt-get install -y xvfb
           fi
           NOOIR_DESKTOP_GUI_SMOKE=1 bash tests/run_windows_full.sh
+      - name: Compile standalone GUI acceptance test against the production desktop JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep test bytecode OUT of the distributable app. Friend paths let the
+          # test inspect the same internal dialog API used by the production toolbar.
+          app="$PWD/build/desktop/mihonnooir-desktop-preview.jar"
+          mkdir -p build/windows-gui-qa
+          kotlinc -classpath "$app:$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar:$PWD/build/desktop/lib/jsoup-1.21.2.jar:$PWD/build/desktop/lib/json-20250517.jar" -Xfriend-paths="$app" \
+            tests/DesktopXtcViewerSwingSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWebEpubTest.kt tests/DesktopInstalledDataTest.kt \
+            -d build/windows-gui-qa/viewer-smoke.jar
+          test -s build/windows-gui-qa/viewer-smoke.jar
+      - name: Retain GUI acceptance test separately from distributable code
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: build/windows-gui-qa/viewer-smoke.jar
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload synthetic rendering comparison for human inspection
         if: always()
         uses: actions/upload-artifact@v4
@@ -182,8 +185,9 @@ jobs:
   windows-app-image:
     needs: build-jvm
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -192,6 +196,10 @@ jobs:
         with:
           name: mihonnooir-desktop-preview-jvm
           path: package/input
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: package/qa
       - name: Create bundled-runtime Windows application
         shell: pwsh
         run: |
@@ -204,7 +212,8 @@ jobs:
           & "$env:JAVA_HOME/bin/jlink.exe" --add-modules ALL-MODULE-PATH --output package/full-runtime --strip-debug --no-man-pages --no-header-files
           if ($LASTEXITCODE -ne 0) { throw "jlink failed: $LASTEXITCODE" }
           if (!(Test-Path 'package/full-runtime/bin/java.exe')) { throw 'Explicit runtime is missing java.exe' }
-          jpackage --type app-image --name MihonNooir-Preview --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --runtime-image package/full-runtime --dest package/output --java-options '-Dfile.encoding=UTF-8'
+          $version = (Get-Content desktop/windows-version.txt -Raw).Trim()
+          jpackage --type app-image --name MihonNooir-Preview --app-version $version --input package/input --main-jar mihonnooir-desktop-preview.jar --main-class dev.nooir.desktop.ui.MangaNooirDesktop --runtime-image package/full-runtime --dest package/output --java-options '-Dfile.encoding=UTF-8'
           if ($LASTEXITCODE -ne 0) { throw "jpackage failed: $LASTEXITCODE" }
           $app = 'package/output/MihonNooir-Preview'
           if (!(Test-Path "$app/MihonNooir-Preview.exe")) { throw 'Windows launcher missing from app image' }
@@ -212,6 +221,7 @@ jobs:
           if (!(Test-Path "$app/runtime")) { throw 'Bundled Java runtime missing' }
           if (!(Test-Path "$app/runtime/bin/java.exe")) { throw 'Bundled Java launcher missing for managed Suwayomi backend' }
           if (!(Test-Path "$app/app/lib/imageio-webp-3.15.3.jar")) { throw 'WebP decoder missing from Windows app image' }
+          if (!(Test-Path "$app/app/lib/pdfbox-app-3.0.8.jar")) { throw 'PDFBox missing from Windows app image' }
           Compress-Archive -Path $app -DestinationPath package/MihonNooir-Windows-Preview.zip -CompressionLevel Optimal
           if (!(Test-Path package/MihonNooir-Windows-Preview.zip)) { throw 'Windows archive missing' }
           $hash = (Get-FileHash -Algorithm SHA256 'package/MihonNooir-Windows-Preview.zip').Hash.ToLowerInvariant()
@@ -337,12 +347,103 @@ jobs:
           $result = [IO.File]::ReadAllBytes($out)
           if ([BitConverter]::ToUInt16($result, 6) -ne 1) { throw 'WebP CBZ output did not contain one page' }
           Write-Host 'PASS: packaged Java runtime opened original WebP CBZ and wrote XTCH'
+      - name: Launch the real packaged Windows EXE without a backend
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          & ./desktop/windows/verify-launcher.ps1 -ExePath 'package/output/MihonNooir-Preview/MihonNooir-Preview.exe'
+      - name: Exercise real saved-book Swing viewer on the packaged Windows runtime
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'package/output/MihonNooir-Preview'
+          $runtime = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          $qa = 'package/qa/viewer-smoke.jar'
+          if (!(Test-Path $runtime) -or !(Test-Path $jar) -or !(Test-Path $qa)) {
+            throw 'Production packaged runtime, JAR or separate GUI QA JAR missing'
+          }
+          # These are Java2D scale overrides on a hosted Windows runner, not
+          # physical multi-monitor/DPI acceptance or manual click-through.
+          $classpath = "$jar;$qa"
+          foreach ($scale in @('1.0','1.25','1.5')) {
+            Write-Host "Windows packaged Swing acceptance at requested Java2D scale $scale"
+            $qaHome = Join-Path $env:RUNNER_TEMP ('nooir-gui-qa-' + [guid]::NewGuid().ToString())
+            $previousHome = $env:MIHONNOOIR_DATA_DIR
+            try {
+              $env:MIHONNOOIR_DATA_DIR = $qaHome
+              $screens = Join-Path (Get-Location) "package/gui-screenshots/scale-$scale"
+              & $runtime '-Djava.awt.headless=false' '-Dnooir.test.offlineLibrary=true' "-Dsun.java2d.uiScale=$scale" "-Dnooir.test.expectedUiScale=$scale" "-Dnooir.test.screenshotDir=$screens" '-cp' $classpath 'dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt'
+              if ($LASTEXITCODE -ne 0) { throw "Packaged Windows GUI smoke failed at scale $scale ($LASTEXITCODE)" }
+            } finally {
+              $env:MIHONNOOIR_DATA_DIR = $previousHome
+              if (Test-Path -LiteralPath $qaHome) { Remove-Item -LiteralPath $qaHome -Recurse -Force }
+            }
+          }
+          Write-Host 'PASS: packaged Windows runtime saved-book viewer at 100/125/150% requested Java2D scales'
+      - name: Retain actual packaged Windows GUI test captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-screenshots
+          path: package/gui-screenshots/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Test document import and persistent jobs against the packaged Windows runtime
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'package/output/MihonNooir-Preview'
+          $java = Join-Path $app 'runtime/bin/java.exe'
+          $jar = Join-Path $app 'app/mihonnooir-desktop-preview.jar'
+          $qa = 'package/qa/viewer-smoke.jar'
+          $cp = "$jar;$qa"
+          foreach ($test in @('DesktopConversionQueueTestKt','DesktopDocumentImportTestKt','DesktopWebEpubTestKt')) {
+            & $java '-Djava.awt.headless=true' '-cp' $cp "dev.nooir.desktop.ui.$test"
+            if ($LASTEXITCODE -ne 0) { throw "Packaged Windows $test failed ($LASTEXITCODE)" }
+          }
+          Write-Host 'PASS: packaged Windows runtime document and persistent queue regression'
+      - name: Create versioned unsigned per-user MSI from verified application image
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content desktop/windows-version.txt -Raw).Trim()
+          $wix = if ($env:WIX) { Join-Path $env:WIX 'bin' } else { "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin" }
+          if (Test-Path (Join-Path $wix 'candle.exe')) { $env:PATH = "$wix;$env:PATH" }
+          Get-Command candle.exe -ErrorAction Stop | Out-Null
+          Get-Command light.exe -ErrorAction Stop | Out-Null
+          New-Item -ItemType Directory -Force package/installer | Out-Null
+          jpackage --type msi --name MihonNooir-Preview --app-version $version --app-image package/output/MihonNooir-Preview --dest package/installer --vendor MihonNooir --win-per-user-install --win-menu --win-shortcut --win-upgrade-uuid '8441c7aa-d895-4f1d-bd3b-c99ee8eb5872'
+          if ($LASTEXITCODE -ne 0) { throw "MSI packaging failed: $LASTEXITCODE" }
+          $msi = @(Get-ChildItem package/installer -Filter *.msi)
+          if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
+          $releaseName = "MihonNooir-Windows-$version-x64"
+          Move-Item -LiteralPath $msi[0].FullName -Destination "package/$releaseName.msi"
+          Copy-Item -LiteralPath package/MihonNooir-Windows-Preview.zip -Destination "package/$releaseName.zip"
+          Get-AuthenticodeSignature "package/$releaseName.msi" | Format-List Status,StatusMessage
+          $lines = foreach ($ext in @('msi','zip')) {
+            $name = "$releaseName.$ext"
+            $hash = (Get-FileHash -Algorithm SHA256 "package/$name").Hash.ToLowerInvariant()
+            "$hash  $name"
+          }
+          Set-Content -Path package/SHA256SUMS-windows.txt -Encoding ascii -Value $lines
+      - name: Exercise MSI synthetic version upgrade and actual user-state survival
+        shell: pwsh
+        timeout-minutes: 18
+        run: |
+          & ./desktop/windows/verify-installed-data.ps1 -PackageRoot 'package' -QaJar 'package/qa/viewer-smoke.jar'
       - uses: actions/upload-artifact@v4
         with:
           name: mihonnooir-windows-preview-unsigned
           path: |
             package/MihonNooir-Windows-Preview.zip
             package/MihonNooir-Windows-Preview.zip.sha256
+            package/MihonNooir-Windows-*-x64.msi
+            package/MihonNooir-Windows-*-x64.zip
+            package/SHA256SUMS-windows.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -395,3 +496,85 @@ jobs:
           $suwayomiJar = Join-Path $env:RUNNER_TEMP 'Suwayomi-Server-v2.4.2366.jar'
           & $runtime '-Djava.awt.headless=true' '-cp' $appJar 'dev.nooir.desktop.suwayomi.RealSuwayomiServerSmoke' $suwayomiJar
           if ($LASTEXITCODE -ne 0) { throw "Real Suwayomi integration failed: $LASTEXITCODE" }
+
+  native-desktop-matrix:
+    name: Native desktop (${{ matrix.platform }}-${{ matrix.arch }})
+    needs: build-jvm
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux
+            arch: x64
+            java_arch: x64
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            java_arch: aarch64
+          - runner: macos-15-intel
+            platform: macos
+            arch: x64
+            java_arch: x64
+          - runner: macos-15
+            platform: macos
+            arch: arm64
+            java_arch: aarch64
+          - runner: windows-11-arm
+            platform: windows
+            arch: arm64
+            java_arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          architecture: ${{ matrix.java_arch }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-desktop-preview-jvm
+          path: package/input
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: package/qa
+      - name: Install Linux virtual display prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgtk-3-0t64 libxtst6 libxi6 libxrender1 fonts-dejavu-core fakeroot rpm cpio
+      - name: Build and exercise native portable desktop preview
+        shell: bash
+        run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+      - name: Download exact pinned real Suwayomi server
+        shell: bash
+        run: |
+          curl --fail --location --retry 2 --max-time 360 \
+            https://github.com/Suwayomi/Suwayomi-Server/releases/download/v2.4.2366/Suwayomi-Server-v2.4.2366.jar \
+            --output package/Suwayomi-Server-v2.4.2366.jar
+      - name: Verify real server integration from bundled runtime
+        shell: bash
+        run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --server-only
+      - name: Build and inspect native installer candidates
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --installers-only
+      - name: Upload platform-specific test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-desktop-qa-${{ matrix.platform }}-${{ matrix.arch }}
+          path: package/native-qa/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain verified unsigned native portable preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-desktop-preview-${{ matrix.platform }}-${{ matrix.arch }}
+          path: package/native-dist/
+          if-no-files-found: error
+          retention-days: 14

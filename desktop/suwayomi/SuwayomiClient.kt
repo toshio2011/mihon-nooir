@@ -67,6 +67,18 @@ data class SuwayomiBrowsePage(
 
 enum class SuwayomiBrowseMode { POPULAR, LATEST, SEARCH }
 
+/** Numeric identities from a validated pinned-server chapter-page manifest. */
+data class SuwayomiOnlineChapter internal constructor(
+    val chapterId: Int,
+    val mangaId: Int,
+    val sourceOrder: Int,
+    val pageCount: Int,
+    val lastPageRead: Int,
+    val syncConflict: SuwayomiReadingConflict?,
+)
+
+data class SuwayomiReadingConflict(val deviceName: String, val remotePage: Int)
+
 class SuwayomiClient(
     endpoint: String = "http://127.0.0.1:4567",
     private val authorization: String? = null,
@@ -106,8 +118,10 @@ class SuwayomiClient(
 
     private fun graphql(query: String): Map<String, Any?> {
         val response = http.send(request("/api/graphql", query).build(), HttpResponse.BodyHandlers.ofInputStream())
-        require(response.statusCode() == 200) { "Suwayomi GraphQL returned HTTP ${response.statusCode()}" }
-        val body = response.body().use { it.readNBytes(4_000_001) }
+        val body = response.body().use {
+            require(response.statusCode() == 200) { "Suwayomi GraphQL returned HTTP ${response.statusCode()}" }
+            it.readNBytes(4_000_001)
+        }
         require(body.size <= 4_000_000) { "Suwayomi GraphQL reply too large" }
         val root = MiniJson.parse(body.toString(Charsets.UTF_8)).asObject()
         val errors = root["errors"] as? List<*>
@@ -183,6 +197,23 @@ class SuwayomiClient(
         return SuwayomiLibraryPage(mangas, total, offset, limit)
     }
 
+    /** Official pinned v2.4.2366 updateManga patch; explicit UI action only. */
+    fun setMangaInLibrary(id: Int, inLibrary: Boolean): Boolean {
+        require(id > 0) { "Invalid manga ID" }
+        val query = """
+            mutation NooirLibraryMembership {
+              updateManga(input: { id: $id, patch: { inLibrary: $inLibrary } }) {
+                manga { id inLibrary }
+              }
+            }
+        """.trimIndent()
+        val changed = graphql(query).obj("updateManga").obj("manga")
+        require(changed.int("id") == id) { "Suwayomi returned a different manga ID" }
+        val state = changed["inLibrary"] as? Boolean ?: error("Missing updated library status")
+        require(state == inLibrary) { "Suwayomi did not apply the library change" }
+        return state
+    }
+
     /**
      * Fetch a source page using Suwayomi's v2.4.2366 FetchSourceManga mutation.
      * Search terms are GraphQL-string-escaped and signed source IDs use LongString literals.
@@ -194,7 +225,7 @@ class SuwayomiClient(
         page: Int = 1,
         searchTerm: String? = null,
     ): SuwayomiBrowsePage {
-        require(sourceId != 0L) { "Invalid source ID" }
+        // Source IDs are signed LongString values; 0 is the built-in Local source.
         require(page in 1..10_000) { "Invalid source page" }
         val queryPart = if (mode == SuwayomiBrowseMode.SEARCH) {
             val term = searchTerm?.trim() ?: ""
@@ -379,6 +410,73 @@ class SuwayomiClient(
             throw error
         }
     }
+
+    /**
+     * Explicit chapter-open action only. Pinned v2.4.2366 fetchChapterPages:
+     * gets page locations, may consult enabled server-side reading sync.
+     * No enqueue/download-CBZ mutation or client-side read/progress mutation.
+     */
+    fun openOnlineChapter(mangaId: Int, chapterId: Int): SuwayomiOnlineChapter {
+        require(mangaId > 0 && chapterId > 0) { "Invalid chapter identity" }
+        val query = """
+            mutation NooirChapterPages {
+              fetchChapterPages(input: { chapterId: $chapterId }) {
+                pages
+                chapter { id mangaId sourceOrder pageCount lastPageRead }
+                syncConflict { deviceName remotePage }
+              }
+            }
+        """.trimIndent()
+        val result = graphql(query).obj("fetchChapterPages")
+        val c = result.obj("chapter")
+        require(c.int("id") == chapterId && c.int("mangaId") == mangaId) { "Unexpected chapter identity" }
+        val order = c.int("sourceOrder")
+        val count = c.int("pageCount")
+        val lastPage = c.int("lastPageRead")
+        require(order >= 0 && count in 1..5000 && lastPage in 0..count) { "Invalid or unsupported chapter page count/progress" }
+        val locations = result.list("pages")
+        require(locations.size == count) { "Chapter page count does not match manifest" }
+        locations.forEachIndexed { index, location ->
+            // Validate all locations against the selected numeric chapter and
+            // exact pinned REST path. Do not resolve arbitrary URLs or queries.
+            require(location == onlinePagePath(mangaId, order, index)) {
+                "Unexpected chapter page location at index $index"
+            }
+        }
+        val conflict = result["syncConflict"]?.asObject()?.let {
+            SuwayomiReadingConflict(it.str("deviceName").take(200), it.int("remotePage").also { page ->
+                require(page in 0..count) { "Unexpected conflicting reading position" }
+            })
+        }
+        return SuwayomiOnlineChapter(chapterId, mangaId, order, count, lastPage, conflict)
+    }
+
+    /** Fetch just one image's bounded encoded bytes; no disk cache, no decode. */
+    fun onlinePage(chapter: SuwayomiOnlineChapter, index: Int): ByteArray {
+        require(chapter.chapterId > 0 && chapter.mangaId > 0 && chapter.sourceOrder >= 0 &&
+            chapter.pageCount in 1..5000 && index in 0 until chapter.pageCount) { "Invalid page index or chapter" }
+        val limit = 25 * 1024 * 1024
+        val response = http.send(
+            request(onlinePagePath(chapter.mangaId, chapter.sourceOrder, index)).build(),
+            HttpResponse.BodyHandlers.ofInputStream(),
+        )
+        return response.body().use { input ->
+            require(response.statusCode() == 200) { "Suwayomi page returned HTTP ${response.statusCode()}" }
+            val type = response.headers().firstValue("Content-Type").orElse("").substringBefore(';').trim().lowercase()
+            require(type in setOf("image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/bmp", "image/avif")) {
+                "Unsupported chapter page media type"
+            }
+            val declared = response.headers().firstValueAsLong("Content-Length")
+            require(!declared.isPresent || declared.asLong in 1L..limit.toLong()) { "Chapter page exceeds encoded size limit" }
+            val bytes = input.readNBytes(limit + 1)
+            require(bytes.isNotEmpty() && bytes.size <= limit &&
+                (!declared.isPresent || declared.asLong == bytes.size.toLong())) { "Empty, oversized or truncated chapter page" }
+            bytes
+        }
+    }
+
+    private fun onlinePagePath(mangaId: Int, order: Int, index: Int) =
+        "/api/v1/manga/$mangaId/chapter/$order/page/$index"
 
     /** Cover fetch is best effort; absent/invalid cover never invents an image. */
     fun thumbnail(mangaId: Int): ByteArray? {
