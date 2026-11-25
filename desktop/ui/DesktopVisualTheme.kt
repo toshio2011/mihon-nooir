@@ -133,7 +133,7 @@ internal class DesktopMangaCoverCache : AutoCloseable {
     private val icons = ConcurrentHashMap<String, ImageIcon>()
     private val pending = ConcurrentHashMap.newKeySet<String>()
     private val missing = ConcurrentHashMap.newKeySet<String>()
-    private val placeholder = ImageIcon(BufferedImage(64, 88, BufferedImage.TYPE_INT_RGB).apply {
+    private val placeholder = ImageIcon(BufferedImage(96, 132, BufferedImage.TYPE_INT_RGB).apply {
         createGraphics().useGraphics { g ->
             g.color = DesktopVisualTheme.elevated
             g.fillRect(0, 0, width, height)
@@ -147,7 +147,7 @@ internal class DesktopMangaCoverCache : AutoCloseable {
     private inline fun Graphics2D.useGraphics(block: (Graphics2D) -> Unit) {
         try { block(this) } finally { dispose() }
     }
-    private var closed = false
+    @Volatile private var closed = false
 
     fun icon(
         item: SuwayomiMangaCard, endpoint: String?, authorization: String?,
@@ -163,7 +163,7 @@ internal class DesktopMangaCoverCache : AutoCloseable {
                 if (bytes == null) { missing.add(key); return@execute }
                 val decoded = DesktopImageDecoder.decode(bytes, 4_000_000)
                 val scaled = try {
-                    val img = BufferedImage(64, 88, BufferedImage.TYPE_INT_RGB)
+                    val img = BufferedImage(96, 132, BufferedImage.TYPE_INT_RGB)
                     val g = img.createGraphics()
                     try {
                         g.color = DesktopVisualTheme.elevated
@@ -172,7 +172,7 @@ internal class DesktopMangaCoverCache : AutoCloseable {
                         val factor = minOf(img.width.toDouble()/decoded.width, img.height.toDouble()/decoded.height)
                         val w = (decoded.width*factor).toInt().coerceAtLeast(1)
                         val h = (decoded.height*factor).toInt().coerceAtLeast(1)
-                        g.drawImage(decoded, (64-w)/2, (88-h)/2, w, h, null)
+                        g.drawImage(decoded, (96-w)/2, (132-h)/2, w, h, null)
                     } finally { g.dispose() }
                     ImageIcon(img)
                 } finally { decoded.flush() }
@@ -198,7 +198,7 @@ internal class DesktopMangaCardRenderer(
     private val repaint: () -> Unit,
 ) : JPanel(BorderLayout(12, 0)), ListCellRenderer<SuwayomiMangaCard> {
     private val art = JLabel().apply {
-        preferredSize = Dimension(64, 88)
+        preferredSize = Dimension(96, 132)
         horizontalAlignment = SwingConstants.CENTER
     }
     private val title = JLabel().apply {
@@ -210,13 +210,32 @@ internal class DesktopMangaCardRenderer(
     private val tag = JLabel().apply {
         font = Font("SansSerif", Font.BOLD, 10)
     }
+    private var grid = true
     init {
         border = EmptyBorder(8, 12, 8, 12)
-        add(art, BorderLayout.WEST)
-        add(JPanel(java.awt.GridLayout(3, 1, 0, 4)).apply {
+        title.putClientProperty("html.disable", true)
+        byline.putClientProperty("html.disable", true)
+        setGrid(true)
+    }
+
+    fun setGrid(enabled: Boolean) {
+        grid = enabled
+        removeAll()
+        val labels = JPanel(java.awt.GridLayout(3, 1, 0, 2)).apply {
             isOpaque = false
             add(title); add(byline); add(tag)
-        }, BorderLayout.CENTER)
+        }
+        listOf(title, byline, tag).forEach {
+            it.horizontalAlignment = if (enabled) SwingConstants.CENTER else SwingConstants.LEFT
+        }
+        if (enabled) {
+            add(art, BorderLayout.CENTER)
+            add(labels, BorderLayout.SOUTH)
+        } else {
+            add(art, BorderLayout.WEST)
+            add(labels, BorderLayout.CENTER)
+        }
+        revalidate()
     }
 
     override fun getListCellRendererComponent(
@@ -224,9 +243,15 @@ internal class DesktopMangaCardRenderer(
         index: Int, isSelected: Boolean, cellHasFocus: Boolean,
     ): Component {
         background = if (isSelected) DesktopVisualTheme.selected else DesktopVisualTheme.surface
-        title.text = value.title.take(110)
+        border = BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(3, 3, 3, 3, DesktopVisualTheme.background),
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(if (cellHasFocus || isSelected) DesktopVisualTheme.accent else DesktopVisualTheme.divider),
+                EmptyBorder(6, 7, 6, 7)))
+        title.text = value.title.take(if (grid) 40 else 110)
+        accessibleContext.accessibleName = value.title
         title.foreground = DesktopVisualTheme.foreground
-        byline.text = value.author?.take(90).orEmpty().ifBlank { "Manga" }
+        byline.text = value.author?.take(if (grid) 30 else 90).orEmpty().ifBlank { "Manga" }
         byline.foreground = DesktopVisualTheme.muted
         tag.text = if (value.inLibrary) "IN LIBRARY" else "AVAILABLE TO READ"
         tag.foreground = if (value.inLibrary) DesktopVisualTheme.accent else DesktopVisualTheme.muted

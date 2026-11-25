@@ -108,13 +108,32 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
         try { block(); reload() } catch (e: Exception) { warn(e) }
     }
     private fun choose() {
+        val kinds = arrayOf("Comic archives / image folders", "PDF documents", "Image EPUB", "Mixed supported books")
+        val kind = JOptionPane.showInputDialog(this, "Choose input type before browsing",
+            "Universal Book Converter — batch", JOptionPane.QUESTION_MESSAGE,
+            null, kinds, kinds[3]) as? String ?: return
+        val extensions = when (kind) {
+            kinds[0] -> arrayOf("cbz", "zip")
+            kinds[1] -> arrayOf("pdf")
+            kinds[2] -> arrayOf("epub")
+            else -> arrayOf("cbz", "zip", "pdf", "epub")
+        }
+        val folders = kind == kinds[0] || kind == kinds[3]
         val input = JFileChooser().apply {
-            dialogTitle = "Choose image folders, CBZ/ZIP, PDF or image EPUB"
-            fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
+            dialogTitle = "Choose " + kind
+            fileSelectionMode = if (folders) JFileChooser.FILES_AND_DIRECTORIES else JFileChooser.FILES_ONLY
+            fileFilter = javax.swing.filechooser.FileNameExtensionFilter(kind, *extensions)
+            isAcceptAllFileFilterUsed = false
             isMultiSelectionEnabled = true
         }
         if (input.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return
         val files = input.selectedFiles.toList().ifEmpty { listOfNotNull(input.selectedFile) }
+        if (files.isEmpty() || files.any { file ->
+                !(folders && file.isDirectory || file.isFile && extensions.any { it.equals(file.extension, true) })
+            }) {
+            JOptionPane.showMessageDialog(this, "Choose only files matching the selected input type.")
+            return
+        }
         val format = JComboBox(arrayOf("EPUB2", "EPUB", "XTC", "XTCH", "CBZ"))
         val device = JComboBox(NooirDeviceProfiles.builtins.map { it.id }.toTypedArray())
         val settings = JPanel(GridLayout(0, 2, 6, 6)).apply {

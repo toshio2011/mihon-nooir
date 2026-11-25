@@ -144,6 +144,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val conversionJobs = JButton("Conversion jobs")
     private val sendReader = JButton("Send to XTEINK")
     private val documentImport = JButton("Import PDF / EPUB")
+    private val universalConverter = JButton("Universal Book Converter")
+    private val browseLayout = JComboBox(arrayOf("Cover grid", "Detailed list"))
     private val checkWindowsUpdates = JButton("Windows updates")
     private val manageExtensions = JButton("Manage extensions…")
     private val openSuwayomiUi = JButton("Open full Suwayomi WebUI")
@@ -225,8 +227,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             nav(openSuwayomiUi)
             add(DesktopVisualTheme.section("READ & CONVERT"))
             nav(localReader)
-            nav(localImport)
-            nav(documentImport)
+            nav(universalConverter, true)
             nav(conversionJobs)
             nav(inspectBinary)
             nav(sendReader)
@@ -260,10 +261,23 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         }
 
         mangaList.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        mangaList.cellRenderer = DesktopMangaCardRenderer(coverCache, { mangaListEndpoint }) {
+        val mangaRenderer = DesktopMangaCardRenderer(coverCache, { mangaListEndpoint }) {
             mangaList.repaint()
         }
-        mangaList.fixedCellHeight = 106
+        mangaList.cellRenderer = mangaRenderer
+        fun applyBrowseLayout() {
+            val grid = browseLayout.selectedIndex == 0
+            mangaRenderer.setGrid(grid)
+            mangaList.layoutOrientation = if (grid) JList.HORIZONTAL_WRAP else JList.VERTICAL
+            mangaList.visibleRowCount = if (grid) -1 else 8
+            mangaList.fixedCellWidth = if (grid) 164 else -1
+            mangaList.fixedCellHeight = if (grid) 218 else 154
+            mangaList.revalidate()
+            mangaList.repaint()
+            if (mangaList.selectedIndex >= 0) mangaList.ensureIndexIsVisible(mangaList.selectedIndex)
+        }
+        browseLayout.addActionListener { applyBrowseLayout() }
+        applyBrowseLayout()
         mangaList.addListSelectionListener { e ->
             if (!e.valueIsAdjusting) {
                 updateLibraryToggle()
@@ -274,7 +288,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             add(popular); add(latest); add(search); add(searchButton); add(libraryToggle)
         }
         val paging = JPanel(FlowLayout(FlowLayout.LEFT, 6, 4)).apply {
-            add(previous); add(pageInfo); add(next)
+            add(previous); add(pageInfo); add(next); add(browseLayout)
         }
         val browsePanel = JPanel(BorderLayout(4, 4)).apply {
             border = DesktopVisualTheme.pane("DISCOVER MANGA")
@@ -347,7 +361,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         controls += listOf(connect, library, popular, latest, searchButton,
             next, previous, selected, onlyDownloaded, clear, refresh, readOnline, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
-            conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, inspectBinary, sendReader, libraryToggle,
+            conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, universalConverter, inspectBinary, sendReader, libraryToggle,
             startServer, stopServer, getServer, checkWindowsUpdates, manageExtensions, openSuwayomiUi)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
@@ -420,6 +434,21 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         conversionJobs.addActionListener { DesktopConversionQueueScreen.open() }
         sendReader.addActionListener { DesktopReaderTransferScreen.open(this) }
         documentImport.addActionListener { DesktopDocumentImportScreen.open(this) }
+        universalConverter.addActionListener {
+            val actions = arrayOf("Comic / image folder", "PDF / image EPUB",
+                "Batch conversion jobs", "Preview finished XTC / XTCH", "Cancel")
+            val choice = JOptionPane.showOptionDialog(this,
+                "Choose your source or open an existing conversion workflow.\n" +
+                    "Text EPUB and public web import are not yet supported on Windows.",
+                "Universal Book Converter", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE, null, actions, actions[0])
+            when (choice) {
+                0 -> exportLocal()
+                1 -> DesktopDocumentImportScreen.open(this)
+                2 -> DesktopConversionQueueScreen.open()
+                3 -> DesktopXtcBinaryPreview.open(this)
+            }
+        }
         checkWindowsUpdates.addActionListener { DesktopWindowsUpdateScreen.open(this) }
         setPaging()
         stopServer.isEnabled = false
@@ -437,7 +466,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         if (!busy.compareAndSet(false, true)) return
         controls.forEach { it.isEnabled = false }
         // Prevent a new selection or endpoint edit from being lost while a request is in flight.
-        listOf(endpoint, search, sourceList, mangaList, chapterList, format, device, downloadMissing)
+        listOf(endpoint, search, sourceList, mangaList, chapterList, format, device, downloadMissing, browseLayout)
             .forEach { it.isEnabled = false }
         status.text = "$label..."
         object : SwingWorker<T, Unit>() {

@@ -333,6 +333,7 @@ private fun verifyOfflineLibrary(folder: File) {
         captureWindow(main, "main-offline")
         verifyExtensionSetup(main)
         verifyToolbarReachable(findButton(main, "Open full Suwayomi WebUI"))
+        verifyToolbarReachable(findButton(main, "Universal Book Converter"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 1 }
         verifyToolbarReachable(findButton(main, "Search"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
@@ -556,7 +557,18 @@ private fun verifyOnlineReading(main: JFrame) {
             it.model.size==1 && it.model.getElementAt(0) is dev.nooir.desktop.suwayomi.SuwayomiMangaCard
         } }
         check(onSwingThread { manga.cellRenderer is dev.nooir.desktop.ui.DesktopMangaCardRenderer })
+        val layoutChoice = onSwingThread {
+            descendants(main).filterIsInstance<JComboBox<*>>().single {
+                it.itemCount == 2 && it.getItemAt(0) == "Cover grid" && it.getItemAt(1) == "Detailed list"
+            }
+        }
+        check(onSwingThread { manga.layoutOrientation == JList.HORIZONTAL_WRAP })
         captureWindow(main, "suwayomi-inspired-manga-browse")
+        onSwingThread { layoutChoice.selectedIndex = 1 }
+        check(onSwingThread { manga.layoutOrientation == JList.VERTICAL && manga.model.size == 1 })
+        captureWindow(main, "manga-detailed-list")
+        onSwingThread { layoutChoice.selectedIndex = 0 }
+        check(onSwingThread { manga.layoutOrientation == JList.HORIZONTAL_WRAP && manga.model.size == 1 })
         onSwingThread { manga.selectedIndex=0 }
         awaitUi("library action available for selected manga") {
             findButton(main, "Remove from library").isEnabled

@@ -311,3 +311,7 @@ This is an unmerged experiment. Real user WebP CBZs, animated WebP,
 high-memory stress, app GUI click-through and Windows install/launch behavior
 must be verified before approval. Do not ship this experiment as a public
 update or replace the existing Android v1.0.17 app.
+
+## Cover-led browsing and conversion hub — next Windows iteration
+
+The manga browser defaults to a wrapping portrait cover grid with a Detailed list alternative. Both views retain the original source, selection and chapter workflow; no new server request is made merely to switch layouts. The Universal Book Converter entry point groups existing comic import, PDF/image EPUB import, durable batch jobs and actual XTC/XTCH preview. Batch selection now starts with a file-type filter, including PDF-only and image-EPUB-only batches. These are UI integration changes, not claims of text-EPUB pagination or Web-to-EPUB parity. Fresh packaged GUI acceptance and screenshots are required.
