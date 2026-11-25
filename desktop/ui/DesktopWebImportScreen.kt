@@ -283,7 +283,8 @@ internal object DesktopWebImportScreen {
             override fun windowClosing(e:java.awt.event.WindowEvent?){if(!busy)dialog.dispose()}
         })
         // Separate the task into three steps; keep project and export controls visible.
-        val tabs = JTabbedPane().apply { name="web-editor-tabs" }
+        val tabs = JTabbedPane().apply { name="web-editor-tabs"; DesktopVisualTheme.tabs(this) }
+        DesktopVisualTheme.table(table)
         fun section(): JPanel = JPanel().apply {
             layout=BoxLayout(this,BoxLayout.Y_AXIS)
             border=BorderFactory.createEmptyBorder(12,14,12,14)
