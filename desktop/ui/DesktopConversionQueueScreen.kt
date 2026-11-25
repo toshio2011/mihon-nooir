@@ -49,6 +49,7 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
                 if (value is DesktopConversionJob) {
                     label.text = "[${value.state}] ${java.io.File(value.input).name} → ${java.io.File(value.output).name}" +
                         (if (value.textEpub == null) "" else " · Text EPUB") +
+                        (if (value.pdfReflow) " · PDF reflow" else "") +
                         (if (value.error.isBlank()) "" else " — " + value.error.take(80))
                     label.toolTipText = value.output
                 }
@@ -109,13 +110,13 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
         try { block(); reload() } catch (e: Exception) { warn(e) }
     }
     private fun choose() {
-        val kinds = arrayOf("Comic archives / image folders", "PDF documents", "Image EPUB", "Mixed supported books", "Text EPUB / novels")
+        val kinds = arrayOf("Comic archives / image folders", "PDF documents", "Image EPUB", "Mixed supported books", "Text EPUB / novels", "PDF reflow to EPUB")
         val kind = JOptionPane.showInputDialog(this, "Choose input type before browsing",
             "Universal Book Converter — batch", JOptionPane.QUESTION_MESSAGE,
             null, kinds, kinds[3]) as? String ?: return
         val extensions = when (kind) {
             kinds[0] -> arrayOf("cbz", "zip")
-            kinds[1] -> arrayOf("pdf")
+            kinds[1], kinds[5] -> arrayOf("pdf")
             kinds[2], kinds[4] -> arrayOf("epub")
             else -> arrayOf("cbz", "zip", "pdf", "epub")
         }
@@ -136,7 +137,9 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
             return
         }
         val prose = kind == kinds[4]
-        val format = JComboBox(if (prose) arrayOf("XTC", "XTCH") else arrayOf("EPUB2", "EPUB", "XTC", "XTCH", "CBZ"))
+        val reflow = kind == kinds[5]
+        val format = JComboBox(if (prose) arrayOf("XTC", "XTCH") else if (reflow) arrayOf("EPUB2","EPUB")
+            else arrayOf("EPUB2", "EPUB", "XTC", "XTCH", "CBZ"))
         val font = JComboBox(arrayOf("Serif", "SansSerif", "Monospaced"))
         val fontSize = JSpinner(SpinnerNumberModel(24,14,46,1))
         val margin = JSpinner(SpinnerNumberModel(26,8,80,2))
@@ -146,7 +149,9 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
         val settings = JPanel(GridLayout(0, 2, 6, 6)).apply {
             add(JLabel("Format")); add(format); add(JLabel("Device")); add(device)
         }
-        if (files.any { it.isFile && it.extension.equals("pdf", true) }) {
+        if (reflow) {
+            settings.add(JLabel("Text pages reflow")); settings.add(JLabel("Complex/scanned pages retain images"))
+        } else if (files.any { it.isFile && it.extension.equals("pdf", true) }) {
             settings.add(JLabel("PDF batch: original pages only")); settings.add(JLabel("No manga panel slicing or text companion"))
         }
         if (prose) {
@@ -162,7 +167,8 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
                 JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return
         val typography = if (prose) DesktopTextEpubImport.Settings(fontSize.value as Int, margin.value as Int,
             lineHeight.value as Int, font.selectedItem as String, direction.selectedItem as String) else null
-        val options = if (prose) MangaConversionOptions().copy(renderAlgorithm="THRESHOLD")
+        val options = if (reflow) MangaConversionOptions().copy(renderAlgorithm="THRESHOLD", rightToLeft=false)
+            else if (prose) MangaConversionOptions().copy(renderAlgorithm="THRESHOLD")
             else DesktopConversionDialog.show(this, MangaConversionOptions.preset("Manga")) ?: return
         val destination = JFileChooser().apply {
             dialogTitle = "Choose an existing output directory"
@@ -171,7 +177,7 @@ private class ConversionQueueWindow : JFrame("MihonNooir — Local conversion jo
         if (destination.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return
         action {
             queue.enqueue(files, destination.selectedFile, ExportFormat.valueOf(format.selectedItem as String),
-                device.selectedItem as String, options, typography)
+                device.selectedItem as String, options, typography, pdfReflow = reflow)
         }
     }
     private fun runJobs() {

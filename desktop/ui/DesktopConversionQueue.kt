@@ -23,6 +23,7 @@ internal data class DesktopConversionJob(
     val format: ExportFormat, val device: String, val token: String,
     val state: ConversionJobState, val error: String = "",
     val textEpub: DesktopTextEpubImport.Settings? = null,
+    val pdfReflow: Boolean = false,
 ) {
     fun args(): Array<String> = arrayOf(
         "--input", input, "--output", output, "--format", format.name,
@@ -84,7 +85,8 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             require(p.size in 8..9) { "Damaged conversion job; original preserved" }
             DesktopConversionJob(p[0], dec(p[1]), dec(p[2]), ExportFormat.valueOf(p[3]),
                 p[4], dec(p[5]), ConversionJobState.valueOf(p[6]), dec(p[7]),
-                p.getOrNull(8)?.let { typographyFromToken(dec(it)) }).also { job ->
+                p.getOrNull(8)?.let { dec(it) }?.takeUnless { it == "pdf:reflow" }?.let { typographyFromToken(it) },
+                p.getOrNull(8)?.let { dec(it) == "pdf:reflow" } ?: false).also { job ->
                 require(runCatching { UUID.fromString(job.id) }.isSuccess &&
                     File(job.input).isAbsolute && File(job.output).isAbsolute &&
                     job.input.length <= 4096 && job.output.length <= 4096 &&
@@ -93,7 +95,9 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
                     job.format != ExportFormat.AUTO &&
                     File(job.output).extension.equals(job.format.extension, true) &&
                     (job.textEpub == null || File(job.input).extension.equals("epub", true) &&
-                        job.format in setOf(ExportFormat.XTC, ExportFormat.XTCH))) {
+                        job.format in setOf(ExportFormat.XTC, ExportFormat.XTCH)) &&
+                    (!job.pdfReflow || File(job.input).extension.equals("pdf", true) &&
+                        job.format in setOf(ExportFormat.EPUB, ExportFormat.EPUB2))) {
                     "Invalid conversion job; original preserved"
                 }
             }
@@ -108,7 +112,8 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             jobs.forEach { j ->
                 val columns = listOf(j.id, enc(j.input), enc(j.output), j.format.name, j.device,
                     enc(j.token), j.state.name, enc(j.error.take(400)))
-                append((columns + listOfNotNull(j.textEpub?.let { enc(typographyToken(it)) })).joinToString("\t")).append('\n')
+                val mode = if (j.pdfReflow) "pdf:reflow" else j.textEpub?.let { typographyToken(it) }
+                append((columns + listOfNotNull(mode?.let { enc(it) })).joinToString("\t")).append('\n')
             }
         }
         require(data.toByteArray(StandardCharsets.UTF_8).size <= MAX_BYTES)
@@ -124,9 +129,13 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
     fun list(): List<DesktopConversionJob> = transaction { read().toList() }
 
     fun enqueue(inputs: List<File>, target: File, format: ExportFormat, device: String,
-        options: MangaConversionOptions, textEpub: DesktopTextEpubImport.Settings? = null): Int = transaction {
+        options: MangaConversionOptions, textEpub: DesktopTextEpubImport.Settings? = null,
+        pdfReflow: Boolean = false): Int = transaction {
         require(inputs.isNotEmpty() && inputs.size <= MAX_JOBS)
         require(format != ExportFormat.AUTO && NooirDeviceProfiles.forId(device).accepts(format))
+        require(!pdfReflow || textEpub == null && format in setOf(ExportFormat.EPUB, ExportFormat.EPUB2)) {
+            "PDF reflow batches require EPUB output"
+        }
         require(textEpub == null || format in setOf(ExportFormat.XTC, ExportFormat.XTCH)) {
             "Text EPUB batches require XTC or XTCH output"
         }
@@ -141,6 +150,9 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             val source = selected.canonicalFile
             require(source.isDirectory || source.isFile && source.extension.lowercase() in setOf("zip", "cbz", "pdf", "epub")) {
                 "Choose an image folder, CBZ/ZIP, PDF or image-based EPUB"
+            }
+            require(!pdfReflow || source.isFile && source.extension.equals("pdf", true)) {
+                "Choose only PDFs for a PDF reflow batch"
             }
             require(textEpub == null || source.isFile && source.extension.equals("epub", true)) {
                 "Choose only EPUB files for a text EPUB batch"
@@ -158,7 +170,7 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             require(source.path.length <= 4096 && output.path.length <= 4096)
             DesktopConversionJob(UUID.randomUUID().toString(), source.path, output.path, format,
                 device, options.copy(panelDiagnostics = false).token(), ConversionJobState.PENDING,
-                textEpub = textEpub)
+                textEpub = textEpub, pdfReflow = pdfReflow)
         }
         write(jobs + added)
         added.size
@@ -227,6 +239,8 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
                         // the optional text companion remains an explicit
                         // single-document workflow. No manga slicing on PDFs.
                         when {
+                            job.pdfReflow ->
+                                DesktopPdfImport.exportReflow(input, output, job.format, job.device, options)
                             input.isFile && input.extension.equals("pdf", true) ->
                                 DesktopPdfImport.export(input, output, job.format, job.device, options)
                             job.textEpub != null ->
