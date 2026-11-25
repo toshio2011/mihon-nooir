@@ -4,6 +4,7 @@ import dev.nooir.bridge.ExportFormat
 import dev.nooir.bridge.XtcBookPreview
 import dev.nooir.desktop.storage.DesktopDataHome
 import dev.nooir.mangabridge.MangaConversionOptions
+import dev.nooir.mangabridge.NooirWebChapterPlan
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
@@ -22,11 +23,20 @@ fun main(args: Array<String>) {
     val bookmarks=ReaderBookmarkStore()
     val jobs=DesktopConversionQueue()
     val settings=DesktopConversionSettingsStore()
+    val web=DesktopWebProjects()
+    val chapters=listOf(NooirWebChapterPlan.Entry("https://example.org/one","One",false),
+        NooirWebChapterPlan.Entry("https://example.org/two","Two",true))
+    val project=DesktopWebProjects.Project(name="Installer QA novel",source="https://example.org/story",
+        known=chapters.map{it.url},chapters=chapters,title="Original QA novel",author="QA",description="Original synopsis",
+        language="en",coverUrl="",localCover="",collage=false,epub2=true,style="COMPACT",
+        imageProfile="BALANCED",includeImages=true,css="",selector="",remove="")
     val preferred=MangaConversionOptions.preset("Manga").copy(preset="Custom", panelMode="ROW_BY_ROW",
         orientation="AUTO_FIT", minimumScreenFillPercent=65, enlargeOversizedSplits=false, renderAlgorithm="ATKINSON")
     if(args[0]=="seed") {
         check(!comic.exists() && !out.exists() && library.books().isEmpty() && jobs.list().isEmpty())
         check(!Files.exists(root.resolve(DesktopConversionSettingsStore.FILE_NAME)))
+        check(web.list().isEmpty())
+        web.save(project)
         settings.save(preferred)
         comic.mkdir();out.mkdir()
         val image=BufferedImage(48,72,BufferedImage.TYPE_INT_RGB)
@@ -43,6 +53,8 @@ fun main(args: Array<String>) {
         jobs.runPending({false})
         check(jobs.enqueue(listOf(comic),out,ExportFormat.XTCH,"X4",options)==1)
     }
+    val savedProject=web.list().single()
+    check(savedProject.id.isNotBlank() && savedProject.copy(id="")==project) { "Saved web project must persist through upgrade/reinstall" }
     check(settings.load()==preferred) { "Installed settings must persist through upgrade/reinstall" }
     val entry=library.books().single()
     check(entry.available && entry.file.canonicalFile==comic.canonicalFile && entry.lastOpenedAt==123456L)
@@ -54,5 +66,5 @@ fun main(args: Array<String>) {
     check(completed.isFile && XtcBookPreview(completed).pageCount==2)
     check(!File(list[1].output).exists())
     check(comic.resolve("001.png").isFile && comic.resolve("002.png").isFile)
-    println("PASS: installed-runtime " + args[0] + " library, bookmark, completed export and pending conversion persisted; conversion preferences retained")
+    println("PASS: installed-runtime " + args[0] + " library, bookmark, completed export and pending conversion persisted; conversion preferences and saved web project retained")
 }

@@ -310,7 +310,7 @@ private fun verifyOfflineLibrary(folder: File) {
         // Launch through the exact production main function, including its
         // look and feel and offline startup. Do not contact Suwayomi.
         MangaNooirDesktop.main(emptyArray())
-        val main = awaitFrame("MihonNooir — Windows development")
+        val main = awaitFrame("MihonNooir — Desktop preview")
         verifyFitsWorkArea(main)
         awaitUi("offline main startup without backend") {
             descendants(main).filterIsInstance<JLabel>().any {
@@ -399,7 +399,7 @@ private fun verifyOfflineLibrary(folder: File) {
         println("PASS: packaged offline main startup, compact/wide layout, library filter, cover, reader page turn, bookmark, reopen/resume and source unchanged; windows/toolbar accessible")
         onSwingThread { Window.getWindows().filter { it.isDisplayable }.forEach { it.dispose() } }
         MangaNooirDesktop.main(emptyArray())
-        val restarted = awaitFrame("MihonNooir — Windows development")
+        val restarted = awaitFrame("MihonNooir — Desktop preview")
         onSwingThread {
             descendants(restarted).filterIsInstance<JTabbedPane>().singleOrNull()?.selectedIndex = 2
         }

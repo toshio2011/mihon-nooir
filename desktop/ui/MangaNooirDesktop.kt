@@ -58,7 +58,7 @@ object MangaNooirDesktop {
     @JvmStatic
     fun main(args: Array<String>) {
         require(args.isEmpty()) { "The GUI accepts no command-line credentials or flags" }
-        require(!java.awt.GraphicsEnvironment.isHeadless()) { "Windows GUI requires a display" }
+        require(!java.awt.GraphicsEnvironment.isHeadless()) { "Desktop GUI requires a display" }
         SwingUtilities.invokeLater {
             runCatching {
                 UIManager.setLookAndFeel(
@@ -120,7 +120,7 @@ internal object DesktopUiModel {
     }
 }
 
-private class DesktopWindow : JFrame("MihonNooir — Windows development") {
+private class DesktopWindow : JFrame("MihonNooir — Desktop preview") {
     private val endpoint = JTextField("http://127.0.0.1:4567", 22)
     private val status = JLabel("Offline ready — open Local library or connect to Suwayomi when needed")
     private val busy = AtomicBoolean(false)
