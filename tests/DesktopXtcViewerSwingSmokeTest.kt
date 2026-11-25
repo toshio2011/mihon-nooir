@@ -451,7 +451,17 @@ private fun verifyWebEditor(main: JFrame) {
         click("Select all")
         check(onSwingThread { (0 until table.rowCount).all{table.getValueAt(it,0)==true} })
         check(onSwingThread { !descendants(dialog).filterIsInstance<JButton>().single{it.text=="Cancel export"}.isEnabled })
+        val tabs=onSwingThread { descendants(dialog).filterIsInstance<JTabbedPane>().single{it.name=="web-editor-tabs"} }
+        check(onSwingThread { tabs.tabCount==3 && tabs.selectedIndex==0 })
         captureWindow(dialog,"web-chapter-editor")
+        onSwingThread { tabs.selectedIndex=1 }
+        val bookTitle=onSwingThread { descendants(dialog).filterIsInstance<JTextField>().single{it.name=="web-book-title"} }
+        onSwingThread { bookTitle.text="Original QA novel" }
+        captureWindow(dialog,"web-book-details")
+        onSwingThread { tabs.selectedIndex=2 }
+        captureWindow(dialog,"web-export-settings")
+        onSwingThread { tabs.selectedIndex=0 }
+        check(onSwingThread { table.rowCount==3 && bookTitle.text=="Original QA novel" })
         println("PASS: native web editor manual links, editable titles, selection, reorder and idle cancellation controls")
     } finally { onSwingThread { dialog.dispose() } }
 }

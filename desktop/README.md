@@ -363,3 +363,7 @@ See [Desktop user guide](DESKTOP_GUIDE.md) for the current development workflow.
 ### Native desktop acceptance and user-state preservation
 
 All matrix targets now require real display-capable Swing acceptance, including both macOS architectures (fresh CI required; no headless fallback or skip). Each portable app is separately copied and its packaged runtime must reopen an isolated user-data fixture with identical file hashes. Extracted/mounted DEB, RPM and DMG payloads must do the same. Windows x64's existing synthetic MSI upgrade/uninstall/reinstall also now includes saved web projects. These checks do not establish OS package-manager upgrades on Linux/macOS or native Windows ARM MSI support. No user data is used and no public release is made.
+
+### Desktop UI polish
+
+The web editor now separates Chapters, Book details and Export settings into tabs, with persistent project actions, status and export controls. The main navigation and web editor use flat, rounded button surfaces with hover, disabled and keyboard-focus states; cover placeholders are centered. Native GUI tests retain chapter selections across tabs and capture each editor section. Changes are pending fresh CI and visual inspection; screenshots from the previous verified build do not show this styling yet.

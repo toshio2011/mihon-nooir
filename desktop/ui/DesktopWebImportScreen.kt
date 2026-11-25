@@ -282,29 +282,79 @@ internal object DesktopWebImportScreen {
         dialog.addWindowListener(object:java.awt.event.WindowAdapter(){
             override fun windowClosing(e:java.awt.event.WindowEvent?){if(!busy)dialog.dispose()}
         })
-        val fields=JPanel().apply{
+        // Separate the task into three steps; keep project and export controls visible.
+        val tabs = JTabbedPane().apply { name="web-editor-tabs" }
+        fun section(): JPanel = JPanel().apply {
             layout=BoxLayout(this,BoxLayout.Y_AXIS)
-            fun field(label:String,component:Component){
-                add(JPanel(BorderLayout(8,3)).apply{add(JLabel(label),BorderLayout.NORTH);add(component,BorderLayout.CENTER)})
-            }
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply{listOf(saveProject,openProject,deleteProject,checkUpdates).forEach{add(it)}})
-            field("Story URL or one public chapter URL per line",JScrollPane(urls))
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply{add(analyze);add(manual)})
-            field("Chapters (check, edit titles, reorder)",JScrollPane(table))
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply{listOf(preview,up,down,reverse,all,none).forEach{add(it)}})
-            field("Book title",title);field("Author",author);field("Synopsis / description",JScrollPane(description))
-            field("Language",language);field("Public cover URL (blank = auto detect)",cover)
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply{add(localPick);add(clearCover);add(localLabel)})
-            add(collage)
-            add(JPanel(GridLayout(0,2,5,5)).apply{
-                add(JLabel("EPUB version"));add(format);add(JLabel("Reading style"));add(style)
-                add(JLabel("Image size"));add(imageProfile)
-            })
-            add(includeImages);field("Optional content CSS selector",contentSelector)
-            field("Optional remove CSS selector",removeSelector);field("Optional safe EPUB CSS",JScrollPane(css))
+            border=BorderFactory.createEmptyBorder(12,14,12,14)
         }
-        dialog.add(JScrollPane(fields),BorderLayout.CENTER)
+        fun JPanel.field(label:String,component:Component){
+            add(JPanel(BorderLayout(8,5)).apply{
+                isOpaque=false
+                add(JLabel(label).apply{foreground=DesktopVisualTheme.muted},BorderLayout.NORTH)
+                add(component,BorderLayout.CENTER)
+                maximumSize=Dimension(Int.MAX_VALUE,preferredSize.height+8)
+            })
+            add(Box.createVerticalStrut(10))
+        }
+        fun actions(vararg buttons:JButton): JPanel = JPanel(FlowLayout(FlowLayout.LEFT,6,4)).apply{
+            isOpaque=false;buttons.forEach{add(it)}
+        }
+        val chapters=JPanel(BorderLayout(0,8)).apply{
+            border=BorderFactory.createEmptyBorder(12,14,12,14)
+            add(JPanel(BorderLayout(0,5)).apply{
+                isOpaque=false
+                add(JLabel("Story URL or one public chapter URL per line").apply{
+                    foreground=DesktopVisualTheme.muted
+                },BorderLayout.NORTH)
+                add(JScrollPane(urls),BorderLayout.CENTER)
+                add(actions(analyze,manual),BorderLayout.SOUTH)
+            },BorderLayout.NORTH)
+            add(JScrollPane(table),BorderLayout.CENTER)
+            add(actions(preview,up,down,reverse,all,none),BorderLayout.SOUTH)
+        }
+        val book=section().apply{
+            field("Book title",title)
+            field("Author",author)
+            field("Synopsis / description",JScrollPane(description))
+            field("Language",language)
+            field("Public cover URL (blank = auto detect)",cover)
+            add(JPanel(BorderLayout(8,0)).apply{
+                isOpaque=false
+                add(actions(localPick,clearCover),BorderLayout.WEST)
+                add(localLabel,BorderLayout.CENTER)
+            })
+            add(collage)
+            add(Box.createVerticalGlue())
+        }
+        val settings=section().apply{
+            field("EPUB version",format)
+            field("Reading style",style)
+            field("Image size",imageProfile)
+            add(includeImages)
+            add(Box.createVerticalStrut(10))
+            field("Optional content CSS selector",contentSelector)
+            field("Optional remove CSS selector",removeSelector)
+            field("Optional safe EPUB CSS",JScrollPane(css))
+            add(Box.createVerticalGlue())
+        }
+        tabs.addTab("1  Chapters",chapters)
+        tabs.addTab("2  Book details",JScrollPane(book))
+        tabs.addTab("3  Export settings",JScrollPane(settings))
+        controls.filterIsInstance<JButton>().forEach{DesktopVisualTheme.action(it,it===export||it===analyze)}
+        DesktopVisualTheme.action(cancelExport)
+        dialog.contentPane.background=DesktopVisualTheme.background
+        dialog.add(JPanel(BorderLayout(0,5)).apply{
+            border=BorderFactory.createEmptyBorder(10,12,6,12)
+            add(JLabel("Web → EPUB").apply{
+                font=java.awt.Font("SansSerif",java.awt.Font.BOLD,20)
+                foreground=DesktopVisualTheme.foreground
+            },BorderLayout.NORTH)
+            add(actions(saveProject,openProject,deleteProject,checkUpdates),BorderLayout.SOUTH)
+        },BorderLayout.NORTH)
+        dialog.add(tabs,BorderLayout.CENTER)
         dialog.add(JPanel(BorderLayout()).apply{
+            border=BorderFactory.createEmptyBorder(5,12,8,12)
             add(status,BorderLayout.CENTER)
             add(JPanel(FlowLayout(FlowLayout.RIGHT)).apply{add(export);add(cancelExport);add(close)},BorderLayout.SOUTH)
         },BorderLayout.SOUTH)
