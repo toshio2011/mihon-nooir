@@ -438,10 +438,10 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
         documentImport.addActionListener { DesktopDocumentImportScreen.open(this) }
         universalConverter.addActionListener {
             val actions = arrayOf("Comic / image folder", "PDF / EPUB",
-                "Batch conversion jobs", "Preview finished XTC / XTCH", "Cancel")
+                "Batch conversion jobs", "Preview finished XTC / XTCH", "Web → EPUB", "Cancel")
             val choice = JOptionPane.showOptionDialog(this,
                 "Choose your source or open an existing conversion workflow.\n" +
-                    "Text EPUB to XTC/XTCH is experimental. Public web import is not yet available.",
+                    "Text EPUB to XTC/XTCH and public web import are experimental.",
                 "Universal Book Converter", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.PLAIN_MESSAGE, null, actions, actions[0])
             when (choice) {
@@ -449,6 +449,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 1 -> DesktopDocumentImportScreen.open(this)
                 2 -> DesktopConversionQueueScreen.open()
                 3 -> DesktopXtcBinaryPreview.open(this)
+                4 -> DesktopWebImportScreen.open(this)
             }
         }
         checkWindowsUpdates.addActionListener { if (windowsX64) DesktopWindowsUpdateScreen.open(this) }

@@ -26,18 +26,19 @@ java -Djava.awt.headless=true -cp "$tmp/windows-rendered-visual-qa.jar" DesktopV
 # current Android v1.0.17 shared renderer and conversion settings.
 test -s build/desktop/lib/pdfbox-app-3.0.8.jar
 sha512sum -c desktop/pdfbox-runtime.sha512
-kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar" desktop/storage/DesktopDataHome.kt \
+kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar:$PWD/build/desktop/lib/jsoup-1.21.2.jar:$PWD/build/desktop/lib/json-20250517.jar" desktop/storage/DesktopDataHome.kt \
   overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,PanelReadableSliceRefiner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt,NooirEpubCssRules.kt} \
-  overlay/app/src/main/java/dev/nooir/mangabridge/{MangaConversionSettingsCore.kt,NooirEpubBook.kt,NooirCoverCollageLayout.kt,NooirWebImageProfile.kt,NooirWebChapterPlan.kt,NooirWebChapterIdentity.kt,NooirWebChapterUpdates.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/{MangaConversionSettingsCore.kt,NooirEpubBook.kt,NooirCoverCollageLayout.kt,NooirWebImageProfile.kt,NooirWebChapterPlan.kt,NooirWebChapterIdentity.kt,NooirWebChapterUpdates.kt,NooirWebArticle.kt,NooirWebNovel.kt,NooirWebPageBook.kt,NooirWebChapterDiscovery.kt,NooirWebTocPagination.kt,NooirWebExtractRules.kt,NooirWebFetchPolicy.kt,NooirWebImageCandidates.kt,NooirWebImageSignature.kt,NooirWebReadability.kt,NooirWattpadPublic.kt} \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt tests/DesktopXtcViewerSwingSmokeTest.kt \
-  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopReaderTransferTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWebImageAdaptersTest.kt tests/DesktopWindowsUpdatesTest.kt \
+  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopReaderTransferTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWebImageAdaptersTest.kt tests/DesktopWebEpubTest.kt tests/DesktopWindowsUpdatesTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopConversionQueueTestKt
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopReaderTransferTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopDocumentImportTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopWebImageAdaptersTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopWebEpubTestKt
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopWindowsUpdatesTestKt
 # Real Swing dialog acceptance using a virtual display. This exercises actual
 # rendered saved-book pages, navigation, resize, fit and 1:1, without touching
