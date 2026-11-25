@@ -4,7 +4,7 @@
 
 **The most important step:** choose chapters **on the manga details screen before opening Export**. The Export dialog chooses the device, format and destination; it does **not** contain a separate chapter picker. In this context, “import chapters” usually means **export chapters out of MihonNooir** for your e-reader.
 
-> **Version note:** These workflows are included in [Android v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19). [Installation guide](GETTING_STARTED.md).
+> **Version note:** These workflows are included in [Android v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20). [Installation guide](GETTING_STARTED.md).
 
 ## Select exactly the chapters you want
 
@@ -45,7 +45,7 @@ For non-downloaded online chapters, MihonNooir uses the installed source extensi
 
 In the current release, the chapter export and Wi-Fi send use the shared background Nooir Activity Queue. You can return to Mihon or switch apps; open **More → Nooir Tools → Activity Queue** to see current and completed jobs, progress, and per-book failures. One ordinary failed book shouldn't block later jobs. **Cancel entire queue** cancels waiting jobs as well; individual dependency cancellation is not offered. The Android notification can show activity if allowed. **100% sent** refers only to bytes uploaded; wait for the reader to confirm success.
 
-The **More → Nooir Tools → Send & Convert files** picker is *different* from chapter selection: it chooses existing documents, CBZ archives or images **from Android storage**, not online chapters from a manga details page.
+The **More → Nooir Tools → Universal Book Converter → Local files** picker is *different* from chapter selection: it chooses existing documents, CBZ archives or images **from Android storage**, not online chapters from a manga details page.
 
 ## If you can't find the chapter selection
 

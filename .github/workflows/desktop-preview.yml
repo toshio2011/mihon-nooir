@@ -61,7 +61,11 @@ jobs:
         run: |
           set -euo pipefail
           # Strict frozen public Android baseline; only Windows-owned files and reviewed test adapters may differ.
-          base=72baf818aa4d26b5d33cffae8259200913a3a781
+          # Main advanced only by the twelve reviewed Android documentation files.
+          # Keep the original released-source guard independently of the integration base.
+          released=72baf818aa4d26b5d33cffae8259200913a3a781
+          base=4b6307961b2712d4b1c02e61190e26511135489f
+          git diff --exit-code "$released" "$base" -- overlay/ config/ tools/ .github/workflows/build-apk.yml .github/workflows/release-apk.yml .github/workflows/publish-v1.0.20.yml .github/workflows/verify-v1.0.20-signing.yml
           git merge-base --is-ancestor "$base" HEAD
           changed=$(git diff --name-only "$base" HEAD)
           unexpected=$(printf '%s\n' "$changed" | grep -v -E '^(desktop/|docs/WINDOWS[^/]*\.md$|tests/(Desktop[^/]*\.kt|Windows[^/]*\.kt|SuwayomiBrowseTest\.kt|run_windows_full\.sh|run\.sh|test_overlay\.py)$|\.github/workflows/desktop-preview\.yml$|$)' || true)

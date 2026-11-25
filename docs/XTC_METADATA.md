@@ -1,8 +1,8 @@
 # XTC and XTCH — format metadata, covers, and synopsis
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
-> [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Current release notes](releases/v1.0.19.md)
+> [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Current release notes](releases/v1.0.20.md)
 
 ## Native data Folio Nooir actually reads
 

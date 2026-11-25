@@ -16,6 +16,7 @@ Open **MihonNooir → More → Nooir Tools**. Inside the hub:
 | **Universal Book Converter → Local files** | Convert local EPUB, CBZ/ZIP or images, or send originals |
 | **Universal Book Converter → Web link** | Convert a public webpage **or multiple webpage links into one EPUB** |
 | **Universal Book Converter → Web novels** | One EPUB per public novel; discover chapters or combine selected chapter URLs |
+| **Universal Book Converter → Preview finished XTC / XTCH book** | Inspect actual saved output pages, not simulated rendering |
 | **Universal Book Converter → PDF files** | Convert one or more PDFs into EPUB 2/3 or XTC/XTCH; keep text selectable in EPUB where feasible |
 | **Browse XTEink files** | Browse reader folders without editing; open its full file manager in your browser |
 

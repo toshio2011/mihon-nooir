@@ -1,10 +1,10 @@
 # MihonNooir — Auto Fit (Row by Row and Panel by Panel)
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 ## Recommended manga settings
 
-1. Select chapters in the manga details screen and open Export; for local comics use Nooir Tools → Send & Convert files.
+1. Select chapters in the manga details screen and open Export; for local comics use Nooir Tools → Universal Book Converter → Local files.
 2. Choose the matching reader profile and output format.
 3. Open **More conversion settings → Apply recommended manga panel settings**.
 4. Verify **Enlarge oversized splits: on** (default), **Minimum screen fill: 50%** (default), **Context Peek: off** (default). These three settings are retained by the shortcut, so check any previous choices.
@@ -43,4 +43,4 @@ Automated tests cover deterministic portrait/wide/square decisions, no-crop geom
 
 **Verified on representative inputs:** 147 source pages, 588 desktop renders across the RC1/RC2 Panel and Row modes, and five Android manga instrumentation tests. All 147 Row cases and 130 of 147 Panel cases were pixel-identical; seven Panel cases consolidated fragments and ten recovered inner panels. Owner reviewed the RC2 phone output. Exact Android-vs-desktop pixel parity, every possible manga layout, and every physical reader/firmware combination are not established.
 
-These improvements are shipped in Android v1.0.19. Recognition remains heuristic, not a semantic guarantee. If two panels remain grouped or an unexpected thin frame appears, try Row by Row or Page mode, enable the optional full-page overview, or save a private diagnostics ZIP for troubleshooting. Switching ordinary overlap does not repair a detector boundary. Windows remains in development; Folio Nooir firmware is not modified. [Release evidence](releases/v1.0.19.md).
+These improvements were shipped in Android v1.0.19 and are retained in v1.0.20. Recognition remains heuristic, not a semantic guarantee. If two panels remain grouped or an unexpected thin frame appears, try Row by Row or Page mode, enable the optional full-page overview, or save a private diagnostics ZIP for troubleshooting. Switching ordinary overlap does not repair a detector boundary. Windows remains in development; Folio Nooir firmware is not modified. [Original release evidence](releases/v1.0.19.md) · [Current release](releases/v1.0.20.md).

@@ -1,6 +1,6 @@
 # PDF to e-reader: EPUB 2/3, XTC and XTCH
 
-> **Current Android release:** [MihonNooir v1.0.19](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.19) (19 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.19.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
+> **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 This feature targets the **mixed-content novel** use case: extract **real, selectable/resizable text** from a PDF, while preserving diagrams, floor plans and pictures near their original paragraphs where possible. Think of a mystery novel with text above and below floor-plan drawings, rather than turning the entire book into page screenshots.
 
@@ -8,7 +8,7 @@ This feature targets the **mixed-content novel** use case: extract **real, selec
 
 ## Steps
 
-1. Open **MihonNooir → More → Nooir Tools → PDF → EPUB · Text + illustrations**.
+1. Open **MihonNooir → More → Nooir Tools → Universal Book Converter → PDF files · Dedicated PDF converter**.
 2. Tap **Choose PDF file(s) from phone** and select one or more documents.
 3. Choose **EPUB 2**, **EPUB 3**, **XTC · 1-bit**, or **XTCH · 2-bit**. For EPUB, select **Reflowable text + illustrations** or **Keep original pages as images**; for XTC/XTCH choose the target reader.
 4. For one PDF, choose optional title, author and output filename. For a batch, each PDF becomes a separate book with a distinct name; select a destination folder for local saving.
@@ -19,7 +19,7 @@ The manga Panel by Panel and oversized-split settings do not apply to the separa
 
 ## Large files and batches
 
-The old fixed 600-page, 100 MiB source, and 300 MiB output cutoffs were removed in v1.0.18 and remain removed in v1.0.19. [Long PDF acceptance](PDF_ANDROID_DEVICE_ACCEPTANCE_2026-11-12.md) and [release verification](releases/v1.0.19.md) describe tests beyond 1,000 and 2,000 pages. Multiple inputs are processed sequentially, not combined into one book. Local saving is still bounded by storage, real output-format limits and decoding/rendering resources; enormous or unusual PDFs can fail. Wi-Fi transfer has a separate **180 MiB per-file** application safety limit. The original PDF is not changed.
+The old fixed 600-page, 100 MiB source, and 300 MiB output cutoffs were removed in v1.0.18 and remain removed in v1.0.20. [Long PDF acceptance](PDF_ANDROID_DEVICE_ACCEPTANCE_2026-11-12.md) and [release verification](releases/v1.0.19.md) describe tests beyond 1,000 and 2,000 pages. Multiple inputs are processed sequentially, not combined into one book. Local saving is still bounded by storage, real output-format limits and decoding/rendering resources; enormous or unusual PDFs can fail. Wi-Fi transfer has a separate **180 MiB per-file** application safety limit. The original PDF is not changed.
 
 ## What happens on different source pages?
 
@@ -56,7 +56,7 @@ You can have a **single EPUB** containing genuinely reflowable text chapters **a
 - [ ] Physical X4 EPUB display, page images, navigation, and transfer.
 - [ ] Memory use, file cleanup, cancel during large document conversion.
 
-For Android implementation history, see [PR #82](https://github.com/toshio2011/mihon-nooir/pull/82) and the [current release notes](releases/v1.0.19.md). Track follow-up layout improvements at the [roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
+For Android implementation history, see [PR #82](https://github.com/toshio2011/mihon-nooir/pull/82) and the [current release notes](releases/v1.0.20.md). Track follow-up layout improvements at the [roadmap](https://github.com/toshio2011/mihon-nooir/issues/8).
 
 ## EPUB version selector
 
