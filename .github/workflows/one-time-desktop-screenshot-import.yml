@@ -1,0 +1,51 @@
+name: One-time desktop guide asset import
+on:
+  push:
+    branches: [docs/one-time-desktop-screenshot-import-20261126]
+    paths: ['.github/workflows/one-time-desktop-screenshot-import.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'toshio2011/mihon-nooir'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Import only verified synthetic QA screenshots into isolated docs branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=7ff39e90bc5f2372ee1ca004e27c24bbb68e2ff7
+          target=desktop/illustrated-guide-20261126
+          cp desktop/DESKTOP_GUIDE.md desktop/SCREENSHOT_COVERAGE.md desktop/screenshot-import.sha256 "$RUNNER_TEMP/"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15003418407/zip" > "$RUNNER_TEMP/screens.zip"
+          git fetch origin "$target"
+          test "$(git rev-parse FETCH_HEAD)" = "$base"
+          git checkout --detach "$base"
+          cp "$RUNNER_TEMP/DESKTOP_GUIDE.md" "$RUNNER_TEMP/SCREENSHOT_COVERAGE.md" desktop/
+          python - <<'PY'
+          import os, pathlib, zipfile, hashlib, re
+          tmp=pathlib.Path(os.environ["RUNNER_TEMP"])
+          out=pathlib.Path("desktop/screenshots/rc-20261125")
+          out.mkdir(parents=True,exist_ok=True)
+          with zipfile.ZipFile(tmp/"screens.zip") as z:
+              for line in (tmp/"screenshot-import.sha256").read_text().splitlines():
+                  digest,name=line.split()
+                  assert re.fullmatch(r"[a-z0-9-]+\.png",name)
+                  data=z.read("scale-1.0/"+name)
+                  assert data.startswith(b"\x89PNG\r\n\x1a\n") and hashlib.sha256(data).hexdigest()==digest
+                  (out/name).write_bytes(data)
+          for url in re.findall(r"\]\((screenshots/[^)]+\.png)\)",pathlib.Path("desktop/DESKTOP_GUIDE.md").read_text()):
+              assert (pathlib.Path("desktop")/url).is_file(),url
+          PY
+          cp "$RUNNER_TEMP/screenshot-import.sha256" desktop/screenshots/rc-20261125/SHA256SUMS
+          git add -- desktop/DESKTOP_GUIDE.md desktop/SCREENSHOT_COVERAGE.md desktop/screenshots/rc-20261125/
+          test -z "$(git diff --cached --name-only | grep -vE '^desktop/(DESKTOP_GUIDE\.md|SCREENSHOT_COVERAGE\.md|screenshots/rc-20261125/([a-z0-9-]+\.png|SHA256SUMS))$' || true)"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Docs: illustrate desktop guide with 19 verified candidate screenshots'
+          git push origin "HEAD:refs/heads/$target"
