@@ -19,7 +19,9 @@ internal object DesktopWebImportScreen {
         val dialog = JDialog(SwingUtilities.getWindowAncestor(parent), "Web pages & novels → EPUB",
             java.awt.Dialog.ModalityType.MODELESS)
         dialog.defaultCloseOperation = WindowConstants.DO_NOTHING_ON_CLOSE
-        val urls = JTextArea(4, 40).apply { name="web-source-urls" }
+        val bounds=java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+        val compact=bounds.height<620 || bounds.width<760
+        val urls = JTextArea(if(compact) 2 else 4, 40).apply { name="web-source-urls" }
         val title = JTextField(30).apply { name="web-book-title" }
         val author = JTextField(25)
         val description = JTextArea(3,40).apply { lineWrap=true; wrapStyleWord=true }
@@ -297,20 +299,48 @@ internal object DesktopWebImportScreen {
             })
             add(Box.createVerticalStrut(10))
         }
-        fun actions(vararg buttons:JButton): JPanel = JPanel(FlowLayout(FlowLayout.LEFT,6,4)).apply{
-            isOpaque=false;buttons.forEach{add(it)}
+        // Use one horizontally scrollable row, never a FlowLayout that wraps
+        // into an unallocated second row on narrow or high-DPI displays.
+        fun actions(vararg buttons:JButton): JScrollPane {
+            val row=JPanel().apply {
+                layout=BoxLayout(this,BoxLayout.X_AXIS)
+                isOpaque=false
+                buttons.forEachIndexed{index,button->
+                    if(index>0)add(Box.createHorizontalStrut(5))
+                    add(button)
+                }
+                border=BorderFactory.createEmptyBorder(3,0,3,0)
+            }
+            return JScrollPane(row,ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED).apply{
+                border=BorderFactory.createEmptyBorder()
+                isOpaque=false
+                viewport.isOpaque=false
+                horizontalScrollBar.unitIncrement=24
+                // Reserve scrollbar height even before layout decides whether it is needed.
+                val h=row.preferredSize.height+horizontalScrollBar.preferredSize.height
+                preferredSize=Dimension(1,h)
+                minimumSize=Dimension(1,h)
+                maximumSize=Dimension(Int.MAX_VALUE,h)
+            }
         }
         val chapters=JPanel(BorderLayout(0,8)).apply{
-            border=BorderFactory.createEmptyBorder(12,14,12,14)
-            add(JPanel(BorderLayout(0,5)).apply{
+            border=BorderFactory.createEmptyBorder(if(compact)4 else 10,10,4,10)
+            add(JPanel(BorderLayout(0,2)).apply{
                 isOpaque=false
-                add(JLabel("Story URL or one public chapter URL per line").apply{
+                add(JLabel(if(compact) "Public story or chapter URLs" else "Story URL or one public chapter URL per line").apply{
                     foreground=DesktopVisualTheme.muted
                 },BorderLayout.NORTH)
-                add(JScrollPane(urls),BorderLayout.CENTER)
+                add(JScrollPane(urls).apply{
+                    preferredSize=Dimension(1,if(compact)38 else 76)
+                },BorderLayout.CENTER)
                 add(actions(analyze,manual),BorderLayout.SOUTH)
             },BorderLayout.NORTH)
-            add(JScrollPane(table),BorderLayout.CENTER)
+            add(JScrollPane(table).apply{
+                name="web-chapter-viewport"
+                minimumSize=Dimension(120,85)
+                viewport.background=DesktopVisualTheme.surface
+            },BorderLayout.CENTER)
             add(actions(preview,up,down,reverse,all,none),BorderLayout.SOUTH)
         }
         val book=section().apply{
@@ -321,7 +351,7 @@ internal object DesktopWebImportScreen {
             field("Public cover URL (blank = auto detect)",cover)
             add(JPanel(BorderLayout(8,0)).apply{
                 isOpaque=false
-                add(actions(localPick,clearCover),BorderLayout.WEST)
+                add(actions(localPick,clearCover).apply{preferredSize=Dimension(330,preferredSize.height)},BorderLayout.WEST)
                 add(localLabel,BorderLayout.CENTER)
             })
             add(collage)
@@ -343,23 +373,28 @@ internal object DesktopWebImportScreen {
         tabs.addTab("3  Export settings",JScrollPane(settings))
         controls.filterIsInstance<JButton>().forEach{DesktopVisualTheme.action(it,it===export||it===analyze)}
         DesktopVisualTheme.action(cancelExport)
+        if(compact) (controls.filterIsInstance<JButton>()+cancelExport).forEach{
+            it.border=BorderFactory.createEmptyBorder(5,8,5,8)
+        }
         dialog.contentPane.background=DesktopVisualTheme.background
         dialog.add(JPanel(BorderLayout(0,5)).apply{
-            border=BorderFactory.createEmptyBorder(10,12,6,12)
-            add(JLabel("Web → EPUB").apply{
+            border=BorderFactory.createEmptyBorder(if(compact)2 else 10,10,2,10)
+            if(!compact)add(JLabel("Web → EPUB").apply{
                 font=java.awt.Font("SansSerif",java.awt.Font.BOLD,20)
                 foreground=DesktopVisualTheme.foreground
             },BorderLayout.NORTH)
-            add(actions(saveProject,openProject,deleteProject,checkUpdates),BorderLayout.SOUTH)
+            add(actions(saveProject,openProject,deleteProject,checkUpdates),BorderLayout.CENTER)
         },BorderLayout.NORTH)
         dialog.add(tabs,BorderLayout.CENTER)
         dialog.add(JPanel(BorderLayout()).apply{
-            border=BorderFactory.createEmptyBorder(5,12,8,12)
-            add(status,BorderLayout.CENTER)
-            add(JPanel(FlowLayout(FlowLayout.RIGHT)).apply{add(export);add(cancelExport);add(close)},BorderLayout.SOUTH)
+            border=BorderFactory.createEmptyBorder(2,10,3,10)
+            add(status,BorderLayout.NORTH)
+            add(actions(export,cancelExport,close),BorderLayout.CENTER)
         },BorderLayout.SOUTH)
-        val bounds=java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
-        dialog.setSize(minOf(900,bounds.width-24),minOf(760,bounds.height-24))
-        dialog.setLocationRelativeTo(parent);dialog.isVisible=true
+        dialog.setSize(minOf(900,bounds.width-12),minOf(760,bounds.height-12))
+        dialog.setLocationRelativeTo(parent)
+        dialog.setLocation(dialog.x.coerceIn(bounds.x,bounds.x+bounds.width-dialog.width),
+            dialog.y.coerceIn(bounds.y,bounds.y+bounds.height-dialog.height))
+        dialog.isVisible=true
     }
 }

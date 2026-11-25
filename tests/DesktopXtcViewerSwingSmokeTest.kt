@@ -455,6 +455,15 @@ private fun verifyWebEditor(main: JFrame) {
         check(onSwingThread { !descendants(dialog).filterIsInstance<JButton>().single{it.text=="Cancel export"}.isEnabled })
         val tabs=onSwingThread { descendants(dialog).filterIsInstance<JTabbedPane>().single{it.name=="web-editor-tabs"} }
         check(onSwingThread { tabs.tabCount==3 && tabs.selectedIndex==0 })
+        val chapterScroll=onSwingThread { descendants(dialog).filterIsInstance<JScrollPane>().single{it.name=="web-chapter-viewport"} }
+        awaitUi("chapter viewport has room for at least two rows at current DPI") {
+            table.isShowing && chapterScroll.viewport.extentSize.height >= table.rowHeight*2 &&
+                chapterScroll.viewport.extentSize.width >= 150
+        }
+        for(label in listOf("Select none","Preview selected chapter","Export selected to EPUB")){
+            val button=onSwingThread{descendants(dialog).filterIsInstance<JButton>().single{it.text==label}}
+            verifyToolbarReachable(button)
+        }
         captureWindow(dialog,"web-chapter-editor")
         onSwingThread { tabs.selectedIndex=1 }
         val bookTitle=onSwingThread { descendants(dialog).filterIsInstance<JTextField>().single{it.name=="web-book-title"} }
