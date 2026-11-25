@@ -482,3 +482,81 @@ jobs:
           $suwayomiJar = Join-Path $env:RUNNER_TEMP 'Suwayomi-Server-v2.4.2366.jar'
           & $runtime '-Djava.awt.headless=true' '-cp' $appJar 'dev.nooir.desktop.suwayomi.RealSuwayomiServerSmoke' $suwayomiJar
           if ($LASTEXITCODE -ne 0) { throw "Real Suwayomi integration failed: $LASTEXITCODE" }
+
+  native-desktop-matrix:
+    name: Native desktop (${{ matrix.platform }}-${{ matrix.arch }})
+    needs: build-jvm
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux
+            arch: x64
+            java_arch: x64
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            java_arch: aarch64
+          - runner: macos-15-intel
+            platform: macos
+            arch: x64
+            java_arch: x64
+          - runner: macos-15
+            platform: macos
+            arch: arm64
+            java_arch: aarch64
+          - runner: windows-11-arm
+            platform: windows
+            arch: arm64
+            java_arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          architecture: ${{ matrix.java_arch }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-desktop-preview-jvm
+          path: package/input
+      - uses: actions/download-artifact@v4
+        with:
+          name: mihonnooir-windows-gui-qa-test
+          path: package/qa
+      - name: Install Linux virtual display prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgtk-3-0t64 libxtst6 libxi6 libxrender1 fonts-dejavu-core
+      - name: Build and exercise native portable desktop preview
+        shell: bash
+        run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+      - name: Download exact pinned real Suwayomi server
+        shell: bash
+        run: |
+          curl --fail --location --retry 2 --max-time 360 \
+            https://github.com/Suwayomi/Suwayomi-Server/releases/download/v2.4.2366/Suwayomi-Server-v2.4.2366.jar \
+            --output package/Suwayomi-Server-v2.4.2366.jar
+      - name: Verify real server integration from bundled runtime
+        shell: bash
+        run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --server-only
+      - name: Upload platform-specific test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-desktop-qa-${{ matrix.platform }}-${{ matrix.arch }}
+          path: package/native-qa/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain verified unsigned native portable preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-desktop-preview-${{ matrix.platform }}-${{ matrix.arch }}
+          path: package/native-dist/
+          if-no-files-found: error
+          retention-days: 14

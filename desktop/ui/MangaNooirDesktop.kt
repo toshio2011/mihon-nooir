@@ -147,6 +147,8 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
     private val universalConverter = JButton("Universal Book Converter")
     private val browseLayout = JComboBox(arrayOf("Cover grid", "Detailed list"))
     private val checkWindowsUpdates = JButton("Windows updates")
+    private val windowsX64 = System.getProperty("os.name").startsWith("Windows", true) &&
+        System.getProperty("os.arch").lowercase() in setOf("amd64", "x86_64")
     private val manageExtensions = JButton("Manage extensions…")
     private val openSuwayomiUi = JButton("Open full Suwayomi WebUI")
     private val startServer = JButton("Start local Suwayomi")
@@ -235,7 +237,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
             nav(manageExtensions)
             nav(offlineJobs)
             nav(remoteJobs)
-            nav(checkWindowsUpdates)
+            if (windowsX64) nav(checkWindowsUpdates)
         }
         add(JScrollPane(navigation,
             JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
@@ -449,7 +451,7 @@ private class DesktopWindow : JFrame("MihonNooir — Windows development") {
                 3 -> DesktopXtcBinaryPreview.open(this)
             }
         }
-        checkWindowsUpdates.addActionListener { DesktopWindowsUpdateScreen.open(this) }
+        checkWindowsUpdates.addActionListener { if (windowsX64) DesktopWindowsUpdateScreen.open(this) }
         setPaging()
         stopServer.isEnabled = false
         // Inputs keep native focus and selection behavior; the navigation and cover cards are themed.
