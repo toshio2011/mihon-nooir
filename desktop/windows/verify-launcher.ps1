@@ -60,7 +60,7 @@ try {
     # Only inspect the freshly started process and its direct children.
     $ownedIds = @([int]$process.Id)
     $ownedIds += @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($process.Id)" | ForEach-Object { [int]$_.ProcessId })
-    $handle = [NooirWindowProbe]::Find([int[]]$ownedIds, 'MihonNooir — Windows development')
+    $handle = [NooirWindowProbe]::Find([int[]]$ownedIds, 'MihonNooir — Desktop preview')
     if ($handle -ne [IntPtr]::Zero) { break }
     Start-Sleep -Milliseconds 500
   }

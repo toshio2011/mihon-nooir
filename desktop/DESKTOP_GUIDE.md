@@ -44,3 +44,7 @@ Wattpad public metadata may supply story-level cover and synopsis. No login sess
 The preview retains data in the existing ~/.mihonnooir folder by default. MIHONNOOIR_DATA_DIR can point to an absolute dedicated folder. Back it up before upgrading or downgrading. Newer conversion queue records may not be readable by old previews. Projects store local cover paths, not copies. Do not remove old data merely to install a new version.
 
 The Windows x64-only update control is not offered on incompatible platforms. No automatic desktop release or update is performed from these development builds. For compatible readers, use the existing Wi-Fi transfer tool or transfer the locally saved output by USB/SD card as supported by your hardware.
+
+## Preview acceptance notes
+
+Native GUI validation is now required for both macOS architectures as well as Windows and Linux. The new acceptance checks verify user data from a separate portable app copy and installer payload; actual Linux package-manager upgrade and macOS Gatekeeper/notarization tests remain separate. Windows x64 MSI acceptance uses a synthetic predecessor rather than an earlier public version. These are development gates, not a claim that the newest installer candidates have already passed.

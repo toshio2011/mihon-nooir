@@ -58,6 +58,35 @@ def sha256(path):
             digest.update(block)
     return digest.hexdigest()
 
+def state_snapshot(root):
+    # Verify the actual user files rather than just a sentinel.
+    paths = ("local-library-v1.txt", "reader-bookmarks-v1.tsv",
+             "conversion-queue-v1.tsv", "conversion-settings-v1.txt",
+             "web-projects-v1.json", "exports/original-comic.xtc",
+             "original-comic/001.png", "original-comic/002.png")
+    return {name: sha256(root / name) for name in paths}
+
+def state_test(java, jar, data, mode):
+    cp = os.pathsep.join(str(x) for x in (package / "qa/viewer-smoke.jar",
+        jar, jar.parent / "lib/*"))
+    env = dict(os.environ, MIHONNOOIR_DATA_DIR=str(data))
+    run(java, "-Djava.awt.headless=true", "-cp", cp,
+        "dev.nooir.desktop.ui.DesktopInstalledDataTestKt", mode, env=env, timeout=300)
+
+def verify_replacement(installed_app, installed_runtime, extracted_jar):
+    # Disposable user root, not the runner's normal app data. Seed via the
+    # native preview, then reopen via a separately extracted/copied app.
+    # This validates portable replacement, not OS package-manager upgrades.
+    with tempfile.TemporaryDirectory(prefix="nooir-replacement-") as folder:
+        data = pathlib.Path(folder) / "user-data"
+        data.mkdir()
+        (data / "nooir-installed-qa.marker").write_text("disposable installer acceptance\n")
+        state_test(runtime, app_jar, data, "seed")
+        before = state_snapshot(data)
+        state_test(installed_runtime, extracted_jar, data, "verify")
+        assert state_snapshot(data) == before, "User state changed during replacement"
+        print("PASS: library, bookmarks, queue, settings, original/export files and web project retained across app replacement")
+
 def verify_installer_runtime(root):
     relative = app_jar.relative_to(app)
     # Linux packages may place the app under /opt or another package root.
@@ -80,6 +109,7 @@ def verify_installer_runtime(root):
         env = dict(os.environ, MIHONNOOIR_DATA_DIR=isolated)
         run(installed_runtime, "-Djava.awt.headless=true", "-cp", cp,
             "dev.nooir.desktop.ui.DesktopWebEpubTestKt", env=env, timeout=300)
+    verify_replacement(installed_app, installed_runtime, extracted_jar)
 
 def installers():
     assert app.is_dir() and runtime.is_file() and app_jar.is_file()
@@ -171,8 +201,17 @@ else:
                "-cp", cp, "dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt"]
         if args.platform == "linux":
             run("xvfb-run", "-a", "-s", "-screen 0 1366x768x24", *gui, env=env, timeout=600)
-        elif args.platform == "windows":
+        else:
+            # Native macOS runners must actually provide a usable display.
+            # A headless or broken GUI is a release-blocking failure, not a skip.
             run(*gui, env=env, timeout=600)
+    # Verify a separately copied portable app (including native executable permissions).
+    with tempfile.TemporaryDirectory(prefix="nooir-portable-copy-") as folder:
+        copied = pathlib.Path(folder) / app.name
+        shutil.copytree(app, copied, symlinks=True)
+        copied_launcher = copied / launcher.relative_to(app)
+        assert copied_launcher.is_file() and (args.platform == "windows" or os.access(copied_launcher, os.X_OK))
+        verify_replacement(copied, copied / runtime.relative_to(app), copied / app_jar.relative_to(app))
     # tar preserves Unix permissions and symlinks.
     dist = package / "native-dist"
     dist.mkdir()
@@ -182,5 +221,5 @@ else:
     (dist / (archive.name + ".sha256")).write_text(sha256(archive) + "  " + archive.name + "\n", encoding="ascii")
     (qa / "summary.txt").write_text("Native runtime: " + actual_arch + "\n"
         "Portable package and packaged conversion tests passed.\n"
-        + ("GUI acceptance deferred on macOS.\n" if args.platform == "macos" else "Swing GUI acceptance passed.\n"))
+        + "Swing GUI acceptance passed.\n")
     print("PASS:", archive.name)

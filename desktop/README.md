@@ -359,3 +359,7 @@ Web export now has cooperative cancellation checked at shared-engine progress bo
 The next candidate adds digest verification for Jsoup and JSON against bytes observed in the successful CI runs, plus Linux DEB/RPM and macOS DMG generation and extracted/mounted payload testing. These new installer candidates require fresh CI. Windows ARM64 retains a portable ZIP until a native installer is validated. Installer payload checks are not installation/upgrade tests, and unsigned macOS packages are not notarized. No public release is authorized by this checkpoint.
 
 See [Desktop user guide](DESKTOP_GUIDE.md) for the current development workflow.
+
+### Native desktop acceptance and user-state preservation
+
+All matrix targets now require real display-capable Swing acceptance, including both macOS architectures (fresh CI required; no headless fallback or skip). Each portable app is separately copied and its packaged runtime must reopen an isolated user-data fixture with identical file hashes. Extracted/mounted DEB, RPM and DMG payloads must do the same. Windows x64's existing synthetic MSI upgrade/uninstall/reinstall also now includes saved web projects. These checks do not establish OS package-manager upgrades on Linux/macOS or native Windows ARM MSI support. No user data is used and no public release is made.
