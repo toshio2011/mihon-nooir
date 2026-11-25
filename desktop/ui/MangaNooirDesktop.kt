@@ -150,6 +150,7 @@ private class DesktopWindow : JFrame("MihonNooir — Desktop preview") {
     private val windowsX64 = System.getProperty("os.name").startsWith("Windows", true) &&
         System.getProperty("os.arch").lowercase() in setOf("amd64", "x86_64")
     private val manageExtensions = JButton("Manage extensions…")
+    private val backupRestore = JButton("Backup & restore…")
     private val openSuwayomiUi = JButton("Open full Suwayomi WebUI")
     private val startServer = JButton("Start local Suwayomi")
     private val getServer = JButton("Download & start Suwayomi")
@@ -235,6 +236,7 @@ private class DesktopWindow : JFrame("MihonNooir — Desktop preview") {
             nav(sendReader)
             add(DesktopVisualTheme.section("MANAGE"))
             nav(manageExtensions)
+            nav(backupRestore)
             nav(offlineJobs)
             nav(remoteJobs)
             if (windowsX64) nav(checkWindowsUpdates)
@@ -364,7 +366,7 @@ private class DesktopWindow : JFrame("MihonNooir — Desktop preview") {
             next, previous, selected, onlyDownloaded, clear, refresh, readOnline, export,
             saveOffline, queueOffline, offlineJobs, queueRemote, queueAllRemote, remoteJobs,
             conversionSettings, localImport, localReader, localLibrary, conversionJobs, documentImport, universalConverter, inspectBinary, sendReader, libraryToggle,
-            startServer, stopServer, getServer, checkWindowsUpdates, manageExtensions, openSuwayomiUi)
+            startServer, stopServer, getServer, checkWindowsUpdates, manageExtensions, openSuwayomiUi, backupRestore)
         inspectBinary.addActionListener { DesktopXtcBinaryPreview.open(this) }
         conversionSettings.addActionListener {
             DesktopConversionDialog.show(this, options)?.let { proposed ->
@@ -381,6 +383,7 @@ private class DesktopWindow : JFrame("MihonNooir — Desktop preview") {
         }
         connect.addActionListener { loadSources() }
         manageExtensions.addActionListener { openExtensionSetup() }
+        backupRestore.addActionListener { DesktopBackupPreview.show(this) { openSuwayomiUi.doClick() } }
         openSuwayomiUi.addActionListener {
             try {
                 val target = DesktopUiModel.extensionSetupUri(endpoint.text)
