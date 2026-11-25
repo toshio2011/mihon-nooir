@@ -225,7 +225,7 @@ class SuwayomiClient(
         page: Int = 1,
         searchTerm: String? = null,
     ): SuwayomiBrowsePage {
-        require(sourceId != 0L) { "Invalid source ID" }
+        // Source IDs are signed LongString values; 0 is the built-in Local source.
         require(page in 1..10_000) { "Invalid source page" }
         val queryPart = if (mode == SuwayomiBrowseMode.SEARCH) {
             val term = searchTerm?.trim() ?: ""

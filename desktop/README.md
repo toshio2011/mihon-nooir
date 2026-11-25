@@ -1,6 +1,6 @@
 # MihonNooir for Windows — integrated development preview
 
-> **Development track, not a public release.** Android v1.0.19 stays stable. This branch consolidates the Windows preview with the exact released v1.0.19 shared panel geometry and settings; no Android production source or firmware changes. Preview version: 0.1.0. Fresh integrated CI and physical PC/reader acceptance are required.
+> **Development track, not a public release.** Android v1.0.20 stays stable. This branch consolidates the Windows preview with the exact released v1.0.20 shared panel geometry and settings; no Android production source or firmware changes. Preview version: 0.1.0. Integrated CI run 45538883269 passed JVM, native Windows packaging, MSI state retention, GUI and real empty-server checks. New Local source and full page-contract tests require fresh CI; physical PC/reader acceptance is still required.
 
 ## Set up Mihon-compatible extensions (optional)
 

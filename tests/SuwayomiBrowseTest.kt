@@ -43,6 +43,10 @@ fun main() {
             "mangas(condition: { inLibrary: true }, first: 2, offset: 2)" in query -> {
                 """{"data":{"mangas":{"totalCount":3,"nodes":[{"id":103,"title":"Third","author":null,"description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
             }
+            "fetchSourceManga" in query && "source: \"0\"" in query -> {
+                check("type: POPULAR" in query && "page: 1" in query)
+                """{"data":{"fetchSourceManga":{"hasNextPage":false,"mangas":[{"id":104,"title":"Synthetic Local Book","author":null,"description":null,"thumbnailUrl":null,"inLibrary":false}]}}}"""
+            }
             "fetchSourceManga" in query && "type: POPULAR" in query -> {
                 check("source: \"$SOURCE_ID\"" in query && "page: 1" in query)
                 """{"data":{"fetchSourceManga":{"hasNextPage":true,"mangas":[{"id":101,"title":"One Piece","author":"Oda","description":"Pirates","thumbnailUrl":"/api/v1/manga/101/thumbnail","inLibrary":false},{"id":102,"title":"Manga Two","author":null,"description":null,"thumbnailUrl":null,"inLibrary":true}]}}}"""
@@ -108,12 +112,17 @@ fun main() {
         check(runCatching { client.setMangaInLibrary(0, true) }.isFailure)
         check(runCatching { client.refreshManga(0) }.isFailure)
         check(runCatching { client.refreshManga(101, false, false) }.isFailure)
+        val local = client.browse(0L, SuwayomiBrowseMode.POPULAR)
+        check(local.sourceId == 0L && local.mangas.single().title == "Synthetic Local Book")
+        val localCli = outputOf {
+            SuwayomiBrowseCli.main(arrayOf("--base-url", base, "--mode", "popular", "--source-id", "0"))
+        }
+        check(localCli.contains("Synthetic Local Book"))
         val beforeInvalid = hits.get()
         check(runCatching { client.sources(-1, 200) }.isFailure)
         check(runCatching { client.sources(0, 201) }.isFailure)
         check(runCatching { client.library(-1, 100) }.isFailure)
         check(runCatching { client.library(0, 201) }.isFailure)
-        check(runCatching { client.browse(0, SuwayomiBrowseMode.POPULAR) }.isFailure)
         check(runCatching { client.browse(SOURCE_ID, SuwayomiBrowseMode.SEARCH, 1, " ") }.isFailure)
         check(runCatching { client.browse(SOURCE_ID, SuwayomiBrowseMode.SEARCH, 1, "x\ny") }.isFailure)
         check(runCatching { client.browse(SOURCE_ID, SuwayomiBrowseMode.LATEST, 1, "query") }.isFailure)
