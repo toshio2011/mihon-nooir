@@ -334,6 +334,7 @@ private fun verifyOfflineLibrary(folder: File) {
         verifyExtensionSetup(main)
         verifyToolbarReachable(findButton(main, "Open full Suwayomi WebUI"))
         verifyToolbarReachable(findButton(main, "Universal Book Converter"))
+        verifyWebEditor(main)
         if (tabs != null) onSwingThread { tabs.selectedIndex = 1 }
         verifyToolbarReachable(findButton(main, "Search"))
         if (tabs != null) onSwingThread { tabs.selectedIndex = 2 }
@@ -418,6 +419,43 @@ private fun verifyOfflineLibrary(folder: File) {
 
 /** Open the actual production main settings and verify saved/canceled edits. */
 /** Exercise the real toolbar and modal without launching a browser or installing an extension. */
+/** Real editor controls, entirely synthetic/manual links; no network. */
+private fun verifyWebEditor(main: JFrame) {
+    onSwingThread { DesktopWebImportScreen.open(main) }
+    val dialog=onSwingThread {
+        Window.getWindows().filterIsInstance<JDialog>().single { it.isShowing && it.title=="Web pages & novels → EPUB" }
+    }
+    try {
+        val input=onSwingThread { descendants(dialog).filterIsInstance<javax.swing.JTextArea>().single { it.name=="web-source-urls" } }
+        val table=onSwingThread { descendants(dialog).filterIsInstance<javax.swing.JTable>().single { it.name=="web-chapter-table" } }
+        fun click(title:String)=onSwingThread {
+            descendants(dialog).filterIsInstance<JButton>().single{it.text==title}.doClick()
+        }
+        onSwingThread {
+            check(GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.contains(dialog.bounds))
+            input.text="https://example.org/one\nhttps://example.org/two\nhttps://example.org/three"
+        }
+        click("Use pasted chapter/page URLs")
+        onSwingThread {
+            check(table.rowCount==3)
+            table.setValueAt("First original chapter",0,1)
+            table.setValueAt(false,1,0)
+            table.setRowSelectionInterval(2,2)
+        }
+        click("Move up")
+        check(onSwingThread { table.getValueAt(1,2)=="https://example.org/three" && table.getValueAt(2,0)==false })
+        click("Reverse order")
+        check(onSwingThread { table.getValueAt(0,2)=="https://example.org/two" && table.getValueAt(2,1)=="First original chapter" })
+        click("Select none")
+        check(onSwingThread { (0 until table.rowCount).none{table.getValueAt(it,0)==true} })
+        click("Select all")
+        check(onSwingThread { (0 until table.rowCount).all{table.getValueAt(it,0)==true} })
+        check(onSwingThread { !descendants(dialog).filterIsInstance<JButton>().single{it.text=="Cancel export"}.isEnabled })
+        captureWindow(dialog,"web-chapter-editor")
+        println("PASS: native web editor manual links, editable titles, selection, reorder and idle cancellation controls")
+    } finally { onSwingThread { dialog.dispose() } }
+}
+
 private fun verifyExtensionSetup(main: JFrame) {
     val button = findButton(main, "Manage extensions…")
     verifyToolbarReachable(button)

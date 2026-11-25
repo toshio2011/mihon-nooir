@@ -347,3 +347,7 @@ Open Universal Book Converter → Web → EPUB. Analyze one public story URL or 
 ### Saved web projects and new chapters
 
 The desktop web editor saves a local project under the existing app data root, keeping full chapter order and included/excluded flags, known public inventory, metadata, cover reference, format, image and CSS options. Open or delete settings explicitly; exported books and original cover files are untouched. Check new chapters reuses the released Android chapter identity logic; confirmed additions are appended and saved only when requested. The 24-project/1 MB bounded library uses a file lock and atomic replacement. Local cover references are paths, not copied images; moving the original cover requires selecting it again. New exports always require a new filename. Pending CI and interactive verification.
+
+### Web export safety and GUI acceptance
+
+Web export now has cooperative cancellation checked at shared-engine progress boundaries and a synchronized final publication point. A canceled or failed export removes its staging file and never publishes partial output. It does not promise immediate interruption of a currently running HTTP/image operation; controls remain busy until the operation unwinds. A late filename conflict preserves the existing file. Native Swing smoke now exercises the real manual chapter editor without network and captures `web-chapter-editor.png`. CI and live-site acceptance remain pending.
