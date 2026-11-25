@@ -74,6 +74,35 @@ object RealSuwayomiServerSmoke {
             }
             check(!api.setMangaInLibrary(card.id, false))
             check(api.library(0, 100).mangas.none { it.id == card.id })
+            // Only synthetic local manga in this disposable server root. Exercise the actual
+            // packaged client's GraphQL multipart, generated download URL and status polling.
+            val backups=DesktopBackupTransport(endpoint)
+            val empty=root.resolve("empty-library.tachibk").toFile()
+            backups.export(empty,includeExtensionStores=true)
+            check(empty.isFile)
+            check(DesktopBackupInspector.inspect(empty.inputStream(),allowEmpty=true).favorites==0)
+            check(api.setMangaInLibrary(card.id,true))
+            val portable=root.resolve("portable-library.tachibk").toFile()
+            backups.export(portable,includeExtensionStores=true)
+            val before=DesktopBackupInspector.inspect(portable)
+            check(before.favorites==1 && before.chapters==2 && 0L in before.referencedSourceIds)
+            check(backups.validate(portable).missingSources.none{it.id==0L})
+            check(!api.setMangaInLibrary(card.id,false))
+            val recovery=root.resolve("before-restore.tachibk").toFile()
+            val restored=backups.beginRestore(portable,recovery)
+            check(backups.await(restored)=="SUCCESS") {"Actual backup restore did not report success"}
+            check(recovery.isFile && DesktopBackupInspector.inspect(recovery.inputStream(),allowEmpty=true).favorites==0)
+            check(api.library(0,100).mangas.single().title==TITLE)
+            val after=root.resolve("after-restore.tachibk").toFile()
+            backups.export(after,includeExtensionStores=true)
+            val roundTrip=DesktopBackupInspector.inspect(after)
+            check(roundTrip.favorites==before.favorites && roundTrip.chapters==before.chapters)
+            val secondRecovery=root.resolve("before-duplicate-restore.tachibk").toFile()
+            check(backups.await(backups.beginRestore(portable,secondRecovery))=="SUCCESS")
+            check(api.library(0,100).mangas.count{it.title==TITLE}==1)
+            check(runCatching{backups.export(portable)}.isFailure)
+            println("PASS: actual pinned Suwayomi native empty export, portable library export, validation, recovery snapshot, restore and duplicate import")
+
             println("PASS: real pinned Suwayomi Local source search, chapter discovery, library membership and four ordered page decodes")
             println("No third-party extensions, external manga, user credentials or normal data directory used.")
         } finally {
