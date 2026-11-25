@@ -90,7 +90,7 @@ jobs:
             -DincludeScope=runtime -DoutputDirectory="$PWD/build/desktop/lib"
           test -s build/desktop/lib/jsoup-1.21.2.jar
           test -s build/desktop/lib/json-20250517.jar
-          sha256sum build/desktop/lib/jsoup-1.21.2.jar build/desktop/lib/json-20250517.jar
+          sha256sum -c desktop/web-runtime.sha256
       - name: Compile portable desktop UI and shared Android conversion core
         shell: bash
         run: |
@@ -542,7 +542,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb libgtk-3-0t64 libxtst6 libxi6 libxrender1 fonts-dejavu-core
+          sudo apt-get install -y xvfb libgtk-3-0t64 libxtst6 libxi6 libxrender1 fonts-dejavu-core fakeroot rpm cpio
       - name: Build and exercise native portable desktop preview
         shell: bash
         run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
@@ -555,6 +555,10 @@ jobs:
       - name: Verify real server integration from bundled runtime
         shell: bash
         run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --server-only
+      - name: Build and inspect native installer candidates
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 desktop/verify_native_package.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --installers-only
       - name: Upload platform-specific test evidence
         if: always()
         uses: actions/upload-artifact@v4

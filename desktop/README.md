@@ -351,3 +351,11 @@ The desktop web editor saves a local project under the existing app data root, k
 ### Web export safety and GUI acceptance
 
 Web export now has cooperative cancellation checked at shared-engine progress boundaries and a synchronized final publication point. A canceled or failed export removes its staging file and never publishes partial output. It does not promise immediate interruption of a currently running HTTP/image operation; controls remain busy until the operation unwinds. A late filename conflict preserves the existing file. Native Swing smoke now exercises the real manual chapter editor without network and captures `web-chapter-editor.png`. CI and live-site acceptance remain pending.
+
+## Integrated desktop preview checkpoint — 25 November 2026
+
+[CI run 45563098681](https://github.com/toshio2011/mihon-nooir/actions/runs/45563098681), commit `14db64e9083f2c1b2c44e62adf116d3a8d973e8e`, passed all eight jobs, covering native Windows x64/ARM64, Linux x64/ARM64 and macOS x64/ARM64. Packaged document and web conversion tests and the real pinned Suwayomi fixture passed. Windows and Linux additionally exercised the Swing GUI; macOS interactive GUI is still a release gate. The web editor's synthetic extraction, metadata, cover, synopsis, selection, persistence and cancellation regression tests passed; this is not evidence of live Wattpad compatibility.
+
+The next candidate adds digest verification for Jsoup and JSON against bytes observed in the successful CI runs, plus Linux DEB/RPM and macOS DMG generation and extracted/mounted payload testing. These new installer candidates require fresh CI. Windows ARM64 retains a portable ZIP until a native installer is validated. Installer payload checks are not installation/upgrade tests, and unsigned macOS packages are not notarized. No public release is authorized by this checkpoint.
+
+See [Desktop user guide](DESKTOP_GUIDE.md) for the current development workflow.
