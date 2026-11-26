@@ -14,6 +14,8 @@
 
 [View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
 
+**Universal Book Converter:** [Visual walkthrough and actual Android EPUB output](UNIVERSAL_CONVERTER_VISUAL_GUIDE.md) — local EPUB, PDF, web novels, combined chapters and saved-file inspection.
+
 ## Visual walkthroughs by task
 
 Choose your platform and task. **Captured** means relevant real screens exist; **partial** means the complete journey or output is not pictured. Desktop remains a development preview, and its images are from Windows QA rather than every supported operating system.
