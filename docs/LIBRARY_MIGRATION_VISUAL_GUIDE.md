@@ -74,6 +74,36 @@ Desktop preview **Conversion jobs** provides **Add local books**, **Run / recove
 
 Transfer, queue, successful restore, extension approval and physical Android migration screens are pending. These steps are text instructions based on existing guides and the inspected candidate implementation, not newly captured UI evidence.
 
+## Final acceptance checkpoint — 26 November 2026
+
+Use the exact unsigned desktop candidate `c2385938f9877869a1ff6afb465dbc73c3e7fd52` from [run 45751778633](https://github.com/toshio2011/mihon-nooir/actions/runs/45751778633). All nine desktop jobs passed. The Intel Mac and Windows real-server logs explicitly report the synthetic Android-format backup validation, recovery backup, restore/export, missing signed source, repeated import, explicit page write-back and rewind refusal. The previously intermittent Intel Mac failure remains a reliability follow-up, not a proven root-cause fix.
+
+| Test package | CI artifact |
+|---|---|
+| Windows x64 (unsigned preview) | [15086591798](https://github.com/toshio2011/mihon-nooir/actions/runs/45751778633/artifacts/15086591798) |
+| Windows ARM64 | [15085709927](https://github.com/toshio2011/mihon-nooir/actions/runs/45751778633/artifacts/15085709927) |
+| macOS Intel | [15086217450](https://github.com/toshio2011/mihon-nooir/actions/runs/45751778633/artifacts/15086217450) |
+| macOS Apple Silicon | [15086278083](https://github.com/toshio2011/mihon-nooir/actions/runs/45751778633/artifacts/15086278083) |
+| Linux x64 | [15086487826](https://github.com/toshio2011/mihon-nooir/actions/runs/45751778633/artifacts/15086487826) |
+| Linux ARM64 | [15085634683](https://github.com/toshio2011/mihon-nooir/actions/runs/45751778633/artifacts/15085634683) |
+
+These artifacts are temporary development downloads, may require GitHub login, and are not signed public releases. Verify the package identity and checksums before execution. Do not bypass OS security warnings. Test with an isolated desktop data directory and an independently backed-up Android test profile. Do not restore a test backup into a primary library.
+
+### Physical acceptance record (all pending unless independently verified)
+
+| Case | Required result |
+|---|---|
+| Launch portable candidate on a real computer | Opens offline, navigation reachable, no existing profile altered |
+| Authorized local CBZ/EPUB/PDF | Read, convert and inspect saved output; source checksums unchanged |
+| Trusted compatible extension | Explicit repository/package approval; source ID and version match; browse, read and export an authorized chapter |
+| Android → desktop | Record original category order/membership, read flags, bookmarks, exact page positions and history; restore with a separate recovery copy and compare |
+| Repeat desktop restore | No duplicate titles/categories; preserve expected state; record exact server ticket/status and logs on failure; no automatic retry |
+| Desktop → Android | Explicitly save server progress, create portable backup, import on a test phone/profile and compare exact records, then reopen |
+| XTEink transfer | Send a uniquely named small book over a trusted LAN, verify acknowledgement, size and actual reader opens/pages; check duplicate refusal without overwriting |
+| Native install/update | Verify profile retention, architecture, OS trust/signing and platform-specific installation/upgrade behavior |
+
+Record candidate SHA, package/OS/architecture, Android app version, firmware/device, actual and expected results, and any failure details. Use synthetic or authorized material; keep personal backups, source credentials, IP addresses and private reading history out of public evidence. Physical Android restore, third-party extension compatibility, physical hardware and production signing remain open. Automated CI success is not a substitute for these checks.
+
 ## Screenshot provenance
 
 The six PNGs in this guide are exact copies of already committed desktop QA screenshots: [source tree at c2385938](https://github.com/toshio2011/mihon-nooir/tree/c2385938f9877869a1ff6afb465dbc73c3e7fd52/desktop/screenshots). No private library, backup, network address or login credentials were added.
