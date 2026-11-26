@@ -132,3 +132,7 @@ java --add-modules jdk.httpserver -jar "$tmp/desktop-backup-transport.jar"
 # Synthetic Android-compatible extension store round trip and exact-ID review.
 kotlinc desktop/suwayomi/{DesktopBackupInspector.kt,DesktopBackupExtensions.kt} tests/DesktopBackupExtensionsTest.kt -include-runtime -d "$tmp/desktop-backup-extensions.jar"
 java -jar "$tmp/desktop-backup-extensions.jar"
+
+# Explicit extension installation contract on a synthetic localhost backend only.
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt} tests/DesktopBackupExtensionRecoveryTest.kt -include-runtime -d "$tmp/desktop-extension-recovery.jar"
+java --add-modules jdk.httpserver -jar "$tmp/desktop-extension-recovery.jar"

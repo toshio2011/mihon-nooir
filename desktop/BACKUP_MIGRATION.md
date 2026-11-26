@@ -19,3 +19,7 @@ The existing packaged real-server smoke now also validates a wholly synthetic An
 ## Stage 5 — explicit reader progress write-back (pending CI)
 
 A successfully displayed online page can be saved explicitly to the local server before export. Local resume remains automatic. Fresh chapter identity/page-count check refuses known rewind or existing server conflict; simultaneous external writers are not atomic. No automatic chapter-read flag or bookmark mutation. Suwayomi may notify configured sync services. Real-server acceptance now checks a saved page and subsequent backup. Android restore and extension installation remain open.
+
+## Stage 6 — reviewed extension recovery (pending CI)
+
+Review missing extensions now offers one-at-a-time installation for unambiguous exact source-ID matches from an already configured repository with matching stored signing identity. Before mutation, the complete approved package/store/key/source mapping is rechecked. After installation, the backend catalog and validation must confirm the requested source IDs. No automatic retry, repository registration, refresh, fuzzy matching, or external extension execution in CI. Matching signing identity is not independent trust; the user must approve the package. Real third-party compatibility and actual Android restore remain open. Missing repositories are handled manually in the local WebUI.

@@ -112,6 +112,28 @@ class DesktopBackupTransport(endpoint: String) {
         val missing=validate(file).missingSources.map{it.id}.toSet()
         return DesktopBackupExtensions.plan(summary,extensionStores(),extensionCatalog(),missing)
     }
+    /** Install only a separately approved cached exact match, never add or refresh a repository.
+     * Suwayomi performs the install; its package execution is a trust decision, not a sandbox.
+     * A lost response may mean a partial install. No retries or automatic rollback.
+     */
+    fun installReviewedExtension(file:File, approved:DesktopBackupExtensions.Recovery):Set<Long> {
+        val fresh=DesktopBackupExtensions.recoverable(extensionPlan(file))
+        require(fresh.any{it==approved}) { "Extension plan changed; review again before installing" }
+        val result=json("mutation NooirRecoverExtension { updateExtension(input: { id: "+
+            MiniJson.quote(approved.pkgName)+", patch: { install: true } }) { extension { pkgName storeIndexUrl isInstalled source { nodes { id } } } } }")
+            .obj("updateExtension").obj("extension")
+        require(result.str("pkgName")==approved.pkgName && result["storeIndexUrl"]==approved.indexUrl &&
+            result["isInstalled"]==true) { "Server did not confirm expected extension; inspect WebUI" }
+        val exposed=result.obj("source").list("nodes").map{it.asObject().long("id")}.toSet()
+        val installed=extensionCatalog().singleOrNull{it.pkgName==approved.pkgName}
+        require(installed!=null && installed.installed && installed.indexUrl==approved.indexUrl) { "Installed package not confirmed" }
+        val store=extensionStores().singleOrNull{it.indexUrl==approved.indexUrl}
+        require(store?.signingKey==approved.signingKey) { "Repository identity changed; inspect WebUI" }
+        val missing=validate(file).missingSources.map{it.id}.toSet()
+        val restored=approved.sourceIds.intersect(exposed).intersect(installed.sources)-missing
+        require(restored==approved.sourceIds) { "Package installed, but some requested sources remain unavailable; inspect WebUI" }
+        return restored
+    }
     fun export(target:File, includeExtensionStores:Boolean=false) {
         require(!target.exists()) { "Choose a new backup filename" }
         val parent=target.absoluteFile.parentFile
