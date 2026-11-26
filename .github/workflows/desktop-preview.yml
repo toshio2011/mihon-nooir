@@ -582,7 +582,7 @@ jobs:
   live-web-acceptance:
     # Explicit, same-repository development test only. Never run on forks,
     # arbitrary input URLs, routine PRs or the public release workflow.
-    if: github.event_name == 'pull_request' && github.head_ref == 'desktop/live-web-acceptance-20261125' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && (github.head_ref == 'desktop/live-web-acceptance-20261125' || github.head_ref == 'desktop/final-acceptance-20261126') && github.event.pull_request.head.repo.full_name == github.repository
     needs: build-jvm
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -9,8 +9,11 @@ This isolated candidate combines backup and extension recovery through PR #143, 
 - Native real-server backup round trip: run 45650969283, all eight passed; chapter flags, page/history record counts, missing signed source ID, recovery copy and repeated import.
 - Explicit desktop server reading-position save: run 45734689592, all eight passed; real pinned server backup includes updated position, known rewind refused.
 - Approved extension recovery: run 45739874517, all eight passed; synthetic localhost installation contract only.
-- Legacy repository index fallback: PR #143; acceptance not yet verified at creation.
+- Legacy repository index fallback: run 45742544467, all eight jobs passed.
 - Documentation: 19 actual embedded desktop screenshots, prior candidate, verified paths. Android PR #140 independently contains 18 actual release-source captures. No final signed Android screenshot claim.
+
+- Integrated candidate run 45743444964: eight desktop jobs passed; live web skipped by branch gate.
+- Backup GUI run 45744401559: eight desktop jobs passed, live web skipped; real GUI inspection and explicit progress save tested at three Windows scales.
 
 ## Release gates
 
@@ -21,3 +24,5 @@ This isolated candidate combines backup and extension recovery through PR #143, 
 5. Review final guides, artifact names/checksums, user-state retention and obtain release approval.
 
 No artifacts published as stable desktop releases. Android v1.0.20 remains untouched.
+
+The final-acceptance branch explicitly opts in to the existing fixed-URL live web acceptance test; the fork and release restrictions remain unchanged. New screenshot assets will be added separately. Physical Android restore, real third-party extension recovery and distribution acceptance remain open.
