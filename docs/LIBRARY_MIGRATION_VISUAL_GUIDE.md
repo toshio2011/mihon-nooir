@@ -104,6 +104,12 @@ These artifacts are temporary development downloads, may require GitHub login, a
 
 Record candidate SHA, package/OS/architecture, Android app version, firmware/device, actual and expected results, and any failure details. Use synthetic or authorized material; keep personal backups, source credentials, IP addresses and private reading history out of public evidence. Physical Android restore, third-party extension compatibility, physical hardware and production signing remain open. Automated CI success is not a substitute for these checks.
 
+## Windows field-test follow-up
+
+A tester reported that extension repository access initially failed with Java SSLHandshakeException / PKIX certification-path errors. A process-scoped Windows certificate-store workaround was suggested; the tester subsequently reported working manual extension setup and successful XTC export on the desktop preview. The exact repository, network conditions, certificate chain and restored-library record equality have not been independently verified. Do not treat this as a universal certificate fix or a completed migration.
+
+Remaining acceptance: diagnose the bundled runtime trust configuration, provide a secure supported solution without disabling TLS verification, and improve reviewed recovery of missing compatible extensions, including modern repository formats. Manual installation remains the available fallback. Keep original backups and verify library records separately.
+
 ## Screenshot provenance
 
 The six PNGs in this guide are exact copies of already committed desktop QA screenshots: [source tree at c2385938](https://github.com/toshio2011/mihon-nooir/tree/c2385938f9877869a1ff6afb465dbc73c3e7fd52/desktop/screenshots). No private library, backup, network address or login credentials were added.
