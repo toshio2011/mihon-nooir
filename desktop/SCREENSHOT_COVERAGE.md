@@ -26,3 +26,5 @@ Android v1.0.20: the separate [Android visual guide PR #140](https://github.com/
 | UPDATES | Version/update flow |
 
 Historical QA and handover files are evidence, not end-user guides. Keep screenshot references next to the relevant steps and verify relative links before release.
+
+New GUI acceptance (pending CI) captures the actual backup action menu, read-only inspection and explicit reading-progress save confirmation/acknowledgement. Review and embed the four verified captures after CI; no placeholder screenshots.

@@ -332,6 +332,7 @@ private fun verifyOfflineLibrary(folder: File) {
         }
         captureWindow(main, "main-offline")
         verifyExtensionSetup(main)
+        verifyBackupInspection(main, folder)
         verifyToolbarReachable(findButton(main, "Open full Suwayomi WebUI"))
         verifyToolbarReachable(findButton(main, "Universal Book Converter"))
         check(onSwingThread { !findButton(main,"Connect / reload sources").isContentAreaFilled &&
@@ -540,12 +541,55 @@ private fun verifyExtensionSetup(main: JFrame) {
     println("PASS: native extension setup toolbar, local address, cancel and remote endpoint rejection; no browser launched")
 }
 
+/** Real menu, native chooser and bounded inspection. No server requests or private files. */
+private fun verifyBackupInspection(main:JFrame,folder:File) {
+    val file=folder.resolve("Synthetic-library.tachibk")
+    // One Android wire-format manga, source ID 42, synthetic URL "x".
+    java.util.zip.GZIPOutputStream(file.outputStream()).use{it.write(byteArrayOf(10,5,8,42,18,1,120))}
+    val original=file.readBytes()
+    val button=findButton(main,"Backup & restore…")
+    fun dialog(title:String):JDialog {
+        awaitUi("backup dialog "+title){Window.getWindows().filterIsInstance<JDialog>().any{it.isShowing && it.title==title}}
+        return onSwingThread{Window.getWindows().filterIsInstance<JDialog>().single{it.isShowing && it.title==title}}
+    }
+    fun openMenu():JDialog{
+        onSwingThread{SwingUtilities.invokeLater{button.doClick()}}
+        return dialog("Backup & restore")
+    }
+    val menu=openMenu()
+    val choices=onSwingThread{descendants(menu).filterIsInstance<JList<*>>().single{it.name=="backup-action-list"}}
+    check(onSwingThread{choices.model.size==6 && choices.selectedIndex==0})
+    check(onSwingThread{GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.contains(menu.bounds)})
+    captureWindow(menu,"backup-menu")
+    onSwingThread{descendants(menu).filterIsInstance<JButton>().single{it.text=="OK"}.doClick()}
+    awaitUi("native backup chooser"){Window.getWindows().filterIsInstance<JDialog>().any{
+        it.isShowing && descendants(it).any{c->c is javax.swing.JFileChooser}
+    }}
+    val picker=onSwingThread{Window.getWindows().filterIsInstance<JDialog>().filter{it.isShowing}.flatMap{descendants(it)}.filterIsInstance<javax.swing.JFileChooser>().single()}
+    onSwingThread{picker.selectedFile=file;picker.approveSelection()}
+    val report=dialog("Backup inspection")
+    check(onSwingThread{descendants(report).filterIsInstance<javax.swing.JTextArea>().any{
+        "Library titles: 1 / 1" in it.text && "Referenced source IDs: 1" in it.text && "No changes made" in it.text
+    }})
+    captureWindow(report,"backup-inspection")
+    onSwingThread{descendants(report).filterIsInstance<JButton>().single{it.text=="OK"}.doClick()}
+    awaitUi("backup report closes"){!report.isShowing}
+    val cancel=openMenu()
+    onSwingThread{descendants(cancel).filterIsInstance<JButton>().single{it.text=="Cancel"}.doClick()}
+    awaitUi("backup cancel closes"){!cancel.isShowing}
+    check(file.readBytes().contentEquals(original))
+    check(onSwingThread{descendants(main).filterIsInstance<JLabel>().any{it.text.orEmpty().startsWith("Offline ready")}})
+    println("PASS: actual backup menu, local file selection, read-only inspection and cancellation; source unchanged")
+}
+
 /** Full GUI journey against synthetic localhost API, no external manga. */
 private fun verifyOnlineReading(main: JFrame) {
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1",0),0)
     val requests = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val manifestIds = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val failedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
+    val savedPosition = java.util.concurrent.atomic.AtomicInteger(0)
+    val progressWrites = java.util.concurrent.atomic.AtomicInteger(0)
     val png = ByteArrayOutputStream().also {
         val art = BufferedImage(96,144,BufferedImage.TYPE_INT_RGB)
         val g = art.createGraphics()
@@ -564,6 +608,12 @@ private fun verifyOnlineReading(main: JFrame) {
                 "NooirSources" in body -> """{"data":{"sources":{"totalCount":0,"nodes":[]}}}"""
                 "NooirLibrary" in body -> """{"data":{"mangas":{"totalCount":1,"nodes":[{"id":9,"title":"Original online fixture","author":"QA","description":null,"thumbnailUrl":"/api/v1/manga/9/thumbnail","inLibrary":true}]}}}"""
                 "NooirManga" in body -> """{"data":{"manga":{"id":9,"title":"Original online fixture","author":"QA","chapters":{"nodes":[{"id":17,"name":"Chapter 1","chapterNumber":1,"sourceOrder":3,"isDownloaded":false},{"id":18,"name":"Chapter 2","chapterNumber":2,"sourceOrder":4,"isDownloaded":false}]}}}}"""
+                "NooirCurrentPosition" in body -> """{"data":{"chapter":{"id":17,"mangaId":9,"pageCount":3,"lastPageRead":${savedPosition.get()}}}}"""
+                "NooirSavePosition" in body -> {
+                    check("lastPageRead: 1" in body && "isRead" !in body)
+                    savedPosition.set(1);progressWrites.incrementAndGet()
+                    """{"data":{"updateChapter":{"chapter":{"id":17,"mangaId":9,"lastPageRead":1}}}}"""
+                }
                 "fetchChapterPages" in body -> {
                     val id = if ("chapterId: 18" in body) 18 else 17
                     manifestIds.add(id)
@@ -665,6 +715,18 @@ private fun verifyOnlineReading(main: JFrame) {
             page(2)
             check(requests.toList()==listOf(30,31,31,32,31))
             check(manifestIds.toList()==listOf(17))
+            check(progressWrites.get()==0)
+            val save=findButton(reader,"Save progress to server")
+            awaitUi("explicit save enabled"){save.isEnabled}
+            onSwingThread{SwingUtilities.invokeLater{save.doClick()}}
+            awaitUi("save progress confirmation"){Window.getWindows().filterIsInstance<JDialog>().any{it.isShowing && it.title=="Save reading progress"}}
+            val confirm=onSwingThread{Window.getWindows().filterIsInstance<JDialog>().single{it.isShowing && it.title=="Save reading progress"}}
+            captureWindow(confirm,"online-progress-confirm")
+            onSwingThread{descendants(confirm).filterIsInstance<JButton>().single{it.text=="OK"}.doClick()}
+            awaitUi("server confirmed reading position"){descendants(reader).filterIsInstance<JLabel>().any{it.text.orEmpty().startsWith("Server confirmed reading position")}}
+            check(savedPosition.get()==1 && progressWrites.get()==1)
+            captureWindow(reader,"online-progress-saved")
+            println("PASS: actual reader explicit progress confirmation and server acknowledgement; no automatic writes")
             onSwingThread { findButton(reader,"Next chapter").doClick() }
             awaitUi("second chapter opened in same window") { reader.title.endsWith("Chapter 2") }
             page(1)
