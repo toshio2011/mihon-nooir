@@ -44,6 +44,21 @@ The two images below show decoded pages of a finished synthetic XTCH in the Andr
 
 [Capture provenance and viewer walkthrough](ANDROID_VISUAL_GUIDE.md#d-inspect-a-finished-xtcxtch).
 
+## Actual XTC and XTCH rendering comparison (desktop QA)
+
+[Download the actual four-style comparison and original source image](https://github.com/toshio2011/mihon-nooir/actions/runs/45744401559/artifacts/15082563759) (GitHub sign-in and artifact retention apply). The archive contains `Nooir_Visual_4Modes_XTC_XTCH.png` and `Nooir_Visual_Source_Synthetic.png`. These were retrieved and visually reviewed; they use synthetic gradients, screentones, line art and dialogue, not copyrighted scans.
+
+The [desktop rendering QA test](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/tests/DesktopVisualRenderingPreviewTest.kt) converts the same source into eight actual saved XTC/XTCH books, decodes each with `XtcBookPreview`, verifies native X4 480×800 dimensions and valid grayscale levels, then builds a half-scale contact sheet. Settings hold panel mode off, layout Pages, cover/trim/spread splitting off and neutral contrast. Only format and rendering algorithm vary. This is desktop converter evidence, not proof of Android raster parity or physical e-reader appearance.
+
+| Style | What to look for |
+|---|---|
+| Floyd–Steinberg | Fine textured gradients and screentones |
+| Atkinson | Lighter highlights and clear linework |
+| Bayer 8×8 | Regular ordered dot pattern |
+| Threshold | Hard tonal bands, with more levels in XTCH |
+
+The original archived PNGs are not yet embedded permanently in the repository. The artifact link is existing evidence; permanent publication and full-resolution per-frame examples remain pending.
+
 ## Compare actual manga results
 
 The planned comparison gallery uses the same legally shareable source page in each pair or sequence. Keep the reader profile and all unrelated settings constant; show every generated view in reading order, including the full-page original. Do not substitute live-preview thumbnails, synthetic checkerboards or diagrams for actual decoded manga output.
@@ -57,8 +72,8 @@ The planned comparison gallery uses the same legally shareable source page in ea
 | Context Peek off vs 4% | Adjacent confirmed panel context | Pending |
 | Full-page overview off vs on | Original overview followed by detail views | Pending |
 | Keep first chapter page whole off vs on | Independent protection of opening artwork | Pending |
-| XTC vs XTCH | Decoded monochrome vs four-level gray on same artwork | Pending |
-| Floyd–Steinberg, Atkinson, Bayer 8×8, Threshold | Line art, shading and dithering texture | Pending |
+| XTC vs XTCH | Decoded monochrome vs four-level gray on same artwork | Desktop synthetic comparison reviewed; manga and Android examples pending |
+| Floyd–Steinberg, Atkinson, Bayer 8×8, Threshold | Line art, shading and dithering texture | Desktop synthetic comparison reviewed; full-resolution manga examples pending |
 | Right-to-left vs left-to-right spread split | Reading order of facing pages | Pending |
 
 ## Capture and publication checklist
