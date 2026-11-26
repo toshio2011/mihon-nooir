@@ -23,3 +23,7 @@ Do not replace the current Swing guide until a verified Compose package is avail
 ## First real-window evidence
 
 Compose workflow run 45783494996 passed 4/4 (three OS compilation jobs and actual Linux Xvfb window capture). Artifact 15099562276 contains the 1040x720 library screenshot, original synthetic cover images rendered by the running app, application and loopback fixture logs. The fixture confirmed library and cover requests. No private library or live extensions used. This confirms the library screen renders, not production library migration or GUI parity. Follow-up expands the fixture to verify first-cover navigation and actual manga detail/chapter query. Reader page captures still pending; verify screenshots visually before updating the final user guide.
+
+## Manga details evidence
+
+Run 45784959867 passed all four Compose jobs. Artifact 15100181909 includes the reviewed 1040x720 library and manga details screenshots and fixture logs confirming the first cover click, chapter metadata and thumbnail response. Follow-up adds a real chapter-open action using the existing fetchChapterPages and bounded page image path with original synthetic manga art. No persistent mutations allowed by the fixture. Reader capture and page-turn coordinates must be verified before claiming full reader runtime acceptance.

@@ -1,6 +1,6 @@
 """Loopback-only synthetic library for real Compose window captures.
 
-No personal library, external source requests, extensions or mutations.
+No personal library, external source requests, extensions or persistent mutations.
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -30,6 +30,24 @@ def cover(i):
     img.save(out, "PNG")
     return out.getvalue()
 
+def comic_page(n):
+    img = Image.new("RGB", (480, 800), "white")
+    d = ImageDraw.Draw(img)
+    for j in range(3):
+        top = 35 + 245*j
+        d.rectangle((18, top, 462, top+225), outline="black", width=4)
+        x = 100 + 55*((n+j)%4)
+        d.rounded_rectangle((x, top+70, x+95, top+160), radius=12, fill="#dddddd", outline="black", width=3)
+        d.ellipse((x+17, top+88, x+36, top+107), fill="black")
+        d.ellipse((x+57, top+88, x+76, top+107), fill="black")
+        d.line((x+30, top+135, x+65, top+135), fill="black", width=3)
+        d.rounded_rectangle((35, top+10, 260, top+50), radius=12, outline="black", width=2)
+        d.text((48, top+24), f"Page {n+1} - Panel {j+1}", fill="black")
+    out = BytesIO()
+    img.save(out, "PNG")
+    return out.getvalue()
+
+PAGES = [comic_page(n) for n in range(3)]
 COVERS = {i: cover(i) for i in range(1, 7)}
 CARDS = [{"id": i, "title": t, "author": "QA fixture", "description": "Synthetic demonstration library.",
           "thumbnailUrl": f"/api/v1/manga/{i}/thumbnail", "inLibrary": True}
@@ -51,6 +69,12 @@ class Handler(BaseHTTPRequestHandler):
         if match:
             self.reply(200, COVERS[int(match.group(1))], "image/png")
             print("COVER_OK " + match.group(1), flush=True)
+            return
+        page = re.fullmatch(r"/api/v1/manga/1/chapter/1/page/([0-2])", self.path)
+        if page:
+            index = int(page.group(1))
+            self.reply(200, PAGES[index], "image/png")
+            print(f"PAGE_OK {index}", flush=True)
             return
         self.reply(404, b"not found", "text/plain")
 
@@ -76,7 +100,15 @@ class Handler(BaseHTTPRequestHandler):
             data = {"data": {"manga": {"id": manga_id, "title": card["title"],
                                      "author": card["author"], "chapters": {"nodes": chapters}}}}
             marker = f"MANGA_OK {manga_id}"
+        elif "mutation NooirChapterPages" in query and re.search(r"chapterId: 101\b", query):
+            data = {"data": {"fetchChapterPages": {
+                "pages": [f"/api/v1/manga/1/chapter/1/page/{n}" for n in range(3)],
+                "chapter": {"id": 101, "mangaId": 1, "sourceOrder": 1, "pageCount": 3, "lastPageRead": 0},
+                "syncConflict": None
+            }}}
+            marker = "READER_OK 101"
         else:
+            print("REJECTED_OPERATION", flush=True)
             self.reply(400, b"unsupported fixture operation", "text/plain")
             return
         self.reply(200, json.dumps(data).encode(), "application/json")
