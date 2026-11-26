@@ -16,10 +16,21 @@ import javax.swing.filechooser.FileNameExtensionFilter
 /** Native backup tools; missing repositories still require manual WebUI review. */
 object DesktopBackupPreview {
     fun show(owner: Component, endpoint: String, openWebUi: () -> Unit) {
-        val actions = arrayOf("Inspect backup…", "Create portable backup…", "Restore library…", "Review missing extensions…", "Review downloaded repo index…", "Open Suwayomi backup tools", "Cancel")
-        when (val choice=JOptionPane.showOptionDialog(owner,
-            "Inspect an Android or desktop backup locally, or use the local Suwayomi WebUI to restore/export library data.\nRepository installation requires separate review.",
-            "Backup & restore", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, actions, actions[0])) {
+        val actions = arrayOf("Inspect backup…", "Create portable backup…", "Restore library…", "Review missing extensions…", "Review downloaded repo index…", "Open Suwayomi backup tools")
+        // A vertical list avoids a seven-button-wide dialog at high DPI.
+        val choices=javax.swing.JList(actions).apply{
+            name="backup-action-list"
+            selectionMode=javax.swing.ListSelectionModel.SINGLE_SELECTION
+            selectedIndex=0
+            visibleRowCount=actions.size
+        }
+        val panel=javax.swing.JPanel(java.awt.BorderLayout(0,8)).apply{
+            add(javax.swing.JLabel("Choose a backup or migration action."),java.awt.BorderLayout.NORTH)
+            add(JScrollPane(choices).apply{preferredSize=java.awt.Dimension(330,160)},java.awt.BorderLayout.CENTER)
+            add(javax.swing.JLabel("Repository installation requires separate approval."),java.awt.BorderLayout.SOUTH)
+        }
+        if(JOptionPane.showConfirmDialog(owner,panel,"Backup & restore",JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE)!=JOptionPane.OK_OPTION)return
+        when (val choice=choices.selectedIndex) {
             0 -> {
                 val picker=JFileChooser().apply { fileFilter=FileNameExtensionFilter("Mihon / Suwayomi backup", "tachibk", "gz") }
                 if(picker.showOpenDialog(owner)!=JFileChooser.APPROVE_OPTION)return
@@ -41,7 +52,7 @@ object DesktopBackupPreview {
                                 s.stores.forEach { appendLine(it.name+"\n  "+it.indexUrl+
                                     if(it.reviewableHttps) "\n  HTTPS — trust not yet verified" else "\n  Manual review required") }
                                 appendLine("\nNo changes made. Repository URLs are not contacted, no APKs installed.")
-                                appendLine("Use the local Suwayomi WebUI for backup/restore. Back up your existing library first.")
+                                appendLine("Use Create portable backup or Restore library in the backup menu. Back up your existing library first.")
                                 appendLine("Android preferences and Nooir settings are not automatically migrated.")
                             }
                             val text=JTextArea(report,20,66).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
