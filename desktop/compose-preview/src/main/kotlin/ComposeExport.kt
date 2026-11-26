@@ -31,6 +31,12 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
     var output by remember { mutableStateOf<File?>(null) }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        // Opt-in CI diagnostic only: no title, source IDs or user paths.
+        if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") {
+            println("QA_EXPORT_DIALOG chapters=${chapters.size}")
+        }
+    }
     val scope = rememberCoroutineScope()
     val missing = chapters.count { !it.downloaded }
     val valid = chapters.isNotEmpty() && chapters.size <= 500 && (missing == 0 || allowDownload)

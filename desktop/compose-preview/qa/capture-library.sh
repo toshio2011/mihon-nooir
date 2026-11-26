@@ -17,7 +17,7 @@ for i in {1..20}; do
   sleep 1
 done
 curl -fsS http://127.0.0.1:4567/health >/dev/null
-setsid gradle -p desktop/compose-preview run --no-daemon > "$out/application.log" 2>&1 &
+setsid env NOOIR_COMPOSE_QA_CAPTURE=1 gradle -p desktop/compose-preview run --no-daemon > "$out/application.log" 2>&1 &
 app_pid=$!
 window=""
 for i in {1..300}; do
@@ -103,12 +103,18 @@ test -s "$out/compose-return-details.png"
 # Capture the chapter selection state before running the actual export engine test.
 xdotool mousemove --window "$window" 948 324 click 1
 sleep 1
-xdotool mousemove --window "$window" 130 384 click 1
+xdotool mousemove --window "$window" 145 384 click 1
 sleep 2
 import -window "$window" "$out/compose-chapter-selection.png"
 test -s "$out/compose-chapter-selection.png"
 # The Export action is at the right edge of the selection toolbar.
-xdotool mousemove --window "$window" 977 324 click 1
+xdotool mousemove --window "$window" 980 324 click 1
+for i in {1..20}; do
+  if grep -Fxq 'QA_EXPORT_DIALOG chapters=1' "$out/application.log"; then break; fi
+  sleep 1
+done
+# A PNG alone does not prove that a modal opened.
+grep -Fxq 'QA_EXPORT_DIALOG chapters=1' "$out/application.log"
 sleep 2
 # Include the modal dialog, which is a separate native window.
 import -window root "$out/compose-export-dialog.png"
