@@ -333,6 +333,7 @@ private fun verifyOfflineLibrary(folder: File) {
         captureWindow(main, "main-offline")
         verifyExtensionSetup(main)
         verifyBackupInspection(main, folder)
+        verifyDocumentQueueAndTransferCaptures(main, folder, comic)
         verifyToolbarReachable(findButton(main, "Open full Suwayomi WebUI"))
         verifyToolbarReachable(findButton(main, "Universal Book Converter"))
         check(onSwingThread { !findButton(main,"Connect / reload sources").isContentAreaFilled &&
@@ -539,6 +540,130 @@ private fun verifyExtensionSetup(main: JFrame) {
     awaitUi("invalid-address warning dismissed") { !errorDialog.isShowing }
     onSwingThread { Unit }
     println("PASS: native extension setup toolbar, local address, cancel and remote endpoint rejection; no browser launched")
+}
+
+/** Additional documentation captures from real dialogs, isolated fixtures only. */
+private fun verifyDocumentQueueAndTransferCaptures(main: JFrame, folder: File, comic: File) {
+    fun dialog(title: String): JDialog {
+        awaitUi("visual QA dialog: $title") {
+            Window.getWindows().filterIsInstance<JDialog>().any { it.isShowing && it.title == title }
+        }
+        return onSwingThread {
+            Window.getWindows().filterIsInstance<JDialog>().single { it.isShowing && it.title == title }
+        }
+    }
+    fun click(parent: Component, label: String) = onSwingThread {
+        val buttons = descendants(parent).filterIsInstance<JButton>()
+        val button = buttons.singleOrNull { it.text == label }
+            ?: error("Expected one button '$label' in " + parent.javaClass.simpleName +
+                "; found: " + buttons.map { it.text })
+        SwingUtilities.invokeLater { button.doClick() }
+    }
+    fun pick(title: String, file: File) {
+        val window = dialog(title)
+        onSwingThread {
+            val picker = descendants(window).filterIsInstance<javax.swing.JFileChooser>().single()
+            picker.selectedFile = file
+            picker.approveSelection()
+        }
+        awaitUi("chooser closes: $title") { !window.isShowing }
+    }
+    fun close(window: JDialog, label: String) {
+        click(window, label)
+        awaitUi("visual QA closes: " + window.title) { !window.isShowing }
+    }
+
+    // Actual converter entry point, not an independently drawn reproduction.
+    click(main, "Universal Book Converter")
+    val converter = dialog("Universal Book Converter")
+    check(onSwingThread { descendants(converter).filterIsInstance<JButton>().any {
+        it.text == "PDF / EPUB"
+    } })
+    captureWindow(converter, "universal-converter-menu")
+    close(converter, "Cancel")
+
+    val pdf = folder.resolve("Original-visual-demo.pdf")
+    org.apache.pdfbox.pdmodel.PDDocument().use { doc ->
+        val page = org.apache.pdfbox.pdmodel.PDPage(
+            org.apache.pdfbox.pdmodel.common.PDRectangle(240f, 320f))
+        doc.addPage(page)
+        org.apache.pdfbox.pdmodel.PDPageContentStream(doc, page).use { stream ->
+            stream.beginText()
+            stream.setFont(org.apache.pdfbox.pdmodel.font.PDType1Font(
+                org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA), 12f)
+            stream.newLineAtOffset(16f, 240f)
+            stream.showText("Original synthetic document.")
+            stream.endText()
+        }
+        doc.save(pdf)
+    }
+    val epub = folder.resolve("Original-visual-demo.epub")
+    dev.nooir.desktop.NooirDesktopCli.main(arrayOf(
+        "--input", comic.absolutePath, "--output", epub.absolutePath,
+        "--format", "EPUB2", "--device", "X4"
+    ))
+    check(epub.isFile && epub.length() > 0)
+    for ((source, capture) in listOf(pdf to "pdf-import-settings", epub to "epub-import-settings")) {
+        click(main, "Universal Book Converter")
+        val menu = dialog("Universal Book Converter")
+        close(menu, "PDF / EPUB")
+        pick("Import an unprotected PDF or EPUB", source)
+        val settings = dialog("Document conversion")
+        check(onSwingThread { descendants(settings).filterIsInstance<JLabel>().any {
+            it.text.orEmpty().contains(if (source.extension == "pdf") "PDF mode" else "EPUB mode")
+        } })
+        captureWindow(settings, capture)
+        close(settings, "Cancel")
+    }
+
+    // Seed real persistent queue state, then run via the actual UI.
+    // Existing isolated data-directory guard in verifyOfflineLibrary applies.
+    val target = folder.resolve("visual-queue-output").apply { check(mkdir()) }
+    val sourceBytes = comic.readBytes()
+    val queue = DesktopConversionQueue()
+    check(queue.list().isEmpty()) { "Visual queue requires empty isolated state" }
+    check(queue.enqueue(listOf(comic), target, dev.nooir.bridge.ExportFormat.XTC,
+        "X4", dev.nooir.mangabridge.MangaConversionOptions.preset("Manga")) == 1)
+    click(main, "Conversion jobs")
+    val jobs = awaitFrame("MihonNooir — Local conversion jobs")
+    val run = findButton(jobs, "Run / recover")
+    val list = onSwingThread { descendants(jobs).filterIsInstance<JList<*>>().single() }
+    check(onSwingThread {
+        list.model.size == 1 &&
+            (list.model.getElementAt(0) as DesktopConversionJob).state == ConversionJobState.PENDING
+    })
+    captureWindow(jobs, "conversion-queue-pending")
+    onSwingThread { run.doClick() }
+    awaitUi("actual local XTC job completes") {
+        list.model.size == 1 &&
+            (list.model.getElementAt(0) as DesktopConversionJob).state == ConversionJobState.COMPLETED &&
+            findButton(jobs, "Add local books").isEnabled
+    }
+    val output = target.listFiles()?.single { it.extension.equals("xtc", true) }
+        ?: error("Missing saved XTC")
+    check(dev.nooir.bridge.XtcBookPreview(output).pageCount > 0)
+    captureWindow(jobs, "conversion-queue-completed")
+    onSwingThread { jobs.dispose() }
+    check(queue.forgetFinished() == 1 && output.isFile)
+    check(comic.readBytes().contentEquals(sourceBytes))
+
+    // Exercise recipient confirmation but deliberately never approve the send.
+    click(main, "Send to XTEINK")
+    pick("Select an existing local book to send", output)
+    val transfer = dialog("Send to compatible Folio Nooir reader")
+    onSwingThread {
+        val fields = descendants(transfer).filterIsInstance<JTextField>()
+        check(fields.size == 3)
+        fields[0].text = "192.168.0.123" // synthetic private address; no network request
+        check(fields[1].text == "/Books")
+    }
+    captureWindow(transfer, "reader-transfer-settings")
+    close(transfer, "OK")
+    val confirm = dialog("Confirm Wi-Fi transfer")
+    captureWindow(confirm, "reader-transfer-confirm")
+    close(confirm, "No")
+    check(output.isFile)
+    println("PASS: real converter entry, document settings, local queue export and canceled transfer confirmation; no reader contacted")
 }
 
 /** Real menu, native chooser and bounded inspection. No server requests or private files. */
