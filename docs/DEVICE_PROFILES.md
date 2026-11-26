@@ -1,5 +1,7 @@
 # E-reader device profiles
 
+> **Screenshot guide:** Device-profile screenshots are pending. See [actual saved-book viewer captures](ANDROID_VISUAL_GUIDE.md#d-inspect-a-finished-xtcxtch) for the separate output-inspection workflow.
+
 > **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 MihonNooir now separates **export output profiles** from **network-transfer capabilities**. Presets choose the image canvas size and `Auto` format; they **do not** make all formats compatible with all reader firmware.

@@ -6,6 +6,9 @@
 
 MihonNooir is an **independent, unofficial Android app based on the full Mihon reader**. Browse, organize and read manga as usual; MihonNooir adds ways to prepare and send books to e-ink readers.
 
+
+**Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
+
 ## Step 1 — Choose the correct APK
 
 Download from the [official v1.0.20 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20), not an Actions/debug artifact or the separate QA app.
@@ -26,6 +29,8 @@ Download from the [official v1.0.20 release](https://github.com/toshio2011/mihon
 > Older temporary-key builds, such as v1.0.12, may not update in place. If Android reports a signature or package conflict, stop and report it rather than deleting app data. No manga or source extensions are bundled.
 
 [Current release notes](releases/v1.0.20.md) · [Build/update details](UPDATES.md)
+
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
 
 ## Step 2 — Locate the features
 

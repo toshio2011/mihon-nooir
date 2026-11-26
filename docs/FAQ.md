@@ -1,5 +1,7 @@
 # MihonNooir FAQ
 
+> **Screenshot guide:** For real Android screen examples, see the [illustrated Android guide](ANDROID_VISUAL_GUIDE.md), including actual finished XTCH pages.
+
 > **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Getting started](GETTING_STARTED.md)

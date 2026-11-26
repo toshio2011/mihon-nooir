@@ -1,5 +1,7 @@
 # MihonNooir: EPUB 2 Classic, EPUB 3 Modern, XTC Fast, XTCH High Quality
 
+> **Screenshot guide:** See the [actual finished XTCH viewer](ANDROID_VISUAL_GUIDE.md#d-inspect-a-finished-xtcxtch). The export format selector still needs its own capture.
+
 > **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 

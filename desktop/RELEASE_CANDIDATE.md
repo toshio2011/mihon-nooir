@@ -30,3 +30,7 @@ The final-acceptance branch explicitly opts in to the existing fixed-URL live we
 ## 26 November final acceptance follow-up
 
 Run 45747976811: eight jobs passed, including actual public Wattpad cover/synopsis and real Windows server backup; Intel Mac failed on the second synthetic restore terminal-state assertion (line 131). The Mac GUI itself passed. No root cause proven from the original logs. Keep the assertion strict, record first/repeat ticket IDs and terminal state, and print a bounded isolated synthetic server log on failure. Do not retry a restore mutation or claim that this is fixed until exact-head CI passes. Physical migration and real extension recovery still outstanding.
+
+## Verified checkpoint and Android docs merge
+
+Run 45750076207 completed with all nine desktop jobs successful, including Intel Mac repeated restore and live public web acceptance. The earlier intermittent Intel Mac failure has not been conclusively diagnosed; diagnostic logging and strict assertions remain. Android visual guide PR #140 merged into main at 9b0be79fb715798fdbb07be64b363750cea2a120 (38 documentation-only paths). This candidate includes those exact docs blobs and updates only the strict guard's integration base; the frozen release-source guard and desktop allowlist remain unchanged. Exact new-head CI is required. Physical Android restore, actual third-party extension installation, signing/notarization and physical device acceptance remain outstanding.

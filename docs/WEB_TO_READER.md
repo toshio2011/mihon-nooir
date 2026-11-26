@@ -4,6 +4,9 @@
 
 > Conversion runs locally on Android, without AI or OCR services; specific sites may not expose readable public HTML.
 
+
+**Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
+
 ## Convert a website link to EPUB
 
 1. Open **MihonNooir → More → Nooir Tools → Universal Book Converter → Web link**.

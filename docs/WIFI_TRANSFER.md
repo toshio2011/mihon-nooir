@@ -1,5 +1,7 @@
 # Send to an XTEink reader over Wi-Fi
 
+> **Screenshot guide:** Transfer screenshots are pending. Follow this guide's connection and recipient checks; see [Android screenshot coverage](ANDROID_VISUAL_GUIDE.md#screenshot-coverage-by-task).
+
 [← Back to README](../README.md) · [All guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [First-time setup](GETTING_STARTED.md) · [Folio Nooir web-server docs](https://github.com/toshio2011/folio-nooir/blob/main/docs/webserver.md)
 
 MihonNooir can send converted manga to XTEink readers with a **compatible HTTP/WebSocket File Transfer API**. The documented integration uses Folio Nooir's server; other firmware may have different endpoints. The current Android release can also send existing files from phone storage. This works over a **local network**; no Bluetooth pairing, USB cable, online account or internet connection is required for the transfer itself.

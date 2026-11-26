@@ -6,6 +6,9 @@ MihonNooir's first **web novel importer** is an experimental extension of [Web t
 
 > This workflow runs locally on the phone. Website-specific and physical reader compatibility still varies.
 
+
+**Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
+
 ## How to download several novels
 
 1. In MihonNooir, go to **More → Nooir Tools → Universal Book Converter → Web novels**.
