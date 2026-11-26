@@ -9,6 +9,8 @@ MihonNooir is an **independent, unofficial Android app based on the full Mihon r
 
 **Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
 
+[Library, extensions, backup and transfer guide](LIBRARY_MIGRATION_VISUAL_GUIDE.md) — desktop preview captures and Android migration precautions.
+
 ## Step 1 — Choose the correct APK
 
 Download from the [official v1.0.20 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20), not an Actions/debug artifact or the separate QA app.

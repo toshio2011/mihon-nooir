@@ -16,6 +16,8 @@
 
 **Universal Book Converter:** [Visual walkthrough and actual Android EPUB output](UNIVERSAL_CONVERTER_VISUAL_GUIDE.md) — local EPUB, PDF, web novels, combined chapters and saved-file inspection.
 
+**Library, extensions, backup and transfer:** [Visual migration and library guide](LIBRARY_MIGRATION_VISUAL_GUIDE.md) — real desktop captures, Android instructions and explicit verification limits.
+
 ## Visual walkthroughs by task
 
 Choose your platform and task. **Captured** means relevant real screens exist; **partial** means the complete journey or output is not pictured. Desktop remains a development preview, and its images are from Windows QA rather than every supported operating system.
