@@ -59,20 +59,17 @@ identify "$out/compose-manga-details.png" >> "$out/window.txt"
 # Verified details capture has first chapter Read action at (970,360).
 xdotool mousemove --window "$window" 970 360 click 1
 for i in {1..30}; do
-  if grep -q '^READER_OK 101
- "$out/fixture.log" && grep -q '^PAGE_OK 0
- "$out/fixture.log"; then break; fi
+  if grep -Fxq 'READER_OK 101' "$out/fixture.log" && grep -Fxq 'PAGE_OK 0' "$out/fixture.log"; then break; fi
   sleep 1
 done
-grep -q '^READER_OK 101
- "$out/fixture.log"
-grep -q '^PAGE_OK 0
- "$out/fixture.log"
+grep -Fxq 'READER_OK 101' "$out/fixture.log"
+grep -Fxq 'PAGE_OK 0' "$out/fixture.log"
 sleep 3
 import -window "$window" "$out/compose-reader-page1.png"
 test -s "$out/compose-reader-page1.png"
 identify "$out/compose-reader-page1.png" >> "$out/window.txt"
 # The next page control will be exercised once the real reader capture is reviewed.
-! grep -q '^REJECTED_OPERATION
- "$out/fixture.log"
-
+if grep -Fxq 'REJECTED_OPERATION' "$out/fixture.log"; then
+  echo "Unexpected fixture operation" >&2
+  exit 1
+fi
