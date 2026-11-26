@@ -9,6 +9,8 @@
 
 **Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
 
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#b-choose-a-converter) (v1.0.20 release-source emulator).
+
 ## Where are the new tools?
 
 Open **MihonNooir → More → Nooir Tools**. Inside the hub:

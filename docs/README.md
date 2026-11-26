@@ -10,6 +10,8 @@
 
 **Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
 
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
+
 ## If this is your first time
 
 1. [**Install MihonNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.
