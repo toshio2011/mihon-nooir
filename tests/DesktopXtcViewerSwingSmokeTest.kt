@@ -553,7 +553,10 @@ private fun verifyDocumentQueueAndTransferCaptures(main: JFrame, folder: File, c
         }
     }
     fun click(parent: Component, label: String) = onSwingThread {
-        val button = descendants(parent).filterIsInstance<JButton>().single { it.text == label }
+        val buttons = descendants(parent).filterIsInstance<JButton>()
+        val button = buttons.singleOrNull { it.text == label }
+            ?: error("Expected one button '$label' in " + parent.javaClass.simpleName +
+                "; found: " + buttons.map { it.text })
         SwingUtilities.invokeLater { button.doClick() }
     }
     fun pick(title: String, file: File) {
@@ -601,7 +604,9 @@ private fun verifyDocumentQueueAndTransferCaptures(main: JFrame, folder: File, c
     ))
     check(epub.isFile && epub.length() > 0)
     for ((source, capture) in listOf(pdf to "pdf-import-settings", epub to "epub-import-settings")) {
-        click(main, "Import PDF / EPUB")
+        click(main, "Universal Book Converter")
+        val menu = dialog("Universal Book Converter")
+        close(menu, "PDF / EPUB")
         pick("Import an unprotected PDF or EPUB", source)
         val settings = dialog("Document conversion")
         check(onSwingThread { descendants(settings).filterIsInstance<JLabel>().any {
