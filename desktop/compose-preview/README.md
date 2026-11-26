@@ -11,3 +11,11 @@ Next gates: actual Android-style design review, real screenshots, native reading
 ## Reader vertical slice
 
 Adds native in-window chapter reading via the existing pinned-server chapter manifest/page APIs. Previous/Next, retry, existing server start position, and bounded single-page decode run through real APIs. No automatic reading-position writes or background downloads. Java ImageIO-supported image formats only in this experiment; retain full existing Swing reader until parity, including WebP, keyboard, reading progress, bookmarks, layouts and next-chapter behavior. New compilation and GUI acceptance required. The original three-OS compile passed for the preceding shell, run 45780842899; this is a new revision.
+
+## Source browsing vertical slice
+
+Adds actual installed-source pagination and native Popular/Latest/Search pages, covers, manga details and explicit chapter refresh. Latest is offered only when supported by the source. Browse requests use the existing pinned Suwayomi client; no new extension install or automatic download. Existing library remains read-only in this revision. Fresh compile and runtime verification required.
+
+## Documentation release gate
+
+Do not replace the current Swing guide until a verified Compose package is available. Capture actual desktop UI and actual decoded output, not concept images. Update onboarding (managed backend and certificate handling), Library/category navigation, Browse/Extensions, partial backup recovery, reader/resume, chapter selection/export, format/settings previews, Universal Converter (EPUB/PDF/web/batches), queue, transfer, settings, installation/update and troubleshooting. Link task-based guides from the project README and distinguish supported/unsupported operations and platform limitations. Keep Android guide aligned with its own verified release; do not claim new Compose functions in Android. Screenshot artifacts must identify exact commit and test run; synthetic fixtures are labeled. Preserve original files and user data.

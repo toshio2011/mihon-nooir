@@ -150,17 +150,24 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
 }
 
 @Composable
-private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, back: () -> Unit) {
+private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: String = "‹ Library", refreshAllowed: Boolean = false, back: () -> Unit) {
     var state by remember(card.id) { mutableStateOf<Result<SuwayomiManga>?>(null) }
     var opened by remember(card.id) { mutableStateOf<SuwayomiChapter?>(null) }
-    LaunchedEffect(client, card.id) { state = request { client.manga(card.id) } }
+    var refreshRevision by remember(card.id) { mutableStateOf(0) }
+    LaunchedEffect(client, card.id, refreshRevision) {
+        state = null
+        state = request {
+            if (refreshRevision > 0) client.refreshManga(card.id)
+            client.manga(card.id)
+        }
+    }
     val chapter = opened
     if (chapter != null) {
         Reader(client, card, chapter) { opened = null }
         return
     }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
-        TextButton(onClick = back) { Text("‹ Library") }
+        TextButton(onClick = back) { Text(backLabel) }
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Cover(client, card, Modifier.width(128.dp).height(184.dp))
             Column(Modifier.weight(1f)) {
@@ -171,13 +178,17 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, back: () ->
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text("Chapters", style = MaterialTheme.typography.titleLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Chapters", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            if (refreshAllowed) TextButton(onClick = { refreshRevision++ }, enabled = state != null) { Text("Refresh chapters") }
+        }
         val result = state
         if (result == null) CircularProgressIndicator()
         else if (result.isFailure) Text("Unable to load chapters. Return to the library and retry.", color = MaterialTheme.colorScheme.error)
         else {
             val chapters = result.getOrThrow().chapters
-            Text("${chapters.size} chapters · read-only interface experiment")
+            Text("${chapters.size} chapters")
+            if (chapters.isEmpty() && refreshAllowed) Text("Refresh chapters to fetch available chapters from this source.")
             LazyColumn(Modifier.weight(1f)) {
                 items(chapters, key = { it.id }) { chapter ->
                     ListItem(headlineContent = { Text(chapter.name) },
@@ -242,23 +253,104 @@ private fun Library(client: SuwayomiClient) {
     }
 }
 
+private data class BrowseRequest(val mode: SuwayomiBrowseMode, val page: Int = 1, val term: String? = null)
+
+@Composable
+private fun SourceBrowser(client: SuwayomiClient, source: SuwayomiSource, back: () -> Unit) {
+    var search by remember(source.id) { mutableStateOf("") }
+    var query by remember(source.id) { mutableStateOf(BrowseRequest(SuwayomiBrowseMode.POPULAR)) }
+    var revision by remember(source.id) { mutableStateOf(0) }
+    var result by remember(source.id, query, revision) { mutableStateOf<Result<SuwayomiBrowsePage>?>(null) }
+    var selected by remember(source.id) { mutableStateOf<SuwayomiMangaCard?>(null) }
+    LaunchedEffect(client, source.id, query, revision) {
+        val q = query
+        result = request { client.browse(source.id, q.mode, q.page, q.term) }
+    }
+    val manga = selected
+    if (manga != null) {
+        Details(client, manga, backLabel = "‹ Browse", refreshAllowed = true) { selected = null }
+        return
+    }
+    Column(Modifier.fillMaxSize().padding(24.dp)) {
+        TextButton(onClick = back) { Text("‹ Sources") }
+        Text(source.displayName, style = MaterialTheme.typography.headlineMedium)
+        if (source.contentWarning.isNotBlank()) Text(source.contentWarning, style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = query.mode == SuwayomiBrowseMode.POPULAR,
+                onClick = { query = BrowseRequest(SuwayomiBrowseMode.POPULAR) }, label = { Text("Popular") })
+            if (source.supportsLatest) FilterChip(selected = query.mode == SuwayomiBrowseMode.LATEST,
+                onClick = { query = BrowseRequest(SuwayomiBrowseMode.LATEST) }, label = { Text("Latest") })
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(search, { search = it.take(200) }, label = { Text("Search this source") }, singleLine = true, modifier = Modifier.weight(1f))
+            Button(onClick = { query = BrowseRequest(SuwayomiBrowseMode.SEARCH, term = search.trim()); revision++ },
+                enabled = search.isNotBlank() && search.none { it.code < 32 }) { Text("Search") }
+        }
+        Spacer(Modifier.height(12.dp))
+        val current = result
+        when {
+            current == null -> CircularProgressIndicator()
+            current.isFailure -> {
+                Text("Could not load this source. Check extension compatibility and network access.", color = MaterialTheme.colorScheme.error)
+                Button(onClick = { revision++ }) { Text("Retry") }
+            }
+            else -> {
+                val page = current.getOrThrow()
+                if (page.mangas.isEmpty()) Text("No titles found")
+                LazyVerticalGrid(GridCells.Adaptive(150.dp), modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(page.mangas.distinctBy { it.id }, key = { it.id }) { item ->
+                        Card(onClick = { selected = item }) {
+                            Cover(client, item, Modifier.fillMaxWidth().aspectRatio(0.70f))
+                            Text(item.title, Modifier.padding(10.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (item.inLibrary) Text("In library", Modifier.padding(horizontal = 10.dp), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { query = query.copy(page = query.page - 1) }, enabled = query.page > 1) { Text("Previous") }
+                    Text("Page ${page.page}")
+                    TextButton(onClick = { query = query.copy(page = query.page + 1) }, enabled = page.hasNextPage && query.page < 10_000) { Text("Next") }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun Sources(client: SuwayomiClient) {
     var result by remember { mutableStateOf<Result<SuwayomiSourcePage>?>(null) }
     var revision by remember { mutableStateOf(0) }
-    LaunchedEffect(client, revision) { result = null; result = request { client.sources(0, 100) } }
+    var offset by remember { mutableStateOf(0) }
+    var selected by remember { mutableStateOf<SuwayomiSource?>(null) }
+    LaunchedEffect(client, revision, offset) { result = null; result = request { client.sources(offset, 100) } }
+    val source = selected
+    if (source != null) {
+        SourceBrowser(client, source) { selected = null }
+        return
+    }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Browse", style = MaterialTheme.typography.headlineMedium)
-        Text("Installed sources · first 100")
+        Text("Installed sources")
         TextButton(onClick = { revision++ }) { Text("Reload") }
         val current = result
         when {
             current == null -> CircularProgressIndicator()
             current.isFailure -> Text("Local server unavailable.", color = MaterialTheme.colorScheme.error)
-            else -> LazyColumn {
-                items(current.getOrThrow().sources, key = { it.id }) {
-                    ListItem(headlineContent = { Text(it.displayName) }, supportingContent = { Text(it.language) })
-                    HorizontalDivider()
+            else -> {
+                val page = current.getOrThrow()
+                Text("${page.totalCount} sources")
+                LazyColumn(Modifier.weight(1f)) {
+                    items(page.sources, key = { it.id }) {
+                        ListItem(headlineContent = { Text(it.displayName) }, supportingContent = { Text(it.language) },
+                            trailingContent = { TextButton(onClick = { selected = it }) { Text("Browse") } })
+                        HorizontalDivider()
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { offset = maxOf(0, offset - 100) }, enabled = offset > 0) { Text("Previous") }
+                    Text("Page ${offset / 100 + 1}")
+                    TextButton(onClick = { offset += 100 }, enabled = offset + 100 < page.totalCount) { Text("Next") }
                 }
             }
         }
