@@ -138,8 +138,24 @@ If a page fails to load, use Retry or navigate to another page.
 
 1. In Android's More → Settings → Data and storage, create a normal Mihon-format backup with the library and desired reading metadata. Keep that original file, downloaded pages and any other data separately.
 2. On desktop, open **Backup & restore → Inspect backup…** and choose the .tachibk file. Review record counts, source IDs and repositories before making changes.
+
+![Actual compact Backup and Restore menu](screenshots/backup-20261126/backup-menu.png)
+
+
+
+![Read-only inspection of a synthetic Android backup](screenshots/backup-20261126/backup-inspection.png)
+
+
 3. Start/connect to the local Suwayomi server. Configure only repositories you independently trust in the local WebUI. Use **Review missing extensions…** for exact source matches; if a never-installed package lacks its source IDs, the development-only **Review downloaded repo index…** action accepts a trusted, locally obtained legacy index JSON for a matching configured repository. The local index is not signature-verified. Modern repository indexes and automatic registration are not implemented. Approve each proposed installation yourself.
 4. Choose **Restore library…**, review the missing sources and confirm a separate, new recovery backup filename. Restore merges library metadata; server completion is not proof every record was restored. Recheck the library and sources afterward.
-5. To move back to Android, save any desired desktop server reading positions explicitly, choose **Create portable backup…**, and copy the .tachibk file to your phone. The Android-compatible field layout and real Suwayomi round trip are tested; actual import on a physical Android device is still required. Keep the original phone backup, use Android's restore menu, and review missing extensions.
+5. To move back to Android, save any desired desktop server reading positions explicitly.
 
-Do not assume the portable backup includes downloaded pages, APKs, credentials, local-only reading positions, Nooir settings, or web projects. Back up the desktop data folder separately. This section describes the development branch, not an already published desktop version. New screenshots for this workflow are pending. See [remaining screenshot coverage](SCREENSHOT_COVERAGE.md) and [migration engineering notes](BACKUP_MIGRATION.md).
+![Explicit save confirmation in desktop online reader](screenshots/backup-20261126/online-progress-confirm.png)
+
+
+
+![Server confirmed reading position; local position retained](screenshots/backup-20261126/online-progress-saved.png)
+
+Then choose **Create portable backup…**, and copy the .tachibk file to your phone. The Android-compatible field layout and real Suwayomi round trip are tested; actual import on a physical Android device is still required. Keep the original phone backup, use Android's restore menu, and review missing extensions.
+
+Do not assume the portable backup includes downloaded pages, APKs, credentials, local-only reading positions, Nooir settings, or web projects. Back up the desktop data folder separately. This section describes the development branch, not an already published desktop version. Four new screenshots above were captured from real Windows GUI acceptance on commit bab58639ff14ac5d8ed854e1dfe09b9bb69fef44, run 45744401559, using a synthetic backup and localhost fixture. They show inspection and reading-position confirmation, not a completed physical Android migration. Restore and extension installation screens still need captures. See [remaining screenshot coverage](SCREENSHOT_COVERAGE.md) and [migration engineering notes](BACKUP_MIGRATION.md).

@@ -1,0 +1,54 @@
+name: One-time verified backup GUI guide asset import
+on:
+  push:
+    branches: [docs/one-time-backup-gui-import-20261126]
+    paths: ['.github/workflows/one-time-backup-gui-import.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'toshio2011/mihon-nooir' && github.ref == 'refs/heads/docs/one-time-backup-gui-import-20261126'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and copy only the four reviewed synthetic captures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=desktop/final-acceptance-20261126
+          base=28c0a0b3afa1b4a9745441805e21e83483ea8aa7
+          cp desktop/{DESKTOP_GUIDE,SCREENSHOT_COVERAGE}.md desktop/backup-screenshot-import.sha256 "$RUNNER_TEMP/"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15083202444/zip" > "$RUNNER_TEMP/screens.zip"
+          git fetch origin "$target"
+          test "$(git rev-parse FETCH_HEAD)" = "$base"
+          git checkout --detach "$base"
+          cp "$RUNNER_TEMP"/{DESKTOP_GUIDE,SCREENSHOT_COVERAGE}.md desktop/
+          python - <<'PY'
+          import os, pathlib, zipfile, hashlib, re
+          tmp=pathlib.Path(os.environ["RUNNER_TEMP"])
+          out=pathlib.Path("desktop/screenshots/backup-20261126")
+          out.mkdir(parents=True,exist_ok=True)
+          manifest=(tmp/"backup-screenshot-import.sha256").read_text()
+          with zipfile.ZipFile(tmp/"screens.zip") as z:
+              for line in manifest.splitlines():
+                  digest,name=line.split()
+                  assert re.fullmatch(r"[a-z0-9-]+\.png",name)
+                  data=z.read("scale-1.0/"+name)
+                  assert data.startswith(b"\x89PNG\r\n\x1a\n") and hashlib.sha256(data).hexdigest()==digest
+                  (out/name).write_bytes(data)
+          (out/"SHA256SUMS").write_text(manifest)
+          links=re.findall(r"\]\((screenshots/[^)]+\.png)\)",pathlib.Path("desktop/DESKTOP_GUIDE.md").read_text())
+          assert len(links)==23
+          for link in links:
+              assert (pathlib.Path("desktop")/link).is_file(),link
+          PY
+          git add -- desktop/{DESKTOP_GUIDE,SCREENSHOT_COVERAGE}.md desktop/screenshots/backup-20261126/
+          test -z "$(git diff --cached --name-only | grep -vE '^desktop/((DESKTOP_GUIDE|SCREENSHOT_COVERAGE)\.md|screenshots/backup-20261126/([a-z0-9-]+\.png|SHA256SUMS))$' || true)"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Docs: embed verified backup and progress GUI screenshots'
+          git push origin "HEAD:refs/heads/$target"
