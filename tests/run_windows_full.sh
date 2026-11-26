@@ -126,7 +126,7 @@ kotlinc desktop/suwayomi/DesktopBackupInspector.kt tests/DesktopBackupInspectorT
 java -jar "$tmp/desktop-backup-inspector.jar"
 
 # Localhost-only backup transport contract; synthetic protocol fixture.
-kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt} tests/DesktopBackupTransportTest.kt -include-runtime -d "$tmp/desktop-backup-transport.jar"
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt,DesktopLegacyRepoIndex.kt} tests/DesktopBackupTransportTest.kt -include-runtime -d "$tmp/desktop-backup-transport.jar"
 java --add-modules jdk.httpserver -jar "$tmp/desktop-backup-transport.jar"
 
 # Synthetic Android-compatible extension store round trip and exact-ID review.
@@ -134,5 +134,9 @@ kotlinc desktop/suwayomi/{DesktopBackupInspector.kt,DesktopBackupExtensions.kt} 
 java -jar "$tmp/desktop-backup-extensions.jar"
 
 # Explicit extension installation contract on a synthetic localhost backend only.
-kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt} tests/DesktopBackupExtensionRecoveryTest.kt -include-runtime -d "$tmp/desktop-extension-recovery.jar"
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt,DesktopLegacyRepoIndex.kt} tests/DesktopBackupExtensionRecoveryTest.kt -include-runtime -d "$tmp/desktop-extension-recovery.jar"
 java --add-modules jdk.httpserver -jar "$tmp/desktop-extension-recovery.jar"
+
+# Real legacy JSON schema, exact signed source identity and stale version refusal.
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupExtensions.kt,DesktopLegacyRepoIndex.kt} tests/DesktopLegacyRepoIndexTest.kt -include-runtime -d "$tmp/desktop-legacy-index.jar"
+java -jar "$tmp/desktop-legacy-index.jar"
