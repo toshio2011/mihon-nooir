@@ -15,3 +15,7 @@ Explicit portable backup includes configured extension stores using Mihon's fiel
 ## Stage 4 — real pinned-server acceptance (pending CI)
 
 The existing packaged real-server smoke now also validates a wholly synthetic Android-format backup, saves a recovery copy, restores it, checks the actual library, exports and checks chapter/read/bookmark/page/history counts, then repeats the import to detect duplicates. It uses a deliberately missing signed source ID and a distinct category ID/order. Server SUCCESS alone is insufficient: Suwayomi can log per-manga errors while completing the overall operation. Android device restore, exact category membership/value round-trip, extension installs and local-reader progress write-back remain open.
+
+## Stage 5 — explicit reader progress write-back (pending CI)
+
+A successfully displayed online page can be saved explicitly to the local server before export. Local resume remains automatic. Fresh chapter identity/page-count check refuses known rewind or existing server conflict; simultaneous external writers are not atomic. No automatic chapter-read flag or bookmark mutation. Suwayomi may notify configured sync services. Real-server acceptance now checks a saved page and subsequent backup. Android restore and extension installation remain open.

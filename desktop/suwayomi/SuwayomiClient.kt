@@ -451,6 +451,23 @@ class SuwayomiClient(
         return SuwayomiOnlineChapter(chapterId, mangaId, order, count, lastPage, conflict)
     }
 
+    /** Explicit action; refuse known rewind. Concurrent remote writers are not atomic. */
+    fun saveOnlinePosition(chapter: SuwayomiOnlineChapter, page: Int): Int {
+        require(chapter.syncConflict == null) { "Resolve server reading conflict first" }
+        require(chapter.chapterId > 0 && chapter.mangaId > 0 && page in 0 until chapter.pageCount)
+        val current = graphql("query NooirCurrentPosition { chapter(id: "+chapter.chapterId+") { id mangaId pageCount lastPageRead } }").obj("chapter")
+        require(current.int("id")==chapter.chapterId && current.int("mangaId")==chapter.mangaId &&
+            current.int("pageCount")==chapter.pageCount) { "Chapter changed; reopen before saving" }
+        val existing=current.int("lastPageRead")
+        require(existing in 0..chapter.pageCount && existing <= page) { "Server has a later or invalid position; no changes made" }
+        if(existing==page)return existing
+        val changed=graphql("mutation NooirSavePosition { updateChapter(input: { id: "+chapter.chapterId+
+            ", patch: { lastPageRead: "+page+" } }) { chapter { id mangaId lastPageRead } } }").obj("updateChapter").obj("chapter")
+        require(changed.int("id")==chapter.chapterId && changed.int("mangaId")==chapter.mangaId &&
+            changed.int("lastPageRead")==page) { "Server did not confirm reading position" }
+        return page
+    }
+
     /** Fetch just one image's bounded encoded bytes; no disk cache, no decode. */
     fun onlinePage(chapter: SuwayomiOnlineChapter, index: Int): ByteArray {
         require(chapter.chapterId > 0 && chapter.mangaId > 0 && chapter.sourceOrder >= 0 &&
