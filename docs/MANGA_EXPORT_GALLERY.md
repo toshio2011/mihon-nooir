@@ -2,7 +2,7 @@
 
 [All user guides](README.md) · [Choose chapters](CHAPTER_SELECTION.md) · [Conversion settings](CONVERSION.md) · [Auto Fit](PANEL_AUTO_FIT.md)
 
-This evergreen guide explains how to export manga and compare conversion choices. The linked Android captures are release-source emulator evidence, not signed-APK or physical-reader captures. Desktop is a development preview. The comparison gallery below is a capture backlog, not a claim that the comparison images already exist.
+This evergreen guide explains how to export manga and compare conversion choices. The linked Android captures are release-source emulator evidence, not signed-APK or physical-reader captures. Desktop is a development preview. The gallery includes a permanently embedded actual-output preview and verified desktop comparisons; the remaining capture and publication tasks are explicitly marked.
 
 ## Export manga on Android
 
@@ -73,11 +73,15 @@ The published development desktop JVM package from [CI run 45744401559, artifact
 | Panel by Panel, Auto Fit | 6 |
 | Panel by Panel, Portrait, full-page overview enabled | 7 |
 
+![Actual decoded XTC first frames, Page, Row by Row, Panel by Panel, from left to right](screenshots/conversion-gallery/segmentation-preview.png)
+
+**Left to right:** Page (1 total frame), Row by Row (3 total frames), Panel by Panel (6 total frames). Only the first frame of each export is shown here. Each native 480 × 800 monochrome frame was reduced to 120 × 200 using nearest-neighbor sampling; this is a navigation preview, not a full-resolution readability comparison. No simulated output or drawn overlay was used.
+
 All decoded frames are native X4 480 × 800 XTC. The six panel images were visually reviewed in reading order (1–6); some thin adjacent border lines are visible when trimming is off. Auto Fit and Landscape produced pixel-identical frames for all three wide rows. The overview was pixel-identical to the standalone Page export, and the six following frames matched the standalone Panel export pixel-for-pixel.
 
 Controlled settings: Pages layout, X4, XTC, right-to-left, Atkinson, neutral contrast 50, ordinary overlap 0%, Context Peek 0%, trim/spread/cover/first-page protection/enlargement off; orientation, segmentation and overview changed only for the listed comparisons. Source SHA-256: `5d8efdb3634e02a0271c5dc2c5410cbd3ef0f40c84224bb17b8773ae5098f959`.
 
-The original comic, seven saved XTC files, full decoded PNG sequences, comparison sheets, source generator, conversion harness, log and checksum manifest were produced in the local QA session. Permanent binary image publication in this repository is pending. The results above are documented now, but the illustrated gallery is not complete until the actual PNGs are committed and reviewed. These tests do not establish Android or physical reader parity.
+The original comic, seven saved XTC files, full decoded PNG sequences, comparison sheets, source generator, conversion harness, log and checksum manifest were produced in the local QA session. The reduced first-frame comparison is permanently embedded above. Full-size contact sheets and complete per-frame PNG publication remain pending. These tests do not establish Android or physical reader parity.
 
 ## Advanced conversion comparisons (desktop QA, 26 November 2026)
 
@@ -93,6 +97,8 @@ The same [desktop JVM artifact](https://github.com/toshio2011/mihon-nooir/action
 
 Context Peek is conditional, not a guaranteed zoom or split. The [desktop converter implementation](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/cli/NooirDesktopCli.kt) only expands adjacent confirmed, unprotected panels when the final slice count matches the detector count and the gap is eligible. The unchanged results alone do not establish a defect or prove that the feature works end to end. Do not advertise a visible before/after effect until a suitable fixture demonstrates it.
 
+A follow-up sweep tested 18 original geometric fixtures (horizontal and vertical adjacent panels with nine gutter widths from 4 to 40 source pixels) in Portrait and Auto Fit, comparing Context Peek 0% and 8%. All 36 comparisons produced two frames with identical decoded pixels. This is a bounded negative result on the tested desktop package, not proof of an application-wide defect. A positive example and diagnostic review of the eligibility gate remain open.
+
 The generated comparison sheets and decoded sequences were inspected in the local QA session. Permanent image publication remains pending; the results are desktop evidence, not signed Android or physical-reader verification.
 
 ## Compare actual manga results
@@ -101,11 +107,11 @@ The planned comparison gallery uses the same legally shareable source page in ea
 
 | Comparison | What to inspect | Capture status |
 |---|---|---|
-| Page vs Row by Row vs Panel by Panel | View count, reading order, scale and grouped columns | Desktop XTC 1/3/6 verified; permanent images and Android pending |
+| Page vs Row by Row vs Panel by Panel | View count, reading order, scale and grouped columns | Desktop XTC 1/3/6 verified; permanent first-frame preview embedded; complete images and Android pending |
 | Portrait vs Landscape vs Auto Fit | Fitted occupancy, rotation and white margins | Desktop XTC row comparison verified; permanent images and Android pending |
 | Ordinary overlap 0% vs 10% | Repeated area and continuity on long strips | Desktop Webtoon XTC verified; permanent images and Android pending |
 | Enlargement off vs on, minimum fill 50% | Natural boundaries or guarded overlap on oversized views | Desktop XTC 2/3 verified; permanent images and Android pending |
-| Context Peek off vs 4% | Adjacent confirmed panel context | Six-panel and close two-panel outputs unchanged; positive example pending |
+| Context Peek off vs 4% | Adjacent confirmed panel context | Six-panel, close two-panel, and 36 additional comparisons unchanged; positive example pending |
 | Full-page overview off vs on | Original overview followed by detail views | Desktop XTC 6/7 verified, exact overview/frame equality; permanent images and Android pending |
 | Keep first chapter page whole off vs on | Independent protection of opening artwork | Pending |
 | XTC vs XTCH | Decoded monochrome vs four-level gray on same artwork | Desktop synthetic comparison reviewed; manga and Android examples pending |
