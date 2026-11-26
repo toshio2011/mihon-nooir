@@ -1,21 +1,23 @@
-# Desktop integration candidate — 25 November 2026
+# Desktop integration candidate — 26 November 2026
 
-This draft consolidates the complete stacked desktop development history through 34e936874f1b7f402b08217b5e9c75feec8aff8c, including the compact high-DPI web editor. The latest Android documentation-only main commit (4b6307961b2712d4b1c02e61190e26511135489f) is retained verbatim. The frozen Android release guard remains in force; no Android app, signing, firmware, release or publication changes.
+This isolated candidate combines backup and extension recovery through PR #143, verified live public web acceptance from PR #133, and the 19 actual desktop guide images from PR #139. Android production source, firmware, signing and release publication remain unchanged. This branch is not the previously verified November 25 candidate.
 
-## Verified evidence before this candidate
+## Prior evidence (not exact combined-commit acceptance)
 
-- Run 45563098681: all six native targets, portable conversion, real Suwayomi and offline web extraction passed.
-- Run 45568094923: native macOS DMG and Linux DEB/RPM package payload checks passed.
-- Run 45568367858: Windows x64/ARM64 and Linux x64/ARM64 user-state retention passed; macOS GUI failed on a nullable label in the test.
-- Run 45570772806: JVM, Windows ARM64, Linux ARM64 and macOS ARM64 passed after UI/test improvements. Superseded jobs were canceled, not passes.
-- Run 45572332745: high-DPI chapter viewport regression is pending at candidate creation.
+- Integrated original candidate: run 45572700921, all eight jobs passed.
+- Live web acceptance: run 45573117372, public-domain EPUB and one public Wattpad chapter with cover and synopsis.
+- Native real-server backup round trip: run 45650969283, all eight passed; chapter flags, page/history record counts, missing signed source ID, recovery copy and repeated import.
+- Explicit desktop server reading-position save: run 45734689592, all eight passed; real pinned server backup includes updated position, known rewind refused.
+- Approved extension recovery: run 45739874517, all eight passed; synthetic localhost installation contract only.
+- Legacy repository index fallback: PR #143; acceptance not yet verified at creation.
+- Documentation: 19 actual embedded desktop screenshots, prior candidate, verified paths. Android PR #140 independently contains 18 actual release-source captures. No final signed Android screenshot claim.
 
-## Required before publication
+## Release gates
 
-1. All eight jobs on this exact integrated commit must pass, including every native architecture, installer checks and real Suwayomi.
-2. Inspect fresh screenshots, especially Windows 150% and compact macOS screens.
-3. Verify a permitted live public web novel including Wattpad metadata and exported chapter text; offline fixture success does not establish live availability.
-4. Decide release package policy for unsigned builds and macOS notarization, test physical machines and actual package-manager upgrades where supported. Windows ARM64 portable is the current intended delivery, not an MSI.
-5. Review compatibility and update documentation, release names, checksums, and obtain explicit release approval.
+1. Exact combined commit must pass all native and live-web jobs and preserve the frozen Android source guard.
+2. Verify fresh GUI captures, including Backup & Restore and progress save controls; remaining PDF, batch, transfer and installation screenshots.
+3. Test actual third-party extension recovery on an isolated server and physical Android restore of a desktop-generated backup. Verify category membership/order, exact page values, history and duplicate handling. No automatic missing-repository registration; modern index recovery remains open.
+4. Test physical readers and platforms, actual Linux package-manager upgrade, unsigned distribution and macOS signing/notarization. Windows ARM64 portable only.
+5. Review final guides, artifact names/checksums, user-state retention and obtain release approval.
 
-No release artifacts are published by this branch. Existing stable Android release remains unchanged.
+No artifacts published as stable desktop releases. Android v1.0.20 remains untouched.

@@ -1,10 +1,10 @@
-# MihonNooir for Windows — integrated development preview
+# MihonNooir Desktop — integrated development preview
 
-> **Development track, not a public release.** Android v1.0.20 stays stable. This branch consolidates the Windows preview with the exact released v1.0.20 shared panel geometry and settings; no Android production source or firmware changes. Preview version: 0.1.0. Integrated CI run 45538883269 passed JVM, native Windows packaging, MSI state retention, GUI and real empty-server checks. New Local source and full page-contract tests require fresh CI; physical PC/reader acceptance is still required.
+> **Development track, not a public release.** Android v1.0.20 remains stable. Windows, macOS and Linux preview builds cover x64 and ARM64 with a bundled Java 21 runtime. See the [illustrated desktop guide](DESKTOP_GUIDE.md) and [candidate acceptance checklist](RELEASE_CANDIDATE.md).
 
 ## Set up Mihon-compatible extensions (optional)
 
-Windows uses the pinned official Suwayomi backend, which runs compatible Mihon/Tachiyomi extensions. Extension setup is separate from Android; MihonNooir neither bundles sources nor automatically imports APKs or repository URLs from the phone.
+Desktop uses the pinned official Suwayomi backend, which runs compatible Mihon/Tachiyomi extensions. Extension setup is separate from Android; MihonNooir does not bundle sources or automatically import APKs or register repository URLs. Native backup migration can preview repositories, restore library metadata and offer explicitly approved exact-source recovery for configured repositories; see the [backup walkthrough](DESKTOP_GUIDE.md#move-your-library-between-android-and-desktop-development-candidate).
 
 1. Choose **Download & start Suwayomi** and explicitly approve the verified official server download, or start/connect to an existing supported local instance.
 2. In **Installed sources**, choose **Manage extensions…**, then open the local Suwayomi browser interface.
