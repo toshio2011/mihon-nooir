@@ -72,10 +72,93 @@ private fun Cover(client: SuwayomiClient, card: SuwayomiMangaCard, modifier: Mod
     }
 }
 
+// Only one page decode/fetch runs at a time. Cancelled effects cannot
+// publish into the next chapter or page. Do not silently mutate progress.
+private val pageSlots = Semaphore(1)
+
+private fun decodeReaderPage(bytes: ByteArray): ImageBitmap {
+    val input = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
+        ?: error("Unable to read page image")
+    return input.use { stream ->
+        val readers = ImageIO.getImageReaders(stream)
+        require(readers.hasNext()) { "Unsupported page image format" }
+        val reader = readers.next()
+        try {
+            reader.input = stream
+            val w = reader.getWidth(0)
+            val h = reader.getHeight(0)
+            require(w > 0 && h > 0 && w.toLong() * h <= 25_000_000L) { "Page dimensions exceed limit" }
+            val factor = maxOf(1, (maxOf(w, h) + 4095) / 4096)
+            val param = reader.defaultReadParam
+            param.setSourceSubsampling(factor, factor, 0, 0)
+            reader.read(0, param).toComposeImageBitmap()
+        } finally { reader.dispose() }
+    }
+}
+
+@Composable
+private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: SuwayomiChapter, back: () -> Unit) {
+    var manifestResult by remember(card.id, chapter.id) { mutableStateOf<Result<SuwayomiOnlineChapter>?>(null) }
+    var page by remember(card.id, chapter.id) { mutableStateOf(0) }
+    var openRevision by remember(card.id, chapter.id) { mutableStateOf(0) }
+    var pageRevision by remember(card.id, chapter.id) { mutableStateOf(0) }
+    LaunchedEffect(client, card.id, chapter.id, openRevision) {
+        manifestResult = null
+        val result = request { client.openOnlineChapter(card.id, chapter.id) }
+        result.getOrNull()?.let { page = it.lastPageRead.coerceIn(0, it.pageCount - 1) }
+        manifestResult = result
+    }
+    val result = manifestResult
+    val manifest = result?.getOrNull()
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = back) { Text("‹ Chapters") }
+            Text(card.title + " · " + chapter.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (result == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        } else if (manifest == null) {
+            Text("Unable to open chapter. Check the installed source and server connection.", color = MaterialTheme.colorScheme.error)
+            Button(onClick = { openRevision++ }) { Text("Retry chapter") }
+        } else {
+            var imageResult by remember(manifest, page, pageRevision) { mutableStateOf<Result<ImageBitmap>?>(null) }
+            LaunchedEffect(client, manifest, page, pageRevision) {
+                val index = page
+                imageResult = pageSlots.withPermit { request { decodeReaderPage(client.onlinePage(manifest, index)) } }
+            }
+            if (manifest.syncConflict != null) Text("Reading-position conflict reported by server. No position is being written.")
+            val rendered = imageResult
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                when {
+                    rendered == null -> CircularProgressIndicator()
+                    rendered.isFailure -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Unable to display this page.")
+                        Button(onClick = { pageRevision++ }) { Text("Retry page") }
+                    }
+                    else -> Image(rendered.getOrThrow(), contentDescription = "Page " + (page + 1),
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { page-- }, enabled = page > 0 && rendered != null) { Text("Previous") }
+                Text("${page + 1} / ${manifest.pageCount}")
+                TextButton(onClick = { page++ }, enabled = page + 1 < manifest.pageCount && rendered != null) { Text("Next") }
+            }
+            Text("Read-only experiment · server progress is not automatically saved", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
 @Composable
 private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, back: () -> Unit) {
     var state by remember(card.id) { mutableStateOf<Result<SuwayomiManga>?>(null) }
+    var opened by remember(card.id) { mutableStateOf<SuwayomiChapter?>(null) }
     LaunchedEffect(client, card.id) { state = request { client.manga(card.id) } }
+    val chapter = opened
+    if (chapter != null) {
+        Reader(client, card, chapter) { opened = null }
+        return
+    }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         TextButton(onClick = back) { Text("‹ Library") }
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -98,7 +181,8 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, back: () ->
             LazyColumn(Modifier.weight(1f)) {
                 items(chapters, key = { it.id }) { chapter ->
                     ListItem(headlineContent = { Text(chapter.name) },
-                        supportingContent = { Text(if (chapter.downloaded) "Downloaded" else "Online") })
+                        supportingContent = { Text(if (chapter.downloaded) "Downloaded" else "Online") },
+                        trailingContent = { TextButton(onClick = { opened = chapter }) { Text("Read") } })
                     HorizontalDivider()
                 }
             }
@@ -209,7 +293,7 @@ fun main() = application {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("Dark theme"); Switch(dark, { dark = it })
                                 }
-                                Text("Read-only UI feasibility build. Use the existing preview for reader, exports, backups, extension management and backend controls.")
+                                Text("Read-only UI feasibility build. Use the existing preview for exports, backups, extension management, backend controls and saved reading progress.")
                             }
                         }
                     }
