@@ -2,6 +2,7 @@ package dev.nooir.desktop.ui
 
 import dev.nooir.desktop.suwayomi.DesktopBackupInspector
 import dev.nooir.desktop.suwayomi.DesktopBackupTransport
+import dev.nooir.desktop.suwayomi.DesktopBackupExtensions
 import java.io.File
 import java.awt.Component
 import javax.swing.JFileChooser
@@ -11,7 +12,7 @@ import javax.swing.JTextArea
 import javax.swing.SwingWorker
 import javax.swing.filechooser.FileNameExtensionFilter
 
-/** Read-only preview; restore/export remain explicitly delegated to the local WebUI. */
+/** Native backup tools; missing repositories still require manual WebUI review. */
 object DesktopBackupPreview {
     fun show(owner: Component, endpoint: String, openWebUi: () -> Unit) {
         val actions = arrayOf("Inspect backup…", "Create portable backup…", "Restore library…", "Review missing extensions…", "Open Suwayomi backup tools", "Cancel")
@@ -87,20 +88,45 @@ object DesktopBackupPreview {
             }
             3 -> {
                 val file=choose(owner,false,"")?:return
-                runTask(owner,"Extension migration review"){
-                    val plan=DesktopBackupTransport(endpoint).extensionPlan(file)
-                    buildString{
-                        appendLine("Repository comparison (no network refresh or installation):")
-                        plan.stores.forEach{appendLine(it.backup.name+": "+it.state.name)}
-                        appendLine("\nSource comparison:")
-                        plan.sources.forEach{row->
-                            appendLine(row.name+" ("+row.id+"): "+row.state.name)
-                            row.candidates.forEach{appendLine("  "+it.name+" / "+it.pkgName)}
-                        }
-                        appendLine("\nReview missing or conflicting repositories in the local WebUI. No changes made.")
-                        appendLine("Catalog entries can be incomplete until you explicitly refresh configured repositories.")
-                    }
+                val api=try{DesktopBackupTransport(endpoint)}catch(e:Exception){
+                    JOptionPane.showMessageDialog(owner,"Use a valid local server.");return
                 }
+                object:SwingWorker<DesktopBackupExtensions.Plan,Void>(){
+                    override fun doInBackground()=api.extensionPlan(file)
+                    override fun done(){
+                        try {
+                            val plan=get()
+                            val candidates=DesktopBackupExtensions.recoverable(plan)
+                            val report=buildString{
+                                appendLine("Repository comparison (no changes made):")
+                                plan.stores.forEach{appendLine(it.backup.name+": "+it.state.name);appendLine("  "+it.backup.indexUrl)}
+                                appendLine("\nSource comparison:")
+                                plan.sources.forEach{row->
+                                    appendLine(row.name+" ("+row.id+"): "+row.state.name)
+                                    row.candidates.forEach{appendLine("  "+it.name+" / "+it.pkgName)}
+                                }
+                                appendLine("\nMissing or changed repositories must be reviewed and added manually in the local WebUI.")
+                                appendLine("The cached catalog may not include every source until explicitly refreshed.")
+                            }
+                            val text=JTextArea(report,18,65).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
+                            JOptionPane.showMessageDialog(owner,JScrollPane(text),"Extension migration review",JOptionPane.INFORMATION_MESSAGE)
+                            if(candidates.isEmpty())return
+                            val choices=arrayOf("Choose one extension…","Cancel")
+                            if(JOptionPane.showOptionDialog(owner,"Exact source matches are available from already configured repositories. Install only extensions you trust.","Recover compatible extensions",JOptionPane.DEFAULT_OPTION,JOptionPane.WARNING_MESSAGE,null,choices,choices[1])!=0)return
+                            val labels=candidates.map{it.name+" — "+it.pkgName}.toTypedArray()
+                            val selected=JOptionPane.showInputDialog(owner,"Select a package to review:","Recover extension",JOptionPane.QUESTION_MESSAGE,null,labels,labels.first())?:return
+                            val approved=candidates[labels.indexOf(selected)]
+                            val approval=JTextArea("Package: "+approved.pkgName+"\nRepository: "+approved.indexUrl+
+                                "\nSigning identity: "+approved.signingKey+"\nSource IDs: "+approved.sourceIds.joinToString()+
+                                "\n\nExtensions run code in your local server. A matching backup key does not prove trust. Install this package only if you trust the repository and its code.",10,58).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
+                            if(JOptionPane.showConfirmDialog(owner,JScrollPane(approval),"Approve extension installation",JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)return
+                            runTask(owner,"Recover extension"){
+                                val restored=api.installReviewedExtension(file,approved)
+                                "Server confirmed "+restored.size+" requested source(s) available from "+approved.pkgName+".\nRun Review missing extensions again for remaining sources."
+                            }
+                        }catch(e:Exception){JOptionPane.showMessageDialog(owner,"Could not review extensions. Check local WebUI.","Extension review",JOptionPane.ERROR_MESSAGE)}
+                    }
+                }.execute()
             }
             4 -> openWebUi()
         }

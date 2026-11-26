@@ -44,6 +44,20 @@ object DesktopBackupExtensions {
         }
         return Plan(review,sources)
     }
+    /** Approval is tied to exact package, store URL, signing identity and source IDs. */
+    data class Recovery(val pkgName:String,val name:String,val indexUrl:String,val signingKey:String,val sourceIds:Set<Long>)
+    fun recoverable(plan:Plan):List<Recovery> {
+        val matched=plan.stores.filter{it.state==StoreState.PRESENT_MATCH}.associateBy{it.backup.indexUrl}
+        return plan.sources.filter{it.state==SourceState.CANDIDATE_REVIEW}
+            .groupBy{it.candidates.single().pkgName}.values.map{rows->
+                val e=rows.first().candidates.single()
+                val url=requireNotNull(e.indexUrl)
+                val store=matched.getValue(url)
+                require(rows.all{it.candidates.single()==e})
+                require(e.pkgName.matches(Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")) && e.pkgName.length<=250)
+                Recovery(e.pkgName,e.name,url,store.backup.signingKey,rows.map{it.id}.toSet())
+            }
+    }
     private fun varint(n:Long):ByteArray {
         var x=n;val b=ByteArrayOutputStream()
         while(x ushr 7!=0L){b.write((x.toInt() and 127) or 128);x=x ushr 7}
