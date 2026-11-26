@@ -10,6 +10,8 @@ cleanup() {
   if [[ -n "$fixture_pid" ]]; then kill "$fixture_pid" 2>/dev/null || true; fi
 }
 trap cleanup EXIT
+# Retain the visible UI and last stage when a GUI assertion fails.
+trap 'rc=$?; echo "GUI capture failed at line $LINENO (exit $rc)" >&2; import -window root "$out/compose-failure.png" 2>/dev/null || true; tail -n 35 "$out/application.log" >&2 || true; tail -n 25 "$out/fixture.log" >&2 || true; exit "$rc"' ERR
 /usr/bin/python3 desktop/compose-preview/qa/preview_fixture.py > "$out/fixture.log" 2>&1 &
 fixture_pid=$!
 for i in {1..20}; do
@@ -121,15 +123,16 @@ import -window root "$out/compose-export-dialog.png"
 test -s "$out/compose-export-dialog.png"
 # Enter a real output path through the visible field and trigger the actual Export button.
 # Fixed footer geometry is checked by the readiness/complete diagnostics, not filenames alone.
-xdotool mousemove 480 566 click 1
+xdotool mousemove 480 528 click 1
 xdotool type --clearmodifiers --delay 1 "$out/compose-gui-export.xtc"
 for i in {1..15}; do
   if grep -Fxq 'QA_OUTPUT_READY' "$out/application.log"; then break; fi
   sleep 1
 done
 grep -Fxq 'QA_OUTPUT_READY' "$out/application.log"
+sleep 1
 import -window root "$out/compose-export-ready.png"
-xdotool mousemove 785 650 click 1
+xdotool mousemove 785 658 click 1
 for i in {1..90}; do
   if grep -Fxq 'QA_EXPORT_COMPLETE' "$out/application.log"; then break; fi
   sleep 1
@@ -137,7 +140,7 @@ done
 grep -Fxq 'QA_EXPORT_COMPLETE' "$out/application.log"
 test -s "$out/compose-gui-export.xtc"
 import -window root "$out/compose-export-complete.png"
-xdotool mousemove 402 650 click 1
+xdotool mousemove 402 658 click 1
 for i in {1..20}; do
   if grep -Fq 'QA_CONVERTED_FRAME page=1 count=' "$out/application.log"; then break; fi
   sleep 1
