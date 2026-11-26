@@ -154,6 +154,9 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
     var state by remember(card.id) { mutableStateOf<Result<SuwayomiManga>?>(null) }
     var opened by remember(card.id) { mutableStateOf<SuwayomiChapter?>(null) }
     var refreshRevision by remember(card.id) { mutableStateOf(0) }
+    var selectionMode by remember(card.id) { mutableStateOf(false) }
+    var selectedIds by remember(card.id) { mutableStateOf(setOf<Int>()) }
+    var exportOpen by remember(card.id) { mutableStateOf(false) }
     LaunchedEffect(client, card.id, refreshRevision) {
         state = null
         state = request {
@@ -187,13 +190,29 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
         else if (result.isFailure) Text("Unable to load chapters. Return to the library and retry.", color = MaterialTheme.colorScheme.error)
         else {
             val chapters = result.getOrThrow().chapters
-            Text("${chapters.size} chapters")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${chapters.size} chapters", Modifier.weight(1f))
+                TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }) {
+                    Text(if (selectionMode) "Cancel selection" else "Select chapters")
+                }
+                if (selectionMode) {
+                    Text("${selectedIds.size} selected")
+                    TextButton(onClick = { exportOpen = true }, enabled = selectedIds.isNotEmpty()) { Text("Export") }
+                }
+            }
+            if (exportOpen) ComposeExport(card, chapters.filter { it.id in selectedIds }) { exportOpen = false }
             if (chapters.isEmpty() && refreshAllowed) Text("Refresh chapters to fetch available chapters from this source.")
             LazyColumn(Modifier.weight(1f)) {
                 items(chapters, key = { it.id }) { chapter ->
                     ListItem(headlineContent = { Text(chapter.name) },
                         supportingContent = { Text(if (chapter.downloaded) "Downloaded" else "Online") },
-                        trailingContent = { TextButton(onClick = { opened = chapter }) { Text("Read") } })
+                        leadingContent = if (selectionMode) {
+                            { Checkbox(checked = chapter.id in selectedIds, onCheckedChange = { checked ->
+                                if (checked && selectedIds.size < 500) selectedIds = selectedIds + chapter.id
+                                if (!checked) selectedIds = selectedIds - chapter.id
+                            }, enabled = chapter.id in selectedIds || selectedIds.size < 500) }
+                        } else null,
+                        trailingContent = { TextButton(onClick = { opened = chapter }, enabled = !selectionMode) { Text("Read") } })
                     HorizontalDivider()
                 }
             }

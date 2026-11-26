@@ -31,3 +31,7 @@ Run 45784959867 passed all four Compose jobs. Artifact 15100181909 includes the 
 ## Reader first-page evidence
 
 Run 45787530533 passed 4/4; artifact 15101126595 contains the reviewed real 1040×720 reader screenshot, confirming the first chapter opened and its first original synthetic comic page rendered. Fixture logs contain READER_OK 101 and PAGE_OK 0. No rejected persistent mutations. Next/Previous and Back click-through tests added using reviewed window coordinates. These new tests are not yet verified. Full reader layout, progress persistence, WebP and Android-style interaction parity remain release gates.
+
+## Native chapter export experiment
+
+The preceding Compose run 45789609636 passed all four jobs, including first-page, next-page and previous-page fixture requests and screenshots. This revision adds explicit chapter selection and a first native export dialog using the existing SuwayomiToNooir and NooirDesktopCli source plus the exact Android shared bridge and options model. No duplicated conversion algorithm. Export requires a new output filename; missing chapter downloads are opt-in. Device/format, panel mode, orientation, cover and overview are available. This is not the full Android settings screen, persistent queue, actual decoded export preview, bundled WebP support or production package. New compile and end-to-end export tests are mandatory. Existing stable Android and Swing code remain unchanged.

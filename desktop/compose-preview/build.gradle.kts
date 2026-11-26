@@ -8,7 +8,15 @@ kotlin {
     jvmToolchain(21)
     sourceSets.named("main") {
         kotlin.srcDir("../suwayomi")
-        kotlin.include("Main.kt", "SuwayomiClient.kt", "MiniJson.kt")
+        kotlin.srcDir("../cli")
+        kotlin.srcDir("../../overlay/app/src/main/java/dev/nooir/bridge")
+        kotlin.srcDir("../../overlay/app/src/main/java/dev/nooir/mangabridge")
+        kotlin.include("Main.kt", "ComposeExport.kt", "SuwayomiClient.kt", "MiniJson.kt", "SuwayomiToNooir.kt",
+            "NooirDesktopCli.kt", "XtcCodec.kt", "XtcBookPreview.kt", "ExportFormats.kt", "NooirDeviceProfiles.kt",
+            "BookArchiveWriter.kt", "Epub2Writer.kt", "GrayscaleConverter.kt", "GrayscalePng.kt", "NaturalPageOrder.kt",
+            "PageSlicePlanner.kt", "PanelContextPeek.kt", "PanelDetectionCore.kt", "PanelViewportPlanner.kt",
+            "PanelAutoFit.kt", "PanelWhitespaceCrop.kt", "PanelSafeSlicePlanner.kt", "PanelReadableSliceRefiner.kt",
+            "XteinkTransferPolicy.kt", "ReflowEpubWriter.kt", "NooirEpubCssRules.kt", "MangaConversionSettingsCore.kt")
     }
 }
 dependencies {
