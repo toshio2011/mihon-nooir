@@ -26,3 +26,7 @@ This isolated candidate combines backup and extension recovery through PR #143, 
 No artifacts published as stable desktop releases. Android v1.0.20 remains untouched.
 
 The final-acceptance branch explicitly opts in to the existing fixed-URL live web acceptance test; the fork and release restrictions remain unchanged. New screenshot assets will be added separately. Physical Android restore, real third-party extension recovery and distribution acceptance remain open.
+
+## 26 November final acceptance follow-up
+
+Run 45747976811: eight jobs passed, including actual public Wattpad cover/synopsis and real Windows server backup; Intel Mac failed on the second synthetic restore terminal-state assertion (line 131). The Mac GUI itself passed. No root cause proven from the original logs. Keep the assertion strict, record first/repeat ticket IDs and terminal state, and print a bounded isolated synthetic server log on failure. Do not retry a restore mutation or claim that this is fixed until exact-head CI passes. Physical migration and real extension recovery still outstanding.

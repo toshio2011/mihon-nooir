@@ -86,6 +86,23 @@ object RealSuwayomiServerSmoke {
             check(DesktopBackupInspector.inspect(progressExport).progressed>=2)
             println("PASS: real pinned server explicit desktop page write-back and portable backup progress; rewind refused")
             println("No third-party extensions, external manga, user credentials or normal data directory used.")
+        } catch (failure: Throwable) {
+            // This root contains only the isolated synthetic fixture. Keep the
+            // original failure and expose bounded backend diagnostics for CI.
+            runCatching {
+                val log = root.resolve("server-output.log").toFile()
+                if (log.isFile) {
+                    val tail = java.io.RandomAccessFile(log,"r").use {
+                        val size = minOf(it.length(), 64L * 1024).toInt()
+                        it.seek(it.length()-size)
+                        ByteArray(size).also { bytes -> it.readFully(bytes) }.toString(Charsets.UTF_8)
+                    }
+                    System.err.println("BEGIN isolated synthetic Suwayomi log tail")
+                    System.err.println(tail)
+                    System.err.println("END isolated synthetic Suwayomi log tail")
+                }
+            }
+            throw failure
         } finally {
             manager.close()
         }
@@ -120,7 +137,9 @@ object RealSuwayomiServerSmoke {
         val src=msg(101,str(1,"Synthetic missing source")+num(2,source))
         java.util.zip.GZIPOutputStream(input.outputStream()).use{it.write(manga+cat+src)}
         check(backup.validate(input).missingSources.any{it.id==source}) { "Missing signed source was not reported" }
-        check(backup.await(backup.beginRestore(input,recovery))=="SUCCESS") { "Pinned server restore failed or status unknown" }
+        val firstTicket=backup.beginRestore(input,recovery)
+        val firstState=backup.await(firstTicket)
+        check(firstState=="SUCCESS") { "First restore "+firstTicket.id+" ended in "+firstState+"; inspect synthetic server log" }
         check(recovery.isFile && recovery.length()>0)
         check(api.library(0,100).mangas.count{it.title==title}==1) { "Restore reported success but synthetic title missing or duplicated" }
         backup.export(exported,includeExtensionStores=true)
@@ -128,7 +147,10 @@ object RealSuwayomiServerSmoke {
         check(summary.favorites==1 && summary.categories>=1 && summary.chapters==1 &&
             summary.read==1 && summary.bookmarks==1 && summary.progressed==1 && summary.history==1 &&
             source in summary.referencedSourceIds) { "Exported library did not preserve the expected synthetic chapter metadata" }
-        check(backup.await(backup.beginRestore(input,duplicateRecovery))=="SUCCESS")
+        val repeatTicket=backup.beginRestore(input,duplicateRecovery)
+        check(repeatTicket.id!=firstTicket.id) { "Server reused restore ID" }
+        val repeatState=backup.await(repeatTicket)
+        check(repeatState=="SUCCESS") { "Repeat restore "+repeatTicket.id+" ended in "+repeatState+"; inspect synthetic server log" }
         check(api.library(0,100).mangas.count{it.title==title}==1) { "Repeated import duplicated library title" }
         backup.export(repeated,includeExtensionStores=true)
         val after=DesktopBackupInspector.inspect(repeated)
