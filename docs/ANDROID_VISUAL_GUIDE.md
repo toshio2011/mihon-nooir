@@ -89,3 +89,21 @@ Leave **EPUB 2 compatibility** unchecked for EPUB3, or enable it for EPUB2. Choo
 ## More Android walkthroughs
 
 The existing [Getting started](GETTING_STARTED.md), [Nooir Tools](NOOIR_TOOLS_QUICK_START.md), [Manga conversion](CONVERSION.md), [PDF](PDF_TO_EPUB.md), [Web novels](WEB_NOVELS.md), [Wi-Fi transfer](WIFI_TRANSFER.md) and [FAQ](FAQ.md) guides remain available. First launch, local input selection, actual XTCH viewer and initial PDF form are now pictured using the release-source QA build. Further captures are needed for full onboarding, extension repository setup, manga selection and export settings, PDF settings and completed output, transfers, backup/restore and other menus. Final signed-APK verification remains separate. No personal backups, manga library or credentials should appear in documentation. Android/Desktop backup migration is still in development; this guide does not promise it in v1.0.20.
+
+## Screenshot coverage by task
+
+The 18 embedded screenshots are from the v1.0.20 release-source emulator QA, not the final signed APK. Every captured screen uses test data. The other guides remain usable as text instructions while their corresponding captures are pending.
+
+| Task | Guide | Visual evidence |
+|---|---|---|
+| Installation and first launch | [Getting started](GETTING_STARTED.md) | Theme selection only; remaining onboarding and installation pending |
+| Nooir Tools and local file selection | [Quick start](NOOIR_TOOLS_QUICK_START.md) | [Converter menu and EPUB input](#first-launch-and-local-book-conversion) |
+| Chapter selection and manga conversion | [Chapter selection](CHAPTER_SELECTION.md), [Conversion](CONVERSION.md) | Manga export screen and settings pending |
+| Device, orientation and Auto Fit | [Device profiles](DEVICE_PROFILES.md), [Orientation](ORIENTATION_OVERLAP.md), [Auto Fit](PANEL_AUTO_FIT.md) | Settings and comparison captures pending |
+| Saved book and format options | [Export formats](EXPORT_FORMATS_EPUB2.md), [XTC metadata](XTC_METADATA.md) | [Actual finished XTCH viewer](#d-inspect-a-finished-xtcxtch); metadata and format selector pending |
+| PDF | [PDF conversion](PDF_TO_EPUB.md) | [Initial form](#e-convert-a-pdf); output settings and result pending |
+| Public web stories, covers and projects | [Web novels](WEB_NOVELS.md), [Web link](WEB_TO_READER.md) | [Web editor and book options](#2-create-one-epub-per-public-story); successful story analysis and export result pending |
+| Transfer and queue | [Wi-Fi](WIFI_TRANSFER.md), [Device files and queue](DEVICE_FILES_AND_QUEUE.md) | Pending; use synthetic filenames and redact network addresses |
+| Backup and updates | [Getting started](GETTING_STARTED.md), [Updates](UPDATES.md) | Pending; use clean test profile and synthetic backup only |
+
+Android desktop migration remains a desktop development feature, not a new Android v1.0.20 release. Never upload private backups or credentials to documentation.
