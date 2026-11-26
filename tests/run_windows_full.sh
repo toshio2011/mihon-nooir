@@ -15,7 +15,7 @@ java -Djava.awt.headless=true -jar "$tmp/windows-binary-preview.jar"
 # Truly exported XTC + XTCH pages are reopened from disk for all four modes.
 # Synthetic contact sheets are retained in CI as visual-review artifacts.
 kotlinc \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,PanelReadableSliceRefiner.kt} \
   overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
   desktop/cli/*.kt tests/DesktopVisualRenderingPreviewTest.kt \
   -include-runtime -d "$tmp/windows-rendered-visual-qa.jar"
@@ -24,22 +24,30 @@ java -Djava.awt.headless=true -cp "$tmp/windows-rendered-visual-qa.jar" DesktopV
 
 # Windows full-app project: headless GUI model tests against exactly the
 # current Android v1.0.17 shared renderer and conversion settings.
-kotlinc desktop/storage/DesktopDataHome.kt \
-  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt} \
-  overlay/app/src/main/java/dev/nooir/mangabridge/MangaConversionSettingsCore.kt \
+test -s build/desktop/lib/pdfbox-app-3.0.8.jar
+sha512sum -c desktop/pdfbox-runtime.sha512
+kotlinc -classpath "$PWD/build/desktop/lib/pdfbox-app-3.0.8.jar:$PWD/build/desktop/lib/jsoup-1.21.2.jar:$PWD/build/desktop/lib/json-20250517.jar" desktop/storage/DesktopDataHome.kt \
+  overlay/app/src/main/java/dev/nooir/bridge/{XtcCodec.kt,XtcBookPreview.kt,ExportFormats.kt,NooirDeviceProfiles.kt,BookArchiveWriter.kt,Epub2Writer.kt,GrayscaleConverter.kt,GrayscalePng.kt,NaturalPageOrder.kt,PageSlicePlanner.kt,PanelContextPeek.kt,PanelDetectionCore.kt,PanelViewportPlanner.kt,PanelAutoFit.kt,PanelWhitespaceCrop.kt,PanelSafeSlicePlanner.kt,PanelReadableSliceRefiner.kt,XteinkTransferPolicy.kt,ReflowEpubWriter.kt,NooirEpubCssRules.kt} \
+  overlay/app/src/main/java/dev/nooir/mangabridge/{MangaConversionSettingsCore.kt,NooirEpubBook.kt,NooirCoverCollageLayout.kt,NooirWebImageProfile.kt,NooirWebChapterPlan.kt,NooirWebChapterIdentity.kt,NooirWebChapterUpdates.kt,NooirWebArticle.kt,NooirWebNovel.kt,NooirWebPageBook.kt,NooirWebChapterDiscovery.kt,NooirWebTocPagination.kt,NooirWebExtractRules.kt,NooirWebFetchPolicy.kt,NooirWebImageCandidates.kt,NooirWebImageSignature.kt,NooirWebReadability.kt,NooirWattpadPublic.kt} \
   desktop/cli/*.kt desktop/suwayomi/*.kt desktop/ui/*.kt \
   tests/DesktopGuiModelTest.kt tests/DesktopXtcViewerSwingSmokeTest.kt \
-  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt \
+  tests/WindowsOfflineJourneyTest.kt tests/DesktopWebpSmokeTest.kt tests/DesktopConversionQueueTest.kt tests/DesktopReaderTransferTest.kt tests/DesktopDocumentImportTest.kt tests/DesktopWebImageAdaptersTest.kt tests/DesktopWebEpubTest.kt tests/DesktopWindowsUpdatesTest.kt \
   -include-runtime -d "$tmp/windows-full-gui-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" DesktopGuiModelTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopConversionQueueTestKt
+java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopReaderTransferTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopDocumentImportTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopWebImageAdaptersTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" dev.nooir.desktop.ui.DesktopWebEpubTestKt
+java -Djava.awt.headless=true -cp "$tmp/windows-full-gui-tests.jar" dev.nooir.desktop.ui.DesktopWindowsUpdatesTestKt
 # Real Swing dialog acceptance using a virtual display. This exercises actual
 # rendered saved-book pages, navigation, resize, fit and 1:1, without touching
 # an installed Windows app. Off by default for developer headless terminals.
 if [ "${NOOIR_DESKTOP_GUI_SMOKE:-0}" = "1" ]; then
   command -v xvfb-run >/dev/null ||
     { echo "Xvfb unavailable for real desktop UI smoke" >&2; exit 1; }
-  xvfb-run -a -s "-screen 0 1366x768x24" \
-    java -Djava.awt.headless=false -cp "$tmp/windows-full-gui-tests.jar" \
+  MIHONNOOIR_DATA_DIR="$tmp/gui-library-isolated" xvfb-run -a -s "-screen 0 1366x768x24" \
+    java -Djava.awt.headless=false -Dnooir.test.offlineLibrary=true -cp "$tmp/windows-full-gui-tests.jar:$PWD/build/desktop/lib/*" \
     dev.nooir.desktop.ui.DesktopXtcViewerSwingSmokeTestKt
 fi
 # Test the actual bundled pure-Java reader and the existing bounded source
@@ -74,6 +82,11 @@ kotlinc desktop/storage/DesktopDataHome.kt desktop/ui/OfflineSaveQueue.kt tests/
   -include-runtime -d "$tmp/windows-offline-save-queue-tests.jar"
 java -Djava.awt.headless=true -cp "$tmp/windows-offline-save-queue-tests.jar" OfflineSaveQueueTestKt
 
+# Online reader transport contract: single-page requests, no source downloads in CI.
+kotlinc desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt} \
+  tests/WindowsOnlineChapterApiTest.kt -include-runtime -d "$tmp/windows-online-api.jar"
+java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$tmp/windows-online-api.jar" WindowsOnlineChapterApiTestKt
+
 # True Suwayomi remote download requests: synthetic localhost GraphQL only.
 # No third-party manga, extension installation or Android build edits.
 kotlinc desktop/storage/DesktopDataHome.kt desktop/suwayomi/{MiniJson.kt,SuwayomiClient.kt} \
@@ -107,3 +120,23 @@ java -Djava.awt.headless=true -cp "$tmp/windows-reader-bookmarks-tests.jar" Read
 kotlinc desktop/storage/DesktopDataHome.kt tests/DesktopDataHomeTest.kt \
   -include-runtime -d "$tmp/windows-storage-root-tests.jar"
 java -jar "$tmp/windows-storage-root-tests.jar"
+
+# Read-only Android/Suwayomi backup preview; synthetic fixtures only.
+kotlinc desktop/suwayomi/DesktopBackupInspector.kt tests/DesktopBackupInspectorTest.kt -include-runtime -d "$tmp/desktop-backup-inspector.jar"
+java -jar "$tmp/desktop-backup-inspector.jar"
+
+# Localhost-only backup transport contract; synthetic protocol fixture.
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt,DesktopLegacyRepoIndex.kt} tests/DesktopBackupTransportTest.kt -include-runtime -d "$tmp/desktop-backup-transport.jar"
+java --add-modules jdk.httpserver -jar "$tmp/desktop-backup-transport.jar"
+
+# Synthetic Android-compatible extension store round trip and exact-ID review.
+kotlinc desktop/suwayomi/{DesktopBackupInspector.kt,DesktopBackupExtensions.kt} tests/DesktopBackupExtensionsTest.kt -include-runtime -d "$tmp/desktop-backup-extensions.jar"
+java -jar "$tmp/desktop-backup-extensions.jar"
+
+# Explicit extension installation contract on a synthetic localhost backend only.
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupTransport.kt,DesktopBackupExtensions.kt,DesktopLegacyRepoIndex.kt} tests/DesktopBackupExtensionRecoveryTest.kt -include-runtime -d "$tmp/desktop-extension-recovery.jar"
+java --add-modules jdk.httpserver -jar "$tmp/desktop-extension-recovery.jar"
+
+# Real legacy JSON schema, exact signed source identity and stale version refusal.
+kotlinc desktop/suwayomi/{MiniJson.kt,DesktopBackupInspector.kt,DesktopBackupExtensions.kt,DesktopLegacyRepoIndex.kt} tests/DesktopLegacyRepoIndexTest.kt -include-runtime -d "$tmp/desktop-legacy-index.jar"
+java -jar "$tmp/desktop-legacy-index.jar"

@@ -2,6 +2,9 @@ package dev.nooir.desktop.ui
 
 import dev.nooir.mangabridge.MangaConversionOptions
 import java.awt.Component
+import java.awt.Dimension
+import java.awt.GraphicsEnvironment
+import java.text.ParseException
 import java.awt.GridLayout
 import javax.swing.JCheckBox
 import javax.swing.JComboBox
@@ -9,6 +12,7 @@ import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JSpinner
+import javax.swing.JScrollPane
 import javax.swing.SpinnerNumberModel
 
 /** Uses Android's exact conversion settings model and token format. */
@@ -28,6 +32,8 @@ internal object DesktopConversionDialog {
         ))
         val renderHelp = JLabel("")
         val contextPeek = JSpinner(SpinnerNumberModel(0, 0, 8, 1))
+        val enlarge = JCheckBox("Enlarge oversized splits")
+        val minFill = JSpinner(SpinnerNumberModel(50,25,80,5))
         var selectedSettings = original
         fun renderExplanation() {
             renderHelp.text = when (renderMode.selectedItem) {
@@ -62,6 +68,10 @@ internal object DesktopConversionDialog {
             split.isSelected = o.splitSpreads
             rtl.isSelected = o.rightToLeft
             renderMode.selectedItem = o.renderAlgorithm
+            enlarge.isSelected = o.enlargeOversizedSplits
+            minFill.value = o.minimumScreenFillPercent
+            enlarge.isEnabled = o.panelMode != "OFF"
+            minFill.isEnabled = enlarge.isEnabled && enlarge.isSelected
             contextPeek.value = o.contextPeekPercent
             contextPeek.isEnabled = o.panelMode == "PANEL_BY_PANEL"
             renderExplanation()
@@ -88,12 +98,15 @@ internal object DesktopConversionDialog {
                 orientation.selectedItem = "PORTRAIT"
             }
             contextPeek.isEnabled = panelMode.selectedItem == "PANEL_BY_PANEL"
+            enlarge.isEnabled = panelMode.selectedItem != "OFF"
+            minFill.isEnabled = enlarge.isEnabled && enlarge.isSelected
         }
+        enlarge.addActionListener { minFill.isEnabled = enlarge.isEnabled && enlarge.isSelected }
         renderMode.addActionListener { if (!updating) renderExplanation() }
         val panel = JPanel(GridLayout(0, 2, 10, 5)).apply {
             add(JLabel("Preset")); add(preset)
             add(JLabel("Page layout")); add(layout)
-            add(JLabel("Page extraction")); add(panelMode)
+            add(JLabel("Page extraction").apply { labelFor = panelMode }); add(panelMode)
             add(JLabel("Orientation")); add(orientation)
             add(JLabel("Contrast (50 = neutral)")); add(contrast)
             add(JLabel("Long-strip overlap %")); add(overlap)
@@ -103,14 +116,40 @@ internal object DesktopConversionDialog {
             add(JLabel("Dithering / rendering")); add(renderMode)
             add(JLabel("Rendering difference")); add(renderHelp)
             add(JLabel("Context Peek % (Panel by Panel)")); add(contextPeek)
+            add(enlarge); add(JLabel("12% protective overlap; useful zoom only"))
+            add(JLabel("Minimum screen fill %").apply { labelFor = minFill }); add(minFill)
             add(clockwise); add(cover)
             add(missingCover); add(color)
             add(showOverview); add(keepChapterFirstWhole)
             add(extended); add(JLabel("XTC/XTCH always grayscale"))
         }
-        if (JOptionPane.showConfirmDialog(parent, panel, "MihonNooir conversion settings",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
-            return null
+        // The growing settings form must remain usable at 125/150% DPI
+        // and on smaller screens. Keep OK/Cancel outside the scrolling area.
+        val work = GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+        val scroll = JScrollPane(panel).apply {
+            preferredSize = Dimension(
+                minOf(panel.preferredSize.width + 24, (work.width - 90).coerceAtLeast(1)),
+                minOf(panel.preferredSize.height + 12, (work.height - 150).coerceAtLeast(1)),
+            )
+            verticalScrollBar.unitIncrement = 24
+            horizontalScrollBar.unitIncrement = 24
+        }
+        while (true) {
+            if (JOptionPane.showConfirmDialog(parent, scroll, "MihonNooir conversion settings",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
+                return null
+            }
+            try {
+                // A typed spinner edit is not necessarily committed before
+                // a mouse click on OK. Validate it rather than saving stale values.
+                listOf(contrast, overlap, pagesPerXhtml, contextPeek, minFill)
+                    .filter { it.isEnabled }.forEach { it.commitEdit() }
+                break
+            } catch (_: ParseException) {
+                JOptionPane.showMessageDialog(parent,
+                    "Enter a valid number within each setting's allowed range.",
+                    "Conversion settings", JOptionPane.WARNING_MESSAGE)
+            }
         }
         return MangaConversionOptions(
             preset = preset.selectedItem as String,
@@ -125,6 +164,8 @@ internal object DesktopConversionDialog {
                 else -> true
             },
             renderAlgorithm = renderMode.selectedItem as String,
+            enlargeOversizedSplits = enlarge.isSelected,
+            minimumScreenFillPercent = minFill.value as Int,
             contextPeekPercent = if (panelMode.selectedItem == "PANEL_BY_PANEL")
                 contextPeek.value as Int else 0,
             orientation = (orientation.selectedItem as String).takeUnless {

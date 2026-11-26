@@ -270,8 +270,47 @@ object NooirDesktopCli {
         (lum * alpha + 255 * (255 - alpha)) / 255 < 247
     }
 
+    private data class DetectedPanel(val region: PageRegion, val preserveWhole: Boolean,
+        val allowSingleEdgeZoom: Boolean = false)
+
+    private fun inkAt(src: BufferedImage,x: Int,y: Int): Boolean {
+        val pixel=src.getRGB(x,y)
+        val alpha=(pixel ushr 24) and 255
+        val lum=(((pixel ushr 16) and 255)*299+((pixel ushr 8) and 255)*587+(pixel and 255)*114)/1000
+        return (lum*alpha+255*(255-alpha))/255 < 247
+    }
+
+    private fun recoverInnerPanelsWithinRow(src: BufferedImage,region: PageRegion,
+        rightToLeft: Boolean): List<PageRegion>? {
+        if (region.width<160 || region.height<240 || region.right>src.width || region.bottom>src.height) return null
+        val scale=minOf(1.0,600.0/region.width,900.0/region.height)
+        val w=(region.width*scale).toInt().coerceAtLeast(1)
+        val h=(region.height*scale).toInt().coerceAtLeast(1)
+        if (w<160 || h<240) return null
+        val thumb=BufferedImage(w,h,BufferedImage.TYPE_INT_RGB)
+        try {
+            val g=thumb.createGraphics()
+            try {
+                g.color=Color.WHITE;g.fillRect(0,0,w,h)
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                g.drawImage(src,0,0,w,h,region.left,region.top,region.right,region.bottom,null)
+            } finally { g.dispose() }
+            val rgb=thumb.getRGB(0,0,w,h,null,0,w)
+            val gray=ByteArray(rgb.size) { i ->
+                val c=rgb[i]
+                ((((c ushr 16) and 255)*299+((c ushr 8) and 255)*587+(c and 255)*114)/1000).toByte()
+            }
+            val plan=PanelDetectionCore.detect(w,h,gray,rightToLeft,false)
+            if (plan.usedFullPageFallback || plan.preserveSingleFrame || plan.regions.size !in 2..6 ||
+                !(plan.reason.startsWith("row-first partition") || plan.reason.contains("slanted") ||
+                    plan.reason.contains("framed components"))) return null
+            return PanelDetectionCore.sourceRegions(plan,w,h,region.width,region.height,paddingPercent=1)
+                .map { PageRegion(it.left+region.left,it.top+region.top,it.right+region.left,it.bottom+region.top) }
+        } finally { thumb.flush() }
+    }
+
     /** Same bounded OCR-free panel detector as Android, with a Java2D thumbnail adapter. */
-    private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<PageRegion>? {
+    private fun detectPanels(src: BufferedImage, options: MangaConversionOptions): List<DetectedPanel>? {
         if (options.panelMode != "PANEL_BY_PANEL" && options.panelMode != "ROW_BY_ROW") return null
         if (src.height.toLong() > src.width.toLong() * 3L) return null
         val scale = minOf(1.0, 600.0 / src.width, 900.0 / src.height)
@@ -295,12 +334,18 @@ object NooirDesktopCli {
         }
         val plan = if (options.panelMode == "ROW_BY_ROW")
             PanelDetectionCore.detectRows(w, h, gray)
-        else PanelDetectionCore.detect(w, h, gray, options.rightToLeft)
-        return if (plan.usedFullPageFallback) null
-            else PanelDetectionCore.sourceRegions(
-                plan, w, h, src.width, src.height,
-                PanelDetectionCore.overlapPaddingPercent(options.overlapPercent),
-            )
+        else PanelDetectionCore.detect(w,h,gray,options.rightToLeft,options.enlargeOversizedSplits)
+        thumbnail.flush()
+        if (plan.usedFullPageFallback) return null
+        val regions=PanelDetectionCore.sourceRegions(plan,w,h,src.width,src.height,
+            PanelDetectionCore.overlapPaddingPercent(options.overlapPercent))
+        return regions.mapIndexed { i,r ->
+            val sparse=options.layout!="WEBTOON" &&
+                PanelSafeSlicePlanner.isSparse(plan.regions[i]) { x,y -> (gray[y*w+x].toInt() and 255)<220 }
+            DetectedPanel(r,sparse || (options.panelMode=="PANEL_BY_PANEL" &&
+                plan.preserveSingleFrame && plan.regions.size==1),
+                options.panelMode=="PANEL_BY_PANEL" && plan.allowSingleEdgeZoom && plan.regions.size==1)
+        }
     }
 
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,
@@ -309,21 +354,28 @@ object NooirDesktopCli {
         val manualRotate = options.orientation == "LANDSCAPE" && width < height
         val manualViewWidth = if (manualRotate) height else width
         val manualViewHeight = if (manualRotate) width else height
-        val detectedPanels = detectPanels(src, options)
-        val panels = if (detectedPanels != null && options.cropWhiteMargins)
-            detectedPanels.map { trimDetectedPanel(src, it) }
+        val sourceWhole=PageRegion(0,0,src.width,src.height)
+        val sparseWhole=if (options.panelMode=="PANEL_BY_PANEL" && options.layout!="WEBTOON" &&
+            src.height.toLong()<=src.width.toLong()*3 &&
+            PanelSafeSlicePlanner.isSparse(sourceWhole) { x,y -> inkAt(src,x,y) }) sourceWhole else null
+        val detectedPanels=if (sparseWhole!=null) listOf(DetectedPanel(sparseWhole,true)) else detectPanels(src,options)
+        val panels=if(detectedPanels!=null && options.cropWhiteMargins)
+            detectedPanels.map { if(it.preserveWhole) it else it.copy(region=trimDetectedPanel(src,it.region)) }
         else detectedPanels
-        val slices: List<PanelFitSlice> = when {
+        val plannedSlices: List<PanelFitSlice> = when {
+            sparseWhole!=null -> listOf(PanelFitSlice(sparseWhole,
+                if(auto) PanelAutoFit.landscapeForMaximumFill(sparseWhole,minOf(width,height),maxOf(width,height))
+                else manualRotate))
             // Row by Row means exactly one screen per detected horizontal tier.
             // Never split a row again on its internal vertical panel gutters.
             panels != null && options.panelMode == "ROW_BY_ROW" && auto ->
                 PanelAutoFit.plan(
-                    panels, minOf(width, height), maxOf(width, height),
+                    panels.map { it.region }, minOf(width, height), maxOf(width, height),
                     options.rightToLeft, options.overlapPercent,
                     preserveWholePanels = true,
                 )
             panels != null && options.panelMode == "ROW_BY_ROW" ->
-                panels.map { PanelFitSlice(it, manualRotate) }
+                panels.map { PanelFitSlice(it.region, manualRotate) }
             // Row-by-Row never falls through to a non-row viewport slicer
             // if its horizontal detector cannot prove any valid boundaries.
             options.panelMode == "ROW_BY_ROW" && panels == null -> {
@@ -337,18 +389,20 @@ object NooirDesktopCli {
             // maximize the displayed area of each resulting fragment.
             panels != null && options.panelMode == "PANEL_BY_PANEL" && auto ->
                 PanelAutoFit.plan(
-                    panels, minOf(width, height), maxOf(width, height),
+                    panels.map { it.region }, minOf(width, height), maxOf(width, height),
                     options.rightToLeft, options.overlapPercent,
                     preserveWholePanels = true,
-                ).flatMap { fit ->
+                ).flatMapIndexed { index, fit ->
                     val vw = if (fit.landscape) maxOf(width, height) else minOf(width, height)
                     val vh = if (fit.landscape) minOf(width, height) else maxOf(width, height)
-                    val parts = safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
+                    val parts = if(panels[index].preserveWhole) listOf(fit.region)
+                    else safePanelSlices(src, fit.region, vw, vh, options.rightToLeft,
                         options.overlapPercent)
                     PanelAutoFit.refitFinalSlices(parts, minOf(width, height), maxOf(width, height))
                 }
             panels != null -> panels.flatMap { panel ->
-                safePanelSlices(src, panel, manualViewWidth, manualViewHeight,
+                if(panel.preserveWhole) listOf(panel.region)
+                else safePanelSlices(src, panel.region, manualViewWidth, manualViewHeight,
                     options.rightToLeft, options.overlapPercent)
             }.map { PanelFitSlice(it, manualRotate) }
             else -> PageSlicePlanner.plan(
@@ -357,11 +411,25 @@ object NooirDesktopCli {
                 options.overlapPercent, if (auto) "PORTRAIT" else options.orientation,
             ).map { PanelFitSlice(it, manualRotate) }
         }
+        val slices=if(options.panelMode=="PANEL_BY_PANEL" && panels!=null &&
+            sparseWhole==null && options.layout!="WEBTOON" && plannedSlices.size<=32) {
+            PanelReadableSliceRefiner.refine(plannedSlices,src.width,src.height,minOf(width,height),maxOf(width,height),
+                inkAt={x,y -> inkAt(src,x,y)},protectedRegions=panels.filter { it.preserveWhole }.map { it.region },
+                autoFit=auto,allowSingleEdgeZoom=panels.size==1 && panels[0].allowSingleEdgeZoom,
+                recoverInnerPanels={ recoverInnerPanelsWithinRow(src,it,options.rightToLeft) },
+                enlargeOversizedSplits=options.enlargeOversizedSplits,
+                minimumScreenFillPercent=options.minimumScreenFillPercent,requireZoomGain=true)
+        } else if(options.panelMode=="ROW_BY_ROW" && panels!=null &&
+            options.enlargeOversizedSplits && options.layout!="WEBTOON") {
+            PanelReadableSliceRefiner.refineRows(plannedSlices,src.width,src.height,minOf(width,height),maxOf(width,height),
+                {x,y -> inkAt(src,x,y)},auto,options.minimumScreenFillPercent,
+                panels.filter { it.preserveWhole }.map { it.region })
+        } else plannedSlices
         // Shared opt-in framing: expand only confirmed, separate panels.
         // Never create a new cut or change default conversion output.
         val framedSlices = if (options.contextPeekPercent > 0 &&
             options.panelMode == "PANEL_BY_PANEL" && options.layout != "WEBTOON" &&
-            panels != null && panels.size >= 2 && slices.size == panels.size) {
+            panels != null && panels.size >= 2 && slices.size == panels.size && panels.none { it.preserveWhole }) {
             val expanded = PanelContextPeek.expand(
                 slices.map { it.region }, src.width, src.height, options.contextPeekPercent)
             slices.mapIndexed { index, view -> view.copy(region = expanded[index]) }
@@ -375,15 +443,18 @@ object NooirDesktopCli {
         for ((sliceIndex, slice) in displaySlices.withIndex()) {
             val isOverview = addOverview && sliceIndex == 0
             val region = slice.region
-            val landscape = if (auto) slice.landscape else manualRotate
+            val landscape = if (isOverview) false else if (auto) slice.landscape else manualRotate
             val frameWidth = if (auto && !fixedFramebuffer && landscape) maxOf(width, height) else width
             val frameHeight = if (auto && !fixedFramebuffer && landscape) minOf(width, height) else height
             val rotate = fixedFramebuffer && landscape && frameWidth < frameHeight
             val vw = if (rotate) frameHeight else frameWidth
             val vh = if (rotate) frameWidth else frameHeight
             // Already trimmed detected panels retain their safety padding.
-            val r = if (options.cropWhiteMargins && panels == null && !isOverview)
-                trimWhite(src, region) else region
+            val r = when {
+                isOverview || !options.cropWhiteMargins || panels!=null -> region
+                options.panelMode=="PANEL_BY_PANEL" && options.layout!="WEBTOON" -> trimDetectedPanel(src,region)
+                else -> trimWhite(src,region)
+            }
             val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)
             val dh = (r.height * scale).toInt().coerceIn(1, vh)

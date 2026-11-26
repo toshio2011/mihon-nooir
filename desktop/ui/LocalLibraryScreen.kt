@@ -140,9 +140,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
 
     init {
         defaultCloseOperation = DISPOSE_ON_CLOSE
-        minimumSize = Dimension(580, 380)
-        setSize(920, 580)
-        setLocationRelativeTo(null)
+        DesktopWindowSizing.fit(this, Dimension(920, 580), Dimension(580, 380))
         list.selectionMode = ListSelectionModel.SINGLE_SELECTION
         list.cellRenderer = object : DefaultListCellRenderer() {
             override fun getListCellRendererComponent(
@@ -171,7 +169,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
             add(this@LocalLibraryWindow.resumeDownloaded)
         }
         add(JPanel(BorderLayout()).apply {
-            add(buttons, BorderLayout.NORTH)
+            add(DesktopWindowSizing.toolbar(buttons), BorderLayout.NORTH)
             add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(JLabel("Find manga:"))
                 add(search)
@@ -186,7 +184,7 @@ private class LocalLibraryWindow : JFrame("MihonNooir — My local library") {
         add(JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
             JScrollPane(list), coverPanel).apply {
             resizeWeight = 0.74
-            dividerLocation = 610
+            dividerLocation = (this@LocalLibraryWindow.width * 0.58).toInt()
         }, BorderLayout.CENTER)
         add(information.apply {
             border = BorderFactory.createEmptyBorder(8, 12, 10, 12)
