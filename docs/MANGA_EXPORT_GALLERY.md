@@ -101,6 +101,24 @@ A follow-up sweep tested 18 original geometric fixtures (horizontal and vertical
 
 The generated comparison sheets and decoded sequences were inspected in the local QA session. Permanent image publication remains pending; the results are desktop evidence, not signed Android or physical-reader verification.
 
+## Choose a file format and protect chapter openings
+
+Fresh local execution of the [desktop JVM QA package](https://github.com/toshio2011/mihon-nooir/actions/runs/45744401559/artifacts/15083466467) exported two identical copies of the original six-panel robot comic with the same X4 profile, Portrait, Panel by Panel, Atkinson, contrast 50, ordinary overlap 0%, right-to-left and enlargement off. Cover, crop, spread split, overview and opening protection were off unless explicitly changed.
+
+| Format | Saved frames | File size (bytes) | Observed result |
+|---|---:|---:|---|
+| XTC | 12 | 576864 | Decoded black/white |
+| XTCH | 12 | 1152864 | Decoded four grayscale levels |
+| EPUB 2 | 12 | 70803 | Image-based EPUB with OPF 2.0 and NCX |
+| EPUB 3 | 12 | 71040 | Image-based EPUB with OPF 3.0 and RTL spine |
+| CBZ | 12 | 64741 | Ordered PNG archive |
+
+These sizes are specific to this small synthetic source and are not general size or speed benchmarks. All 12 extracted images in EPUB 2, EPUB 3 and CBZ were pixel-identical to the decoded XTCH frames. EPUB spine links, image ordering, ZIP CRCs and native dimensions were checked; EPUB 2 does not use the EPUB 3 RTL spine attribute. Actual firmware compatibility is not established by these archive checks.
+
+**Keep first page of each chapter whole** is different from **Show full page before splits**. With opening protection disabled, both six-panel input pages produced 12 frames. With protection enabled, the opening page was emitted whole and the second was split into six frames (7 total). The opening image matched the standalone Page export exactly; the six remaining frames matched the corresponding unprotected second-page frames exactly. This fixture is a single chapter; multi-chapter and physical-reader captures remain separate.
+
+The local evidence archive includes all six actual saved books, full decoded or extracted PNG frames, contact sheets, checksum manifest, source, and reproduction scripts. The new full-size contact sheets have not yet been permanently embedded in this repository.
+
 ## Compare actual manga results
 
 The planned comparison gallery uses the same legally shareable source page in each pair or sequence. Keep the reader profile and all unrelated settings constant; show every generated view in reading order, including the full-page original. Do not substitute live-preview thumbnails, synthetic checkerboards or diagrams for actual decoded manga output.
@@ -113,8 +131,8 @@ The planned comparison gallery uses the same legally shareable source page in ea
 | Enlargement off vs on, minimum fill 50% | Natural boundaries or guarded overlap on oversized views | Desktop XTC 2/3 verified; permanent images and Android pending |
 | Context Peek off vs 4% | Adjacent confirmed panel context | Six-panel, close two-panel, and 36 additional comparisons unchanged; positive example pending |
 | Full-page overview off vs on | Original overview followed by detail views | Desktop XTC 6/7 verified, exact overview/frame equality; permanent images and Android pending |
-| Keep first chapter page whole off vs on | Independent protection of opening artwork | Pending |
-| XTC vs XTCH | Decoded monochrome vs four-level gray on same artwork | Desktop synthetic comparison reviewed; manga and Android examples pending |
+| Keep first chapter page whole off vs on | Independent protection of opening artwork | Desktop XTC 12/7 verified, exact opening/remaining frame equality; permanent images and Android pending |
+| XTC vs XTCH | Decoded monochrome vs four-level gray on same artwork | Desktop synthetic rendering and original robot manga comparison verified; permanent images and Android pending |
 | Floyd–Steinberg, Atkinson, Bayer 8×8, Threshold | Line art, shading and dithering texture | Desktop synthetic comparison reviewed; full-resolution manga examples pending |
 | Right-to-left vs left-to-right spread split | Reading order of facing pages | Desktop XTC exact reverse verified; permanent images and Android pending |
 
