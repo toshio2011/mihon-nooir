@@ -7,6 +7,11 @@
 > [!IMPORTANT]
 > **The latest official Android release is [v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20)** (24 November 2026). See [release notes](releases/v1.0.20.md) for Universal Book Converter, EPUB → XTC/XTCH, Web → EPUB and signed upgrade verification. Existing manga and PDF tools are retained. Windows remains in development.
 
+
+**Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
+
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
+
 ## If this is your first time
 
 1. [**Install MihonNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.

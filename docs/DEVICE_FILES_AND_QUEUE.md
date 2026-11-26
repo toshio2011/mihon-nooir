@@ -1,5 +1,7 @@
 # Browse XTEink files, Activity Queue and filename conflicts
 
+> **Screenshot guide:** Queue and device-file screenshots are pending. See [Android screenshot coverage](ANDROID_VISUAL_GUIDE.md#screenshot-coverage-by-task).
+
 > **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 [← All guides](README.md) · [Nooir Tools quick start](NOOIR_TOOLS_QUICK_START.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)

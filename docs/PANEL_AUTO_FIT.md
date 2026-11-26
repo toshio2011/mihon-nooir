@@ -1,5 +1,7 @@
 # MihonNooir — Auto Fit (Row by Row and Panel by Panel)
 
+> **Screenshot guide:** Manga Auto Fit settings screenshots are pending. See [Android screenshot coverage](ANDROID_VISUAL_GUIDE.md#screenshot-coverage-by-task).
+
 > **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 ## Recommended manga settings

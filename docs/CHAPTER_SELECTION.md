@@ -1,5 +1,7 @@
 # Choosing chapters for manga export
 
+> **Screenshot guide:** Chapter selection screenshots are pending; the actual [Android visual walkthrough](ANDROID_VISUAL_GUIDE.md#screenshot-coverage-by-task) currently illustrates the local converter and finished-book viewer, not the manga Export dialog.
+
 [← Documentation](README.md) · [Main README](../README.md) · [Getting started](GETTING_STARTED.md) · [Wi-Fi transfer](WIFI_TRANSFER.md)
 
 **The most important step:** choose chapters **on the manga details screen before opening Export**. The Export dialog chooses the device, format and destination; it does **not** contain a separate chapter picker. In this context, “import chapters” usually means **export chapters out of MihonNooir** for your e-reader.

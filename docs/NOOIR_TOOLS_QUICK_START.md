@@ -6,6 +6,11 @@
 
 **Already using normal Mihon?** MihonNooir is a separate Android app. Your existing Mihon reader, library, extensions, downloads, backup and tracking behavior are meant to remain available. No manga sources or books are bundled.
 
+
+**Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
+
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#b-choose-a-converter) (v1.0.20 release-source emulator).
+
 ## Where are the new tools?
 
 Open **MihonNooir → More → Nooir Tools**. Inside the hub:

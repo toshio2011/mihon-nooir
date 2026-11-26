@@ -1,5 +1,7 @@
 # XTC and XTCH — format metadata, covers, and synopsis
 
+> **Screenshot guide:** See the [actual finished XTCH viewer](ANDROID_VISUAL_GUIDE.md#d-inspect-a-finished-xtcxtch); metadata and shelf cover screenshots are pending.
+
 > **Current Android release:** [MihonNooir v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) (24 November 2026). This guide describes shipped features; see [release notes](releases/v1.0.20.md). Individual inputs, sources and reader firmware may behave differently. Windows is not publicly released.
 
 > [Export comparison](EXPORT_FORMATS_EPUB2.md) · [Current release notes](releases/v1.0.20.md)

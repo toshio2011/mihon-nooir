@@ -1,5 +1,7 @@
 # Update policy
 
+> **Screenshot guide:** Version and update screenshots are pending; see the [illustrated Android guide](ANDROID_VISUAL_GUIDE.md) for release-source screen captures.
+
 ## Keeping the app up to date
 
 [Official Android v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20) was published 24 November 2026. It retains package `dev.nooir.mihontrial.foss` and the official v1.0.19 signing certificate. All five APKs passed checks; Android 16 emulator upgrade retained the package UID. [Publication](https://github.com/toshio2011/mihon-nooir/actions/runs/45402302298) promoted exact signed artifact 14905454241 after byte-for-byte verification. Not every device or library migration has been tested.
