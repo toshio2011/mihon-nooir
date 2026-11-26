@@ -8,6 +8,8 @@
 
 > **Version note:** These workflows are included in [Android v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20). [Installation guide](GETTING_STARTED.md).
 
+[Manga export quick walkthrough and conversion gallery](MANGA_EXPORT_GALLERY.md) — settings, saved-file inspection and pending visual chapter-selection captures.
+
 ## Select exactly the chapters you want
 
 1. Open **MihonNooir → Library** (or browse a source) and open the manga's **details page**, where its chapter list appears.
