@@ -6,6 +6,8 @@ The guide is organized by task and maintained across releases. The current scree
 
 This is the Android guide, separate from the desktop development preview. Install the [official signed v1.0.20 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20). The screenshots below are actual raw Android emulator captures from the release-source integration run [45352687891](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891), not screenshots of the signed APK or a personal device. The embedded files are permanent copies of the original capture PNGs. The exact [screenshot archive](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891/artifacts/14901798319) contains eight images and capture notes; Actions login and retention apply.
 
+For a task-based guide to file types, typography and actual decoded Android EPUB output, see [Universal Book Converter](UNIVERSAL_CONVERTER_VISUAL_GUIDE.md).
+
 ## First launch and local book conversion
 
 These ten additional real emulator screenshots come from the same release-source integration run [45352687891](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891), [Universal Converter/device-smoke archive](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891/artifacts/14902042068). All content is synthetic. The capture notes confirm navigation, including two decoded pages of an actual finished XTCH. They do not depict the final signed APK.
