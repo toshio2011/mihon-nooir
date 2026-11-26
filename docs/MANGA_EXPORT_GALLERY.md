@@ -79,6 +79,22 @@ Controlled settings: Pages layout, X4, XTC, right-to-left, Atkinson, neutral con
 
 The original comic, seven saved XTC files, full decoded PNG sequences, comparison sheets, source generator, conversion harness, log and checksum manifest were produced in the local QA session. Permanent binary image publication in this repository is pending. The results above are documented now, but the illustrated gallery is not complete until the actual PNGs are committed and reviewed. These tests do not establish Android or physical reader parity.
 
+## Advanced conversion comparisons (desktop QA, 26 November 2026)
+
+The same [desktop JVM artifact](https://github.com/toshio2011/mihon-nooir/actions/runs/45744401559/artifacts/15083466467) was run against synthetic scroll, oversized-row, double-page spread and panel fixtures. Each result was exported as XTC and decoded through XtcBookPreview at native X4 480 × 800. Only the setting under comparison was changed within each pair.
+
+| Comparison | Actual result | What it means |
+|---|---|---|
+| Webtoon, Portrait, overlap 0% vs 10% | 3 vs 3 frames; first frame identical, later frames different | 10% repeats visible content at the next slice boundary; count may vary by source |
+| Row by Row, Landscape, enlargement off vs on, minimum fill 50% | 2 vs 3 frames | Oversized test tier becomes two larger views; ordinary overlap remains 0% |
+| Split double-page spread, RTL vs LTR | 2 vs 2 frames | Exact same decoded frames in reverse order; RTL emits right half first |
+| Context Peek 0% vs 4%, original six-panel comic | 6 vs 6 frames; all pixels identical | No visible effect on this fixture |
+| Context Peek 0% vs 8%, close two-panel fixture | 2 vs 2 frames; all pixels identical | Still no visible effect; a positive end-to-end example remains pending |
+
+Context Peek is conditional, not a guaranteed zoom or split. The [desktop converter implementation](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/cli/NooirDesktopCli.kt) only expands adjacent confirmed, unprotected panels when the final slice count matches the detector count and the gap is eligible. The unchanged results alone do not establish a defect or prove that the feature works end to end. Do not advertise a visible before/after effect until a suitable fixture demonstrates it.
+
+The generated comparison sheets and decoded sequences were inspected in the local QA session. Permanent image publication remains pending; the results are desktop evidence, not signed Android or physical-reader verification.
+
 ## Compare actual manga results
 
 The planned comparison gallery uses the same legally shareable source page in each pair or sequence. Keep the reader profile and all unrelated settings constant; show every generated view in reading order, including the full-page original. Do not substitute live-preview thumbnails, synthetic checkerboards or diagrams for actual decoded manga output.
@@ -87,14 +103,14 @@ The planned comparison gallery uses the same legally shareable source page in ea
 |---|---|---|
 | Page vs Row by Row vs Panel by Panel | View count, reading order, scale and grouped columns | Desktop XTC 1/3/6 verified; permanent images and Android pending |
 | Portrait vs Landscape vs Auto Fit | Fitted occupancy, rotation and white margins | Desktop XTC row comparison verified; permanent images and Android pending |
-| Ordinary overlap 0% vs 10% | Repeated area and continuity on long strips | Pending |
-| Enlargement off vs on, minimum fill 50% | Natural boundaries or guarded overlap on oversized views | Pending |
-| Context Peek off vs 4% | Adjacent confirmed panel context | Pending |
+| Ordinary overlap 0% vs 10% | Repeated area and continuity on long strips | Desktop Webtoon XTC verified; permanent images and Android pending |
+| Enlargement off vs on, minimum fill 50% | Natural boundaries or guarded overlap on oversized views | Desktop XTC 2/3 verified; permanent images and Android pending |
+| Context Peek off vs 4% | Adjacent confirmed panel context | Six-panel and close two-panel outputs unchanged; positive example pending |
 | Full-page overview off vs on | Original overview followed by detail views | Desktop XTC 6/7 verified, exact overview/frame equality; permanent images and Android pending |
 | Keep first chapter page whole off vs on | Independent protection of opening artwork | Pending |
 | XTC vs XTCH | Decoded monochrome vs four-level gray on same artwork | Desktop synthetic comparison reviewed; manga and Android examples pending |
 | Floyd–Steinberg, Atkinson, Bayer 8×8, Threshold | Line art, shading and dithering texture | Desktop synthetic comparison reviewed; full-resolution manga examples pending |
-| Right-to-left vs left-to-right spread split | Reading order of facing pages | Pending |
+| Right-to-left vs left-to-right spread split | Reading order of facing pages | Desktop XTC exact reverse verified; permanent images and Android pending |
 
 ## Capture and publication checklist
 
