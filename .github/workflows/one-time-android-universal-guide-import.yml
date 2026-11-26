@@ -1,0 +1,54 @@
+name: One-time Android universal converter guide asset import
+on:
+  push:
+    branches: [docs/one-time-android-universal-guide-import-20261126]
+    paths: ['.github/workflows/one-time-android-universal-guide-import.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'toshio2011/mihon-nooir' && github.ref == 'refs/heads/docs/one-time-android-universal-guide-import-20261126'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Copy only reviewed Android captures and guide changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=docs/android-v1.0.20-visual-guide-20261126
+          base=5f3650f0cacbec7ee48e056a83f3f11b2fd9617f
+          cp docs/{ANDROID_VISUAL_GUIDE,GETTING_STARTED,NOOIR_TOOLS_QUICK_START,CONVERSION,PDF_TO_EPUB,README}.md docs/android-universal-screenshot-import.sha256 "$RUNNER_TEMP/"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14902042068/zip" > "$RUNNER_TEMP/screens.zip"
+          git fetch origin "$target"
+          test "$(git rev-parse FETCH_HEAD)" = "$base"
+          git checkout --detach "$base"
+          cp "$RUNNER_TEMP"/{ANDROID_VISUAL_GUIDE,GETTING_STARTED,NOOIR_TOOLS_QUICK_START,CONVERSION,PDF_TO_EPUB,README}.md docs/
+          python - <<'PY'
+          import os, pathlib, zipfile, hashlib, re
+          tmp=pathlib.Path(os.environ["RUNNER_TEMP"])
+          out=pathlib.Path("docs/screenshots/android-v1.0.20/universal")
+          out.mkdir(parents=True,exist_ok=True)
+          manifest=(tmp/"android-universal-screenshot-import.sha256").read_text()
+          with zipfile.ZipFile(tmp/"screens.zip") as z:
+              for line in manifest.splitlines():
+                  digest,name=line.split()
+                  assert re.fullmatch(r"[a-z0-9-]+\.png",name)
+                  data=z.read("android-universal-converter-screenshots/"+name)
+                  assert data.startswith(b"\x89PNG\r\n\x1a\n") and hashlib.sha256(data).hexdigest()==digest
+                  (out/name).write_bytes(data)
+          (out/"SHA256SUMS").write_text(manifest)
+          links=re.findall(r"\]\((screenshots/[^)]+\.png)\)",pathlib.Path("docs/ANDROID_VISUAL_GUIDE.md").read_text())
+          assert len(links)==18
+          for link in links:
+              assert (pathlib.Path("docs")/link).is_file(),link
+          PY
+          git add -- docs/{ANDROID_VISUAL_GUIDE,GETTING_STARTED,NOOIR_TOOLS_QUICK_START,CONVERSION,PDF_TO_EPUB,README}.md docs/screenshots/android-v1.0.20/universal/
+          test -z "$(git diff --cached --name-only | grep -vE '^docs/((ANDROID_VISUAL_GUIDE|GETTING_STARTED|NOOIR_TOOLS_QUICK_START|CONVERSION|PDF_TO_EPUB|README)\.md|screenshots/android-v1\.0\.20/universal/([a-z0-9-]+\.png|SHA256SUMS))$' || true)"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Docs: add ten genuine Android converter and PDF walkthrough captures'
+          git push origin "HEAD:refs/heads/$target"

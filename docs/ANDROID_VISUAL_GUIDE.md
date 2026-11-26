@@ -2,6 +2,50 @@
 
 This is the Android guide, separate from the desktop development preview. Install the [official signed v1.0.20 release](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20). The screenshots below are actual raw Android emulator captures from the release-source integration run [45352687891](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891), not screenshots of the signed APK or a personal device. The embedded files are permanent copies of the original capture PNGs. The exact [screenshot archive](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891/artifacts/14901798319) contains eight images and capture notes; Actions login and retention apply.
 
+## First launch and local book conversion
+
+These ten additional real emulator screenshots come from the same release-source integration run [45352687891](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891), [Universal Converter/device-smoke archive](https://github.com/toshio2011/mihon-nooir/actions/runs/45352687891/artifacts/14902042068). All content is synthetic. The capture notes confirm navigation, including two decoded pages of an actual finished XTCH. They do not depict the final signed APK.
+
+### A. Finish first-run setup
+
+Install the official APK using [Getting started](GETTING_STARTED.md). Choose your theme and tap **Next**. When asked for a storage folder, choose or create a dedicated app folder rather than the entire Downloads root, grant access, complete onboarding and tap **Get started**. This screenshot shows the theme step; folder creation and later onboarding screens are not pictured.
+
+![First launch theme selection and Next button](screenshots/android-v1.0.20/universal/00-launch-state.png)
+
+### B. Choose a converter
+
+Open **More → Nooir Tools → Universal Book Converter**. Choose **Local files**, **Preview finished XTC / XTCH book**, or the dedicated **PDF files** converter; scroll for web options. The available routes depend on the selected source type.
+
+![Actual Universal Book Converter source menu](screenshots/android-v1.0.20/universal/01-universal-source-menu.png)
+
+### C. Local EPUB, CBZ/ZIP or images
+
+Select **Local files**. Choose the input type first so Android's file picker filters matching documents. Select **EPUB** then **Choose EPUB files**. Review device profile, output format and conversion settings after selecting a file; select the destination before starting. For EPUB to XTC/XTCH, choose the appropriate supported reader and typography settings. The captures show the selection screen before a file is picked, not a completed conversion.
+
+![Input type selector in Send and Convert files](screenshots/android-v1.0.20/universal/02-local-input-types.png)
+
+![EPUB selected and Choose EPUB files button](screenshots/android-v1.0.20/universal/03-epub-source-and-outputs.png)
+
+### D. Inspect a finished XTC/XTCH
+
+Choose **Preview finished XTC / XTCH book → Choose finished XTC / XTCH book**. Pick your actual saved file in Android's file picker. Use First, Prev, Next or Last to inspect decoded output. This does not reconvert the file or send it to the reader. The synthetic fixture deliberately has a black square on page one and reflowed prose on page two.
+
+![Finished book preview entry](screenshots/android-v1.0.20/universal/01a-finished-book-preview-entry.png)
+
+![Android document picker with synthetic XTCH fixture](screenshots/android-v1.0.20/universal/01b-android-file-picker.png)
+
+![Decoded synthetic XTCH page one](screenshots/android-v1.0.20/universal/01c-actual-decoded-xtch-page.png)
+
+![Decoded synthetic XTCH page two](screenshots/android-v1.0.20/universal/01d-actual-decoded-xtch-next-page.png)
+
+### E. Convert a PDF
+
+Open **Universal Book Converter → PDF files**, or select **PDF** under Local files and tap **Open PDF converter**. Choose one or more PDFs, enter optional title/author and a new output name. Scroll to select EPUB2/3, XTC or XTCH, review applicable settings and save or send. Use original page mode if complex layouts do not reflow well. See the [PDF guide](PDF_TO_EPUB.md) for the different output modes and limitations. These screenshots show the actual pre-selection form, not a finished PDF conversion.
+
+![PDF input selection and Open PDF converter button](screenshots/android-v1.0.20/universal/04-pdf-source.png)
+
+![Dedicated PDF to e-reader form](screenshots/android-v1.0.20/universal/05-dedicated-pdf-converter.png)
+
 ## 1. Find Nooir Tools
 
 Open MihonNooir. Tap **More** (bottom-right) → **Nooir Tools** → **Universal Book Converter** → **Web novels**. The captured emulator followed these actual navigation labels. The library is deliberately empty in the test profile.
@@ -44,4 +88,4 @@ Leave **EPUB 2 compatibility** unchecked for EPUB3, or enable it for EPUB2. Choo
 
 ## More Android walkthroughs
 
-The existing [Getting started](GETTING_STARTED.md), [Nooir Tools](NOOIR_TOOLS_QUICK_START.md), [Manga conversion](CONVERSION.md), [PDF](PDF_TO_EPUB.md), [Web novels](WEB_NOVELS.md), [Wi-Fi transfer](WIFI_TRANSFER.md) and [FAQ](FAQ.md) guides remain available. Captures for onboarding, extension repository setup, manga export, actual XTC/XTCH viewer, PDF, transfers, backup/restore and other menus are still needed from the exact released Android version. No personal backups, manga library or credentials should appear in documentation. Android/Desktop backup migration is still in development; this guide does not promise it in v1.0.20.
+The existing [Getting started](GETTING_STARTED.md), [Nooir Tools](NOOIR_TOOLS_QUICK_START.md), [Manga conversion](CONVERSION.md), [PDF](PDF_TO_EPUB.md), [Web novels](WEB_NOVELS.md), [Wi-Fi transfer](WIFI_TRANSFER.md) and [FAQ](FAQ.md) guides remain available. First launch, local input selection, actual XTCH viewer and initial PDF form are now pictured using the release-source QA build. Further captures are needed for full onboarding, extension repository setup, manga selection and export settings, PDF settings and completed output, transfers, backup/restore and other menus. Final signed-APK verification remains separate. No personal backups, manga library or credentials should appear in documentation. Android/Desktop backup migration is still in development; this guide does not promise it in v1.0.20.

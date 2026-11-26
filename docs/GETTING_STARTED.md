@@ -30,6 +30,8 @@ Download from the [official v1.0.20 release](https://github.com/toshio2011/mihon
 
 [Current release notes](releases/v1.0.20.md) · [Build/update details](UPDATES.md)
 
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
+
 ## Step 2 — Locate the features
 
 In v1.0.20 open **More → Nooir Tools**:

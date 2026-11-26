@@ -6,6 +6,8 @@ This feature targets the **mixed-content novel** use case: extract **real, selec
 
 
 
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#e-convert-a-pdf) (v1.0.20 release-source emulator).
+
 ## Steps
 
 1. Open **MihonNooir → More → Nooir Tools → Universal Book Converter → PDF files · Dedicated PDF converter**.

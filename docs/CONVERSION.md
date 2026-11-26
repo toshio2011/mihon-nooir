@@ -8,6 +8,8 @@ MihonNooir exports manga into e-reader-oriented formats while keeping the source
 
 > **Version note:** Quick Export, Nooir Tools, the shared queue and advanced image settings are included in v1.0.20. [Nooir Tools guide](NOOIR_TOOLS_QUICK_START.md).
 
+[View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#d-inspect-a-finished-xtcxtch) (v1.0.20 release-source emulator).
+
 ## Pick an output
 
 | Format | Image/color approach | Navigation and metadata | Typical use |
