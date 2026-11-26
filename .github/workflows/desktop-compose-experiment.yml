@@ -26,3 +26,30 @@ jobs:
           gradle-version: '8.12.1'
       - name: Compile isolated Compose UI
         run: gradle -p desktop/compose-preview compileKotlin --no-daemon --stacktrace
+  capture-library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12.1'
+      - name: Install isolated GUI capture dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth xdotool imagemagick python3-pil
+      - name: Launch real Compose UI and capture library
+        run: |
+          bash -n desktop/compose-preview/qa/capture-library.sh
+          xvfb-run -a -s '-screen 0 1440x900x24' bash desktop/compose-preview/qa/capture-library.sh
+      - name: Upload actual Compose library capture and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-compose-library-visual
+          path: compose-visual-evidence/
+          if-no-files-found: warn
