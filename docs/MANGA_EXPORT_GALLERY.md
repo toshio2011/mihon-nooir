@@ -59,18 +59,38 @@ The [desktop rendering QA test](https://github.com/toshio2011/mihon-nooir/blob/d
 
 The original archived PNGs are not yet embedded permanently in the repository. The artifact link is existing evidence; permanent publication and full-resolution per-frame examples remain pending.
 
+## Verified manga segmentation and orientation exports (desktop QA package, 26 November 2026)
+
+The published development desktop JVM package from [CI run 45744401559, artifact 15083466467](https://github.com/toshio2011/mihon-nooir/actions/runs/45744401559/artifacts/15083466467) was downloaded and executed locally against an original synthetic six-panel robot comic. The source has numbered dialogue in right-to-left order. These are fresh actual saved XTC conversions, not an inference from the older regression tests or mockups.
+
+| Settings | Actual saved frames |
+|---|---:|
+| Page, Portrait | 1 |
+| Row by Row, Portrait | 3 |
+| Panel by Panel, Portrait | 6 |
+| Row by Row, Landscape | 3 |
+| Row by Row, Auto Fit | 3 |
+| Panel by Panel, Auto Fit | 6 |
+| Panel by Panel, Portrait, full-page overview enabled | 7 |
+
+All decoded frames are native X4 480 × 800 XTC. The six panel images were visually reviewed in reading order (1–6); some thin adjacent border lines are visible when trimming is off. Auto Fit and Landscape produced pixel-identical frames for all three wide rows. The overview was pixel-identical to the standalone Page export, and the six following frames matched the standalone Panel export pixel-for-pixel.
+
+Controlled settings: Pages layout, X4, XTC, right-to-left, Atkinson, neutral contrast 50, ordinary overlap 0%, Context Peek 0%, trim/spread/cover/first-page protection/enlargement off; orientation, segmentation and overview changed only for the listed comparisons. Source SHA-256: `5d8efdb3634e02a0271c5dc2c5410cbd3ef0f40c84224bb17b8773ae5098f959`.
+
+The original comic, seven saved XTC files, full decoded PNG sequences, comparison sheets, source generator, conversion harness, log and checksum manifest were produced in the local QA session. Permanent binary image publication in this repository is pending. The results above are documented now, but the illustrated gallery is not complete until the actual PNGs are committed and reviewed. These tests do not establish Android or physical reader parity.
+
 ## Compare actual manga results
 
 The planned comparison gallery uses the same legally shareable source page in each pair or sequence. Keep the reader profile and all unrelated settings constant; show every generated view in reading order, including the full-page original. Do not substitute live-preview thumbnails, synthetic checkerboards or diagrams for actual decoded manga output.
 
 | Comparison | What to inspect | Capture status |
 |---|---|---|
-| Page vs Row by Row vs Panel by Panel | View count, reading order, scale and grouped columns | Pending |
-| Portrait vs Landscape vs Auto Fit | Fitted occupancy, rotation and white margins | Pending |
+| Page vs Row by Row vs Panel by Panel | View count, reading order, scale and grouped columns | Desktop XTC 1/3/6 verified; permanent images and Android pending |
+| Portrait vs Landscape vs Auto Fit | Fitted occupancy, rotation and white margins | Desktop XTC row comparison verified; permanent images and Android pending |
 | Ordinary overlap 0% vs 10% | Repeated area and continuity on long strips | Pending |
 | Enlargement off vs on, minimum fill 50% | Natural boundaries or guarded overlap on oversized views | Pending |
 | Context Peek off vs 4% | Adjacent confirmed panel context | Pending |
-| Full-page overview off vs on | Original overview followed by detail views | Pending |
+| Full-page overview off vs on | Original overview followed by detail views | Desktop XTC 6/7 verified, exact overview/frame equality; permanent images and Android pending |
 | Keep first chapter page whole off vs on | Independent protection of opening artwork | Pending |
 | XTC vs XTCH | Decoded monochrome vs four-level gray on same artwork | Desktop synthetic comparison reviewed; manga and Android examples pending |
 | Floyd–Steinberg, Atkinson, Bayer 8×8, Threshold | Line art, shading and dithering texture | Desktop synthetic comparison reviewed; full-resolution manga examples pending |
