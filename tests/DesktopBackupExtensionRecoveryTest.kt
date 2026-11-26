@@ -44,6 +44,18 @@ fun main(){
         ambiguous=false
         check(api.installReviewedExtension(file,approval)==setOf(42L) && mutations.get()==1)
         check(runCatching{api.installReviewedExtension(file,approval)}.isFailure && mutations.get()==1)
+        val requested=listOf(approval.copy(pkgName="first.pkg"),approval.copy(pkgName="bad.pkg"),approval.copy(pkgName="last.pkg"))
+        val attempted=mutableListOf<String>()
+        val results=DesktopBackupExtensions.recoverBatch(requested){
+            attempted.add(it.pkgName)
+            if(it.pkgName=="bad.pkg")error("Synthetic package unavailable")
+            it.sourceIds
+        }
+        check(attempted==requested.map{it.pkgName})
+        check(results.map{it.needsReview}==listOf(false,true,false))
+        check(results[0].confirmed==setOf(42L) && results[1].confirmed.isEmpty() && results[2].confirmed==setOf(42L))
+        check(runCatching{DesktopBackupExtensions.recoverBatch(listOf(approval,approval)){error("Must not run")}}.isFailure)
+        println("PASS: best-effort approved extension batch continues after failure, no duplicate or retry")
         println("PASS: explicitly approved exact-source extension recovery, key conflict, ambiguity, post-install verification and repeat refusal")
     }finally{server.stop(0);dir.deleteRecursively()}
 }

@@ -163,18 +163,34 @@ object DesktopBackupPreview {
                             val text=JTextArea(report,18,65).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
                             JOptionPane.showMessageDialog(owner,JScrollPane(text),"Extension migration review",JOptionPane.INFORMATION_MESSAGE)
                             if(candidates.isEmpty())return
-                            val choices=arrayOf("Choose one extension…","Cancel")
-                            if(JOptionPane.showOptionDialog(owner,"Exact source matches are available from already configured repositories. Install only extensions you trust.","Recover compatible extensions",JOptionPane.DEFAULT_OPTION,JOptionPane.WARNING_MESSAGE,null,choices,choices[1])!=0)return
                             val labels=candidates.map{it.name+" — "+it.pkgName}.toTypedArray()
-                            val selected=JOptionPane.showInputDialog(owner,"Select a package to review:","Recover extension",JOptionPane.QUESTION_MESSAGE,null,labels,labels.first())?:return
-                            val approved=candidates[labels.indexOf(selected)]
-                            val approval=JTextArea("Package: "+approved.pkgName+"\nRepository: "+approved.indexUrl+
-                                "\nSigning identity: "+approved.signingKey+"\nSource IDs: "+approved.sourceIds.joinToString()+
-                                "\n\nExtensions run code in your local server. A matching backup key does not prove trust. Install this package only if you trust the repository and its code.",10,58).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
-                            if(JOptionPane.showConfirmDialog(owner,JScrollPane(approval),"Approve extension installation",JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)return
-                            runTask(owner,"Recover extension"){
-                                val restored=api.installReviewedExtension(file,approved,evidence)
-                                "Server confirmed "+restored.size+" requested source(s) available from "+approved.pkgName+".\nRun Review missing extensions again for remaining sources."
+                            val selection=javax.swing.JList(labels).apply{
+                                selectionMode=javax.swing.ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+                                visibleRowCount=minOf(10,labels.size)
+                                selectedIndex=0
+                            }
+                            val panel=javax.swing.JPanel(java.awt.BorderLayout(0,8)).apply{
+                                add(javax.swing.JLabel("Select compatible packages you trust (up to 100)."),java.awt.BorderLayout.NORTH)
+                                add(JScrollPane(selection),java.awt.BorderLayout.CENTER)
+                                add(javax.swing.JLabel("Unsupported or unresolved sources remain in your library."),java.awt.BorderLayout.SOUTH)
+                            }
+                            if(JOptionPane.showConfirmDialog(owner,panel,"Recover compatible extensions",JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE)!=JOptionPane.OK_OPTION)return
+                            val approved=selection.selectedIndices.map{candidates[it]}
+                            if(approved.isEmpty() || approved.size>100)return
+                            val approval=JTextArea(approved.joinToString("\n\n"){
+                                "Package: "+it.pkgName+"\nRepository: "+it.indexUrl+
+                                "\nSigning identity: "+it.signingKey+"\nSource IDs: "+it.sourceIds.joinToString()
+                            }+"\n\nExtensions run code on your local server. Matching backup keys do not prove trust. Approve only packages and repositories you trust. Each selection will be checked again before installation; failed or changed packages will be skipped without retry.",16,65).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
+                            if(JOptionPane.showConfirmDialog(owner,JScrollPane(approval),"Approve selected extension installations",JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)return
+                            runTask(owner,"Recover selected extensions"){
+                                val results=DesktopBackupExtensions.recoverBatch(approved){api.installReviewedExtension(file,it,evidence)}
+                                buildString{
+                                    appendLine("Confirmed packages: "+results.count{!it.needsReview}+" / "+results.size)
+                                    appendLine("Confirmed source IDs: "+results.flatMap{it.confirmed}.distinct().size)
+                                    results.forEach{appendLine(it.packageName+": "+if(it.needsReview)"Not confirmed — check local WebUI before retrying" else "Recovered")}
+                                    appendLine("\nUnsupported, unselected or failed sources remain in your library. No manga or backup records were removed.")
+                                    appendLine("Review remaining sources separately. No failed installation was retried.")
+                                }
                             }
     }
     private fun choose(owner:Component,save:Boolean,name:String):File? {
