@@ -82,6 +82,8 @@ The shortcut retains your other settings. For a useful starting point, check tha
 
 The panel improvements introduced in v1.0.19 and retained in v1.0.20 rejoin weakly supported thin fragments, recovers strongly framed inner panels, recognizes supported slanted/spanning layouts and protects some continuous artwork. A real narrow panel can remain narrow. The new enlargement setting tries verified natural boundaries first; a separate 12% protective overlap is used only on eligible regions when both views improve scale. The ordinary overlap slider is independent. Use Row by Row or Page if a particular layout is not recognized. [Detailed settings and examples](PANEL_AUTO_FIT.md).
 
+[See the actual desktop XTC/XTCH comparison and manga export gallery](MANGA_EXPORT_GALLERY.md#actual-xtc-and-xtch-rendering-comparison-desktop-qa). The rendering comparison uses decoded saved files; Android and physical reader results may differ.
+
 ### Pick a rendering style
 
 | Rendering | Typical appearance |
