@@ -1,5 +1,6 @@
 package dev.nooir.desktop.compose
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -8,6 +9,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.DialogProperties
+import dev.nooir.bridge.GrayscalePng
+import dev.nooir.bridge.XtcBookPreview
+import javax.imageio.ImageIO
 import dev.nooir.bridge.ExportFormat
 import dev.nooir.bridge.NooirDeviceProfiles
 import dev.nooir.desktop.suwayomi.SuwayomiMangaCard
@@ -22,6 +30,7 @@ import java.io.File
 import javax.swing.JFileChooser
 
 /** Initial native export slice. Shares the exact existing converter and options token. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapter>, close: () -> Unit) {
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
@@ -31,6 +40,8 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
     var output by remember { mutableStateOf<File?>(null) }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
+    var finishedBook by remember { mutableStateOf<File?>(null) }
+    var showPreview by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         // Opt-in CI diagnostic only: no title, source IDs or user paths.
         if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") {
@@ -40,10 +51,16 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
     val scope = rememberCoroutineScope()
     val missing = chapters.count { !it.downloaded }
     val valid = chapters.isNotEmpty() && chapters.size <= 500 && (missing == 0 || allowDownload)
-    AlertDialog(onDismissRequest = { if (!busy) close() },
-        title = { Text("Export manga") },
-        text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    BasicAlertDialog(onDismissRequest = { if (!busy) close() },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth(0.85f)) {
+        Surface(shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Export manga", style = MaterialTheme.typography.headlineSmall)
+                if (showPreview && finishedBook != null) {
+                    ConvertedBookPreview(finishedBook!!) { showPreview = false }
+                } else {
+            Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(card.title, style = MaterialTheme.typography.titleMedium)
                 Text("${chapters.size} chapters selected · $missing not downloaded")
                 Text("Device", style = MaterialTheme.typography.titleSmall)
@@ -59,13 +76,23 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 OutlinedButton(onClick = {
                     options = MangaConversionOptions.preset("Manga").copy(panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT")
                 }, enabled = !busy) { Text("Apply manga settings") }
-                Text("Panel mode")
-                ExportChoice(options.panelMode, listOf("OFF", "ROW_BY_ROW", "PANEL_BY_PANEL"), !busy) {
-                    options = options.copy(panelMode = it)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Panel mode")
+                        ExportChoice(options.panelMode, listOf("OFF", "ROW_BY_ROW", "PANEL_BY_PANEL"), !busy) {
+                            options = options.copy(panelMode = it)
+                        }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("Orientation")
+                        ExportChoice(options.orientation, listOf("PORTRAIT", "LANDSCAPE", "AUTO_FIT"), !busy) {
+                            options = options.copy(orientation = it)
+                        }
+                    }
                 }
-                Text("Orientation")
-                ExportChoice(options.orientation, listOf("PORTRAIT", "LANDSCAPE", "AUTO_FIT"), !busy) {
-                    options = options.copy(orientation = it)
+                Text("Rendering algorithm")
+                ExportChoice(options.renderAlgorithm, listOf("LEGACY", "FLOYD_STEINBERG", "ATKINSON", "BAYER_8X8", "THRESHOLD"), !busy) {
+                    options = options.copy(renderAlgorithm = it)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(options.showFullPageBeforeSplits, { options = options.copy(showFullPageBeforeSplits = it) }, enabled = !busy)
@@ -98,9 +125,13 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 output?.let { Text(it.absolutePath, style = MaterialTheme.typography.bodySmall) }
                 if (busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Exporting… keep this window open.") }
                 result?.let { Text(it) }
+                if (finishedBook != null) OutlinedButton(onClick = { showPreview = true }, enabled = !busy) {
+                    Text("Preview converted book")
+                }
             }
-        },
-        confirmButton = {
+            HorizontalDivider()
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = close, enabled = !busy) { Text("Close") }
             Button(enabled = !busy && valid && output != null, onClick = {
                 val target = output ?: return@Button
                 val args = arrayOf("--mode", "export", "--manga-id", card.id.toString(),
@@ -109,12 +140,14 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                     "--download-missing", allowDownload.toString())
                 busy = true
                 result = null
+                finishedBook = null
                 scope.launch {
                     try {
                         withContext(Dispatchers.IO) {
                             runComposeExport(args, target)
                         }
                         result = "Exported: ${target.name}"
+                        finishedBook = target.takeIf { it.extension.lowercase() in setOf("xtc", "xtch") }
                         output = null
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
@@ -122,9 +155,52 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                     } finally { busy = false }
                 }
             }) { Text("Export") }
-        },
-        dismissButton = { TextButton(onClick = close, enabled = !busy) { Text("Close") } })
+            }
+                }
+            }
+        }
+    }
 }
+
+private data class DecodedFrame(val count: Int, val image: ImageBitmap)
+
+@Composable
+private fun ConvertedBookPreview(file: File, back: () -> Unit) {
+    var page by remember(file) { mutableStateOf(0) }
+    var frame by remember(file, page) { mutableStateOf<DecodedFrame?>(null) }
+    var failed by remember(file, page) { mutableStateOf(false) }
+    LaunchedEffect(file, page) {
+        try {
+            frame = withContext(Dispatchers.IO) {
+                val book = XtcBookPreview(file)
+                val png = GrayscalePng.encode(book.page(page))
+                val decoded = png.inputStream().use { ImageIO.read(it) } ?: error("Cannot decode exported page")
+                DecodedFrame(book.pageCount, decoded.toComposeImageBitmap())
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { failed = true }
+    }
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(file.name, style = MaterialTheme.typography.titleMedium)
+        Text("Actual converted output", style = MaterialTheme.typography.labelMedium)
+        Box(Modifier.fillMaxWidth().height(390.dp), contentAlignment = Alignment.Center) {
+            val current = frame
+            when {
+                failed -> Text("Unable to decode this page. The exported file has not been modified.")
+                current == null -> CircularProgressIndicator()
+                else -> Image(current.image, contentDescription = "Converted page ${page + 1}",
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { page-- }, enabled = frame != null && page > 0) { Text("Previous") }
+            Text("${page + 1} / ${frame?.count ?: "…"}")
+            TextButton(onClick = { page++ }, enabled = frame?.let { page + 1 < it.count } == true) { Text("Next") }
+        }
+        TextButton(onClick = back) { Text("Back to export") }
+    }
+}
+
 
 @Composable
 private fun ExportChoice(value: String, choices: List<String>, enabled: Boolean, select: (String) -> Unit) {
