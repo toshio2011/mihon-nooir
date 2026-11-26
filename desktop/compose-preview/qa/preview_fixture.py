@@ -60,12 +60,27 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(400, b"invalid request", "text/plain")
             return
         query = json.loads(self.rfile.read(size))["query"]
-        if "query NooirLibrary" not in query or "mutation" in query:
+        if "query NooirLibrary" in query and "mutation" not in query:
+            data = {"data": {"mangas": {"totalCount": len(CARDS), "nodes": CARDS}}}
+            marker = "LIBRARY_OK"
+        elif "query NooirManga" in query and "mutation" not in query:
+            match = re.search(r"manga\(id: ([1-6])\)", query)
+            if not match:
+                self.reply(400, b"unknown fixture manga", "text/plain")
+                return
+            manga_id = int(match.group(1))
+            card = CARDS[manga_id-1]
+            chapters = [{"id": manga_id*100+n, "name": f"Chapter {n} — Original QA sample",
+                         "chapterNumber": float(n), "sourceOrder": n, "isDownloaded": n == 1}
+                        for n in range(1, 5)]
+            data = {"data": {"manga": {"id": manga_id, "title": card["title"],
+                                     "author": card["author"], "chapters": {"nodes": chapters}}}}
+            marker = f"MANGA_OK {manga_id}"
+        else:
             self.reply(400, b"unsupported fixture operation", "text/plain")
             return
-        data = {"data": {"mangas": {"totalCount": len(CARDS), "nodes": CARDS}}}
         self.reply(200, json.dumps(data).encode(), "application/json")
-        print("LIBRARY_OK", flush=True)
+        print(marker, flush=True)
 
 if __name__ == "__main__":
     ThreadingHTTPServer(("127.0.0.1", 4567), Handler).serve_forever()

@@ -39,3 +39,21 @@ import -window "$window" "$out/compose-library.png"
 test -s "$out/compose-library.png"
 identify "$out/compose-library.png" >> "$out/window.txt"
 printf 'Actual Compose application window; synthetic original cover art and library data; commit %s\n' "${GITHUB_SHA:-local}" > "$out/provenance.txt"
+
+# The reviewed 1040x720 library screenshot has its first cover at x=105..277,
+# y=166..412. Refuse other sizes rather than silently clicking the wrong UI.
+geometry="$(xdotool getwindowgeometry --shell "$window")"
+grep -qx 'WIDTH=1040' <<< "$geometry"
+grep -qx 'HEIGHT=720' <<< "$geometry"
+xdotool mousemove --window "$window" 190 280 click 1
+for i in {1..30}; do
+  if grep -q '^MANGA_OK 1$' "$out/fixture.log"; then break; fi
+  sleep 1
+done
+grep -q '^MANGA_OK 1$' "$out/fixture.log"
+sleep 3
+import -window "$window" "$out/compose-manga-details.png"
+test -s "$out/compose-manga-details.png"
+identify "$out/compose-manga-details.png" >> "$out/window.txt"
+# This confirms a real library-to-details action and chapter metadata request.
+# Reader page capture will be added after reviewing the actual details layout.
