@@ -404,7 +404,12 @@ fun main() = application {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("Dark theme"); Switch(dark, { dark = it })
                                 }
-                                Text("Read-only UI feasibility build. Use the existing preview for exports, backups, extension management, backend controls and saved reading progress.")
+                                var backupOpen by remember { mutableStateOf(false) }
+                                ListItem(headlineContent = { Text("Backup & restore") },
+                                    supportingContent = { Text("Library backups and compatible extension recovery") },
+                                    trailingContent = { TextButton(onClick = { backupOpen = true }) { Text("Open") } })
+                                if (backupOpen) ComposeBackup { backupOpen = false }
+                                Text("Experimental desktop interface. Use the existing preview for backend controls, repository setup and saved reading progress.")
                             }
                         }
                     }
