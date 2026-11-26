@@ -90,7 +90,7 @@ class DesktopBackupTransport(endpoint: String) {
         val all=mutableListOf<DesktopBackupExtensions.Extension>()
         var offset=0
         while(true){
-            val page=json("query NooirBackupCatalog { extensions(first: 50, offset: $offset) { totalCount nodes { pkgName name storeIndexUrl isInstalled isObsolete source { nodes { id } } } } }").obj("extensions")
+            val page=json("query NooirBackupCatalog { extensions(first: 50, offset: $offset) { totalCount nodes { pkgName name storeIndexUrl isInstalled isObsolete versionCodeLong versionName source { nodes { id } } } } }").obj("extensions")
             val total=page.int("totalCount");require(total in 0..20_000)
             val rows=page.list("nodes");require(rows.size<=50 && offset+rows.size<=total)
             rows.forEach{raw->
@@ -98,7 +98,8 @@ class DesktopBackupTransport(endpoint: String) {
                 val ids=e.obj("source").list("nodes").map{it.asObject().long("id")}.toSet()
                 all.add(DesktopBackupExtensions.Extension(e.str("pkgName"),e.str("name"),e["storeIndexUrl"] as? String,
                     e["isInstalled"] as? Boolean ?: error("Missing install status"),
-                    e["isObsolete"] as? Boolean ?: error("Missing obsolete status"),ids))
+                    e["isObsolete"] as? Boolean ?: error("Missing obsolete status"),ids,
+                    (e["versionCodeLong"] as? String)?.toLongOrNull(),e["versionName"] as? String))
             }
             offset+=rows.size
             if(offset==total)break
@@ -107,17 +108,20 @@ class DesktopBackupTransport(endpoint: String) {
         require(all.map{it.pkgName}.toSet().size==all.size) { "Duplicate extension package" }
         return all
     }
-    fun extensionPlan(file:File):DesktopBackupExtensions.Plan {
+    fun extensionPlan(file:File,evidence:DesktopLegacyRepoIndex.Evidence?=null):DesktopBackupExtensions.Plan {
         val summary=DesktopBackupInspector.inspect(file)
         val missing=validate(file).missingSources.map{it.id}.toSet()
-        return DesktopBackupExtensions.plan(summary,extensionStores(),extensionCatalog(),missing)
+        val stores=extensionStores()
+        val raw=extensionCatalog()
+        val catalog=if(evidence==null)raw else DesktopLegacyRepoIndex.enrich(summary,stores,raw,evidence)
+        return DesktopBackupExtensions.plan(summary,stores,catalog,missing)
     }
     /** Install only a separately approved cached exact match, never add or refresh a repository.
      * Suwayomi performs the install; its package execution is a trust decision, not a sandbox.
      * A lost response may mean a partial install. No retries or automatic rollback.
      */
-    fun installReviewedExtension(file:File, approved:DesktopBackupExtensions.Recovery):Set<Long> {
-        val fresh=DesktopBackupExtensions.recoverable(extensionPlan(file))
+    fun installReviewedExtension(file:File, approved:DesktopBackupExtensions.Recovery,evidence:DesktopLegacyRepoIndex.Evidence?=null):Set<Long> {
+        val fresh=DesktopBackupExtensions.recoverable(extensionPlan(file,evidence))
         require(fresh.any{it==approved}) { "Extension plan changed; review again before installing" }
         val result=json("mutation NooirRecoverExtension { updateExtension(input: { id: "+
             MiniJson.quote(approved.pkgName)+", patch: { install: true } }) { extension { pkgName storeIndexUrl isInstalled source { nodes { id } } } } }")
@@ -126,7 +130,8 @@ class DesktopBackupTransport(endpoint: String) {
             result["isInstalled"]==true) { "Server did not confirm expected extension; inspect WebUI" }
         val exposed=result.obj("source").list("nodes").map{it.asObject().long("id")}.toSet()
         val installed=extensionCatalog().singleOrNull{it.pkgName==approved.pkgName}
-        require(installed!=null && installed.installed && installed.indexUrl==approved.indexUrl) { "Installed package not confirmed" }
+        require(installed!=null && installed.installed && installed.indexUrl==approved.indexUrl &&
+            installed.versionCode==approved.versionCode && installed.versionName==approved.versionName) { "Installed package not confirmed" }
         val store=extensionStores().singleOrNull{it.indexUrl==approved.indexUrl}
         require(store?.signingKey==approved.signingKey) { "Repository identity changed; inspect WebUI" }
         val missing=validate(file).missingSources.map{it.id}.toSet()

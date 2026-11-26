@@ -11,7 +11,7 @@ object DesktopBackupExtensions {
     data class Store(val indexUrl:String,val name:String,val badgeLabel:String,val signingKey:String,
                      val contactWebsite:String,val contactDiscord:String?,val legacy:Boolean,val extensionListUrl:String?)
     data class Extension(val pkgName:String,val name:String,val indexUrl:String?,val installed:Boolean,
-                         val obsolete:Boolean,val sources:Set<Long>)
+                         val obsolete:Boolean,val sources:Set<Long>,val versionCode:Long?=null,val versionName:String?=null)
     enum class StoreState { PRESENT_MATCH, KEY_CONFLICT, MISSING_REVIEW, UNVERIFIED }
     data class StoreReview(val backup:DesktopBackupInspector.Store,val state:StoreState)
     enum class SourceState { PRESENT, CANDIDATE_REVIEW, AMBIGUOUS, UNRESOLVED }
@@ -45,7 +45,7 @@ object DesktopBackupExtensions {
         return Plan(review,sources)
     }
     /** Approval is tied to exact package, store URL, signing identity and source IDs. */
-    data class Recovery(val pkgName:String,val name:String,val indexUrl:String,val signingKey:String,val sourceIds:Set<Long>)
+    data class Recovery(val pkgName:String,val name:String,val indexUrl:String,val signingKey:String,val sourceIds:Set<Long>,val versionCode:Long?=null,val versionName:String?=null)
     fun recoverable(plan:Plan):List<Recovery> {
         val matched=plan.stores.filter{it.state==StoreState.PRESENT_MATCH}.associateBy{it.backup.indexUrl}
         return plan.sources.filter{it.state==SourceState.CANDIDATE_REVIEW}
@@ -55,7 +55,7 @@ object DesktopBackupExtensions {
                 val store=matched.getValue(url)
                 require(rows.all{it.candidates.single()==e})
                 require(e.pkgName.matches(Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")) && e.pkgName.length<=250)
-                Recovery(e.pkgName,e.name,url,store.backup.signingKey,rows.map{it.id}.toSet())
+                Recovery(e.pkgName,e.name,url,store.backup.signingKey,rows.map{it.id}.toSet(),e.versionCode,e.versionName)
             }
     }
     private fun varint(n:Long):ByteArray {

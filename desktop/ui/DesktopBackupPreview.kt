@@ -3,6 +3,7 @@ package dev.nooir.desktop.ui
 import dev.nooir.desktop.suwayomi.DesktopBackupInspector
 import dev.nooir.desktop.suwayomi.DesktopBackupTransport
 import dev.nooir.desktop.suwayomi.DesktopBackupExtensions
+import dev.nooir.desktop.suwayomi.DesktopLegacyRepoIndex
 import java.io.File
 import java.awt.Component
 import javax.swing.JFileChooser
@@ -15,8 +16,8 @@ import javax.swing.filechooser.FileNameExtensionFilter
 /** Native backup tools; missing repositories still require manual WebUI review. */
 object DesktopBackupPreview {
     fun show(owner: Component, endpoint: String, openWebUi: () -> Unit) {
-        val actions = arrayOf("Inspect backup…", "Create portable backup…", "Restore library…", "Review missing extensions…", "Open Suwayomi backup tools", "Cancel")
-        when (JOptionPane.showOptionDialog(owner,
+        val actions = arrayOf("Inspect backup…", "Create portable backup…", "Restore library…", "Review missing extensions…", "Review downloaded repo index…", "Open Suwayomi backup tools", "Cancel")
+        when (val choice=JOptionPane.showOptionDialog(owner,
             "Inspect an Android or desktop backup locally, or use the local Suwayomi WebUI to restore/export library data.\nRepository installation requires separate review.",
             "Backup & restore", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, actions, actions[0])) {
             0 -> {
@@ -86,16 +87,55 @@ object DesktopBackupPreview {
                     }
                 }.execute()
             }
-            3 -> {
+            3,4 -> {
+                // Separate menu action below opens an explicitly selected local index.
                 val file=choose(owner,false,"")?:return
                 val api=try{DesktopBackupTransport(endpoint)}catch(e:Exception){
                     JOptionPane.showMessageDialog(owner,"Use a valid local server.");return
                 }
-                object:SwingWorker<DesktopBackupExtensions.Plan,Void>(){
-                    override fun doInBackground()=api.extensionPlan(file)
-                    override fun done(){
-                        try {
-                            val plan=get()
+                reviewExtensions(owner,api,file,choice==4)
+            }
+            5 -> openWebUi()
+        }
+    }
+    private fun reviewExtensions(owner:Component,api:DesktopBackupTransport,file:File,withIndex:Boolean) {
+        object:SwingWorker<DesktopBackupExtensions.Plan,Void>(){
+            override fun doInBackground()=api.extensionPlan(file)
+            override fun done(){
+                try{
+                    val plan=get()
+                    if(!withIndex){showPlan(owner,api,file,plan,null);return}
+                    val stores=plan.stores.filter{it.state==DesktopBackupExtensions.StoreState.PRESENT_MATCH}.map{it.backup}
+                    if(stores.isEmpty()){
+                        JOptionPane.showMessageDialog(owner,"No matching configured repository. Add a trusted repository manually in the local WebUI, then review again.");return
+                    }
+                    val labels=stores.map{it.name+" — "+it.indexUrl}.toTypedArray()
+                    val selected=JOptionPane.showInputDialog(owner,
+                        "Select the configured repository whose legacy index you downloaded yourself.",
+                        "Choose trusted repository",JOptionPane.QUESTION_MESSAGE,null,labels,labels.first())?:return
+                    val store=stores[labels.indexOf(selected)]
+                    if(JOptionPane.showConfirmDialog(owner,
+                            "Choose an index.min.json obtained directly from this trusted repository.\n"+
+                            store.indexUrl+"\nThe index is not cryptographically verified. Never use a file from an unknown source.",
+                            "Local repository evidence",JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)return
+                    val picker=JFileChooser().apply{fileFilter=FileNameExtensionFilter("Legacy extension index JSON","json")}
+                    if(picker.showOpenDialog(owner)!=JFileChooser.APPROVE_OPTION)return
+                    val indexFile=picker.selectedFile
+                    object:SwingWorker<Pair<DesktopBackupExtensions.Plan,DesktopLegacyRepoIndex.Evidence>,Void>(){
+                        override fun doInBackground():Pair<DesktopBackupExtensions.Plan,DesktopLegacyRepoIndex.Evidence>{
+                            val evidence=DesktopLegacyRepoIndex.read(indexFile,store)
+                            return api.extensionPlan(file,evidence) to evidence
+                        }
+                        override fun done(){
+                            try{val(p,e)=get();showPlan(owner,api,file,p,e)}
+                            catch(ex:Exception){JOptionPane.showMessageDialog(owner,"Invalid index or repository no longer matches. No changes requested.")}
+                        }
+                    }.execute()
+                }catch(e:Exception){JOptionPane.showMessageDialog(owner,"Could not review extensions. Check local WebUI.","Extension review",JOptionPane.ERROR_MESSAGE)}
+            }
+        }.execute()
+    }
+    private fun showPlan(owner:Component,api:DesktopBackupTransport,file:File,plan:DesktopBackupExtensions.Plan,evidence:DesktopLegacyRepoIndex.Evidence?) {
                             val candidates=DesktopBackupExtensions.recoverable(plan)
                             val report=buildString{
                                 appendLine("Repository comparison (no changes made):")
@@ -106,7 +146,8 @@ object DesktopBackupPreview {
                                     row.candidates.forEach{appendLine("  "+it.name+" / "+it.pkgName)}
                                 }
                                 appendLine("\nMissing or changed repositories must be reviewed and added manually in the local WebUI.")
-                                appendLine("The cached catalog may not include every source until explicitly refreshed.")
+                                appendLine("Never-installed packages may lack source IDs. Use a trusted downloaded legacy index when needed.")
+                                if(evidence!=null)appendLine("Local index SHA-256: "+evidence.sha256+" (user-supplied, not signature verified)")
                             }
                             val text=JTextArea(report,18,65).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
                             JOptionPane.showMessageDialog(owner,JScrollPane(text),"Extension migration review",JOptionPane.INFORMATION_MESSAGE)
@@ -121,15 +162,9 @@ object DesktopBackupPreview {
                                 "\n\nExtensions run code in your local server. A matching backup key does not prove trust. Install this package only if you trust the repository and its code.",10,58).apply{isEditable=false;lineWrap=true;wrapStyleWord=true;caretPosition=0}
                             if(JOptionPane.showConfirmDialog(owner,JScrollPane(approval),"Approve extension installation",JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)return
                             runTask(owner,"Recover extension"){
-                                val restored=api.installReviewedExtension(file,approved)
+                                val restored=api.installReviewedExtension(file,approved,evidence)
                                 "Server confirmed "+restored.size+" requested source(s) available from "+approved.pkgName+".\nRun Review missing extensions again for remaining sources."
                             }
-                        }catch(e:Exception){JOptionPane.showMessageDialog(owner,"Could not review extensions. Check local WebUI.","Extension review",JOptionPane.ERROR_MESSAGE)}
-                    }
-                }.execute()
-            }
-            4 -> openWebUi()
-        }
     }
     private fun choose(owner:Component,save:Boolean,name:String):File? {
         val picker=JFileChooser().apply{
