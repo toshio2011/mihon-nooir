@@ -14,6 +14,27 @@
 
 [View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
 
+## Visual walkthroughs by task
+
+Choose your platform and task. **Captured** means relevant real screens exist; **partial** means the complete journey or output is not pictured. Desktop remains a development preview, and its images are from Windows QA rather than every supported operating system.
+
+| Task | Android | Desktop preview |
+|---|---|---|
+| Install and set up | [First launch](ANDROID_VISUAL_GUIDE.md#a-finish-first-run-setup) · partial | [Packages and setup](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#choose-the-package-for-your-computer) · partial |
+| Extensions and manga reading | [Getting started](GETTING_STARTED.md) · text; captures pending | [Extension setup](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#first-launch-and-extension-setup) · [Reader](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#read-manga) · captured |
+| Select and export manga | [Chapter selection](CHAPTER_SELECTION.md) · captures pending | [Chapter browsing](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#read-manga) · captured; end-to-end export capture pending |
+| Compare manga conversion settings | [Manga comparison gallery](MANGA_EXPORT_GALLERY.md) · desktop output evidence; Android comparison pending | [Actual segmentation and formats](MANGA_EXPORT_GALLERY.md) · verified desktop results, image publication partial |
+| Convert local EPUB, CBZ or images | [Local files](ANDROID_VISUAL_GUIDE.md#c-local-epub-cbzzip-or-images) · partial | [Universal Converter](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#universal-book-converter) · partial |
+| Inspect finished XTC/XTCH | [Actual saved-file viewer](ANDROID_VISUAL_GUIDE.md#d-inspect-a-finished-xtcxtch) · captured | [Saved-file viewer](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#universal-book-converter) · captured |
+| Convert PDF | [PDF input](ANDROID_VISUAL_GUIDE.md#e-convert-a-pdf) · partial | [Universal Converter](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#universal-book-converter) · text; PDF captures pending |
+| Web novel to EPUB | [Web editor](ANDROID_VISUAL_GUIDE.md#2-create-one-epub-per-public-story) · partial | [Chapter editor](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#public-web-pages-and-novels) · partial |
+| Combine chapters, covers and synopsis | [Combined book](ANDROID_VISUAL_GUIDE.md#3-combine-public-chapters-into-one-book) · [Book details](ANDROID_VISUAL_GUIDE.md#4-book-details-and-covers) · partial | [Book details and export](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#public-web-pages-and-novels) · partial |
+| Save projects and check new chapters | [Saved projects](ANDROID_VISUAL_GUIDE.md#5-chapter-titles-and-saved-projects) · partial | [Web projects](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#public-web-pages-and-novels) · text; completion captures pending |
+| Transfer and queue | [Wi-Fi transfer](WIFI_TRANSFER.md) · [Queue](DEVICE_FILES_AND_QUEUE.md) · captures pending | [Data and transfer](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#your-data-and-updates) · captures pending |
+| Backup and migrate | [Android setup and backup precautions](GETTING_STARTED.md) · captures pending | [Backup and migration](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md#move-your-library-between-android-and-desktop-development-candidate) · partial; physical Android round-trip not yet verified |
+
+For screenshot coverage and provenance, see [Android capture status](ANDROID_VISUAL_GUIDE.md#screenshot-coverage-by-task) and [desktop capture status](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/SCREENSHOT_COVERAGE.md).
+
 ## If this is your first time
 
 1. [**Install MihonNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.
