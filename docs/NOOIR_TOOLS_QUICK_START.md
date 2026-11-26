@@ -11,6 +11,8 @@
 
 [View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#b-choose-a-converter) (v1.0.20 release-source emulator).
 
+[Universal Book Converter visual walkthrough](UNIVERSAL_CONVERTER_VISUAL_GUIDE.md) — real input-selection screens and decoded Android EPUB output evidence.
+
 ## Where are the new tools?
 
 Open **MihonNooir → More → Nooir Tools**. Inside the hub:
