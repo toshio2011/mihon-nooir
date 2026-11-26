@@ -56,8 +56,8 @@ import -window "$window" "$out/compose-manga-details.png"
 test -s "$out/compose-manga-details.png"
 identify "$out/compose-manga-details.png" >> "$out/window.txt"
 # This confirms a real library-to-details action and chapter metadata request.
-# Verified details capture has first chapter Read action at (970,360).
-xdotool mousemove --window "$window" 970 360 click 1
+# Verified details capture has first chapter Read action at (970,384) after the selection toolbar.
+xdotool mousemove --window "$window" 970 384 click 1
 for i in {1..30}; do
   if grep -Fxq 'READER_OK 101' "$out/fixture.log" && grep -Fxq 'PAGE_OK 0' "$out/fixture.log"; then break; fi
   sleep 1
@@ -100,6 +100,26 @@ sleep 3
 import -window "$window" "$out/compose-return-details.png"
 test -s "$out/compose-return-details.png"
 
+# Capture the chapter selection state before running the actual export engine test.
+xdotool mousemove --window "$window" 948 324 click 1
+sleep 1
+xdotool mousemove --window "$window" 130 384 click 1
+sleep 2
+import -window "$window" "$out/compose-chapter-selection.png"
+test -s "$out/compose-chapter-selection.png"
+# The Export action is at the right edge of the selection toolbar.
+xdotool mousemove --window "$window" 977 324 click 1
+sleep 2
+# Include the modal dialog, which is a separate native window.
+import -window root "$out/compose-export-dialog.png"
+test -s "$out/compose-export-dialog.png"
+# Close the experimental app before the independent headless engine verification.
+kill -- "-$app_pid" 2>/dev/null || true
+wait "$app_pid" || true
+app_pid=""
+gradle -p desktop/compose-preview qaExport --no-daemon --stacktrace -PqaOutput="$out" > "$out/export-test.log" 2>&1
+grep -Fxq 'PASS: Compose export XTC and XTCH decoded successfully' "$out/export-test.log"
+test "$(grep -Fxc 'CBZ_OK 101' "$out/fixture.log" || true)" -eq 2
 if grep -Fxq 'REJECTED_OPERATION' "$out/fixture.log"; then
   echo "Unexpected fixture operation" >&2
   exit 1

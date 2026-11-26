@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 import json
 import re
+import zipfile
 from PIL import Image, ImageDraw
 
 TITLES = ["The Paper Moon", "Library of Clouds", "Garden of Stars",
@@ -48,6 +49,14 @@ def comic_page(n):
     return out.getvalue()
 
 PAGES = [comic_page(n) for n in range(3)]
+def chapter_archive():
+    out = BytesIO()
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for n, page in enumerate(PAGES, 1):
+            archive.writestr(f"{n:03d}.png", page)
+    return out.getvalue()
+
+CBZ = chapter_archive()
 COVERS = {i: cover(i) for i in range(1, 7)}
 CARDS = [{"id": i, "title": t, "author": "QA fixture", "description": "Synthetic demonstration library.",
           "thumbnailUrl": f"/api/v1/manga/{i}/thumbnail", "inLibrary": True}
@@ -75,6 +84,10 @@ class Handler(BaseHTTPRequestHandler):
             index = int(page.group(1))
             self.reply(200, PAGES[index], "image/png")
             print(f"PAGE_OK {index}", flush=True)
+            return
+        if self.path == "/api/v1/chapter/101/download?markAsRead=false":
+            self.reply(200, CBZ, "application/zip")
+            print("CBZ_OK 101", flush=True)
             return
         self.reply(404, b"not found", "text/plain")
 

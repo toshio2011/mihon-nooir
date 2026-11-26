@@ -106,8 +106,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 scope.launch {
                     try {
                         withContext(Dispatchers.IO) {
-                            SuwayomiToNooir.main(args)
-                            check(target.isFile && target.length() > 0) { "No output created" }
+                            runComposeExport(args, target)
                         }
                         result = "Exported: ${target.name}"
                         output = null
@@ -132,4 +131,11 @@ private fun ExportChoice(value: String, choices: List<String>, enabled: Boolean,
             }
         }
     }
+}
+
+/** Shared production entry point; the QA fixture exercises this exact function. */
+internal fun runComposeExport(args: Array<String>, target: File) {
+    require(!target.exists()) { "Choose a new output file" }
+    SuwayomiToNooir.main(args)
+    check(target.isFile && target.length() > 0) { "No output created" }
 }

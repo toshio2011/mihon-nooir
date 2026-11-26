@@ -27,3 +27,11 @@ dependencies {
 compose.desktop {
     application { mainClass = "dev.nooir.desktop.compose.MainKt" }
 }
+
+tasks.register<JavaExec>("qaExport") {
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.nooir.desktop.compose.ComposeExportSmokeKt")
+    args(providers.gradleProperty("qaOutput").orElse("").get())
+    systemProperty("java.awt.headless", "true")
+}
