@@ -32,5 +32,14 @@ fun main(args: Array<String>) {
         check(runCatching { runComposeExport(request, target) }.isFailure) { "Existing output was accepted" }
         println("${format.name}: ${book.pageCount} decoded frames, ${target.length()} bytes")
     }
+    val guiFile = File(folder, "compose-gui-export.xtc")
+    val guiBook = XtcBookPreview(guiFile)
+    check(guiBook.format == XtcFormat.XTC && guiBook.pageCount >= 3)
+    for (i in 0 until guiBook.pageCount) {
+        val page = guiBook.page(i)
+        check(page.width == 480 && page.height == 800 && page.depth == 1)
+        if (i == 0) File(folder, "decoded-gui-xtc-page1.png").writeBytes(GrayscalePng.encode(page))
+    }
+    println("PASS: GUI-triggered XTC decoded successfully")
     println("PASS: Compose export XTC and XTCH decoded successfully")
 }

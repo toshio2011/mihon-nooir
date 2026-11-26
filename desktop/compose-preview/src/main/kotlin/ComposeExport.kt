@@ -37,7 +37,10 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
     var format by remember { mutableStateOf(ExportFormat.XTC) }
     var options by remember { mutableStateOf(MangaConversionOptions.preset("Manga")) }
     var allowDownload by remember { mutableStateOf(false) }
-    var output by remember { mutableStateOf<File?>(null) }
+    var outputText by remember { mutableStateOf("") }
+    val output = remember(outputText, format) {
+        File(outputText).takeIf { outputText.isNotBlank() && it.isAbsolute && it.extension.equals(format.extension, true) }
+    }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     var finishedBook by remember { mutableStateOf<File?>(null) }
@@ -47,6 +50,9 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
         if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") {
             println("QA_EXPORT_DIALOG chapters=${chapters.size}")
         }
+    }
+    LaunchedEffect(output != null) {
+        if (output != null && System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_OUTPUT_READY")
     }
     val scope = rememberCoroutineScope()
     val missing = chapters.count { !it.downloaded }
@@ -60,18 +66,18 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 if (showPreview && finishedBook != null) {
                     ConvertedBookPreview(finishedBook!!) { showPreview = false }
                 } else {
-            Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(card.title, style = MaterialTheme.typography.titleMedium)
                 Text("${chapters.size} chapters selected · $missing not downloaded")
                 Text("Device", style = MaterialTheme.typography.titleSmall)
                 ExportChoice(device.name, NooirDeviceProfiles.builtins.map { it.name }, !busy) { name ->
                     device = NooirDeviceProfiles.builtins.first { it.name == name }
                     if (!device.accepts(format)) format = device.autoFormat
-                    output = null
+                    outputText = ""
                 }
                 Text("Output format", style = MaterialTheme.typography.titleSmall)
                 ExportChoice(format.name, ExportFormat.entries.filter { it != ExportFormat.AUTO && device.accepts(it) }.map { it.name }, !busy) {
-                    format = ExportFormat.valueOf(it); output = null
+                    format = ExportFormat.valueOf(it); outputText = ""
                 }
                 OutlinedButton(onClick = {
                     options = MangaConversionOptions.preset("Manga").copy(panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT")
@@ -106,31 +112,40 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                     Checkbox(allowDownload, { allowDownload = it }, enabled = !busy)
                     Text("Download selected missing chapters")
                 }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = outputText, onValueChange = { outputText = it },
+                    modifier = Modifier.weight(1f), enabled = !busy, singleLine = true,
+                    label = { Text("Output file (.${format.extension})") })
                 OutlinedButton(onClick = {
                     val picker = JFileChooser().apply {
+                        dialogTitle = "Choose export destination"
                         selectedFile = File("manga.${format.extension}")
                         fileFilter = javax.swing.filechooser.FileNameExtensionFilter(format.name, format.extension)
                     }
                     if (picker.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
                         val f = picker.selectedFile
                         if (f.extension.equals(format.extension, true) && !f.exists() && f.absoluteFile.parentFile.isDirectory) {
-                            output = f.absoluteFile
+                            outputText = f.absolutePath
                             result = null
                         } else {
-                            output = null
+                            outputText = ""
                             result = "Choose a new .${format.extension} file in an existing folder."
                         }
                     }
-                }, enabled = !busy) { Text("Choose output file") }
-                output?.let { Text(it.absolutePath, style = MaterialTheme.typography.bodySmall) }
-                if (busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Exporting… keep this window open.") }
-                result?.let { Text(it) }
-                if (finishedBook != null) OutlinedButton(onClick = { showPreview = true }, enabled = !busy) {
-                    Text("Preview converted book")
-                }
+                }, enabled = !busy) { Text("Browse") }
+            }
+            Box(Modifier.fillMaxWidth().height(40.dp)) {
+                if (busy) Column {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("Exporting… keep this window open.", style = MaterialTheme.typography.bodySmall)
+                } else Text(result ?: "Choose a new file in an existing folder.", style = MaterialTheme.typography.bodySmall, maxLines = 2)
             }
             HorizontalDivider()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { showPreview = true }, enabled = !busy && finishedBook != null) { Text("Preview converted book") }
+            Spacer(Modifier.weight(1f))
             TextButton(onClick = close, enabled = !busy) { Text("Close") }
             Button(enabled = !busy && valid && output != null, onClick = {
                 val target = output ?: return@Button
@@ -148,7 +163,8 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                         }
                         result = "Exported: ${target.name}"
                         finishedBook = target.takeIf { it.extension.lowercase() in setOf("xtc", "xtch") }
-                        output = null
+                        outputText = ""
+                        if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_EXPORT_COMPLETE")
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
                         result = "Export failed. Check the selected chapters, output and local server before retrying."
@@ -177,6 +193,7 @@ private fun ConvertedBookPreview(file: File, back: () -> Unit) {
                 val decoded = png.inputStream().use { ImageIO.read(it) } ?: error("Cannot decode exported page")
                 DecodedFrame(book.pageCount, decoded.toComposeImageBitmap())
             }
+            if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_CONVERTED_FRAME page=${page + 1} count=${frame?.count}")
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { failed = true }
     }
@@ -217,7 +234,7 @@ private fun ExportChoice(value: String, choices: List<String>, enabled: Boolean,
 
 /** Shared production entry point; the QA fixture exercises this exact function. */
 internal fun runComposeExport(args: Array<String>, target: File) {
-    require(!target.exists()) { "Choose a new output file" }
+    require(target.isAbsolute && target.parentFile.isDirectory && !target.exists()) { "Choose a new output file in an existing folder" }
     SuwayomiToNooir.main(args)
     check(target.isFile && target.length() > 0) { "No output created" }
 }

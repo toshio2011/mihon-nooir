@@ -119,13 +119,40 @@ sleep 2
 # Include the modal dialog, which is a separate native window.
 import -window root "$out/compose-export-dialog.png"
 test -s "$out/compose-export-dialog.png"
+# Enter a real output path through the visible field and trigger the actual Export button.
+# Fixed footer geometry is checked by the readiness/complete diagnostics, not filenames alone.
+xdotool mousemove 480 566 click 1
+xdotool type --clearmodifiers --delay 1 "$out/compose-gui-export.xtc"
+for i in {1..15}; do
+  if grep -Fxq 'QA_OUTPUT_READY' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'QA_OUTPUT_READY' "$out/application.log"
+import -window root "$out/compose-export-ready.png"
+xdotool mousemove 785 650 click 1
+for i in {1..90}; do
+  if grep -Fxq 'QA_EXPORT_COMPLETE' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'QA_EXPORT_COMPLETE' "$out/application.log"
+test -s "$out/compose-gui-export.xtc"
+import -window root "$out/compose-export-complete.png"
+xdotool mousemove 402 650 click 1
+for i in {1..20}; do
+  if grep -Fq 'QA_CONVERTED_FRAME page=1 count=' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fq 'QA_CONVERTED_FRAME page=1 count=' "$out/application.log"
+sleep 2
+import -window root "$out/compose-converted-book-preview.png"
+test -s "$out/compose-converted-book-preview.png"
 # Close the experimental app before the independent headless engine verification.
 kill -- "-$app_pid" 2>/dev/null || true
 wait "$app_pid" || true
 app_pid=""
 gradle -p desktop/compose-preview qaExport --no-daemon --stacktrace -PqaOutput="$out" > "$out/export-test.log" 2>&1
 grep -Fxq 'PASS: Compose export XTC and XTCH decoded successfully' "$out/export-test.log"
-test "$(grep -Fxc 'CBZ_OK 101' "$out/fixture.log" || true)" -eq 2
+test "$(grep -Fxc 'CBZ_OK 101' "$out/fixture.log" || true)" -eq 3
 if grep -Fxq 'REJECTED_OPERATION' "$out/fixture.log"; then
   echo "Unexpected fixture operation" >&2
   exit 1
