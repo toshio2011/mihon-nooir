@@ -28,3 +28,5 @@ Android v1.0.20: the separate [Android visual guide PR #140](https://github.com/
 Historical QA and handover files are evidence, not end-user guides. Keep screenshot references next to the relevant steps and verify relative links before release.
 
 New GUI acceptance (pending CI) captures the actual backup action menu, read-only inspection and explicit reading-progress save confirmation/acknowledgement. Review and embed the four verified captures after CI; no placeholder screenshots.
+
+Four additional reviewed real Windows captures from PR #145, run 45744401559, artifact 15083202444: backup-menu, backup-inspection, online-progress-confirm, online-progress-saved. The actual GUI tests passed at three scales. Remaining backup captures: native export/restore completion and actual extension recovery. Total desktop guide images: 23.
