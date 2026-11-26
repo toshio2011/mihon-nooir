@@ -160,3 +160,6 @@ if grep -Fxq 'REJECTED_OPERATION' "$out/fixture.log"; then
   echo "Unexpected fixture operation" >&2
   exit 1
 fi
+
+gradle -p desktop/compose-preview qaBackup --no-daemon --stacktrace > "$out/backup-test.log" 2>&1
+grep -Fxq 'PASS: partial extension recovery preserves backup and continues after failure' "$out/backup-test.log"

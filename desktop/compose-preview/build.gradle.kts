@@ -35,3 +35,10 @@ tasks.register<JavaExec>("qaExport") {
     args(providers.gradleProperty("qaOutput").orElse("").get())
     systemProperty("java.awt.headless", "true")
 }
+
+tasks.register<JavaExec>("qaBackup") {
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.nooir.desktop.compose.ComposeBackupSmokeKt")
+    systemProperty("java.awt.headless", "true")
+}

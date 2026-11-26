@@ -138,7 +138,9 @@ internal fun ComposeBackup(close: () -> Unit) {
                     }
                 }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text(message, style = MaterialTheme.typography.bodySmall)
+                Column(Modifier.fillMaxWidth().heightIn(max = 110.dp).verticalScroll(rememberScrollState())) {
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = close, enabled = !busy) { Text("Close") }
                 }
@@ -177,7 +179,12 @@ internal fun ComposeBackup(close: () -> Unit) {
                     DesktopBackupExtensions.recoverBatch(approved) { api.installReviewedExtension(current.file, it) }
                 }
                 selected = emptySet(); plan = null
-                message = "${results.count { !it.needsReview }} of ${results.size} packages confirmed; ${results.count { it.needsReview }} need review. Unsupported sources and library records were retained."
+                message = buildString {
+                    append("${results.count { !it.needsReview }} of ${results.size} packages confirmed. No library records were deleted by recovery.")
+                    results.forEach { result ->
+                        append("\n${result.packageName}: ${if (result.needsReview) "Not confirmed — review before retrying" else "Recovered"}")
+                    }
+                }
             }
         }) { Text("Approve installation") } },
         dismissButton = { TextButton(onClick = { confirmExtensions = false }) { Text("Cancel") } })
