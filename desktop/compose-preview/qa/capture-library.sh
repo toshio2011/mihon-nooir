@@ -68,7 +68,38 @@ sleep 3
 import -window "$window" "$out/compose-reader-page1.png"
 test -s "$out/compose-reader-page1.png"
 identify "$out/compose-reader-page1.png" >> "$out/window.txt"
-# The next page control will be exercised once the real reader capture is reviewed.
+# The actual 1040x720 reader capture places Next at (621,665)
+# and Previous at (510,665). Verify real page requests, not just clicks.
+xdotool mousemove --window "$window" 621 665 click 1
+for i in {1..30}; do
+  if grep -Fxq 'PAGE_OK 1' "$out/fixture.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'PAGE_OK 1' "$out/fixture.log"
+sleep 3
+import -window "$window" "$out/compose-reader-page2.png"
+test -s "$out/compose-reader-page2.png"
+identify "$out/compose-reader-page2.png" >> "$out/window.txt"
+# Exact pixel comparison rejects identical screenshots after the next-page request.
+if compare -metric AE "$out/compose-reader-page1.png" "$out/compose-reader-page2.png" null: 2>"$out/page-difference.txt"; then
+  echo "Reader page did not visibly change" >&2
+  exit 1
+fi
+xdotool mousemove --window "$window" 510 665 click 1
+for i in {1..30}; do
+  if [[ "$(grep -Fxc 'PAGE_OK 0' "$out/fixture.log" || true)" -ge 2 ]]; then break; fi
+  sleep 1
+done
+test "$(grep -Fxc 'PAGE_OK 0' "$out/fixture.log" || true)" -ge 2
+sleep 3
+import -window "$window" "$out/compose-reader-return-page1.png"
+test -s "$out/compose-reader-return-page1.png"
+# Leave the reader by its actual back control, preserving the chapter list.
+xdotool mousemove --window "$window" 145 40 click 1
+sleep 3
+import -window "$window" "$out/compose-return-details.png"
+test -s "$out/compose-return-details.png"
+
 if grep -Fxq 'REJECTED_OPERATION' "$out/fixture.log"; then
   echo "Unexpected fixture operation" >&2
   exit 1

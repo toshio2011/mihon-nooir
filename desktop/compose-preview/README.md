@@ -27,3 +27,7 @@ Compose workflow run 45783494996 passed 4/4 (three OS compilation jobs and actua
 ## Manga details evidence
 
 Run 45784959867 passed all four Compose jobs. Artifact 15100181909 includes the reviewed 1040x720 library and manga details screenshots and fixture logs confirming the first cover click, chapter metadata and thumbnail response. Follow-up adds a real chapter-open action using the existing fetchChapterPages and bounded page image path with original synthetic manga art. No persistent mutations allowed by the fixture. Reader capture and page-turn coordinates must be verified before claiming full reader runtime acceptance.
+
+## Reader first-page evidence
+
+Run 45787530533 passed 4/4; artifact 15101126595 contains the reviewed real 1040×720 reader screenshot, confirming the first chapter opened and its first original synthetic comic page rendered. Fixture logs contain READER_OK 101 and PAGE_OK 0. No rejected persistent mutations. Next/Previous and Back click-through tests added using reviewed window coordinates. These new tests are not yet verified. Full reader layout, progress persistence, WebP and Android-style interaction parity remain release gates.
