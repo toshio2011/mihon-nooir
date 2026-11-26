@@ -179,6 +179,33 @@ if ! tap_visible "Nooir Tools" 5; then
   capture "01-navigation-blocked"
   exit 1
 fi
+# Capture the actual hub, queue filters and reader browser before returning to
+# the existing Universal Converter journey. Never start a network request,
+# cancel a job, change a backup, or contact a third-party source.
+# Each PNG must have a matching visible UI title in its accessibility dump.
+capture_verified() {
+  local name="$1" label="$2"
+  if ! dump_ui || [ -z "$(lookup "$label")" ]; then
+    echo "FAIL: $name missing expected visible label: $label" >> "$out/capture-notes.txt"
+    capture "${name}-blocked"
+    return 1
+  fi
+  capture "$name"
+  cp "$out/window.xml" "$out/$name.xml"
+}
+capture_verified "00a-nooir-tools-hub" "Activity Queue" || exit 1
+tap_visible "Activity Queue · All current jobs" 3 || exit 1
+capture_verified "00b-activity-queue-current" "Nooir Activity Queue" || exit 1
+tap_visible "History" 2 || exit 1
+capture_verified "00c-activity-queue-history" "Nooir Activity Queue" || exit 1
+tap_visible "Close" 2 || exit 1
+tap_visible "Browse XTEink files" 3 || exit 1
+capture_verified "00d-reader-file-browser" "XTEink Device Files" || exit 1
+# No hostname entry, Connect & browse, or browser launch.
+tap_visible "Close" 2 || exit 1
+capture_verified "00e-return-to-nooir-tools" "Activity Queue" || exit 1
+echo "PASS: queue Current/History and reader browser opened; no reader contacted" >> "$out/capture-notes.txt"
+
 if ! tap_visible "Universal Book Converter" 5; then
   echo "Universal Converter entry not visible" | tee -a "$out/capture-notes.txt"
   capture "01-universal-route-blocked"
