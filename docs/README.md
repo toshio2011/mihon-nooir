@@ -8,7 +8,9 @@
 > **The latest official Android release is [v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20)** (24 November 2026). See [release notes](releases/v1.0.20.md) for Universal Book Converter, EPUB → XTC/XTCH, Web → EPUB and signed upgrade verification. Existing manga and PDF tools are retained. Windows remains in development.
 
 
-**Visual walkthrough:** [Android v1.0.20 visual walkthrough](ANDROID_VISUAL_GUIDE.md) — actual release-source Android emulator screenshots and current web book settings.
+**Visual walkthroughs:** [Android visual user guide](ANDROID_VISUAL_GUIDE.md) — actual release-source emulator screenshots and task coverage. [Desktop preview guide](https://github.com/toshio2011/mihon-nooir/blob/desktop/final-acceptance-20261126/desktop/DESKTOP_GUIDE.md) — separate development preview.
+
+**Manga export and conversion gallery:** [Export manga and compare conversion modes](MANGA_EXPORT_GALLERY.md) — recommended settings, actual saved-file inspection examples, and explicit pending manga comparison captures.
 
 [View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
 
@@ -24,7 +26,7 @@
 | I want to… | Read this |
 |---|---|
 | Pick certain manga chapters instead of the entire series | [Chapter selection and Quick Export](CHAPTER_SELECTION.md) |
-| Convert manga into XTC, XTCH, EPUB or CBZ | [Formats and conversion](CONVERSION.md) |
+| Convert manga into XTC, XTCH, EPUB or CBZ | [Manga export and gallery](MANGA_EXPORT_GALLERY.md) · [Formats and conversion](CONVERSION.md) |
 | Read individual Japanese manga panels | [Recommended manga settings and Auto Fit](PANEL_AUTO_FIT.md) |
 | Read portrait/landscape and overlapping manga pages | [Orientation and overlap](ORIENTATION_OVERLAP.md) |
 | Convert one public webpage/article to EPUB | [Web link → EPUB](WEB_TO_READER.md) |
