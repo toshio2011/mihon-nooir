@@ -16,6 +16,10 @@ data class SuwayomiChapter(
     val chapterNumber: Double,
     val sourceOrder: Int,
     val downloaded: Boolean,
+    val read: Boolean? = null,
+    val lastPageRead: Int? = null,
+    val bookmarked: Boolean? = null,
+    val uploadDate: Long? = null,
 )
 
 data class SuwayomiManga(
@@ -23,6 +27,7 @@ data class SuwayomiManga(
     val title: String,
     val author: String,
     val chapters: List<SuwayomiChapter>,
+    val firstUnreadId: Int? = null,
 )
 
 /** Source IDs are signed 64-bit hashes serialized as GraphQL LongString; valid IDs may be negative. */
@@ -49,7 +54,10 @@ data class SuwayomiMangaCard(
     val description: String?,
     val thumbnailUrl: String?,
     val inLibrary: Boolean,
+    val unreadCount: Int? = null,
 )
+
+data class SuwayomiCategory(val id: Int, val name: String, val order: Int)
 
 data class SuwayomiLibraryPage(
     val mangas: List<SuwayomiMangaCard>,
@@ -66,6 +74,22 @@ data class SuwayomiBrowsePage(
 )
 
 enum class SuwayomiBrowseMode { POPULAR, LATEST, SEARCH }
+
+data class SuwayomiFeedEntry(
+    val manga: SuwayomiMangaCard,
+    val chapter: SuwayomiChapter,
+    val read: Boolean,
+    val lastPageRead: Int,
+    val pageCount: Int,
+    val lastReadAt: Long,
+    val fetchedAt: Long,
+)
+
+data class SuwayomiFeedPage(val entries: List<SuwayomiFeedEntry>, val totalCount: Int)
+
+data class SuwayomiDownload(val chapterId:Int,val mangaId:Int,val mangaTitle:String,val chapterName:String,
+    val state:String,val tries:Int,val position:Int)
+data class SuwayomiDownloads(val state:String,val queue:List<SuwayomiDownload>)
 
 /** Numeric identities from a validated pinned-server chapter-page manifest. */
 data class SuwayomiOnlineChapter internal constructor(
@@ -167,13 +191,38 @@ class SuwayomiClient(
     }
 
     /** User's Suwayomi library (not an Android Mihon library sync). */
-    fun library(offset: Int = 0, limit: Int = 100): SuwayomiLibraryPage {
+    fun categories(): List<SuwayomiCategory> {
+        val found = mutableListOf<SuwayomiCategory>()
+        var offset = 0
+        do {
+            val page = graphql("query NooirCategories { categories(first: 100, offset: $offset) { totalCount nodes { id name order } } }").obj("categories")
+            val total = page.int("totalCount")
+            require(total in 0..1000)
+            val nodes = page.list("nodes")
+            require(nodes.size <= 100 && offset + nodes.size <= total)
+            found += nodes.map {
+                val node = it.asObject()
+                SuwayomiCategory(node.int("id"),node.str("name"),node.int("order")).also { category ->
+                    require(category.id >= 0 && category.name.length <= 500)
+                }
+            }
+            offset += nodes.size
+            if (offset == total) break
+            require(nodes.isNotEmpty()) { "Incomplete category listing" }
+        } while (true)
+        require(found.map { it.id }.distinct().size == found.size)
+        return found.sortedWith(compareBy<SuwayomiCategory> { it.order }.thenBy { it.id })
+    }
+
+    fun library(offset: Int = 0, limit: Int = 100, categoryId: Int? = null): SuwayomiLibraryPage {
         require(offset in 0..100_000 && limit in 1..200) { "Invalid library pagination" }
+        require(categoryId == null || categoryId >= 0)
+        val category = categoryId?.let { ", categoryIds: [$it]" }.orEmpty()
         val query = """
             query NooirLibrary {
-              mangas(condition: { inLibrary: true }, first: $limit, offset: $offset) {
+              mangas(condition: { inLibrary: true$category }, first: $limit, offset: $offset) {
                 totalCount
-                nodes { id title author description thumbnailUrl inLibrary }
+                nodes { id title author description thumbnailUrl inLibrary unreadCount }
               }
             }
         """.trimIndent()
@@ -189,6 +238,7 @@ class SuwayomiClient(
                 description = node["description"] as? String,
                 thumbnailUrl = node["thumbnailUrl"] as? String,
                 inLibrary = node["inLibrary"] as? Boolean ?: error("Missing inLibrary"),
+                unreadCount = (node["unreadCount"] as? Long)?.takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt(),
             )
         }
         require(mangas.size <= limit && mangas.all { it.inLibrary }) {
@@ -286,13 +336,60 @@ class SuwayomiClient(
         }
     }
 
+    /** Read-only library chapter feed, using pinned v2.4.2366 ChapterQuery.
+     * History lists chapters with a saved read timestamp, not an invented event log.
+     * Updates lists cached chapter metadata, never implies a remote source refresh.
+     */
+    fun chapterFeed(history: Boolean, offset: Int = 0, limit: Int = 50): SuwayomiFeedPage {
+        require(offset in 0..100_000 && limit in 1..100)
+        val order = if (history) "LAST_READ_AT" else "FETCHED_AT"
+        val timestamp = if (history) "lastReadAt" else "fetchedAt"
+        val query = """
+            query NooirChapterFeed {
+              chapters(filter: { inLibrary: { equalTo: true }, $timestamp: { greaterThan: "0" } },
+                order: [{ by: $order, byType: DESC }], first: $limit, offset: $offset) {
+                totalCount
+                nodes { id mangaId name chapterNumber sourceOrder isDownloaded isRead lastPageRead pageCount lastReadAt fetchedAt
+                  manga { id title author description thumbnailUrl inLibrary }
+                }
+              }
+            }
+        """.trimIndent()
+        val root = graphql(query).obj("chapters")
+        val total = root.int("totalCount")
+        val rows = root.list("nodes")
+        require(total >= 0 && rows.size <= limit && (rows.isEmpty() || offset + rows.size <= total))
+        val entries = rows.map { raw ->
+            val c = raw.asObject()
+            val m = c.obj("manga")
+            val card = SuwayomiMangaCard(m.int("id"), m.str("title"), m["author"] as? String,
+                m["description"] as? String, m["thumbnailUrl"] as? String, m["inLibrary"] == true)
+            val chapter = SuwayomiChapter(c.int("id"), c.str("name"),
+                (c["chapterNumber"] as? Number)?.toDouble() ?: error("Missing chapter number"),
+                c.int("sourceOrder"), c["isDownloaded"] as? Boolean ?: error("Missing download status"))
+            val readAt = c.long("lastReadAt")
+            val fetched = c.long("fetchedAt")
+            val lastPage = c.int("lastPageRead")
+            val pageCount = c.int("pageCount")
+            require(card.id > 0 && card.id == c.int("mangaId") && card.inLibrary &&
+                chapter.id > 0 && chapter.chapterNumber.isFinite() && chapter.sourceOrder >= 0 &&
+                lastPage >= 0 && pageCount >= -1 && readAt >= 0 && fetched >= 0 &&
+                (if (history) readAt > 0 else fetched > 0)) { "Invalid chapter feed record" }
+            SuwayomiFeedEntry(card,chapter,c["isRead"] as? Boolean ?: error("Missing reading state"),
+                lastPage,pageCount,readAt,fetched)
+        }
+        require(entries.map { it.chapter.id }.distinct().size == entries.size)
+        return SuwayomiFeedPage(entries,total)
+    }
+
     fun manga(id: Int): SuwayomiManga {
         require(id > 0) { "Invalid manga ID" }
         val query = """
             query NooirManga {
               manga(id: $id) {
                 id title author
-                chapters { nodes { id name chapterNumber sourceOrder isDownloaded } }
+                firstUnreadChapter { id }
+                chapters { nodes { id name chapterNumber sourceOrder isDownloaded isRead lastPageRead isBookmarked uploadDate } }
               }
             }
         """.trimIndent()
@@ -307,11 +404,73 @@ class SuwayomiClient(
                     ?: error("Missing chapter number"),
                 sourceOrder = c.int("sourceOrder"),
                 downloaded = c["isDownloaded"] as? Boolean ?: error("Missing download status"),
+                read = c["isRead"] as? Boolean,
+                lastPageRead = c["lastPageRead"]?.let { c.int("lastPageRead").also { page -> require(page >= 0) } },
+                bookmarked = c["isBookmarked"] as? Boolean,
+                uploadDate = c["uploadDate"]?.let { c.long("uploadDate") },
             )
         }
         require(chapters.size <= 50_000) { "Too many chapters" }
+        require(result.int("id") == id && chapters.map { it.id }.distinct().size == chapters.size)
+        val firstUnread = result["firstUnreadChapter"]?.asObject()?.int("id")
+        require(firstUnread == null || chapters.any { it.id == firstUnread && it.read != true })
         return SuwayomiManga(result.int("id"), result.str("title"),
-            result["author"] as? String ?: "", chapters)
+            result["author"] as? String ?: "", chapters, firstUnread)
+    }
+
+    /** Explicit flag-only update. Validate membership against a fresh manga snapshot.
+     * Mark unread preserves lastPageRead; this never deletes or resets a chapter. */
+    fun updateChapterFlags(mangaId:Int,ids:List<Int>,read:Boolean?=null,bookmarked:Boolean?=null) {
+        require(mangaId>0 && ids.size in 1..500 && ids.all{it>0} && ids.distinct().size==ids.size)
+        require((read!=null) != (bookmarked!=null)) { "Choose one chapter action" }
+        val current=manga(mangaId).chapters.associateBy{it.id}
+        require(ids.all{it in current}) { "Chapter selection changed; reload before updating" }
+        val patch=if(read!=null) "isRead: $read" else "isBookmarked: $bookmarked"
+        val result=graphql("mutation NooirUpdateFlags { updateChapters(input: { ids: ["+
+            ids.joinToString(",")+"], patch: { "+patch+" } }) { chapters { id mangaId isRead isBookmarked } } }")
+            .obj("updateChapters").list("chapters").map{it.asObject()}
+        require(result.size==ids.size && result.map{it.int("id")}.toSet()==ids.toSet() &&
+            result.all{it.int("mangaId")==mangaId && (if(read!=null)it["isRead"]==read else it["isBookmarked"]==bookmarked)}) {
+            "Server did not confirm every chapter flag; reload before retrying"
+        }
+    }
+
+    /** Actual pinned downloader state; progress is not fabricated from local records. */
+    fun downloadStatus():SuwayomiDownloads {
+        val root=graphql("query NooirDownloadStatus { downloadStatus { state queue { state tries position chapter { id mangaId name } manga { id title } } } }").obj("downloadStatus")
+        val state=root.str("state")
+        require(state in setOf("STARTED","STOPPED"))
+        val rows=root.list("queue")
+        require(rows.size<=10000)
+        val entries=rows.map{
+            val item=it.asObject();val c=item.obj("chapter");val m=item.obj("manga")
+            val row=SuwayomiDownload(c.int("id"),m.int("id"),m.str("title"),c.str("name"),item.str("state"),item.int("tries"),item.int("position"))
+            require(row.chapterId>0 && row.mangaId>0 && c.int("mangaId")==row.mangaId && row.tries>=0 && row.position>=0 &&
+                row.state in setOf("QUEUED","DOWNLOADING","FINISHED","ERROR"))
+            row
+        }
+        require(entries.map{it.chapterId}.distinct().size==entries.size)
+        return SuwayomiDownloads(state,entries.sortedBy{it.position})
+    }
+
+    fun setDownloaderRunning(running:Boolean) {
+        val target=if(running)"STARTED" else "STOPPED"
+        if(downloadStatus().state==target) return
+        val operation=if(running)"startDownloader" else "stopDownloader"
+        val result=graphql("mutation NooirDownloader { "+operation+"(input: {}) { downloadStatus { state } } }")
+            .obj(operation).obj("downloadStatus")
+        require(result.str("state")==target) { "Downloader state not confirmed; reload" }
+    }
+
+    fun removeQueuedChapter(mangaId:Int,chapterId:Int) {
+        require(mangaId>0 && chapterId>0)
+        val current=downloadStatus().queue.singleOrNull{it.chapterId==chapterId}
+            ?: error("Chapter is no longer in the queue")
+        require(current.mangaId==mangaId && current.state in setOf("QUEUED","ERROR")) { "Queue changed; reload" }
+        val result=graphql("mutation NooirRemoveQueued { dequeueChapterDownloads(input: { ids: ["+
+            chapterId+"] }) { downloadStatus { queue { chapter { id } } } } }")
+            .obj("dequeueChapterDownloads").obj("downloadStatus").list("queue")
+        require(result.none{it.asObject().obj("chapter").int("id")==chapterId}) { "Queue removal not confirmed" }
     }
 
     fun enqueue(ids: List<Int>) {

@@ -139,6 +139,83 @@ class DesktopBackupTransport(endpoint: String) {
         require(restored==approved.sourceIds) { "Package installed, but some requested sources remain unavailable; inspect WebUI" }
         return restored
     }
+    /**
+     * Native catalogue installation, with the same exact-identity checks as backup
+     * recovery. Caller must display and obtain explicit approval of the package and
+     * store before invoking. No automatic install, refresh, retry or downgrade.
+     */
+    fun installCatalogExtension(approved:DesktopBackupExtensions.Extension,
+                                approvedStore:DesktopBackupExtensions.Store):Set<Long> {
+        require(!approved.installed && !approved.obsolete &&
+            approved.pkgName.length<=250 && approved.pkgName.matches(Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")) &&
+            approved.indexUrl==approvedStore.indexUrl &&
+            approved.versionCode!=null && approved.versionCode>=0 && !approved.versionName.isNullOrBlank()) {
+            "Package requires complete identity and version information"
+        }
+        val identity=DesktopBackupInspector.Store(approvedStore.name,approvedStore.indexUrl,
+            approvedStore.signingKey,approvedStore.legacy,approvedStore.extensionListUrl.orEmpty())
+        require(identity.reviewableHttps && identity.signingKey.isNotBlank()) { "Repository requires review" }
+        require(extensionStores().singleOrNull{it.indexUrl==approvedStore.indexUrl}==approvedStore &&
+            extensionCatalog().singleOrNull{it.pkgName==approved.pkgName}==approved) {
+            "Catalogue changed; review again"
+        }
+        val result=json("mutation NooirRecoverExtension { updateExtension(input: { id: "+
+            MiniJson.quote(approved.pkgName)+", patch: { install: true } }) { extension { pkgName storeIndexUrl isInstalled source { nodes { id } } } } }")
+            .obj("updateExtension").obj("extension")
+        require(result.str("pkgName")==approved.pkgName && result["storeIndexUrl"]==approvedStore.indexUrl &&
+            result["isInstalled"]==true) { "Installation not confirmed" }
+        val exposed=result.obj("source").list("nodes").map{it.asObject().long("id")}.toSet()
+        val installed=extensionCatalog().singleOrNull{it.pkgName==approved.pkgName}
+        require(installed!=null && installed.installed && installed.indexUrl==approvedStore.indexUrl &&
+            installed.versionCode==approved.versionCode && installed.versionName==approved.versionName &&
+            extensionStores().singleOrNull{it.indexUrl==approvedStore.indexUrl}==approvedStore &&
+            installed.sources.containsAll(approved.sources) && exposed.containsAll(approved.sources)) {
+            "Installation status uncertain; review the catalogue before retrying"
+        }
+        return installed.sources
+    }
+    /** Pinned v2.4.2366 AddExtensionStoreInput. Explicit user consent only.
+     * Upstream may canonicalize a legacy URL or follow indexV2, and upserts
+     * its canonical row. A changed response is reported, never rolled back
+     * automatically. No package installation is requested here.
+     */
+    fun addReviewedRepository(indexUrl:String):DesktopBackupExtensions.Store {
+        require(indexUrl.length in 12..2048 && indexUrl == indexUrl.trim() &&
+            indexUrl.none { it.isISOControl() }) { "Invalid repository URL" }
+        val uri=URI(indexUrl)
+        val host=uri.host.orEmpty().lowercase()
+        require(uri.scheme=="https" && host.contains('.') && !host.endsWith(".local") &&
+            !host.endsWith(".localhost") && !host.endsWith(".internal") &&
+            host.any{it.isLetter()} && !host.matches(Regex("[0-9.]+")) &&
+            uri.rawUserInfo==null && uri.rawQuery==null && uri.rawFragment==null &&
+            (uri.port==-1 || uri.port==443) &&
+            uri.rawPath.orEmpty().endsWithAnyRepositorySuffix()) { "Use a trusted public HTTPS repository index URL" }
+        val before=extensionStores()
+        require(before.none{it.indexUrl==indexUrl}) { "Repository already configured" }
+        val result=json("mutation NooirAddRepository { addExtensionStore(input: { indexUrl: "+
+            MiniJson.quote(indexUrl)+" }) { extensionStore { name badgeLabel signingKey contactWebsite contactDiscord indexUrl isLegacy extensionListUrl } } }")
+            .obj("addExtensionStore").obj("extensionStore")
+        val actual=result.str("indexUrl")
+        val after=extensionStores()
+        val store=after.singleOrNull{it.indexUrl==actual}
+        require(store!=null && store.signingKey.isNotBlank() && store.signingKey==result.str("signingKey") &&
+            DesktopBackupInspector.Store(store.name,store.indexUrl,store.signingKey,store.legacy,store.extensionListUrl.orEmpty()).reviewableHttps &&
+            before.all { existing -> after.contains(existing) }) {
+            "Repository response or existing identity changed; inspect the catalogue before any installation"
+        }
+        return store
+    }
+
+    private fun String.endsWithAnyRepositorySuffix():Boolean =
+        listOf("/repo.json","/index.min.json","/index.pb","/index.json").any{endsWith(it)}
+
+    /** Explicit remote refresh, not a side effect of opening the UI. Upstream
+     * may update repository metadata and catalogue records; no APK install. */
+    fun refreshExtensionCatalogue() {
+        json("mutation NooirRefreshCatalogue { fetchExtensions(input: {}) { clientMutationId } }")
+            .obj("fetchExtensions")
+    }
+
     fun export(target:File, includeExtensionStores:Boolean=false) {
         require(!target.exists()) { "Choose a new backup filename" }
         val parent=target.absoluteFile.parentFile

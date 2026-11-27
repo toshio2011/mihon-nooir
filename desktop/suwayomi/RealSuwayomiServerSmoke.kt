@@ -59,6 +59,20 @@ object RealSuwayomiServerSmoke {
             check(manga.id == card.id && manga.chapters.size == 2) { "Expected two synthetic chapters" }
             check(api.setMangaInLibrary(card.id, true))
             check(api.library(0, 100).mangas.any { it.id == card.id })
+            check(api.chapterFeed(false).entries.any { it.manga.id == card.id }) { "Missing actual server chapter updates" }
+            println("PASS: actual pinned server chapter updates including unopened chapters")
+            val first=manga.chapters.first()
+            api.updateChapterFlags(card.id,listOf(first.id),bookmarked=true)
+            check(api.manga(card.id).chapters.single{it.id==first.id}.bookmarked==true)
+            api.updateChapterFlags(card.id,listOf(first.id),read=true)
+            check(api.manga(card.id).chapters.single{it.id==first.id}.read==true)
+            api.updateChapterFlags(card.id,listOf(first.id),read=false)
+            api.updateChapterFlags(card.id,listOf(first.id),bookmarked=false)
+            val restored=api.manga(card.id).chapters.single{it.id==first.id}
+            check(restored.read==false && restored.bookmarked==false && restored.lastPageRead==first.lastPageRead)
+            check(runCatching{api.updateChapterFlags(card.id,listOf(Int.MAX_VALUE),bookmarked=true)}.isFailure)
+            check(api.downloadStatus().queue.isEmpty())
+            println("PASS: pinned server chapter flags, membership guard and native empty download queue")
             for (chapter in manga.chapters) {
                 val opened = api.openOnlineChapter(manga.id, chapter.id)
                 check(opened.pageCount == 2 && opened.syncConflict == null)
@@ -85,6 +99,8 @@ object RealSuwayomiServerSmoke {
             DesktopBackupTransport(endpoint).export(progressExport)
             check(DesktopBackupInspector.inspect(progressExport).progressed>=2)
             println("PASS: real pinned server explicit desktop page write-back and portable backup progress; rewind refused")
+            check(api.chapterFeed(true).entries.isNotEmpty()) { "Restored history missing from chapter feed" }
+            println("PASS: actual pinned server restored reading history feed")
             println("No third-party extensions, external manga, user credentials or normal data directory used.")
         } catch (failure: Throwable) {
             // This root contains only the isolated synthetic fixture. Keep the

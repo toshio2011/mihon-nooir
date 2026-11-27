@@ -35,6 +35,7 @@ internal class DesktopWebProjects(private val root: Path = DesktopDataHome.root(
         val css: String,
         val selector: String,
         val remove: String,
+        val collageUrls: List<String> = emptyList(),
     ) {
         override fun toString() = name
     }
@@ -72,6 +73,7 @@ internal class DesktopWebProjects(private val root: Path = DesktopDataHome.root(
         require(p.localCover.length<=4096 && (p.localCover.isBlank() || java.io.File(p.localCover).isAbsolute))
         require(!(p.coverUrl.isNotBlank() && p.localCover.isNotBlank()) &&
             (!p.collage || p.coverUrl.isBlank() && p.localCover.isBlank()))
+        require(p.collageUrls.isEmpty() || p.collage && p.collageUrls.size in 2..4 && p.collageUrls.distinct().size==p.collageUrls.size && p.collageUrls.all(::url))
         NooirWebExtractRules.validate(p.selector,p.remove)
         NooirWebImageProfile.parse(p.imageProfile)
         ReflowEpubStyle.parse(p.style)
@@ -96,7 +98,7 @@ internal class DesktopWebProjects(private val root: Path = DesktopDataHome.root(
                 j.getString("title"),j.getString("author"),j.getString("description"),j.getString("language"),
                 j.getString("coverUrl"),j.getString("localCover"),j.getBoolean("collage"),j.getBoolean("epub2"),
                 j.getString("style"),j.getString("imageProfile"),j.getBoolean("includeImages"),j.getString("css"),
-                j.getString("selector"),j.getString("remove")).also{validate(it);require(it.id.isNotBlank())}
+                j.getString("selector"),j.getString("remove"),j.optJSONArray("collageUrls")?.let{a->(0 until a.length()).map{a.getString(it)}}.orEmpty()).also{validate(it);require(it.id.isNotBlank())}
         }.also{require(it.map{p->p.id}.distinct().size==it.size)}
     }
     private fun write(items:List<Project>) {
@@ -110,7 +112,7 @@ internal class DesktopWebProjects(private val root: Path = DesktopDataHome.root(
                 .put("author",p.author).put("description",p.description).put("language",p.language)
                 .put("coverUrl",p.coverUrl).put("localCover",p.localCover).put("collage",p.collage)
                 .put("epub2",p.epub2).put("style",p.style).put("imageProfile",p.imageProfile)
-                .put("includeImages",p.includeImages).put("css",p.css).put("selector",p.selector).put("remove",p.remove))
+                .put("includeImages",p.includeImages).put("css",p.css).put("selector",p.selector).put("remove",p.remove).put("collageUrls",JSONArray(p.collageUrls)))
         }
         val bytes=rows.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size<=MAX_BYTES){"Saved library exceeds 1 MB"}

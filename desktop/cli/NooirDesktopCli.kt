@@ -80,8 +80,8 @@ object NooirDesktopCli {
             require(flags.keys.all { it in setOf("--input", "--output", "--format", "--device", "--options-token", "--title") }) { "Unknown option" }
             val input = File(flags["--input"] ?: error("Missing --input")).canonicalFile
             val output = File(flags["--output"] ?: error("Missing --output")).canonicalFile
-            require(input.isDirectory || (input.isFile && input.extension.lowercase() in setOf("cbz", "zip"))) {
-                "Input must be an image folder or CBZ/ZIP archive"
+            require(input.isDirectory || (input.isFile && input.extension.lowercase() in (setOf("cbz", "zip") + imageExt))) {
+                "Input must be an image, image folder or CBZ/ZIP archive"
             }
             require(!output.exists()) { "Output already exists: $output" }
             require(output.parentFile.isDirectory) { "Output directory does not exist" }
@@ -111,17 +111,7 @@ object NooirDesktopCli {
                             val firstInChapter = !entry.cover && entry.chapter != lastNonCoverChapter
                             if (!entry.cover) lastNonCoverChapter = entry.chapter
                             val img = decode(entry.open)
-                            val wholePageOpts = options.copy(
-                                layout = "PAGED", cropWhiteMargins = false,
-                                splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
-                                panelMode = "OFF", showFullPageBeforeSplits = false,
-                                contextPeekPercent = 0,
-                            )
-                            val opts = when {
-                                entry.cover -> wholePageOpts
-                                firstInChapter && options.keepChapterFirstPageWhole -> wholePageOpts
-                                else -> options
-                            }
+                            val opts = effectivePageOptions(options,entry.cover || namedCover(entry.name),firstInChapter)
                             for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
                                 yield(Rendered(entry.chapter, entry.cover, frame))
                             }
@@ -178,6 +168,9 @@ object NooirDesktopCli {
     }
 
     private fun <T> withInput(input: File, use: (List<SourcePage>) -> T): T {
+        if(input.isFile && input.extension.lowercase() in imageExt) {
+            return use(listOf(SourcePage(input.name,input.nameWithoutExtension,false){input.inputStream()}))
+        }
         if (input.isDirectory) {
             val files = input.walkTopDown().filter { it.isFile && it.extension.lowercase() in imageExt }.toList()
             require(files.size <= MAX_PAGES) { "Too many source files" }
@@ -209,6 +202,12 @@ object NooirDesktopCli {
             }.sortedWith(compareBy<SourcePage> { !it.cover })
             return use(sources)
         }
+    }
+
+    private fun namedCover(filename:String):Boolean {
+        val stem=filename.replace('\\','/').substringAfterLast('/').substringBeforeLast('.').lowercase()
+            .replace(Regex("^[0-9]{5}__"),"")
+        return stem in setOf("cover","frontcover","folder")
     }
 
     private fun decode(open: () -> InputStream): BufferedImage {
@@ -348,6 +347,68 @@ object NooirDesktopCli {
         }
     }
 
+    /** Bounded sample-page preview: identical renderer and dimensions as export.
+     * No source modification, archive output or network access. */
+    private fun effectivePageOptions(options:MangaConversionOptions,cover:Boolean,firstChapterPage:Boolean):MangaConversionOptions =
+        when {
+            cover -> options.copy(layout="PAGED",cropWhiteMargins=false,splitSpreads=false,orientation="PORTRAIT",
+                overlapPercent=0,panelMode="OFF",showFullPageBeforeSplits=false,contextPeekPercent=0)
+            firstChapterPage && options.keepChapterFirstPageWhole -> options.copy(
+                layout="PAGED",cropWhiteMargins=false,splitSpreads=false,panelMode="OFF")
+            else -> options
+        }
+
+    internal data class LocalSample(val bytes:ByteArray,val name:String,val index:Int,val count:Int,
+        val cover:Boolean,val firstChapterPage:Boolean)
+
+    /** Inspect one source page using exactly the CLI source ordering, without extracting the archive.
+     * Only an explicitly selected local input is read. No source data is modified. */
+    internal fun localSample(input:File,index:Int,includeCover:Boolean):LocalSample {
+        val source=input.canonicalFile
+        require(source.isDirectory || source.isFile && source.extension.lowercase() in (setOf("cbz","zip")+imageExt))
+        return withInput(source){items->
+            val pages=items.filter{!it.cover || includeCover}
+            require(pages.isNotEmpty()){"No readable image pages"}
+            val actual=index.coerceIn(0,pages.lastIndex)
+            val page=pages[actual]
+            val previous=pages.subList(0,actual).lastOrNull{!it.cover}
+            val first=!page.cover && previous?.chapter!=page.chapter
+            val bytes=page.open().use{it.readNBytes(MAX_IMAGE_BYTES+1)}
+            require(bytes.isNotEmpty() && bytes.size<=MAX_IMAGE_BYTES)
+            LocalSample(bytes,page.name,actual,pages.size,page.cover || namedCover(page.name),first)
+        }
+    }
+
+    internal data class SamplePreview(val frames: List<ByteArray>, val truncated: Boolean)
+    internal fun previewImage(bytes: ByteArray, device: String, format: ExportFormat,
+                              options: MangaConversionOptions, firstChapterPage: Boolean = false,
+                              cover:Boolean = false, checkCancelled: () -> Unit = {}): SamplePreview {
+        require(bytes.isNotEmpty() && bytes.size <= MAX_IMAGE_BYTES)
+        val profile = NooirDeviceProfiles.forId(device)
+        require(format != ExportFormat.AUTO && profile.accepts(format))
+        val archive = format in setOf(ExportFormat.EPUB, ExportFormat.EPUB2, ExportFormat.CBZ)
+        val width = if (archive && options.orientation == "LANDSCAPE") profile.height else profile.width
+        val height = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
+        val effective = effectivePageOptions(options,cover,firstChapterPage)
+        val source = DesktopImageDecoder.decode(bytes, MAX_IMAGE_PIXELS)
+        try {
+            val frames = mutableListOf<ByteArray>()
+            var total = 0L
+            var truncated = false
+            for (frame in render(source, width, height, if (format == ExportFormat.XTC) 1 else 2,
+                effective, fixedFramebuffer = !archive)) {
+                checkCancelled()
+                if (frames.size >= 12) { truncated = true; break }
+                val png = frame.colorPng ?: GrayscalePng.encode(frame)
+                if (total + png.size > 24L * 1024 * 1024) { truncated = true; break }
+                frames.add(png)
+                total += png.size
+            }
+            require(frames.isNotEmpty()) { "Sample exceeds preview budget" }
+            return SamplePreview(frames, truncated)
+        } finally { source.flush() }
+    }
+
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean): Sequence<QuantizedPage> = sequence {
         val auto = options.panelMode != "OFF" && options.orientation == "AUTO_FIT"
@@ -455,7 +516,7 @@ object NooirDesktopCli {
                 options.panelMode=="PANEL_BY_PANEL" && options.layout!="WEBTOON" -> trimDetectedPanel(src,region)
                 else -> trimWhite(src,region)
             }
-            val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
+            val scale = minOf(vw.toFloat() / r.width, vh.toFloat() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)
             val dh = (r.height * scale).toInt().coerceIn(1, vh)
             val frame = BufferedImage(frameWidth, frameHeight, BufferedImage.TYPE_INT_RGB)

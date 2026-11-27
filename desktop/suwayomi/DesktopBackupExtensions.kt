@@ -58,6 +58,23 @@ object DesktopBackupExtensions {
                 Recovery(e.pkgName,e.name,url,store.backup.signingKey,rows.map{it.id}.toSet(),e.versionCode,e.versionName)
             }
     }
+    /** Only approved exact packages are attempted, independently and once.
+     * An uncertain mutation is reported, not retried or rolled back.
+     * Interruptions stop the operation rather than starting further installs.
+     */
+    data class BatchResult(val packageName:String,val confirmed:Set<Long>,val needsReview:Boolean)
+    fun recoverBatch(approved:List<Recovery>,install:(Recovery)->Set<Long>):List<BatchResult> {
+        require(approved.size in 1..100 && approved.map{it.pkgName}.distinct().size==approved.size)
+        return approved.map{item->
+            if(Thread.currentThread().isInterrupted)throw InterruptedException("Extension recovery interrupted")
+            try {
+                val confirmed=install(item)
+                BatchResult(item.pkgName,confirmed.intersect(item.sourceIds),confirmed!=item.sourceIds)
+            }catch(e:InterruptedException){Thread.currentThread().interrupt();throw e}
+            catch(e:java.util.concurrent.CancellationException){throw e}
+            catch(e:Exception){BatchResult(item.pkgName,emptySet(),true)}
+        }
+    }
     private fun varint(n:Long):ByteArray {
         var x=n;val b=ByteArrayOutputStream()
         while(x ushr 7!=0L){b.write((x.toInt() and 127) or 128);x=x ushr 7}

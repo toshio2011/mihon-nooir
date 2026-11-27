@@ -68,7 +68,7 @@ jobs:
           git diff --exit-code "$released" "$base" -- overlay/ config/ tools/ .github/workflows/build-apk.yml .github/workflows/release-apk.yml .github/workflows/publish-v1.0.20.yml .github/workflows/verify-v1.0.20-signing.yml
           git merge-base --is-ancestor "$base" HEAD
           changed=$(git diff --name-only "$base" HEAD)
-          unexpected=$(printf '%s\n' "$changed" | grep -v -E '^(desktop/|docs/WINDOWS[^/]*\.md$|tests/(Desktop[^/]*\.kt|Windows[^/]*\.kt|SuwayomiBrowseTest\.kt|run_windows_full\.sh|run\.sh|test_overlay\.py)$|\.github/workflows/desktop-preview\.yml$|$)' || true)
+          unexpected=$(printf '%s\n' "$changed" | grep -v -E '^(README\.md$|docs/README\.md$|desktop/|docs/WINDOWS[^/]*\.md$|tests/(Desktop[^/]*\.kt|Windows[^/]*\.kt|SuwayomiBrowseTest\.kt|run_windows_full\.sh|run\.sh|test_overlay\.py)$|\.github/workflows/desktop-preview\.yml$|\.github/workflows/desktop-compose-experiment\.yml$|$)' || true)
           test -z "$unexpected" || { printf 'STOP: unexpected changes:\n%s\n' "$unexpected" >&2; exit 1; }
           git diff --exit-code "$base" HEAD -- overlay/ config/ tools/ .github/workflows/build-apk.yml .github/workflows/release-apk.yml .github/workflows/publish-v1.0.20.yml .github/workflows/verify-v1.0.20-signing.yml
           echo 'PASS: exact released Android v1.0.20 source and signing/release workflows preserved'

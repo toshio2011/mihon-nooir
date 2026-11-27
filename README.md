@@ -20,6 +20,10 @@ Read manga on Android · Choose chapters · Convert books · Send to XTEink over
 > [!IMPORTANT]
 > **MihonNooir is independent and unofficial.** The latest official Android release is **[v1.0.20](https://github.com/toshio2011/mihon-nooir/releases/tag/v1.0.20)**, published 24 November 2026, based on Mihon v0.21.3. It uses the persistent signing certificate shared with official v1.0.19, v1.0.18 and v1.0.17. Back up your library and important downloaded chapters before updating. **From v1.0.17, download the correct APK manually** because the old updater could choose the wrong CPU architecture. Install over the existing app; do not uninstall or clear storage. If Android reports a signing/package conflict, stop and report it. Windows is still in development.
 
+## Windows Compose preview (experimental)
+
+[**Windows preview download and visual walkthrough**](docs/WINDOWS_COMPOSE_PREVIEW_GUIDE.md) · [Portable ZIP (CI artifact)](https://github.com/toshio2011/mihon-nooir/actions/runs/45952282235/artifacts/15177533204). Native Android-inspired interface; separate from the stable Android release and existing Swing preview. Physical Windows acceptance is pending.
+
 ## What's new in Android v1.0.20
 
 - **Universal Book Converter:** choose input type and compatible output; convert local EPUB to XTC/XTCH with typography controls, or convert supported CBZ/ZIP/images.

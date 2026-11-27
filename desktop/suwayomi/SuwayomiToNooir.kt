@@ -151,7 +151,9 @@ object SuwayomiToNooir {
             for ((index, entry) in pages.withIndex()) {
                 require(entry.size < 0 || entry.size <= MAX_IMAGE_BYTES) { "Oversized CBZ image entry" }
                 val ext = entry.name.substringAfterLast('.').lowercase()
-                val target = File(destination, "%05d.%s".format(index + 1, ext))
+                val stem = entry.name.replace('\\','/').substringAfterLast('/').substringBeforeLast('.').lowercase()
+                val marker = if(stem in setOf("cover","frontcover","folder")) "__"+stem else ""
+                val target = File(destination, "%05d%s.%s".format(index + 1, marker, ext))
                 zip.getInputStream(entry).use { input ->
                     target.outputStream().use { out ->
                         val buffer = ByteArray(64 * 1024)

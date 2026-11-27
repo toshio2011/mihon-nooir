@@ -37,8 +37,8 @@ internal class DesktopConversionSettingsStore(private val directory: Path = Desk
 
     private val file = directory.resolve(FILE_NAME)
 
-    fun load(): MangaConversionOptions {
-        if (Files.notExists(file, NOFOLLOW_LINKS)) return MangaConversionOptions.preset("Manga")
+    fun load(defaultIfMissing: MangaConversionOptions = MangaConversionOptions.preset("Manga")): MangaConversionOptions {
+        if (Files.notExists(file, NOFOLLOW_LINKS)) return preferences(defaultIfMissing)
         require(Files.isRegularFile(file, NOFOLLOW_LINKS)) { "Conversion settings file is unreadable or not a regular file" }
         val bytes = Files.newInputStream(file).use { it.readNBytes(MAX_BYTES + 1) }
         require(bytes.size in 1..MAX_BYTES) { "Conversion settings file is empty or too large" }
