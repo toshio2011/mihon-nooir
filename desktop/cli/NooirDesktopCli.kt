@@ -118,7 +118,7 @@ object NooirDesktopCli {
                                 contextPeekPercent = 0,
                             )
                             val opts = when {
-                                entry.cover -> wholePageOpts
+                                entry.cover || namedCover(entry.name) -> wholePageOpts
                                 firstInChapter && options.keepChapterFirstPageWhole -> options.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED")
                                 else -> options
                             }
@@ -209,6 +209,12 @@ object NooirDesktopCli {
             }.sortedWith(compareBy<SourcePage> { !it.cover })
             return use(sources)
         }
+    }
+
+    private fun namedCover(filename:String):Boolean {
+        val stem=filename.replace('\\','/').substringAfterLast('/').substringBeforeLast('.').lowercase()
+            .replace(Regex("^[0-9]{5}__"),"")
+        return stem in setOf("cover","frontcover","folder")
     }
 
     private fun decode(open: () -> InputStream): BufferedImage {

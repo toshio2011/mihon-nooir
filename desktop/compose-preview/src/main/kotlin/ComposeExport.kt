@@ -134,7 +134,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 }catch(e:Exception){result=e.message ?: "Unable to queue export"}
             }){Text("Queue & close")}
             TextButton(onClick = close, enabled = !busy) { Text("Close") }
-            Button(enabled = !busy && valid && output != null, onClick = {
+            Button(enabled = !busy && !sessionConversions.active && valid && output != null, onClick = {
                 val target = output ?: return@Button
                 val args = arrayOf("--mode", "export", "--manga-id", card.id.toString(),
                     "--chapters", chapters.joinToString(",") { it.id.toString() }, "--format", format.name,

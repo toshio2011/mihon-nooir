@@ -186,7 +186,7 @@ internal fun ComposeConverter(close: () -> Unit) {
                             }catch(e:Exception){result=e.message ?: "Unable to queue conversion"}
                         }){Text("Queue & close")}
                         TextButton(onClick = close, enabled = !busy) { Text("Close") }
-                        Button(enabled = !busy && source != null && File(outputText).isAbsolute &&
+                        Button(enabled = !busy && !sessionConversions.active && source != null && File(outputText).isAbsolute &&
                             File(outputText).extension.equals(format.extension,true) && format in formats, onClick = {
                             val input = source ?: return@Button
                             val target = File(outputText)

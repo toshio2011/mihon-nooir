@@ -222,3 +222,6 @@ grep -Fxq 'PASS: explicit position save, reopen, conflict and rewind refusal' "$
 
 gradle -p desktop/compose-preview qaLiveSample --no-daemon --stacktrace > "$out/live-sample-test.log" 2>&1
 grep -Fxq 'PASS: actual renderer sample preview, first chapter page and fixed device dimensions' "$out/live-sample-test.log"
+
+gradle -p desktop/compose-preview qaSessionConversions --no-daemon --stacktrace > "$out/session-conversions-test.log" 2>&1
+grep -Fxq 'PASS: app-owned conversion ordering, duplicate protection, cancellation and batch handoff' "$out/session-conversions-test.log"

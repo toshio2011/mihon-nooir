@@ -16,6 +16,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import dev.nooir.desktop.ui.DesktopConversionQueue
 
 internal enum class SessionJobState { QUEUED, RUNNING, COMPLETED, FAILED, CANCELED }
 internal data class SessionConversionJob(val id:String,val target:File,val label:String,
@@ -27,7 +29,30 @@ internal class SessionConversions(private val scope:CoroutineScope) {
     val jobs:List<SessionConversionJob> get()=records.toList()
     var running by mutableStateOf(false)
         private set
-    val active:Boolean get()=running || pending.isNotEmpty()
+    var batchRunning by mutableStateOf(false)
+        private set
+    var batchPausing by mutableStateOf(false)
+        private set
+    var batchStatus by mutableStateOf("")
+        private set
+    private val batchStop=AtomicBoolean(false)
+    val active:Boolean get()=running || batchRunning || pending.isNotEmpty()
+    fun startBatch(queue:DesktopConversionQueue) {
+        require(!active){"Another conversion is active; finish it first"}
+        batchStop.set(false);batchPausing=false;batchRunning=true
+        batchStatus="Running local jobs…"
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO){queue.runPending({batchStop.get()})}
+                batchStatus=if(batchStop.get())"Paused after current conversion." else "Batch finished. Review individual results."
+            }catch(e:CancellationException){throw e}
+            catch(e:Exception){batchStatus="Batch not confirmed: "+(e.message ?: "Unknown error").take(160)}
+            finally{batchRunning=false;batchPausing=false;startPending()}
+        }
+    }
+    fun pauseBatch(){
+        if(batchRunning){batchStop.set(true);batchPausing=true;batchStatus="Pausing after current conversion…"}
+    }
     private fun replace(id:String,state:SessionJobState,detail:String=""){
         val i=records.indexOfFirst{it.id==id}
         if(i>=0)records[i]=records[i].copy(state=state,detail=detail)
@@ -39,7 +64,11 @@ internal class SessionConversions(private val scope:CoroutineScope) {
         require(records.size<500){"Clear finished activity records before adding jobs"}
         val job=SessionConversionJob(UUID.randomUUID().toString(),out,label,SessionJobState.QUEUED)
         records.add(job);pending.addLast(Task(job,convert))
-        if(!running){
+        startPending()
+        return job.id
+    }
+    private fun startPending(){
+        if(!running && !batchRunning && pending.isNotEmpty()){
             running=true
             scope.launch {
                 try {
@@ -59,7 +88,6 @@ internal class SessionConversions(private val scope:CoroutineScope) {
                 }finally{running=false}
             }
         }
-        return job.id
     }
     fun cancel(id:String){
         val task=pending.firstOrNull{it.job.id==id} ?: return
@@ -85,7 +113,8 @@ internal fun SessionActivity(close:()->Unit,openBatch:()->Unit){
                 else {
                     Text("Conversions continue while you read or browse. Close this dialog whenever you like.")
                     Text("Single-export activity is session-only; completed files stay on disk. Durable local batches are available separately.",style=MaterialTheme.typography.bodySmall)
-                    if(controller.running) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if(controller.running || controller.batchRunning) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if(controller.batchRunning || controller.batchStatus.isNotBlank()) Text(controller.batchStatus,style=MaterialTheme.typography.bodySmall)
                     Text(jobs.count{it.state==SessionJobState.QUEUED}.toString()+" queued · "+jobs.count{it.state==SessionJobState.RUNNING}+" running · "+jobs.count{it.state==SessionJobState.COMPLETED}+" completed")
                     LazyColumn(Modifier.fillMaxWidth().heightIn(min=160.dp,max=370.dp)){
                         if(jobs.isEmpty())item{Text("No conversions in this session.")}
@@ -103,7 +132,7 @@ internal fun SessionActivity(close:()->Unit,openBatch:()->Unit){
                     }
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                         TextButton(onClick={controller.clearFinished()}){Text("Clear finished")}
-                        TextButton(onClick=openBatch,enabled=!controller.active){Text("Local batch queue")}
+                        TextButton(onClick=openBatch){Text("Local batch queue")}
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick=close){Text("Close")}
                     }

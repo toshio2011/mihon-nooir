@@ -65,6 +65,7 @@ internal fun runComposeWebExport(entries: List<NooirWebChapterPlan.Entry>, targe
 @Composable
 internal fun ComposeWeb(close: () -> Unit) {
     val operations = LocalOperations.current
+    val sessionConversions = LocalSessionConversions.current
     val scope = rememberCoroutineScope()
     var urls by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<NooirWebChapterPlan.Entry>>(emptyList()) }
@@ -230,7 +231,17 @@ internal fun ComposeWeb(close: () -> Unit) {
                     },enabled=!cancelRequested){Text("Cancel export")}
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick=close,enabled=!busy){Text("Close")}
-                    Button(enabled=!busy && title.isNotBlank() && entries.any{it.included} &&
+                    TextButton(enabled=!busy && title.isNotBlank() && entries.any{it.included} &&
+                        File(output).isAbsolute && File(output).extension.equals("epub",true),onClick={
+                        val target=File(output);val plan=entries.toList()
+                        val opts=ComposeWebOptions(title,author,synopsis,language,cover,localCover,collage,format,style,imageProfile,images,css,selector,remove)
+                        try {
+                            NooirWebChapterPlan.export(plan)
+                            sessionConversions.submit(target,title){runComposeWebExport(plan,target,opts,DesktopWebExportSession())}
+                            close()
+                        }catch(e:Exception){status=(e.message ?: "Unable to queue EPUB").take(240)}
+                    }){Text("Queue & close")}
+                    Button(enabled=!busy && !sessionConversions.active && title.isNotBlank() && entries.any{it.included} &&
                         File(output).isAbsolute && File(output).extension.equals("epub",true),onClick={
                         val target=File(output);val plan=entries.toList()
                         val opts=ComposeWebOptions(title,author,synopsis,language,cover,localCover,collage,format,style,imageProfile,images,css,selector,remove)

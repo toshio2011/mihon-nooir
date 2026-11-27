@@ -98,3 +98,10 @@ tasks.register<JavaExec>("qaLiveSample") {
     mainClass.set("dev.nooir.desktop.compose.ComposeLiveSampleSmokeKt")
     systemProperty("java.awt.headless", "true")
 }
+
+tasks.register<JavaExec>("qaSessionConversions") {
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.nooir.desktop.compose.ComposeSessionConversionsSmokeKt")
+    systemProperty("java.awt.headless", "true")
+}

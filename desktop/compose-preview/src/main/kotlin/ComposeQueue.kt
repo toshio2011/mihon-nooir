@@ -23,7 +23,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 
@@ -46,11 +45,11 @@ internal fun ComposeQueue(close: () -> Unit) {
     val queue = remember { DesktopConversionQueue() }
     val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
-    val stop = remember { AtomicBoolean(false) }
+    val controller = LocalSessionConversions.current
     var jobs by remember { mutableStateOf<List<DesktopConversionJob>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
-    var running by remember { mutableStateOf(false) }
-    var pausing by remember { mutableStateOf(false) }
+    val running = controller.batchRunning
+    val pausing = controller.batchPausing
     var status by remember { mutableStateOf("Loading local conversion jobs…") }
     var addOpen by remember { mutableStateOf(false) }
     var clearConfirm by remember { mutableStateOf(false) }
@@ -65,7 +64,7 @@ internal fun ComposeQueue(close: () -> Unit) {
             try { block(); reload() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { status = "Queue operation failed. Existing records and output files were not deliberately removed. Reload before retrying." }
-            finally { busy = false; running = false }
+            finally { busy = false }
         }
     }
     LaunchedEffect(Unit) {
@@ -77,12 +76,12 @@ internal fun ComposeQueue(close: () -> Unit) {
         catch (e: Exception) { status = "Could not read the queue. Original records are retained." }
     }
     LaunchedEffect(running) {
-        while (running) {
-            kotlinx.coroutines.delay(1000)
-            try { reload() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
-        }
+        do {
+            try { reload() } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { status="Unable to refresh queue. Existing records retained." }
+            if(running) kotlinx.coroutines.delay(1000)
+        } while(running)
     }
-    DisposableEffect(Unit) { onDispose { stop.set(true) } }
 
     BasicAlertDialog(onDismissRequest = { if (!busy) close() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -98,14 +97,10 @@ internal fun ComposeQueue(close: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { addOpen = true }, enabled = !busy) { Text("Add books") }
                         OutlinedButton(onClick = {
-                            stop.set(false); pausing = false; running = true
-                            status = "Running local jobs…"
-                            action {
-                                withContext(Dispatchers.IO) { queue.runPending({ stop.get() }) }
-                                status = if (stop.get()) "Paused after current conversion." else "Batch finished. Review individual results."
-                            }
-                        }, enabled = !busy && jobs.any { it.state in setOf(ConversionJobState.PENDING,ConversionJobState.RUNNING) }) { Text("Run / recover") }
-                        OutlinedButton(onClick = { stop.set(true); pausing = true; status = "Pausing after current conversion…" },
+                            try{controller.startBatch(queue)}
+                            catch(e:Exception){status=e.message ?: "Could not start batch"}
+                        }, enabled = !busy && !controller.active && jobs.any { it.state in setOf(ConversionJobState.PENDING,ConversionJobState.RUNNING) }) { Text("Run / recover") }
+                        OutlinedButton(onClick = { controller.pauseBatch() },
                             enabled = running && !pausing) { Text("Pause after current") }
                     }
                     Text("${jobs.count { it.state == ConversionJobState.PENDING }} pending · ${jobs.count { it.state == ConversionJobState.COMPLETED }} completed · ${jobs.count { it.state in setOf(ConversionJobState.FAILED,ConversionJobState.INTERRUPTED) }} need review")
@@ -135,7 +130,9 @@ internal fun ComposeQueue(close: () -> Unit) {
                             HorizontalDivider()
                         }
                     }
+                    if(controller.batchStatus.isNotBlank()) Text(controller.batchStatus,style=MaterialTheme.typography.bodySmall)
                     Text(status, style = MaterialTheme.typography.bodySmall)
+                    Text("Close this queue to keep reading or browsing while conversions run.",style=MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { action { status = "Queue refreshed." } }, enabled = !busy) { Text("Reload") }
                         TextButton(onClick = { clearConfirm = true }, enabled = !busy) { Text("Clear finished") }
