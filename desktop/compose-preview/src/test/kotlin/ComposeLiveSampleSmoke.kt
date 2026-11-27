@@ -21,6 +21,31 @@ fun main() {
     }finally{g.dispose()}
     val bytes=ByteArrayOutputStream().also{ImageIO.write(image,"png",it)}.toByteArray()
     image.flush()
+    val directory=java.nio.file.Files.createTempDirectory("nooir-compose-defaults-")
+    try {
+        val store=dev.nooir.desktop.ui.DesktopConversionSettingsStore(directory)
+        check(loadMangaDefaults(store).options==androidMangaDefaults())
+        val custom=MangaConversionOptions(renderAlgorithm="ATKINSON",contrast=73,contextPeekPercent=4,
+            allowMissingCover=true,skipUnavailableChapters=true,panelDiagnostics=true)
+        store.save(custom)
+        check(loadMangaDefaults(store).options==custom.copy(allowMissingCover=false,skipUnavailableChapters=false,panelDiagnostics=false))
+        val path=directory.resolve(dev.nooir.desktop.ui.DesktopConversionSettingsStore.FILE_NAME)
+        java.nio.file.Files.writeString(path,"unknown settings")
+        check(loadMangaDefaults(store).warning.isNotBlank())
+        check(runCatching{store.save(custom)}.isFailure && java.nio.file.Files.readString(path)=="unknown settings")
+    }finally{directory.toFile().deleteRecursively()}
+    val typography=androidTypographyDefaults()
+    check(typography.family=="SansSerif")
+    check(typographyPreset(typography,"Compact").let{Triple(it.fontPx,it.marginPx,it.lineHeight)}==Triple(20,14,110))
+    check(typographyPreset(typography,"Balanced")==typography)
+    check(typographyPreset(typography,"Large").let{Triple(it.fontPx,it.marginPx,it.lineHeight)}==Triple(32,20,135))
+    val customReader=checkNotNull(validatedCustomReader("600","1000"))
+    check(customReader.width==600 && customReader.height==1000 && !customReader.xteinkWifi)
+    check(validatedCustomReader("4096","4096")==null && validatedCustomReader("63","800")==null)
+    val customPreview=NooirDesktopCli.previewImage(bytes,customReader.id,ExportFormat.XTC,androidMangaDefaults())
+    check(customPreview.frames.all{png->ImageIO.read(png.inputStream()).let{img->
+        try{img.width==600 && img.height==1000}finally{img.flush()}
+    }})
     val fresh=androidMangaDefaults()
     check(fresh.copy(renderAlgorithm="LEGACY")==MangaConversionOptions())
     check(androidRendering(fresh)=="FLOYD_STEINBERG")

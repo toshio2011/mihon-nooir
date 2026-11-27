@@ -112,10 +112,28 @@ internal fun ComposeMangaSettings(o:MangaConversionOptions,format:ExportFormat,e
         }
     }
 }
+internal fun androidTypographyDefaults()=DesktopTextEpubImport.Settings(family="SansSerif")
+internal val androidReadingPresets=linkedMapOf("Compact" to Triple(20,14,110),
+    "Balanced" to Triple(24,26,118),"Large" to Triple(32,20,135))
+internal fun typographyPreset(s:DesktopTextEpubImport.Settings,name:String):DesktopTextEpubImport.Settings {
+    val (size,margin,lineHeight)=androidReadingPresets.getValue(name)
+    return s.copy(fontPx=size,marginPx=margin,lineHeight=lineHeight)
+}
 @Composable
 internal fun ComposeTypographySettings(s:DesktopTextEpubImport.Settings,enabled:Boolean,change:(DesktopTextEpubImport.Settings)->Unit) {
     Text("Typography",style=MaterialTheme.typography.titleMedium)
-    ExportChoice(s.family,listOf("Serif","SansSerif","Monospaced"),enabled){change(s.copy(family=it))}
+    Text("Reading presets")
+    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+        androidReadingPresets.forEach{(name,values)->
+            FilterChip(selected=Triple(s.fontPx,s.marginPx,s.lineHeight)==values,
+                onClick={change(typographyPreset(s,name))},label={Text(name)},enabled=enabled)
+        }
+    }
+    Text("Font family")
+    val families=linkedMapOf("SansSerif" to "Sans","Serif" to "Serif","Monospaced" to "Mono")
+    ExportChoice(families[s.family] ?: s.family,families.values.toList(),enabled){label->
+        change(s.copy(family=families.entries.first{it.value==label}.key))
+    }
     ConversionSlider("Font size (px)",s.fontPx,14..46,enabled){change(s.copy(fontPx=it))}
     ConversionSlider("Margins (px)",s.marginPx,8..80,enabled){change(s.copy(marginPx=it))}
     ConversionSlider("Line height (%)",s.lineHeight,100..200,enabled){change(s.copy(lineHeight=it))}

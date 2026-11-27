@@ -172,8 +172,10 @@ private fun ComposeBatchOptions(close: () -> Unit,
     var folder by remember { mutableStateOf<File?>(null) }
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
-    var options by remember { mutableStateOf(androidMangaDefaults()) }
-    var typography by remember { mutableStateOf(DesktopTextEpubImport.Settings()) }
+    val defaults=rememberMangaDefaults() ?: return
+    var mangaDefaults by remember { mutableStateOf(defaults.options) }
+    var options by remember { mutableStateOf(mangaDefaults) }
+    var typography by remember { mutableStateOf(androidTypographyDefaults()) }
     var selectionError by remember { mutableStateOf("") }
     val formats = ExportFormat.entries.filter { kind.accepts(it) && device.accepts(it) }
     fun adjust() { if (format !in formats && formats.isNotEmpty()) format = formats.first() }
@@ -183,7 +185,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
             Text("Input type")
             ExportChoice(kind.label,BatchKind.entries.map { it.label },true) { label ->
                 kind = BatchKind.entries.first { it.label == label }; files = emptyList(); selectionError = ""
-                options = if(kind in setOf(BatchKind.MANGA,BatchKind.EPUB_IMAGES)) androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)
+                options = if(kind in setOf(BatchKind.MANGA,BatchKind.EPUB_IMAGES)) mangaDefaults else androidMangaDefaults().copy(rightToLeft=false)
             }
             OutlinedButton(onClick = {
                 val picker = JFileChooser().apply {
@@ -199,7 +201,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
                 }
             }) { Text("Choose books (${files.size})") }
             Text("Device")
-            ExportChoice(device.name,NooirDeviceProfiles.builtins.map { it.name },true) { name -> device = NooirDeviceProfiles.builtins.first { it.name == name } }
+            ComposeDeviceChoice(device,true) { chosen -> device = chosen }
             Text("Format")
             ExportChoice(format.name,formats.map { it.name },formats.isNotEmpty()) { format = ExportFormat.valueOf(it) }
             OutlinedButton(onClick = {
@@ -208,7 +210,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
             }) { Text(folder?.name ?: "Choose output folder") }
             if(selectionError.isNotBlank()) Text(selectionError,color=MaterialTheme.colorScheme.error)
             when(kind) {
-                BatchKind.MANGA,BatchKind.EPUB_IMAGES -> { MangaPreferenceActions(options,true){options=it}; ComposeMangaSettings(options,format,true){options=it}; ComposeLiveSample(device.id,format,options,formats.contains(format)) }
+                BatchKind.MANGA,BatchKind.EPUB_IMAGES -> { MangaPreferenceActions(options,true,defaults.warning,{mangaDefaults=it}){options=it}; ComposeMangaSettings(options,format,true){options=it}; ComposeLiveSample(device.id,format,options,formats.contains(format)) }
                 BatchKind.PDF -> ComposePdfSettings(options,format,true){options=it}
                 BatchKind.EPUB_TEXT -> {ComposeTypographySettings(typography,true){typography=it};ComposeRenderingSettings(options,true){options=it}}
                 BatchKind.REFLOW -> Text("PDF reflow uses existing extraction defaults.")

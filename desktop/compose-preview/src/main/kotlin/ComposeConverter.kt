@@ -77,8 +77,10 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
     var mode by remember { mutableStateOf(initialInput.mode()) }
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
-    var options by remember { mutableStateOf(if(initialInput.mode()==LocalConversionMode.MANGA) androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)) }
-    var typography by remember { mutableStateOf(DesktopTextEpubImport.Settings()) }
+    val defaults=rememberMangaDefaults() ?: return
+    var mangaDefaults by remember { mutableStateOf(defaults.options) }
+    var options by remember { mutableStateOf(if(initialInput.mode()==LocalConversionMode.MANGA) mangaDefaults else androidMangaDefaults().copy(rightToLeft=false)) }
+    var typography by remember { mutableStateOf(androidTypographyDefaults()) }
     var outputText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf("") }
@@ -105,7 +107,7 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                         ExportChoice(inputKind.label,UniversalInput.entries.map{it.label},!busy){label->
                             inputKind=UniversalInput.entries.first{it.label==label}
                             source=null;mode=inputKind.mode()
-                            options=if(mode==LocalConversionMode.MANGA)androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)
+                            options=if(mode==LocalConversionMode.MANGA)mangaDefaults else androidMangaDefaults().copy(rightToLeft=false)
                             finished=null;result="";adjustFormat()
                         }
                     }
@@ -122,7 +124,7 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                                 if (inputKind.accepts(file)) {
                                     source = file
                                     mode = modesFor(file).first()
-                                    options = if (mode == LocalConversionMode.MANGA) androidMangaDefaults()
+                                    options = if (mode in setOf(LocalConversionMode.MANGA,LocalConversionMode.EPUB_IMAGES)) mangaDefaults
                                         else androidMangaDefaults().copy(rightToLeft=false)
                                     adjustFormat()
                                     result = ""; finished = null
@@ -137,14 +139,14 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                         ExportChoice(mode.label, modes.map { it.label }, !busy) { label ->
                             mode = modes.first { it.label == label }
                             options = if (mode in setOf(LocalConversionMode.MANGA,LocalConversionMode.EPUB_IMAGES))
-                                androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)
+                                mangaDefaults else androidMangaDefaults().copy(rightToLeft=false)
                             adjustFormat()
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column(Modifier.weight(1f)) {
                                 Text("Reader device")
-                                ExportChoice(device.name, NooirDeviceProfiles.builtins.map { it.name }, !busy) { name ->
-                                    device = NooirDeviceProfiles.builtins.first { it.name == name }; adjustFormat()
+                                ComposeDeviceChoice(device,!busy) { chosen ->
+                                    device = chosen; adjustFormat()
                                 }
                             }
                             Column(Modifier.weight(1f)) {
@@ -156,7 +158,7 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                         }
                         when(mode) {
                             LocalConversionMode.MANGA, LocalConversionMode.EPUB_IMAGES ->
-                                { MangaPreferenceActions(options,!busy) { options = it }; ComposeMangaSettings(options,format,!busy) { options = it }; ComposeLiveSample(device.id,format,options,!busy) }
+                                { MangaPreferenceActions(options,!busy,defaults.warning,{mangaDefaults=it}) { options = it }; ComposeMangaSettings(options,format,!busy) { options = it }; ComposeLiveSample(device.id,format,options,!busy) }
                             LocalConversionMode.EPUB_TEXT -> {
                                 ComposeTypographySettings(typography,!busy) { typography = it }
                                 ComposeRenderingSettings(options,!busy) { options = it }

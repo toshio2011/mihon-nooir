@@ -35,7 +35,8 @@ import javax.swing.JFileChooser
 internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapter>, close: () -> Unit) {
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
-    var options by remember { mutableStateOf(androidMangaDefaults()) }
+    val defaults=rememberMangaDefaults() ?: return
+    var options by remember { mutableStateOf(defaults.options) }
     var allowDownload by remember { mutableStateOf(false) }
     var outputText by remember { mutableStateOf("") }
     val output = remember(outputText, format) {
@@ -72,8 +73,8 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 Text(card.title, style = MaterialTheme.typography.titleMedium)
                 Text("${chapters.size} chapters selected · $missing not downloaded")
                 Text("Device", style = MaterialTheme.typography.titleSmall)
-                ExportChoice(device.name, NooirDeviceProfiles.builtins.map { it.name }, !busy) { name ->
-                    device = NooirDeviceProfiles.builtins.first { it.name == name }
+                ComposeDeviceChoice(device,!busy) { chosen ->
+                    device = chosen
                     if (!device.accepts(format)) format = device.autoFormat
                     outputText = ""
                 }
@@ -81,7 +82,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 ExportChoice(format.name, ExportFormat.entries.filter { it != ExportFormat.AUTO && device.accepts(it) }.map { it.name }, !busy) {
                     format = ExportFormat.valueOf(it); outputText = ""
                 }
-                MangaPreferenceActions(options,!busy) { options = it }
+                MangaPreferenceActions(options,!busy,defaults.warning) { options = it }
                 ComposeMangaSettings(options,format,!busy) { options = it }
                 ComposeLiveSample(device.id,format,options,!busy)
                 if (missing > 0) Row(verticalAlignment = Alignment.CenterVertically) {
