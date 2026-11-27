@@ -1,5 +1,6 @@
 package dev.nooir.desktop.compose
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -9,11 +10,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import dev.nooir.bridge.*
 import dev.nooir.mangabridge.*
 import dev.nooir.desktop.ui.DesktopWebExportSession
+import dev.nooir.desktop.ui.DesktopWebProjects
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,6 +42,7 @@ internal data class ComposeWebOptions(
     val css: String,
     val selector: String,
     val remove: String,
+    val collageUrls: List<String> = emptyList(),
 )
 
 /** The same ordered chapter plan, shared web engine and publication guard as Swing. */
@@ -49,11 +55,12 @@ internal fun runComposeWebExport(entries: List<NooirWebChapterPlan.Entry>, targe
         !(options.collage && (options.localCover != null || options.coverUrl.isNotBlank()))) {
         "Choose one cover source"
     }
+    require(options.collageUrls.isEmpty() || options.collage && options.collageUrls.size in 2..4 && options.collageUrls.distinct().size==options.collageUrls.size) { "Choose 2–4 distinct cover URLs" }
     return session.export(target) { temp, checkpoint ->
         checkpoint()
         NooirWebPageBook.convert(plan.urls,temp,options.title.trim(),options.author,plan.titles,
             coverUrl=options.coverUrl,localCover=options.localCover?.let { NooirWebCover.loadLocal(it) },
-            collageCover=options.collage,bookDescription=options.synopsis,bookLanguage=options.language,
+            collageCover=options.collage,collageCoverUrls=options.collageUrls,bookDescription=options.synopsis,bookLanguage=options.language,
             epubFormat=options.format,readingStyle=options.style,customCss=options.css,
             includeImages=options.images,imageProfile=options.imageProfile,
             contentSelector=options.selector,removeSelector=options.remove,
@@ -76,6 +83,18 @@ internal fun ComposeWeb(close: () -> Unit) {
     var cover by remember { mutableStateOf("") }
     var localCover by remember { mutableStateOf<File?>(null) }
     var collage by remember { mutableStateOf(false) }
+    var collageLinks by remember { mutableStateOf("") }
+    var coverPreview by remember { mutableStateOf<ImageBitmap?>(null) }
+    val projects=remember{DesktopWebProjects()}
+    var projectRows by remember{mutableStateOf<List<DesktopWebProjects.Project>>(emptyList())}
+    var projectId by remember{mutableStateOf("")}
+    var projectName by remember{mutableStateOf("")}
+    var sourceUrl by remember{mutableStateOf("")}
+    var known by remember{mutableStateOf<List<String>>(emptyList())}
+    var loadProject by remember{mutableStateOf<DesktopWebProjects.Project?>(null)}
+    var deleteProject by remember{mutableStateOf<DesktopWebProjects.Project?>(null)}
+    var saveConfirm by remember{mutableStateOf(false)}
+    var newChapters by remember{mutableStateOf<List<NooirWebChapterPlan.Entry>?>(null)}
     var format by remember { mutableStateOf(ReflowEpubFormat.EPUB3) }
     var style by remember { mutableStateOf(ReflowEpubStyle.STANDARD) }
     var imageProfile by remember { mutableStateOf(NooirWebImageProfile.ORIGINAL) }
@@ -91,6 +110,8 @@ internal fun ComposeWeb(close: () -> Unit) {
     var session by remember { mutableStateOf<DesktopWebExportSession?>(null) }
     var cancelRequested by remember { mutableStateOf(false) }
     fun links() = urls.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
+    fun extraCovers()=if(collage)collageLinks.lineSequence().map{it.trim()}.filter{it.isNotBlank()}.toList() else emptyList()
+    fun snapshot()=DesktopWebProjects.Project(projectId,projectName.trim(),sourceUrl,known,entries.toList(),title,author,synopsis,language,cover,localCover?.absolutePath.orEmpty(),collage,format==ReflowEpubFormat.EPUB2,style.name,imageProfile.name,images,css,selector,remove,extraCovers())
     fun work(label:String, action:suspend ()->Unit) {
         if(busy) return
         busy = true; status = label
@@ -112,7 +133,7 @@ internal fun ComposeWeb(close: () -> Unit) {
                 Text("Web to EPUB",style=MaterialTheme.typography.headlineSmall)
                 Text("Public chapters only · no login, cookies or access-control bypass",style=MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    listOf("Chapters","Book details","Settings").forEach { name ->
+                    listOf("Chapters","Book details","Settings","Projects").forEach { name ->
                         FilterChip(selected=tab==name,onClick={ tab=name },label={ Text(name) },enabled=!busy)
                     }
                 }
@@ -126,9 +147,10 @@ internal fun ComposeWeb(close: () -> Unit) {
                                 if(url==null) status="Enter exactly one story overview URL."
                                 else work("Analyzing public story…") {
                                     val info=withContext(Dispatchers.IO) { NooirWebChapterDiscovery.inspect(url) }
+                                    projectId="";projectName="";sourceUrl=info.inputUrl;known=info.chapters.map{it.url}
                                     entries=info.chapters; title=info.title; author=info.author
                                     synopsis=info.description; language=info.language.ifBlank{"en"}
-                                    cover=info.detectedCoverUrl; localCover=null; collage=false
+                                    cover=info.detectedCoverUrl; localCover=null; collage=false;collageLinks=""
                                     status="Discovered ${entries.size} public chapters. Review selection and book details."
                                 }
                             },enabled=!busy && urls.isNotBlank()) { Text("Analyze story") }
@@ -138,6 +160,8 @@ internal fun ComposeWeb(close: () -> Unit) {
                                         NooirWebChapterPlan.Entry(url,"Chapter " + (i+1))
                                     })
                                     NooirWebChapterPlan.export(proposed)
+                                    projectId="";projectName="";sourceUrl="";known=proposed.map{it.url}
+                                    title="";author="";synopsis="";language="en";cover="";localCover=null;collage=false;collageLinks=""
                                     entries=proposed; status="Added ${entries.size} chapter links."
                                 } catch(e:Exception) { status=(e.message?:"Invalid chapter links").take(200) }
                             },enabled=!busy && urls.isNotBlank()) { Text("Use pasted links") }
@@ -196,7 +220,48 @@ internal fun ComposeWeb(close: () -> Unit) {
                         }
                         Row(verticalAlignment=Alignment.CenterVertically) {
                             Checkbox(collage,{ collage=it; if(it){cover="";localCover=null} },enabled=!busy)
-                            Text("Combine 2–4 detected covers")
+                            Text("Combine 2–4 book covers")
+                        }
+                        if(collage) OutlinedTextField(collageLinks,{collageLinks=it.take(2400)},label={Text("Optional 2–4 public cover URLs, one per line")},modifier=Modifier.fillMaxWidth(),enabled=!busy)
+                        OutlinedButton(onClick={
+                            val local=localCover;val single=cover;val combined=collage;val extras=extraCovers()
+                            val links=entries.filter{it.included}.map{it.url}
+                            work("Loading actual cover preview…"){
+                                coverPreview=withContext(Dispatchers.IO){
+                                    val asset=if(local!=null)NooirWebCover.loadLocal(local) else NooirWebPageBook.previewCoverAsset(links,single,combined,extras)
+                                    val decoded=DesktopWebImageCodec.decode(requireNotNull(asset){"No public cover detected. Choose a local cover or a direct image URL."})
+                                    try{decoded.toComposeImageBitmap()}finally{decoded.flush()}
+                                }
+                                status="Cover preview loaded; remote artwork can change before export."
+                            }
+                        },enabled=!busy && (localCover!=null || entries.any{it.included})){Text("Preview actual cover")}
+                    }
+                    "Projects" -> Column(Modifier.fillMaxWidth().heightIn(max=390.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                        LaunchedEffect(Unit){work("Loading saved projects…"){projectRows=withContext(Dispatchers.IO){projects.list()};status="Saved projects loaded."}}
+                        Text("Saved web projects",style=MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(projectName,{projectName=it.take(100)},label={Text("Project name")},singleLine=true,enabled=!busy,modifier=Modifier.fillMaxWidth())
+                        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            Button(onClick={saveConfirm=true},enabled=!busy && projectName.isNotBlank() && entries.isNotEmpty()){Text(if(projectId.isBlank())"Save project" else "Update project")}
+                            TextButton(onClick={projectId="";projectName=""},enabled=!busy){Text("Save as new")}
+                            TextButton(onClick={
+                                val story=sourceUrl;val inventory=known.toList();val current=entries.map{NooirWebChapterIdentity.key(it.url)}.toSet()
+                                work("Checking public chapter inventory…"){
+                                    val info=withContext(Dispatchers.IO){NooirWebChapterDiscovery.inspect(story)}
+                                    val additions=NooirWebChapterUpdates.findNew(inventory,info.chapters).filterNot{NooirWebChapterIdentity.key(it.url) in current}
+                                    if(additions.isEmpty()) status="No new chapters found."
+                                    else{newChapters=additions;status="Review "+additions.size+" new chapters."}
+                                }
+                            },enabled=!busy && sourceUrl.isNotBlank() && known.isNotEmpty()){Text("Check new chapters")}
+                        }
+                        Text("Projects store local settings and chapter lists, not downloaded content. Check updates explicitly; nothing is exported automatically.",style=MaterialTheme.typography.bodySmall)
+                        if(projectRows.isEmpty())Text("No saved projects.")
+                        projectRows.forEach{saved->
+                            ListItem(headlineContent={Text(saved.name)},supportingContent={Text(saved.chapters.size.toString()+" chapters")},
+                                trailingContent={Row{
+                                    TextButton(onClick={loadProject=saved},enabled=!busy){Text("Load")}
+                                    TextButton(onClick={deleteProject=saved},enabled=!busy){Text("Delete")}
+                                }})
+                            HorizontalDivider()
                         }
                     }
                     else -> Column(Modifier.fillMaxWidth().heightIn(max=390.dp).verticalScroll(rememberScrollState()),
@@ -234,7 +299,7 @@ internal fun ComposeWeb(close: () -> Unit) {
                     TextButton(enabled=!busy && title.isNotBlank() && entries.any{it.included} &&
                         File(output).isAbsolute && File(output).extension.equals("epub",true),onClick={
                         val target=File(output);val plan=entries.toList()
-                        val opts=ComposeWebOptions(title,author,synopsis,language,cover,localCover,collage,format,style,imageProfile,images,css,selector,remove)
+                        val opts=ComposeWebOptions(title,author,synopsis,language,cover,localCover,collage,format,style,imageProfile,images,css,selector,remove,extraCovers())
                         try {
                             NooirWebChapterPlan.export(plan)
                             sessionConversions.submit(target,title){runComposeWebExport(plan,target,opts,DesktopWebExportSession())}
@@ -244,7 +309,7 @@ internal fun ComposeWeb(close: () -> Unit) {
                     Button(enabled=!busy && !sessionConversions.active && title.isNotBlank() && entries.any{it.included} &&
                         File(output).isAbsolute && File(output).extension.equals("epub",true),onClick={
                         val target=File(output);val plan=entries.toList()
-                        val opts=ComposeWebOptions(title,author,synopsis,language,cover,localCover,collage,format,style,imageProfile,images,css,selector,remove)
+                        val opts=ComposeWebOptions(title,author,synopsis,language,cover,localCover,collage,format,style,imageProfile,images,css,selector,remove,extraCovers())
                         val active=DesktopWebExportSession();session=active
                         work("Exporting selected chapters…") {
                             try {
@@ -264,6 +329,52 @@ internal fun ComposeWeb(close: () -> Unit) {
             }
         }
     }
+    if(saveConfirm)AlertDialog(onDismissRequest={saveConfirm=false},title={Text(if(projectId.isBlank())"Save web project?" else "Replace saved project?")},
+        text={Text("Save the current chapter selection and conversion settings locally? No book files will be changed.")},
+        confirmButton={Button(onClick={saveConfirm=false;val draft=snapshot();work("Saving project…"){
+            val saved=withContext(Dispatchers.IO){projects.save(draft)}
+            projectId=saved.id;projectRows=withContext(Dispatchers.IO){projects.list()};status="Saved "+saved.name
+        }}){Text("Save")}},dismissButton={TextButton(onClick={saveConfirm=false}){Text("Cancel")}})
+    loadProject?.let{saved->AlertDialog(onDismissRequest={loadProject=null},title={Text("Load "+saved.name+"?")},
+        text={Text("Replace the current editor contents? Unsaved changes will be lost; saved books remain untouched.")},
+        confirmButton={Button(onClick={
+            projectId=saved.id;projectName=saved.name;sourceUrl=saved.source;known=saved.known;entries=saved.chapters
+            urls=if(saved.source.isNotBlank())saved.source else saved.chapters.joinToString("\n"){it.url}
+            title=saved.title;author=saved.author;synopsis=saved.description;language=saved.language;cover=saved.coverUrl
+            localCover=saved.localCover.takeIf{it.isNotBlank()}?.let(::File);collage=saved.collage;collageLinks=saved.collageUrls.joinToString("\n")
+            format=if(saved.epub2)ReflowEpubFormat.EPUB2 else ReflowEpubFormat.EPUB3
+            style=ReflowEpubStyle.parse(saved.style);imageProfile=NooirWebImageProfile.parse(saved.imageProfile)
+            images=saved.includeImages;css=saved.css;selector=saved.selector;remove=saved.remove;output=""
+            loadProject=null;tab="Chapters";status="Loaded "+saved.name
+        }){Text("Load")}},dismissButton={TextButton(onClick={loadProject=null}){Text("Cancel")}})}
+    deleteProject?.let{saved->AlertDialog(onDismissRequest={deleteProject=null},title={Text("Delete saved project?")},
+        text={Text(saved.name+" · only saved settings are removed. EPUB files remain untouched.")},
+        confirmButton={Button(onClick={deleteProject=null;work("Removing project settings…"){
+            withContext(Dispatchers.IO){projects.delete(saved.id)}
+            if(projectId==saved.id){projectId="";projectName=""}
+            projectRows=withContext(Dispatchers.IO){projects.list()};status="Removed project settings."
+        }}){Text("Delete")}},dismissButton={TextButton(onClick={deleteProject=null}){Text("Cancel")}})}
+    newChapters?.let{found->AlertDialog(onDismissRequest={newChapters=null},title={Text("Review new chapters")},
+        text={Column(Modifier.heightIn(max=320.dp).verticalScroll(rememberScrollState())){
+            Text("Choose which newly discovered chapters to append.")
+            found.forEachIndexed{index,entry->Row(verticalAlignment=Alignment.CenterVertically){
+                Checkbox(entry.included,{newChapters=NooirWebChapterPlan.toggle(found,index)})
+                Text(entry.title)
+            }}
+        }},
+        confirmButton={Button(enabled=found.any{it.included},onClick={
+            try{
+                val selected=found.filter{it.included}
+                val merged=NooirWebChapterPlan.start(entries+selected)
+                NooirWebChapterPlan.export(merged.map{it.copy(included=true)})
+                entries=merged
+                known=(known+selected.map{it.url}).distinctBy(NooirWebChapterIdentity::key)
+                status="Added "+selected.size+" chapters. Save project to retain this update.";newChapters=null
+            }catch(e:Exception){status=(e.message?:"Chapter list exceeds limit").take(240);newChapters=null}
+        }){Text("Add selected")}},dismissButton={TextButton(onClick={newChapters=null}){Text("Cancel")}})}
+    coverPreview?.let{bitmap->AlertDialog(onDismissRequest={coverPreview=null},title={Text("Actual cover preview")},
+        text={Image(bitmap,contentDescription="Selected EPUB cover",modifier=Modifier.fillMaxWidth().height(320.dp),contentScale=ContentScale.Fit)},
+        confirmButton={TextButton(onClick={coverPreview=null}){Text("Close")}})}
     val preview=chapterPreview
     if(preview!=null) AlertDialog(onDismissRequest={chapterPreview=null},title={Text(preview.first)},
         text={Column(Modifier.heightIn(max=380.dp).verticalScroll(rememberScrollState())){Text(preview.second)}},

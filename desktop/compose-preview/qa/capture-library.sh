@@ -234,3 +234,6 @@ grep -Fxq 'PASS: actual renderer sample preview, first chapter page and fixed de
 
 gradle -p desktop/compose-preview qaSessionConversions --no-daemon --stacktrace > "$out/session-conversions-test.log" 2>&1
 grep -Fxq 'PASS: app-owned conversion ordering, duplicate protection, cancellation and batch handoff' "$out/session-conversions-test.log"
+
+gradle -p desktop/compose-preview qaComposeWebProjects --no-daemon --stacktrace > "$out/web-projects-test.log" 2>&1
+grep -Fxq 'PASS: web project persistence, legacy compatibility, manual cover list validation and chapter inventory' "$out/web-projects-test.log"
