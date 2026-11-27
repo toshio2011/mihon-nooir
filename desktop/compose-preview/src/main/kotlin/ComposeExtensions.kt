@@ -36,6 +36,10 @@ internal fun ComposeExtensions(back: () -> Unit) {
     var tab by remember { mutableStateOf("Installed") }
     var approval by remember { mutableStateOf<ExtensionApproval?>(null) }
     var status by remember { mutableStateOf("") }
+    var repositoryUrl by remember { mutableStateOf("") }
+    var addConfirmation by remember { mutableStateOf(false) }
+    var refreshConfirmation by remember { mutableStateOf(false) }
+    var addedStore by remember { mutableStateOf<DesktopBackupExtensions.Store?>(null) }
     LaunchedEffect(revision) {
         loading = true
         snapshot = null
@@ -82,7 +86,17 @@ internal fun ComposeExtensions(back: () -> Unit) {
                         HorizontalDivider()
                     }
                 }
-                Text("Repository addition and refresh still use the existing desktop backend setup.", style = MaterialTheme.typography.bodySmall)
+                HorizontalDivider()
+                OutlinedTextField(repositoryUrl, { repositoryUrl = it.take(2048) },
+                    label = { Text("Trusted repository index URL") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(), enabled = !installing)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { addConfirmation = true },
+                        enabled = repositoryUrl.isNotBlank() && !installing && !loading) { Text("Add repository") }
+                    OutlinedButton(onClick = { refreshConfirmation = true },
+                        enabled = !installing && !loading && data.stores.isNotEmpty()) { Text("Refresh catalogue") }
+                }
+                Text("Review repository identity before installing any package. A refresh contacts configured repositories.", style = MaterialTheme.typography.bodySmall)
             } else {
                 val rows = remember(data, search, tab) {
                     data.packages.filter { it.installed == (tab == "Installed") &&
@@ -116,6 +130,53 @@ internal fun ComposeExtensions(back: () -> Unit) {
             }
         }
     }
+    if (addConfirmation) AlertDialog(onDismissRequest = { addConfirmation = false },
+        title = { Text("Add trusted repository?") },
+        text = { Text("Contact this repository and add its metadata to the local reading service?\n\n${repositoryUrl.trim()}\n\nThe server may follow redirects or normalize a legacy index, including updating an existing canonical repository. Only proceed with a URL you trust. No extension is installed by this action.") },
+        confirmButton = { Button(onClick = {
+            val url = repositoryUrl.trim()
+            addConfirmation = false
+            installing = true
+            addedStore = null
+            status = "Contacting repository…"
+            scope.launch {
+                try {
+                    addedStore = withContext(Dispatchers.IO) { api.addReviewedRepository(url) }
+                    repositoryUrl = ""
+                    status = "Repository confirmed. Review its identity, then refresh the catalogue."
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { status = "Repository addition not confirmed. Check the catalogue, URL and server TLS trust before retrying. No automatic retry." }
+                finally { installing = false; revision++ }
+            }
+        }) { Text("Approve repository") } },
+        dismissButton = { TextButton(onClick = { addConfirmation = false }) { Text("Cancel") } })
+    val added = addedStore
+    if (added != null) AlertDialog(onDismissRequest = { addedStore = null },
+        title = { Text("Review repository identity") },
+        text = { Column {
+            Text(added.name)
+            Text(added.indexUrl)
+            Text("Signing identity: ${added.signingKey}")
+            Text("Matching metadata does not prove trust. Compare this identity with the repository's official information.")
+        } },
+        confirmButton = { TextButton(onClick = { addedStore = null }) { Text("Close") } })
+    if (refreshConfirmation) AlertDialog(onDismissRequest = { refreshConfirmation = false },
+        title = { Text("Refresh extension catalogue?") },
+        text = { Text("The local reading service will contact all configured repositories. Metadata and available versions may change. No extension is automatically installed.") },
+        confirmButton = { Button(onClick = {
+            refreshConfirmation = false
+            installing = true
+            status = "Refreshing catalogue…"
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) { api.refreshExtensionCatalogue() }
+                    status = "Catalogue refresh completed. Review current identities and available packages."
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { status = "Refresh not confirmed. Reload to inspect the current catalogue." }
+                finally { installing = false; revision++ }
+            }
+        }) { Text("Refresh") } },
+        dismissButton = { TextButton(onClick = { refreshConfirmation = false }) { Text("Cancel") } })
     val pending = approval
     if (pending != null) AlertDialog(
         onDismissRequest = { approval = null },
