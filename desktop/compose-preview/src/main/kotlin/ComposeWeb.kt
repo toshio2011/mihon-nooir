@@ -64,6 +64,7 @@ internal fun runComposeWebExport(entries: List<NooirWebChapterPlan.Entry>, targe
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeWeb(close: () -> Unit) {
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     var urls by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<NooirWebChapterPlan.Entry>>(emptyList()) }
@@ -92,7 +93,7 @@ internal fun ComposeWeb(close: () -> Unit) {
     fun work(label:String, action:suspend ()->Unit) {
         if(busy) return
         busy = true; status = label
-        scope.launch {
+        scope.launchProtected(operations) {
             try { action() }
             catch(e: CancellationException) { throw e }
             catch(e: Exception) { status = (e.message ?: "Web operation failed").take(240) }

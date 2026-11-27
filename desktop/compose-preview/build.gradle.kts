@@ -17,7 +17,7 @@ kotlin {
         kotlin.srcDir("../ui")
         kotlin.srcDir("../../overlay/app/src/main/java/dev/nooir/bridge")
         kotlin.srcDir("../../overlay/app/src/main/java/dev/nooir/mangabridge")
-        kotlin.include("Main.kt", "ComposeExport.kt", "ComposeBackup.kt", "ComposeExtensions.kt", "ComposeBackend.kt", "ComposeConverter.kt", "ComposeQueue.kt", "ComposeWeb.kt", "ComposeTransfer.kt", "DesktopReaderTransfer.kt", "DesktopWebExportSession.kt", "DesktopWebProjects.kt", "DesktopWebCover.kt", "DesktopWebImageAdapters.kt",
+        kotlin.include("Main.kt", "ComposeExport.kt", "ComposeBackup.kt", "ComposeExtensions.kt", "ComposeBackend.kt", "OperationGuard.kt", "ComposeConverter.kt", "ComposeQueue.kt", "ComposeWeb.kt", "ComposeTransfer.kt", "DesktopReaderTransfer.kt", "DesktopWebExportSession.kt", "DesktopWebProjects.kt", "DesktopWebCover.kt", "DesktopWebImageAdapters.kt",
             "NooirCoverCollageLayout.kt", "NooirWebImageProfile.kt", "NooirWebChapterPlan.kt", "NooirWebChapterIdentity.kt", "NooirWebChapterUpdates.kt", "NooirWebArticle.kt", "NooirWebNovel.kt", "NooirWebPageBook.kt", "NooirWebChapterDiscovery.kt", "NooirWebTocPagination.kt", "NooirWebExtractRules.kt", "NooirWebFetchPolicy.kt", "NooirWebImageCandidates.kt", "NooirWebImageSignature.kt", "NooirWebReadability.kt", "NooirWattpadPublic.kt", "DesktopConversionQueue.kt", "DesktopPdfImport.kt", "DesktopTextEpubImport.kt", "DesktopImageEpubImport.kt", "NooirEpubBook.kt", "DesktopDataHome.kt", "OfficialSuwayomiCache.kt", "SuwayomiProcessManager.kt", "DesktopBackupInspector.kt", "DesktopBackupTransport.kt", "DesktopBackupExtensions.kt", "DesktopLegacyRepoIndex.kt", "SuwayomiClient.kt", "MiniJson.kt", "SuwayomiToNooir.kt",
             "NooirDesktopCli.kt", "XtcCodec.kt", "XtcBookPreview.kt", "ExportFormats.kt", "NooirDeviceProfiles.kt",
             "BookArchiveWriter.kt", "Epub2Writer.kt", "GrayscaleConverter.kt", "GrayscalePng.kt", "NaturalPageOrder.kt",
@@ -73,5 +73,12 @@ tasks.register<JavaExec>("qaReaderTransfer") {
     dependsOn("testClasses")
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("dev.nooir.desktop.ui.DesktopReaderTransferTestKt")
+    systemProperty("java.awt.headless", "true")
+}
+
+tasks.register<JavaExec>("qaPosition") {
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.nooir.desktop.compose.ComposePositionSmokeKt")
     systemProperty("java.awt.headless", "true")
 }

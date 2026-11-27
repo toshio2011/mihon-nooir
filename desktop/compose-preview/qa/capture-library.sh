@@ -216,3 +216,6 @@ grep -Fxq 'PASS: local manga, PDF, EPUB conversion and decoded output' "$out/loc
 
 gradle -p desktop/compose-preview qaReaderTransfer --no-daemon --stacktrace > "$out/reader-transfer-test.log" 2>&1
 grep -Fxq 'PASS: private reader address validation, multipart, duplicate refusal, exact ACK, size verification and source immutability' "$out/reader-transfer-test.log"
+
+gradle -p desktop/compose-preview qaPosition --no-daemon --stacktrace > "$out/position-test.log" 2>&1
+grep -Fxq 'PASS: explicit position save, reopen, conflict and rewind refusal' "$out/position-test.log"

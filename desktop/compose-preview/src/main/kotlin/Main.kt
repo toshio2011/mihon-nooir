@@ -114,6 +114,7 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
     var saving by remember(card.id, chapter.id) { mutableStateOf(false) }
     var savedPage by remember(card.id, chapter.id) { mutableStateOf<Int?>(null) }
     var saveStatus by remember(card.id, chapter.id) { mutableStateOf("") }
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(client, card.id, chapter.id, openRevision) {
         manifestResult = null
@@ -169,7 +170,7 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
                 confirmButton = { Button(onClick = {
                     val target = page
                     saveOpen = false; saving = true; saveStatus = "Checking position…"
-                    scope.launch {
+                    scope.launchProtected(operations) {
                         try {
                             val saved = withContext(Dispatchers.IO) { client.saveOnlinePosition(manifest, target) }
                             savedPage = saved
@@ -526,10 +527,14 @@ private fun NooirNavigationIcon(name: String) {
 
 fun main() = application {
     val backend = remember { ComposeBackendSession() }
+    val operations = remember { OperationGuard() }
+    var closeBlocked by remember { mutableStateOf(false) }
     val lifecycle = rememberCoroutineScope()
     var closing by remember { mutableStateOf(false) }
     Window(onCloseRequest = {
-        if (!closing) {
+        if (operations.active) {
+            closeBlocked = true
+        } else if (!closing) {
             closing = true
             lifecycle.launch {
                 try { withContext(Dispatchers.IO) { backend.close() } }
@@ -545,11 +550,16 @@ fun main() = application {
         var setupRevision by remember { mutableStateOf(0) }
         LaunchedEffect(setupRevision) {
             backendState = BackendState.Checking
-            backendState = try { withContext(Dispatchers.IO) { backend.connectOrStartCached() } }
+            backendState = try { operations.protect { withContext(Dispatchers.IO) { backend.connectOrStartCached() } } }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { BackendState.Unavailable("Local reading service could not start. Check the existing server and retry.") }
         }
+        CompositionLocalProvider(LocalOperations provides operations) {
         MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
+            if (closeBlocked) AlertDialog(onDismissRequest = { closeBlocked = false },
+                title = { Text("Operation in progress") },
+                text = { Text("Finish the active operation before closing MihonNooir. For a batch, use Pause after current.") },
+                confirmButton = { TextButton(onClick = { closeBlocked = false }) { Text("OK") } })
             Surface(Modifier.fillMaxSize()) {
                 if (closing) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Closing MihonNooir…") }
@@ -561,7 +571,7 @@ fun main() = application {
                         Text("Nooir", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(20.dp))
                         listOf("Library", "Updates", "History", "Browse", "More").forEach { name ->
-                            NavigationRailItem(selected = section == name, onClick = { section = name },
+                            NavigationRailItem(selected = section == name, onClick = { if (!operations.active) section = name }, enabled = !operations.active,
                                 icon = { NooirNavigationIcon(name) }, label = { Text(name) })
                         }
                     }
@@ -605,8 +615,8 @@ fun main() = application {
                                 val connection = backendState as? BackendState.Ready
                                 ListItem(headlineContent = { Text("Reading service") },
                                     supportingContent = { Text(if (connection?.owned == true) "Managed by MihonNooir" else "Connected to existing local service") },
-                                    trailingContent = { TextButton(onClick = { setupRevision++ }) { Text("Reconnect") } })
-                                Text("Experimental desktop interface. Remote chapter jobs and saved reading progress still require the existing preview.")
+                                    trailingContent = { TextButton(onClick = { if (!operations.active) setupRevision++ }, enabled = !operations.active) { Text("Reconnect") } })
+                                Text("Experimental desktop interface. Remote chapter jobs still require the existing preview.")
                             }
                         }
                     }
@@ -614,4 +624,5 @@ fun main() = application {
             }
         }
     }
+}
 }

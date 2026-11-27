@@ -27,6 +27,7 @@ private data class ExtensionApproval(
 @Composable
 internal fun ComposeExtensions(back: () -> Unit) {
     val api = remember { DesktopBackupTransport("http://127.0.0.1:4567") }
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     var snapshot by remember { mutableStateOf<ExtensionSnapshot?>(null) }
     var loading by remember { mutableStateOf(true) }
@@ -139,7 +140,7 @@ internal fun ComposeExtensions(back: () -> Unit) {
             installing = true
             addedStore = null
             status = "Contacting repository…"
-            scope.launch {
+            scope.launchProtected(operations) {
                 try {
                     addedStore = withContext(Dispatchers.IO) { api.addReviewedRepository(url) }
                     repositoryUrl = ""
@@ -167,7 +168,7 @@ internal fun ComposeExtensions(back: () -> Unit) {
             refreshConfirmation = false
             installing = true
             status = "Refreshing catalogue…"
-            scope.launch {
+            scope.launchProtected(operations) {
                 try {
                     withContext(Dispatchers.IO) { api.refreshExtensionCatalogue() }
                     status = "Catalogue refresh completed. Review current identities and available packages."
@@ -195,7 +196,7 @@ internal fun ComposeExtensions(back: () -> Unit) {
             approval = null
             installing = true
             status = "Installing…"
-            scope.launch {
+            scope.launchProtected(operations) {
                 try {
                     val sources = withContext(Dispatchers.IO) { api.installCatalogExtension(pending.item, pending.store) }
                     status = "Installation confirmed · ${sources.size} exposed sources."

@@ -69,6 +69,7 @@ internal fun ComposeConverter(close: () -> Unit) {
     LaunchedEffect(Unit) {
         if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_LOCAL_CONVERTER_OPEN")
     }
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     var source by remember { mutableStateOf<File?>(null) }
     var mode by remember { mutableStateOf(LocalConversionMode.MANGA) }
@@ -203,7 +204,7 @@ internal fun ComposeConverter(close: () -> Unit) {
                             val selectedMode = mode; val selectedFormat = format; val selectedDevice = device.id
                             val selectedOptions = options; val selectedTypography = typography
                             busy = true; finished = null; result = "Converting…"
-                            scope.launch {
+                            scope.launchProtected(operations) {
                                 try {
                                     withContext(Dispatchers.IO) {
                                         convertLocalFile(input,target,selectedMode,selectedFormat,selectedDevice,selectedOptions,selectedTypography)

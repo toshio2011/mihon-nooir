@@ -54,6 +54,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
     LaunchedEffect(output != null) {
         if (output != null && System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_OUTPUT_READY")
     }
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     val missing = chapters.count { !it.downloaded }
     val valid = chapters.isNotEmpty() && chapters.size <= 500 && (missing == 0 || allowDownload)
@@ -156,7 +157,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 busy = true
                 result = null
                 finishedBook = null
-                scope.launch {
+                scope.launchProtected(operations) {
                     try {
                         withContext(Dispatchers.IO) {
                             runComposeExport(args, target)

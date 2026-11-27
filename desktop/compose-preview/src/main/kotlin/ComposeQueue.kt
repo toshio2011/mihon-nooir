@@ -42,6 +42,7 @@ private enum class BatchKind(val label: String, val extensions: List<String>, va
 @Composable
 internal fun ComposeQueue(close: () -> Unit) {
     val queue = remember { DesktopConversionQueue() }
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     val stop = remember { AtomicBoolean(false) }
     var jobs by remember { mutableStateOf<List<DesktopConversionJob>>(emptyList()) }
@@ -58,7 +59,7 @@ internal fun ComposeQueue(close: () -> Unit) {
     fun action(block: suspend () -> Unit) {
         if (busy) return
         busy = true
-        scope.launch {
+        scope.launchProtected(operations) {
             try { block(); reload() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { status = "Queue operation failed. Existing records and output files were not deliberately removed. Reload before retrying." }

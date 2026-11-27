@@ -22,6 +22,7 @@ private data class TransferApproval(val file: File, val address: String, val fol
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeTransfer(initialFile: File? = null, close: () -> Unit) {
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     var file by remember { mutableStateOf(initialFile) }
     var address by remember { mutableStateOf("") }
@@ -97,7 +98,7 @@ internal fun ComposeTransfer(initialFile: File? = null, close: () -> Unit) {
         text={Text("Send ${pending.file.name} to ${pending.address}${pending.folder}/${pending.name}?\n\nThis local HTTP connection is unencrypted. Avoid simultaneous uploads to the same destination. If transfer is not confirmed, inspect the reader before retrying.")},
         confirmButton={Button(onClick={
             approval=null;busy=true;progress=0;status="Checking reader destination…"
-            scope.launch {
+            scope.launchProtected(operations) {
                 try {
                     withContext(Dispatchers.IO) {
                         var last=-1

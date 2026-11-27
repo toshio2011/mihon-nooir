@@ -40,6 +40,7 @@ private data class ReviewedBackup(
 @Composable
 internal fun ComposeBackup(close: () -> Unit) {
     val api = remember { DesktopBackupTransport("http://127.0.0.1:4567") }
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var review by remember { mutableStateOf<ReviewedBackup?>(null) }
@@ -53,7 +54,7 @@ internal fun ComposeBackup(close: () -> Unit) {
     fun work(action: suspend () -> Unit) {
         if (busy) return
         busy = true
-        scope.launch {
+        scope.launchProtected(operations) {
             try { action() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { message = "Operation failed or status is unknown. Review the local server before retrying." }

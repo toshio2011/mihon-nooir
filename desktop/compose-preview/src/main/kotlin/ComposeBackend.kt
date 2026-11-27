@@ -61,6 +61,7 @@ internal class ComposeBackendSession : Closeable {
 @Composable
 internal fun ComposeBackendSetup(session: ComposeBackendSession, state: BackendState,
                                  update: (BackendState) -> Unit, retry: () -> Unit) {
+    val operations = LocalOperations.current
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
@@ -97,7 +98,7 @@ internal fun ComposeBackendSetup(session: ComposeBackendSession, state: BackendS
         confirmButton = { Button(onClick = {
             confirm = false
             update(BackendState.Checking)
-            scope.launch {
+            scope.launchProtected(operations) {
                 try { update(withContext(Dispatchers.IO) { session.downloadAndStart() }) }
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) { update(BackendState.Unavailable("Setup failed. Check the official server cache, network and local service before retrying.")) }
