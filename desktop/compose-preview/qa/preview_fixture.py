@@ -138,10 +138,10 @@ class Handler(BaseHTTPRequestHandler):
             manga_id = int(match.group(1))
             card = CARDS[manga_id-1]
             chapters = [{"id": manga_id*100+n, "name": f"Chapter {n} — Original QA sample",
-                         "chapterNumber": float(n), "sourceOrder": n, "isDownloaded": n == 1}
+                         "chapterNumber": float(n), "sourceOrder": n, "isDownloaded": n == 1, "isRead": False, "lastPageRead": 0}
                         for n in range(1, 5)]
             data = {"data": {"manga": {"id": manga_id, "title": card["title"],
-                                     "author": card["author"], "chapters": {"nodes": chapters}}}}
+                                     "author": card["author"], "firstUnreadChapter": {"id": manga_id*100+1}, "chapters": {"nodes": chapters}}}}
             marker = f"MANGA_OK {manga_id}"
         elif "mutation NooirChapterPages" in query and re.search(r"chapterId: 101\b", query):
             data = {"data": {"fetchChapterPages": {

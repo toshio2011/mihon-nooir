@@ -110,18 +110,24 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
     var page by remember(card.id, chapter.id) { mutableStateOf(0) }
     var openRevision by remember(card.id, chapter.id) { mutableStateOf(0) }
     var pageRevision by remember(card.id, chapter.id) { mutableStateOf(0) }
+    var saveOpen by remember(card.id, chapter.id) { mutableStateOf(false) }
+    var saving by remember(card.id, chapter.id) { mutableStateOf(false) }
+    var savedPage by remember(card.id, chapter.id) { mutableStateOf<Int?>(null) }
+    var saveStatus by remember(card.id, chapter.id) { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(client, card.id, chapter.id, openRevision) {
         manifestResult = null
         val result = request { client.openOnlineChapter(card.id, chapter.id) }
-        result.getOrNull()?.let { page = it.lastPageRead.coerceIn(0, it.pageCount - 1) }
+        result.getOrNull()?.let { page = it.lastPageRead.coerceIn(0, it.pageCount - 1); savedPage = it.lastPageRead }
         manifestResult = result
     }
     val result = manifestResult
     val manifest = result?.getOrNull()
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = back) { Text("‹ Chapters") }
+            TextButton(onClick = back, enabled = !saving) { Text("‹ Chapters") }
             Text(card.title + " · " + chapter.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (saving) Text("Saving…", style = MaterialTheme.typography.labelSmall)
         }
         if (result == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -148,11 +154,33 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { page-- }, enabled = page > 0 && rendered != null) { Text("Previous") }
+                TextButton(onClick = { page-- }, enabled = !saving && page > 0 && rendered != null) { Text("Previous") }
                 Text("${page + 1} / ${manifest.pageCount}")
-                TextButton(onClick = { page++ }, enabled = page + 1 < manifest.pageCount && rendered != null) { Text("Next") }
+                TextButton(onClick = { page++ }, enabled = !saving && page + 1 < manifest.pageCount && rendered != null) { Text("Next") }
             }
-            Text("Read-only experiment · server progress is not automatically saved", style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(saveStatus.ifBlank { "Progress is saved only on request." }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = { saveOpen = true }, enabled = !saving && rendered?.isSuccess == true &&
+                    manifest.syncConflict == null && page > (savedPage ?: Int.MAX_VALUE)) { Text("Save position") }
+            }
+            if (saveOpen) AlertDialog(onDismissRequest = { saveOpen = false },
+                title = { Text("Save reading position?") },
+                text = { Text("Save page " + (page + 1) + " to your local reading service? A known later position will not be overwritten. Concurrent writers may still race.") },
+                confirmButton = { Button(onClick = {
+                    val target = page
+                    saveOpen = false; saving = true; saveStatus = "Checking position…"
+                    scope.launch {
+                        try {
+                            val saved = withContext(Dispatchers.IO) { client.saveOnlinePosition(manifest, target) }
+                            savedPage = saved
+                            saveStatus = "Saved page " + (saved + 1)
+                            if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_POSITION_SAVED")
+                        } catch(e: CancellationException) { throw e }
+                        catch(e: Exception) { saveStatus = "Save not confirmed. Reopen chapter to check the current position." }
+                        finally { saving = false }
+                    }
+                }) { Text("Save") } },
+                dismissButton = { TextButton(onClick = { saveOpen = false }) { Text("Cancel") } })
         }
     }
 }
@@ -162,19 +190,22 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
     var state by remember(card.id) { mutableStateOf<Result<SuwayomiManga>?>(null) }
     var opened by remember(card.id) { mutableStateOf<SuwayomiChapter?>(null) }
     var refreshRevision by remember(card.id) { mutableStateOf(0) }
+    var reloadRevision by remember(card.id) { mutableStateOf(0) }
+    var consumedRefresh by remember(card.id) { mutableStateOf(0) }
     var selectionMode by remember(card.id) { mutableStateOf(false) }
     var selectedIds by remember(card.id) { mutableStateOf(setOf<Int>()) }
     var exportOpen by remember(card.id) { mutableStateOf(false) }
-    LaunchedEffect(client, card.id, refreshRevision) {
+    LaunchedEffect(client, card.id, refreshRevision, reloadRevision) {
         state = null
         state = request {
-            if (refreshRevision > 0) client.refreshManga(card.id)
+            if (refreshRevision > consumedRefresh) client.refreshManga(card.id)
             client.manga(card.id)
         }
+        consumedRefresh = refreshRevision
     }
     val chapter = opened
     if (chapter != null) {
-        Reader(client, card, chapter) { opened = null }
+        Reader(client, card, chapter) { opened = null; reloadRevision++ }
         return
     }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
@@ -200,6 +231,8 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
             val chapters = result.getOrThrow().chapters
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${chapters.size} chapters", Modifier.weight(1f))
+                val next = chapters.firstOrNull { it.id == result.getOrThrow().firstUnreadId }
+                if (!selectionMode && next != null) TextButton(onClick = { opened = next }) { Text("Continue reading") }
                 TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }) {
                     Text(if (selectionMode) "Cancel selection" else "Select chapters")
                 }
@@ -213,7 +246,8 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
             LazyColumn(Modifier.weight(1f)) {
                 items(chapters, key = { it.id }) { chapter ->
                     ListItem(headlineContent = { Text(chapter.name) },
-                        supportingContent = { Text(if (chapter.downloaded) "Downloaded" else "Online") },
+                        supportingContent = { Text(listOfNotNull(if (chapter.downloaded) "Downloaded" else "Online",
+                            chapter.read?.let { if (it) "Read" else "Unread" }, chapter.lastPageRead?.takeIf { it > 0 }?.let { "Saved page " + (it + 1) }).joinToString(" · ")) },
                         leadingContent = if (selectionMode) {
                             { Checkbox(checked = chapter.id in selectedIds, onCheckedChange = { checked ->
                                 if (checked && selectedIds.size < 500) selectedIds = selectedIds + chapter.id

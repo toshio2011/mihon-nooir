@@ -16,6 +16,8 @@ data class SuwayomiChapter(
     val chapterNumber: Double,
     val sourceOrder: Int,
     val downloaded: Boolean,
+    val read: Boolean? = null,
+    val lastPageRead: Int? = null,
 )
 
 data class SuwayomiManga(
@@ -23,6 +25,7 @@ data class SuwayomiManga(
     val title: String,
     val author: String,
     val chapters: List<SuwayomiChapter>,
+    val firstUnreadId: Int? = null,
 )
 
 /** Source IDs are signed 64-bit hashes serialized as GraphQL LongString; valid IDs may be negative. */
@@ -379,7 +382,8 @@ class SuwayomiClient(
             query NooirManga {
               manga(id: $id) {
                 id title author
-                chapters { nodes { id name chapterNumber sourceOrder isDownloaded } }
+                firstUnreadChapter { id }
+                chapters { nodes { id name chapterNumber sourceOrder isDownloaded isRead lastPageRead } }
               }
             }
         """.trimIndent()
@@ -394,11 +398,16 @@ class SuwayomiClient(
                     ?: error("Missing chapter number"),
                 sourceOrder = c.int("sourceOrder"),
                 downloaded = c["isDownloaded"] as? Boolean ?: error("Missing download status"),
+                read = c["isRead"] as? Boolean,
+                lastPageRead = c["lastPageRead"]?.let { c.int("lastPageRead").also { page -> require(page >= 0) } },
             )
         }
         require(chapters.size <= 50_000) { "Too many chapters" }
+        require(result.int("id") == id && chapters.map { it.id }.distinct().size == chapters.size)
+        val firstUnread = result["firstUnreadChapter"]?.asObject()?.int("id")
+        require(firstUnread == null || chapters.any { it.id == firstUnread && it.read != true })
         return SuwayomiManga(result.int("id"), result.str("title"),
-            result["author"] as? String ?: "", chapters)
+            result["author"] as? String ?: "", chapters, firstUnread)
     }
 
     fun enqueue(ids: List<Int>) {
