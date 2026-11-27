@@ -219,3 +219,6 @@ grep -Fxq 'PASS: private reader address validation, multipart, duplicate refusal
 
 gradle -p desktop/compose-preview qaPosition --no-daemon --stacktrace > "$out/position-test.log" 2>&1
 grep -Fxq 'PASS: explicit position save, reopen, conflict and rewind refusal' "$out/position-test.log"
+
+gradle -p desktop/compose-preview qaLiveSample --no-daemon --stacktrace > "$out/live-sample-test.log" 2>&1
+grep -Fxq 'PASS: actual renderer sample preview, first chapter page and fixed device dimensions' "$out/live-sample-test.log"

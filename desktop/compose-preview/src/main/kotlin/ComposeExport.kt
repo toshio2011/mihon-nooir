@@ -82,6 +82,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 }
                 MangaPreferenceActions(options,!busy) { options = it }
                 ComposeMangaSettings(options,format,!busy) { options = it }
+                ComposeLiveSample(device.id,format,options,!busy)
                 if (missing > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(allowDownload, { allowDownload = it }, enabled = !busy)
                     Text("Download selected missing chapters")

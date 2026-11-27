@@ -142,7 +142,7 @@ internal fun ComposeConverter(close: () -> Unit) {
                         }
                         when(mode) {
                             LocalConversionMode.MANGA, LocalConversionMode.EPUB_IMAGES, LocalConversionMode.PDF ->
-                                { MangaPreferenceActions(options,!busy) { options = it }; ComposeMangaSettings(options,format,!busy) { options = it } }
+                                { MangaPreferenceActions(options,!busy) { options = it }; ComposeMangaSettings(options,format,!busy) { options = it }; ComposeLiveSample(device.id,format,options,!busy) }
                             LocalConversionMode.EPUB_TEXT -> {
                                 ComposeTypographySettings(typography,!busy) { typography = it }
                                 ComposeRenderingSettings(options,!busy) { options = it }

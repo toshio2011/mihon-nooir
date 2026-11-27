@@ -98,3 +98,7 @@ Field feedback: the first Compose build exposed too few conversion settings. The
 ### Follow-up validation and settings persistence
 
 Expanded settings revision d833958 compiled on all three OS targets, but CI exposed a docs whitelist issue (README.md and docs/README.md only) and a stale GUI chapter-selection coordinate. The next revision allows those exact documentation files while retaining protected Android source checks, adjusts clicks to the reviewed failure screenshot (checkbox y404, toolbar y344), adds independent combinable reading/download/bookmark filters, and explicit load/save default manga preferences using the existing shared desktop store. Save requires approval; existing queued jobs and Android are unchanged. Native persistent typography, auto-load behavior, full GUI setting acceptance, and the real-server history/updates test remain pending. No new preview ZIP yet.
+
+### Live sample preview (next candidate)
+
+The expanded settings panel now includes a local image sample preview in manga export, image/PDF conversion and image batches. It uses the exact shared JVM page renderer and debounces changes, with at most 12 frames / 24 MiB of encoded sample data. Treat as chapter first page applies the real first-page preservation rule. A sample image is explicitly selected; automatic extraction from CBZ/EPUB/PDF/source chapters and full original-image comparison are not yet implemented. The original file is read only. New synthetic renderer smoke added; CI and GUI verification pending. No Android changes or released binary.

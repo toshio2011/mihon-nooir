@@ -348,6 +348,41 @@ object NooirDesktopCli {
         }
     }
 
+    /** Bounded sample-page preview: identical renderer and dimensions as export.
+     * No source modification, archive output or network access. */
+    internal data class SamplePreview(val frames: List<ByteArray>, val truncated: Boolean)
+    internal fun previewImage(bytes: ByteArray, device: String, format: ExportFormat,
+                              options: MangaConversionOptions, firstChapterPage: Boolean = false,
+                              checkCancelled: () -> Unit = {}): SamplePreview {
+        require(bytes.isNotEmpty() && bytes.size <= MAX_IMAGE_BYTES)
+        val profile = NooirDeviceProfiles.forId(device)
+        require(format != ExportFormat.AUTO && profile.accepts(format))
+        val archive = format in setOf(ExportFormat.EPUB, ExportFormat.EPUB2, ExportFormat.CBZ)
+        val width = if (archive && options.orientation == "LANDSCAPE") profile.height else profile.width
+        val height = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
+        val effective = if (firstChapterPage && options.keepChapterFirstPageWhole) options.copy(
+            layout = "PAGED", cropWhiteMargins = false, splitSpreads = false, orientation = "PORTRAIT",
+            overlapPercent = 0, panelMode = "OFF", showFullPageBeforeSplits = false, contextPeekPercent = 0,
+        ) else options
+        val source = DesktopImageDecoder.decode(bytes, MAX_IMAGE_PIXELS)
+        try {
+            val frames = mutableListOf<ByteArray>()
+            var total = 0L
+            var truncated = false
+            for (frame in render(source, width, height, if (format == ExportFormat.XTC) 1 else 2,
+                effective, fixedFramebuffer = !archive)) {
+                checkCancelled()
+                if (frames.size >= 12) { truncated = true; break }
+                val png = frame.colorPng ?: GrayscalePng.encode(frame)
+                if (total + png.size > 24L * 1024 * 1024) { truncated = true; break }
+                frames.add(png)
+                total += png.size
+            }
+            require(frames.isNotEmpty()) { "Sample exceeds preview budget" }
+            return SamplePreview(frames, truncated)
+        } finally { source.flush() }
+    }
+
     private fun render(src: BufferedImage, width: Int, height: Int, depth: Int,
         options: MangaConversionOptions, fixedFramebuffer: Boolean): Sequence<QuantizedPage> = sequence {
         val auto = options.panelMode != "OFF" && options.orientation == "AUTO_FIT"

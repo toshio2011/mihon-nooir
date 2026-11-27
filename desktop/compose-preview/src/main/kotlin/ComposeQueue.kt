@@ -211,7 +211,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
             }) { Text(folder?.name ?: "Choose output folder") }
             if(selectionError.isNotBlank()) Text(selectionError,color=MaterialTheme.colorScheme.error)
             when(kind) {
-                BatchKind.MANGA,BatchKind.EPUB_IMAGES,BatchKind.PDF -> ComposeMangaSettings(options,format,true){options=it}
+                BatchKind.MANGA,BatchKind.EPUB_IMAGES,BatchKind.PDF -> { MangaPreferenceActions(options,true){options=it}; ComposeMangaSettings(options,format,true){options=it}; ComposeLiveSample(device.id,format,options,formats.contains(format)) }
                 BatchKind.EPUB_TEXT -> {ComposeTypographySettings(typography,true){typography=it};ComposeRenderingSettings(options,true){options=it}}
                 BatchKind.REFLOW -> Text("PDF reflow uses existing extraction defaults.")
             }
