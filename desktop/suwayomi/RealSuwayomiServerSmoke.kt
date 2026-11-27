@@ -59,6 +59,8 @@ object RealSuwayomiServerSmoke {
             check(manga.id == card.id && manga.chapters.size == 2) { "Expected two synthetic chapters" }
             check(api.setMangaInLibrary(card.id, true))
             check(api.library(0, 100).mangas.any { it.id == card.id })
+            check(api.chapterFeed(false).entries.any { it.manga.id == card.id }) { "Missing actual server chapter updates" }
+            println("PASS: actual pinned server chapter updates including unopened chapters")
             for (chapter in manga.chapters) {
                 val opened = api.openOnlineChapter(manga.id, chapter.id)
                 check(opened.pageCount == 2 && opened.syncConflict == null)
@@ -85,6 +87,8 @@ object RealSuwayomiServerSmoke {
             DesktopBackupTransport(endpoint).export(progressExport)
             check(DesktopBackupInspector.inspect(progressExport).progressed>=2)
             println("PASS: real pinned server explicit desktop page write-back and portable backup progress; rewind refused")
+            check(api.chapterFeed(true).entries.isNotEmpty()) { "Restored history missing from chapter feed" }
+            println("PASS: actual pinned server restored reading history feed")
             println("No third-party extensions, external manga, user credentials or normal data directory used.")
         } catch (failure: Throwable) {
             // This root contains only the isolated synthetic fixture. Keep the

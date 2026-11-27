@@ -125,7 +125,7 @@ class Handler(BaseHTTPRequestHandler):
             history = "LAST_READ_AT" in query
             rows = [{"id": i*100+1, "mangaId": i, "name": "Chapter 1 — Original QA sample",
                      "chapterNumber": 1.0, "sourceOrder": 1, "isDownloaded": True,
-                     "isRead": False, "lastPageRead": 1, "pageCount": 3,
+                     "isRead": False, "lastPageRead": 1 if history else 0, "pageCount": 3 if history else -1,
                      "lastReadAt": str(1700000000000-i*1000), "fetchedAt": str(1700000000000-i*1000),
                      "manga": CARDS[i-1]} for i in range(1,4 if history else 7)]
             data = {"data": {"chapters": {"totalCount": len(rows), "nodes": rows[offset:offset+limit]}}}
@@ -138,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
             manga_id = int(match.group(1))
             card = CARDS[manga_id-1]
             chapters = [{"id": manga_id*100+n, "name": f"Chapter {n} — Original QA sample",
-                         "chapterNumber": float(n), "sourceOrder": n, "isDownloaded": n == 1, "isRead": False, "lastPageRead": 0}
+                         "chapterNumber": float(n), "sourceOrder": n, "isDownloaded": n == 1, "isRead": False, "lastPageRead": 0, "isBookmarked": n == 2, "uploadDate": str(1700000000000+n*1000)}
                         for n in range(1, 5)]
             data = {"data": {"manga": {"id": manga_id, "title": card["title"],
                                      "author": card["author"], "firstUnreadChapter": {"id": manga_id*100+1}, "chapters": {"nodes": chapters}}}}

@@ -140,43 +140,18 @@ internal fun ComposeConverter(close: () -> Unit) {
                                 }
                             }
                         }
-                        if (mode in setOf(LocalConversionMode.MANGA,LocalConversionMode.EPUB_IMAGES)) {
-                            OutlinedButton(onClick = {
-                                options = MangaConversionOptions.preset("Manga").copy(panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT")
-                            }, enabled = !busy) { Text("Apply manga settings") }
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("Panel mode")
-                                    ExportChoice(options.panelMode, listOf("OFF","ROW_BY_ROW","PANEL_BY_PANEL"), !busy) {
-                                        options = options.copy(panelMode = it)
-                                    }
-                                }
-                                Column(Modifier.weight(1f)) {
-                                    Text("Orientation")
-                                    ExportChoice(options.orientation, listOf("PORTRAIT","LANDSCAPE","AUTO_FIT"), !busy) {
-                                        options = options.copy(orientation = it)
-                                    }
-                                }
+                        when(mode) {
+                            LocalConversionMode.MANGA, LocalConversionMode.EPUB_IMAGES, LocalConversionMode.PDF ->
+                                ComposeMangaSettings(options,format,!busy) { options = it }
+                            LocalConversionMode.EPUB_TEXT -> {
+                                ComposeTypographySettings(typography,!busy) { typography = it }
+                                ComposeRenderingSettings(options,!busy) { options = it }
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(options.showFullPageBeforeSplits, { options = options.copy(showFullPageBeforeSplits = it) }, enabled = !busy)
-                                Text("Full page before splits")
+                            LocalConversionMode.PDF_COMPANION -> {
+                                ComposeRenderingSettings(options,!busy) { options = it }
+                                ConversionToggle("Include cover",options.includeCover,!busy){options=options.copy(includeCover=it)}
                             }
-                        } else if (mode == LocalConversionMode.EPUB_TEXT) {
-                            Text("Font: ${typography.family} · ${typography.fontPx}px")
-                            ExportChoice(typography.family, listOf("Serif","SansSerif","Monospaced"), !busy) {
-                                typography = typography.copy(family = it)
-                            }
-                            Slider(value = typography.fontPx.toFloat(), onValueChange = { typography = typography.copy(fontPx = it.toInt()) },
-                                valueRange = 14f..46f, steps = 31, enabled = !busy)
-                            Text("Reading direction")
-                            ExportChoice(typography.direction, listOf("Auto","Left to right","Right to left"), !busy) {
-                                typography = typography.copy(direction = it)
-                            }
-                        }
-                        Text("Rendering")
-                        ExportChoice(options.renderAlgorithm, listOf("LEGACY","FLOYD_STEINBERG","ATKINSON","BAYER_8X8","THRESHOLD"), !busy) {
-                            options = options.copy(renderAlgorithm = it)
+                            LocalConversionMode.PDF_REFLOW -> Text("Reflowable PDF text retains existing extraction defaults.",style=MaterialTheme.typography.bodySmall)
                         }
                         Text("Protected documents are not supported. Text reflow is not a full CSS layout reproduction.", style = MaterialTheme.typography.bodySmall)
                     }

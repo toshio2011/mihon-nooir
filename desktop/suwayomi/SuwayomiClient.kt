@@ -18,6 +18,8 @@ data class SuwayomiChapter(
     val downloaded: Boolean,
     val read: Boolean? = null,
     val lastPageRead: Int? = null,
+    val bookmarked: Boolean? = null,
+    val uploadDate: Long? = null,
 )
 
 data class SuwayomiManga(
@@ -367,7 +369,7 @@ class SuwayomiClient(
             val pageCount = c.int("pageCount")
             require(card.id > 0 && card.id == c.int("mangaId") && card.inLibrary &&
                 chapter.id > 0 && chapter.chapterNumber.isFinite() && chapter.sourceOrder >= 0 &&
-                lastPage >= 0 && pageCount >= 0 && readAt >= 0 && fetched >= 0 &&
+                lastPage >= 0 && pageCount >= -1 && readAt >= 0 && fetched >= 0 &&
                 (if (history) readAt > 0 else fetched > 0)) { "Invalid chapter feed record" }
             SuwayomiFeedEntry(card,chapter,c["isRead"] as? Boolean ?: error("Missing reading state"),
                 lastPage,pageCount,readAt,fetched)
@@ -383,7 +385,7 @@ class SuwayomiClient(
               manga(id: $id) {
                 id title author
                 firstUnreadChapter { id }
-                chapters { nodes { id name chapterNumber sourceOrder isDownloaded isRead lastPageRead } }
+                chapters { nodes { id name chapterNumber sourceOrder isDownloaded isRead lastPageRead isBookmarked uploadDate } }
               }
             }
         """.trimIndent()
@@ -400,6 +402,8 @@ class SuwayomiClient(
                 downloaded = c["isDownloaded"] as? Boolean ?: error("Missing download status"),
                 read = c["isRead"] as? Boolean,
                 lastPageRead = c["lastPageRead"]?.let { c.int("lastPageRead").also { page -> require(page >= 0) } },
+                bookmarked = c["isBookmarked"] as? Boolean,
+                uploadDate = c["uploadDate"]?.let { c.long("uploadDate") },
             )
         }
         require(chapters.size <= 50_000) { "Too many chapters" }

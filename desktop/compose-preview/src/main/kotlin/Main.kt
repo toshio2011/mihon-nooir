@@ -197,6 +197,15 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
     var selectionMode by remember(card.id) { mutableStateOf(false) }
     var selectedIds by remember(card.id) { mutableStateOf(setOf<Int>()) }
     var exportOpen by remember(card.id) { mutableStateOf(false) }
+    var chapterFilter by remember(card.id) { mutableStateOf("All") }
+    var chapterSort by remember(card.id) { mutableStateOf("Source order") }
+    var descending by remember(card.id) { mutableStateOf(false) }
+    var filterOpen by remember(card.id) { mutableStateOf(false) }
+    var downloadConfirm by remember(card.id) { mutableStateOf<List<Int>>(emptyList()) }
+    var downloadStatus by remember(card.id) { mutableStateOf("") }
+    var downloading by remember(card.id) { mutableStateOf(false) }
+    val operations = LocalOperations.current
+    val scope = rememberCoroutineScope()
     LaunchedEffect(client, card.id, refreshRevision, reloadRevision) {
         state = null
         state = request {
@@ -224,15 +233,41 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
         Spacer(Modifier.height(16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Chapters", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            if (refreshAllowed) TextButton(onClick = { refreshRevision++ }, enabled = state != null) { Text("Refresh chapters") }
+            TextButton(onClick = { filterOpen = true }, enabled = state?.isSuccess == true && !downloading) { Text("Filter / sort") }
+            TextButton(onClick = { refreshRevision++ }, enabled = state != null && !downloading) { Text("Refresh chapters") }
         }
         val result = state
         if (result == null) CircularProgressIndicator()
         else if (result.isFailure) Text("Unable to load chapters. Return to the library and retry.", color = MaterialTheme.colorScheme.error)
         else {
             val chapters = result.getOrThrow().chapters
+            val visible = remember(chapters,chapterFilter,chapterSort,descending) {
+                val filtered = chapters.filter { when(chapterFilter) {
+                    "Unread" -> it.read == false
+                    "Read" -> it.read == true
+                    "Downloaded" -> it.downloaded
+                    "Not downloaded" -> !it.downloaded
+                    "Bookmarked" -> it.bookmarked == true
+                    else -> true
+                } }
+                val sorted = when(chapterSort) {
+                    "Chapter number" -> filtered.sortedWith(compareBy<SuwayomiChapter>{it.chapterNumber}.thenBy{it.sourceOrder})
+                    "Upload date" -> filtered.sortedWith(compareBy<SuwayomiChapter>{it.uploadDate ?: 0L}.thenBy{it.sourceOrder})
+                    else -> filtered
+                }
+                if(descending) sorted.reversed() else sorted
+            }
+            if(filterOpen) AlertDialog(onDismissRequest={filterOpen=false},title={Text("Chapter filters and sorting")},
+                text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Text("Filter")
+                    ExportChoice(chapterFilter,listOf("All","Unread","Read","Downloaded","Not downloaded","Bookmarked"),true){chapterFilter=it;selectedIds=emptySet()}
+                    Text("Sort by")
+                    ExportChoice(chapterSort,listOf("Source order","Chapter number","Upload date"),true){chapterSort=it;selectedIds=emptySet()}
+                    ConversionToggle("Reverse order",descending,true){descending=it;selectedIds=emptySet()}
+                    Text("Changing filters or sorting clears chapter selection.",style=MaterialTheme.typography.bodySmall)
+                }},confirmButton={TextButton(onClick={filterOpen=false}){Text("Done")}})
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${chapters.size} chapters", Modifier.weight(1f))
+                Text(if(chapterFilter=="All") "${chapters.size} chapters" else "${visible.size} / ${chapters.size} chapters", Modifier.weight(1f))
                 val next = chapters.firstOrNull { it.id == result.getOrThrow().firstUnreadId }
                 if (!selectionMode && next != null) TextButton(onClick = { opened = next }) { Text("Continue reading") }
                 TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }) {
@@ -240,13 +275,30 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
                 }
                 if (selectionMode) {
                     Text("${selectedIds.size} selected")
-                    TextButton(onClick = { exportOpen = true }, enabled = selectedIds.isNotEmpty()) { Text("Export") }
+                    TextButton(onClick={selectedIds=visible.take(500).map{it.id}.toSet()},enabled=!downloading){Text("Select all")}
+                    TextButton(onClick={downloadConfirm=visible.filter{it.id in selectedIds && !it.downloaded}.map{it.id}},enabled=!downloading && visible.any{it.id in selectedIds && !it.downloaded}){Text("Download")}
+                    TextButton(onClick = { exportOpen = true }, enabled = selectedIds.isNotEmpty() && !downloading) { Text("Export") }
                 }
             }
-            if (exportOpen) ComposeExport(card, chapters.filter { it.id in selectedIds }) { exportOpen = false }
-            if (chapters.isEmpty() && refreshAllowed) Text("Refresh chapters to fetch available chapters from this source.")
+            if (exportOpen) ComposeExport(card, visible.filter { it.id in selectedIds }) { exportOpen = false }
+            if(downloadStatus.isNotBlank()) Text(downloadStatus,style=MaterialTheme.typography.bodySmall)
+            if(downloadConfirm.isNotEmpty()) AlertDialog(onDismissRequest={downloadConfirm=emptyList()},title={Text("Download chapters?")},
+                text={Text("Queue "+downloadConfirm.size+" chapters in the local reading service? Download completion is separate from queue acceptance.")},
+                confirmButton={Button(onClick={
+                    val ids=downloadConfirm.toList();downloadConfirm=emptyList();downloading=true
+                    scope.launchProtected(operations){
+                        try {
+                            withContext(Dispatchers.IO){client.enqueue(ids)}
+                            downloadStatus="Queued "+ids.size+" chapters. Reload chapter status after downloads finish."
+                            reloadRevision++
+                        }catch(e:CancellationException){throw e}
+                        catch(e:Exception){downloadStatus="Download request not confirmed. Check the reading service before retrying."}
+                        finally{downloading=false}
+                    }
+                }){Text("Queue downloads")}},dismissButton={TextButton(onClick={downloadConfirm=emptyList()}){Text("Cancel")}})
+            if (visible.isEmpty()) Text("No chapters match this filter.")
             LazyColumn(Modifier.weight(1f)) {
-                items(chapters, key = { it.id }) { chapter ->
+                items(visible, key = { it.id }) { chapter ->
                     ListItem(headlineContent = { Text(chapter.name) },
                         supportingContent = { Text(listOfNotNull(if (chapter.downloaded) "Downloaded" else "Online",
                             chapter.read?.let { if (it) "Read" else "Unread" }, chapter.lastPageRead?.takeIf { it > 0 }?.let { "Saved page " + (it + 1) }).joinToString(" · ")) },
@@ -256,7 +308,10 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
                                 if (!checked) selectedIds = selectedIds - chapter.id
                             }, enabled = chapter.id in selectedIds || selectedIds.size < 500) }
                         } else null,
-                        trailingContent = { TextButton(onClick = { opened = chapter }, enabled = !selectionMode) { Text("Read") } })
+                        trailingContent = { Row {
+                            if(!selectionMode && !chapter.downloaded) TextButton(onClick={downloadConfirm=listOf(chapter.id)},enabled=!downloading){Text("Download")}
+                            TextButton(onClick = { opened = chapter }, enabled = !selectionMode && !downloading) { Text("Read") }
+                        } })
                     HorizontalDivider()
                 }
             }
@@ -480,7 +535,7 @@ private fun ChapterFeed(client: SuwayomiClient, history: Boolean) {
         val data=state?.getOrNull()
         when {
             state==null -> CircularProgressIndicator()
-            data==null -> Text("Unable to load chapter records. Check your local reading service and reload.",color=MaterialTheme.colorScheme.error)
+            data==null -> Column { Text("Unable to load chapter records.",color=MaterialTheme.colorScheme.error); Text(state.exceptionOrNull()?.message?.take(240) ?: "Unknown response error",style=MaterialTheme.typography.bodySmall) }
             else -> {
                 if(data.entries.isEmpty()) Text(if(history) "No saved reading history yet." else "No cached chapter updates yet.")
                 LazyColumn(Modifier.weight(1f)) {

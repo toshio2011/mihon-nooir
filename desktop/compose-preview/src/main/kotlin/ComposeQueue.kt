@@ -1,6 +1,8 @@
 package dev.nooir.desktop.compose
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -144,12 +146,12 @@ internal fun ComposeQueue(close: () -> Unit) {
             }
         }
     }
-    if (addOpen) ComposeBatchOptions(close = { addOpen = false }) { files, folder, kind, format, device, options ->
+    if (addOpen) ComposeBatchOptions(close = { addOpen = false }) { files, folder, kind, format, device, options, typography ->
         addOpen = false
         action {
             val count = withContext(Dispatchers.IO) {
                 queue.enqueue(files,folder,format,device,options,
-                    textEpub = if (kind == BatchKind.EPUB_TEXT) DesktopTextEpubImport.Settings() else null,
+                    textEpub = if (kind == BatchKind.EPUB_TEXT) typography else null,
                     pdfReflow = kind == BatchKind.REFLOW)
             }
             status = "Added $count local jobs. Press Run to convert."
@@ -167,20 +169,24 @@ internal fun ComposeQueue(close: () -> Unit) {
 
 @Composable
 private fun ComposeBatchOptions(close: () -> Unit,
-    enqueue: (List<File>,File,BatchKind,ExportFormat,String,MangaConversionOptions) -> Unit) {
+    enqueue: (List<File>,File,BatchKind,ExportFormat,String,MangaConversionOptions,DesktopTextEpubImport.Settings) -> Unit) {
     var kind by remember { mutableStateOf(BatchKind.MANGA) }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
     var folder by remember { mutableStateOf<File?>(null) }
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
+    var options by remember { mutableStateOf(MangaConversionOptions.preset("Manga")) }
+    var typography by remember { mutableStateOf(DesktopTextEpubImport.Settings()) }
+    var selectionError by remember { mutableStateOf("") }
     val formats = ExportFormat.entries.filter { kind.accepts(it) && device.accepts(it) }
     fun adjust() { if (format !in formats && formats.isNotEmpty()) format = formats.first() }
     LaunchedEffect(kind,device) { adjust() }
     AlertDialog(onDismissRequest = close, title = { Text("Add local conversion jobs") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        text = { Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState()),verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Input type")
             ExportChoice(kind.label,BatchKind.entries.map { it.label },true) { label ->
-                kind = BatchKind.entries.first { it.label == label }; files = emptyList()
+                kind = BatchKind.entries.first { it.label == label }; files = emptyList(); selectionError = ""
+                options = if(kind in setOf(BatchKind.MANGA,BatchKind.EPUB_IMAGES)) MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft=false,renderAlgorithm="THRESHOLD")
             }
             OutlinedButton(onClick = {
                 val picker = JFileChooser().apply {
@@ -191,7 +197,8 @@ private fun ComposeBatchOptions(close: () -> Unit,
                 }
                 if (picker.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
                     val picked = picker.selectedFiles.toList().ifEmpty { listOfNotNull(picker.selectedFile) }
-                    files = picked.filter { kind.folders && it.isDirectory || it.isFile && it.extension.lowercase() in kind.extensions }
+                    val accepted = picked.filter { kind.folders && it.isDirectory || it.isFile && it.extension.lowercase() in kind.extensions }
+                    if(accepted.size!=picked.size){files=emptyList();selectionError="Some selected files are unsupported. Choose again."} else {files=accepted;selectionError=""}
                 }
             }) { Text("Choose books (${files.size})") }
             Text("Device")
@@ -202,14 +209,17 @@ private fun ComposeBatchOptions(close: () -> Unit,
                 val picker = JFileChooser().apply { fileSelectionMode = JFileChooser.DIRECTORIES_ONLY }
                 if (picker.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) folder = picker.selectedFile
             }) { Text(folder?.name ?: "Choose output folder") }
-            Text("Manga uses the standard manga preset. Text EPUB uses default typography. Existing files are never overwritten.", style = MaterialTheme.typography.bodySmall)
+            if(selectionError.isNotBlank()) Text(selectionError,color=MaterialTheme.colorScheme.error)
+            when(kind) {
+                BatchKind.MANGA,BatchKind.EPUB_IMAGES,BatchKind.PDF -> ComposeMangaSettings(options,format,true){options=it}
+                BatchKind.EPUB_TEXT -> {ComposeTypographySettings(typography,true){typography=it};ComposeRenderingSettings(options,true){options=it}}
+                BatchKind.REFLOW -> Text("PDF reflow uses existing extraction defaults.")
+            }
+            Text("These settings apply to every selected book. Existing files are never overwritten.",style=MaterialTheme.typography.bodySmall)
         } },
         confirmButton = { Button(enabled = files.isNotEmpty() && folder != null && format in formats, onClick = {
             val target = folder ?: return@Button
-            val options = if (kind in setOf(BatchKind.MANGA,BatchKind.EPUB_IMAGES))
-                MangaConversionOptions.preset("Manga")
-            else MangaConversionOptions().copy(rightToLeft = false,renderAlgorithm = "THRESHOLD")
-            enqueue(files,target,kind,format,device.id,options)
+            enqueue(files,target,kind,format,device.id,options,typography)
         }) { Text("Add to queue") } },
         dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
 }

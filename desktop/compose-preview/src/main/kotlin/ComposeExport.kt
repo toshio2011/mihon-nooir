@@ -80,35 +80,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 ExportChoice(format.name, ExportFormat.entries.filter { it != ExportFormat.AUTO && device.accepts(it) }.map { it.name }, !busy) {
                     format = ExportFormat.valueOf(it); outputText = ""
                 }
-                OutlinedButton(onClick = {
-                    options = MangaConversionOptions.preset("Manga").copy(panelMode = "PANEL_BY_PANEL", orientation = "AUTO_FIT")
-                }, enabled = !busy) { Text("Apply manga settings") }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Panel mode")
-                        ExportChoice(options.panelMode, listOf("OFF", "ROW_BY_ROW", "PANEL_BY_PANEL"), !busy) {
-                            options = options.copy(panelMode = it)
-                        }
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text("Orientation")
-                        ExportChoice(options.orientation, listOf("PORTRAIT", "LANDSCAPE", "AUTO_FIT"), !busy) {
-                            options = options.copy(orientation = it)
-                        }
-                    }
-                }
-                Text("Rendering algorithm")
-                ExportChoice(options.renderAlgorithm, listOf("LEGACY", "FLOYD_STEINBERG", "ATKINSON", "BAYER_8X8", "THRESHOLD"), !busy) {
-                    options = options.copy(renderAlgorithm = it)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(options.showFullPageBeforeSplits, { options = options.copy(showFullPageBeforeSplits = it) }, enabled = !busy)
-                    Text("Full page before splits")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(options.includeCover, { options = options.copy(includeCover = it) }, enabled = !busy)
-                    Text("Include cover")
-                }
+                ComposeMangaSettings(options,format,!busy) { options = it }
                 if (missing > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(allowDownload, { allowDownload = it }, enabled = !busy)
                     Text("Download selected missing chapters")
