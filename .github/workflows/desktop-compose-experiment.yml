@@ -81,7 +81,13 @@ jobs:
           & "$image/backend-java/bin/java.exe" -version
           if ($LASTEXITCODE -ne 0) { throw "Backend runtime failed" }
           $commit = git rev-parse HEAD
-          "Experimental preview; commit $commit. No real device acceptance yet." | Set-Content "$image/PREVIEW.txt"
+          $baseline = (Get-Content config/version.txt -Raw).Trim()
+          if ($baseline -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid Android baseline version" }
+          $nativeVersion = (Get-Content desktop/windows-version.txt -Raw).Trim()
+          @("MihonNooir $baseline-preview (Windows development candidate)",
+            "Commit: $commit",
+            "Windows native package version: $nativeVersion",
+            "Not an official stable Windows release; physical-device acceptance pending.") | Set-Content "$image/PREVIEW.txt"
           Compress-Archive -Path $image -DestinationPath MihonNooir-Compose-Windows-Preview.zip
       - name: Upload portable Windows preview
         uses: actions/upload-artifact@v4

@@ -112,3 +112,10 @@ tasks.register<JavaExec>("qaComposeWebProjects") {
     mainClass.set("dev.nooir.desktop.compose.ComposeWebProjectsSmokeKt")
     systemProperty("java.awt.headless","true")
 }
+
+// Display the shared Android baseline without changing either platform's release version.
+tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
+    from(rootProject.file("../../config/version.txt")) {
+        rename { "nooir-android-baseline.txt" }
+    }
+}

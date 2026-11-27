@@ -44,6 +44,12 @@ import javax.imageio.ImageIO
 
 private val coverSlots = Semaphore(3)
 
+private fun desktopPreviewLabel():String {
+    val baseline=object {}.javaClass.getResourceAsStream("/nooir-android-baseline.txt")
+        ?.bufferedReader()?.use{it.readText().trim()}
+    return if(baseline!=null && baseline.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+"))) baseline+"-preview" else "development preview"
+}
+
 private suspend fun <T> request(block: () -> T): Result<T> = withContext(Dispatchers.IO) {
     try { Result.success(block()) }
     catch (e: CancellationException) { throw e }
@@ -146,8 +152,8 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
             val target=when(event.key){
                 Key.DirectionRight,Key.PageDown->(page+1).coerceAtMost(manifest.pageCount-1)
                 Key.DirectionLeft,Key.PageUp->(page-1).coerceAtLeast(0)
-                Key.Home->0
-                Key.End->manifest.pageCount-1
+                Key.MoveHome->0
+                Key.MoveEnd->manifest.pageCount-1
                 Key.Spacebar->if(event.isShiftPressed)(page-1).coerceAtLeast(0) else (page+1).coerceAtMost(manifest.pageCount-1)
                 else->null
             }
@@ -665,7 +671,7 @@ fun main() = application {
                 finally { exitApplication() }
             }
         }
-    }, title = "MihonNooir · Compose experiment",
+    }, title = "MihonNooir · "+desktopPreviewLabel()+" · Compose experiment",
         state = rememberWindowState(width = 1040.dp, height = 720.dp)) {
         var section by remember { mutableStateOf("Library") }
         var activityOpen by remember { mutableStateOf(false) }

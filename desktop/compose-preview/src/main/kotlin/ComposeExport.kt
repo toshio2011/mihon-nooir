@@ -201,8 +201,8 @@ internal fun ConvertedBookPreview(file: File, back: () -> Unit) {
             val target=if(count==null)null else when(event.key){
                 Key.DirectionRight,Key.PageDown->(page+1).coerceAtMost(count-1)
                 Key.DirectionLeft,Key.PageUp->(page-1).coerceAtLeast(0)
-                Key.Home->0
-                Key.End->count-1
+                Key.MoveHome->0
+                Key.MoveEnd->count-1
                 Key.Spacebar->if(event.isShiftPressed)(page-1).coerceAtLeast(0) else (page+1).coerceAtMost(count-1)
                 else->null
             }
