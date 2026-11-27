@@ -98,8 +98,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         query = json.loads(self.rfile.read(size))["query"]
         if "query NooirLibrary" in query and "mutation" not in query:
-            data = {"data": {"mangas": {"totalCount": len(CARDS), "nodes": CARDS}}}
-            marker = "LIBRARY_OK"
+            paging = re.search(r"first: (\d+), offset: (\d+)", query)
+            if not paging or not 1 <= int(paging.group(1)) <= 200:
+                self.reply(400, b"invalid library pagination", "text/plain")
+                return
+            limit, offset = map(int, paging.groups())
+            data = {"data": {"mangas": {"totalCount": len(CARDS), "nodes": CARDS[offset:offset+limit]}}}
+            marker = "STARTUP_LIBRARY_OK" if limit == 1 else "LIBRARY_OK"
         elif "query NooirManga" in query and "mutation" not in query:
             match = re.search(r"manga\(id: ([1-6])\)", query)
             if not match:

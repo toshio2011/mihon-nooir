@@ -24,7 +24,7 @@ app_pid=$!
 window=""
 for i in {1..300}; do
   window="$(xdotool search --onlyvisible --name 'MihonNooir.*Compose experiment' 2>/dev/null | head -n 1 || true)"
-  if [[ -n "$window" ]] && grep -q LIBRARY_OK "$out/fixture.log" &&
+  if [[ -n "$window" ]] && grep -Fxq LIBRARY_OK "$out/fixture.log" &&
      [[ "$(grep -c '^COVER_OK ' "$out/fixture.log" || true)" -ge 4 ]]; then
     break
   fi
@@ -32,7 +32,8 @@ for i in {1..300}; do
   sleep 1
 done
 test -n "$window"
-grep -q LIBRARY_OK "$out/fixture.log"
+grep -Fxq STARTUP_LIBRARY_OK "$out/fixture.log"
+grep -Fxq LIBRARY_OK "$out/fixture.log"
 test "$(grep -c '^COVER_OK ' "$out/fixture.log" || true)" -ge 4
 sleep 3
 xdotool getwindowname "$window" > "$out/window.txt"
@@ -163,3 +164,6 @@ fi
 
 gradle -p desktop/compose-preview qaBackup --no-daemon --stacktrace > "$out/backup-test.log" 2>&1
 grep -Fxq 'PASS: partial extension recovery preserves backup and continues after failure' "$out/backup-test.log"
+
+gradle -p desktop/compose-preview qaCatalogInstall --no-daemon --stacktrace > "$out/catalog-test.log" 2>&1
+grep -Fxq 'PASS: reviewed catalogue install and stale identity refusal' "$out/catalog-test.log"

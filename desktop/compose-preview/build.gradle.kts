@@ -43,3 +43,10 @@ tasks.register<JavaExec>("qaBackup") {
     mainClass.set("dev.nooir.desktop.compose.ComposeBackupSmokeKt")
     systemProperty("java.awt.headless", "true")
 }
+
+tasks.register<JavaExec>("qaCatalogInstall") {
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.nooir.desktop.compose.ComposeCatalogInstallSmokeKt")
+    systemProperty("java.awt.headless", "true")
+}
