@@ -456,6 +456,11 @@ fun main() = application {
                                     supportingContent = { Text("Library backups and compatible extension recovery") },
                                     trailingContent = { TextButton(onClick = { backupOpen = true }) { Text("Open") } })
                                 if (backupOpen) ComposeBackup { backupOpen = false }
+                                var transferOpen by remember { mutableStateOf(false) }
+                                ListItem(headlineContent = { Text("Send to XTEink") },
+                                    supportingContent = { Text("Transfer a local book to a compatible Folio Nooir reader") },
+                                    trailingContent = { TextButton(onClick = { transferOpen = true }) { Text("Open") } })
+                                if (transferOpen) ComposeTransfer { transferOpen = false }
                                 val connection = backendState as? BackendState.Ready
                                 ListItem(headlineContent = { Text("Reading service") },
                                     supportingContent = { Text(if (connection?.owned == true) "Managed by MihonNooir" else "Connected to existing local service") },

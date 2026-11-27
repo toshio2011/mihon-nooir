@@ -195,3 +195,6 @@ grep -Fxq 'PASS: reviewed catalogue install and stale identity refusal' "$out/ca
 
 gradle -p desktop/compose-preview qaLocalConverter --no-daemon --stacktrace -PqaOutput="$out" > "$out/local-converter-test.log" 2>&1
 grep -Fxq 'PASS: local manga, PDF, EPUB conversion and decoded output' "$out/local-converter-test.log"
+
+gradle -p desktop/compose-preview qaReaderTransfer --no-daemon --stacktrace > "$out/reader-transfer-test.log" 2>&1
+grep -Fxq 'PASS: private reader address validation, multipart, duplicate refusal, exact ACK, size verification and source immutability' "$out/reader-transfer-test.log"

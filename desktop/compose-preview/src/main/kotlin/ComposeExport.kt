@@ -214,7 +214,12 @@ internal fun ConvertedBookPreview(file: File, back: () -> Unit) {
             Text("${page + 1} / ${frame?.count ?: "…"}")
             TextButton(onClick = { page++ }, enabled = frame?.let { page + 1 < it.count } == true) { Text("Next") }
         }
-        TextButton(onClick = back) { Text("Back to export") }
+        var sendOpen by remember(file) { mutableStateOf(false) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextButton(onClick = back) { Text("Back to export") }
+            TextButton(onClick = { sendOpen = true }) { Text("Send to XTEink") }
+        }
+        if (sendOpen) ComposeTransfer(initialFile = file) { sendOpen = false }
     }
 }
 
