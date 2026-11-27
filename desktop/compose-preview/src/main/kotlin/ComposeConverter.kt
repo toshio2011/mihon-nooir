@@ -66,6 +66,9 @@ private fun modesFor(file: File?): List<LocalConversionMode> = when {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeConverter(close: () -> Unit) {
+    LaunchedEffect(Unit) {
+        if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_LOCAL_CONVERTER_OPEN")
+    }
     val scope = rememberCoroutineScope()
     var source by remember { mutableStateOf<File?>(null) }
     var mode by remember { mutableStateOf(LocalConversionMode.MANGA) }

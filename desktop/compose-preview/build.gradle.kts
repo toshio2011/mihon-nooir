@@ -53,3 +53,11 @@ tasks.register<JavaExec>("qaCatalogInstall") {
     mainClass.set("dev.nooir.desktop.compose.ComposeCatalogInstallSmokeKt")
     systemProperty("java.awt.headless", "true")
 }
+
+tasks.register<JavaExec>("qaLocalConverter") {
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.nooir.desktop.compose.ComposeLocalConverterSmokeKt")
+    args(providers.gradleProperty("qaOutput").orElse("").get())
+    systemProperty("java.awt.headless", "true")
+}

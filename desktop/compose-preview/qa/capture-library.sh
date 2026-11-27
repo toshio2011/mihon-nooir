@@ -150,6 +150,31 @@ grep -Fq 'QA_CONVERTED_FRAME page=1 count=' "$out/application.log"
 sleep 2
 import -window root "$out/compose-converted-book-preview.png"
 test -s "$out/compose-converted-book-preview.png"
+# Capture a content page as well as the cover of the actual converted book.
+xdotool mousemove 629 621 click 1
+for i in {1..20}; do
+  if grep -Fq 'QA_CONVERTED_FRAME page=2 count=' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fq 'QA_CONVERTED_FRAME page=2 count=' "$out/application.log"
+sleep 1
+import -window root "$out/compose-converted-manga-page.png"
+# Dismiss the export modal and open the More screen.
+xdotool key Escape
+sleep 1
+xdotool mousemove --window "$window" 40 213 click 1
+sleep 2
+import -window "$window" "$out/compose-more.png"
+# Open the first More list item (Universal Converter).
+xdotool mousemove --window "$window" 970 148 click 1
+for i in {1..20}; do
+  if grep -Fxq 'QA_LOCAL_CONVERTER_OPEN' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'QA_LOCAL_CONVERTER_OPEN' "$out/application.log"
+sleep 2
+import -window root "$out/compose-universal-converter.png"
+test -s "$out/compose-universal-converter.png"
 # Close the experimental app before the independent headless engine verification.
 kill -- "-$app_pid" 2>/dev/null || true
 wait "$app_pid" || true
@@ -167,3 +192,6 @@ grep -Fxq 'PASS: partial extension recovery preserves backup and continues after
 
 gradle -p desktop/compose-preview qaCatalogInstall --no-daemon --stacktrace > "$out/catalog-test.log" 2>&1
 grep -Fxq 'PASS: reviewed catalogue install and stale identity refusal' "$out/catalog-test.log"
+
+gradle -p desktop/compose-preview qaLocalConverter --no-daemon --stacktrace -PqaOutput="$out" > "$out/local-converter-test.log" 2>&1
+grep -Fxq 'PASS: local manga, PDF, EPUB conversion and decoded output' "$out/local-converter-test.log"
