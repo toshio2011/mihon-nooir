@@ -62,6 +62,16 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
         }
     }
 
+    // Same filename policy as DesktopUiModel.suggestedFile; keep the queue
+    // independent of the Swing JFrame and its unrelated screen dependencies.
+    private fun queueOutputName(title: String, format: ExportFormat): String {
+        val normalized = title.replace(Regex("[^\\p{L}\\p{N} ._()-]"), "_")
+            .trim().take(80).trimEnd(' ', '.').ifBlank { "MihonNooir" }
+        val reserved = Regex("(?i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$")
+        val safe = if (reserved.matches(normalized)) "_$normalized" else normalized
+        return safe + "." + format.extension
+    }
+
     private val index = folder.resolve("conversion-queue-v1.tsv")
     private fun <T> transaction(block: () -> T): T = synchronized(gate) {
         Files.createDirectories(folder)
@@ -157,7 +167,7 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             require(textEpub == null || source.isFile && source.extension.equals("epub", true)) {
                 "Choose only EPUB files for a text EPUB batch"
             }
-            val output = File(directory, DesktopUiModel.suggestedFile(source.nameWithoutExtension, format)).canonicalFile
+            val output = File(directory, queueOutputName(source.nameWithoutExtension, format)).canonicalFile
             require(output.parentFile == directory && source != output && !output.exists()) {
                 "Output already exists or is not a new local destination: " + output.name
             }

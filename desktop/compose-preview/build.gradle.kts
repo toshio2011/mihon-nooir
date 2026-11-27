@@ -13,7 +13,7 @@ kotlin {
         kotlin.srcDir("../ui")
         kotlin.srcDir("../../overlay/app/src/main/java/dev/nooir/bridge")
         kotlin.srcDir("../../overlay/app/src/main/java/dev/nooir/mangabridge")
-        kotlin.include("Main.kt", "ComposeExport.kt", "ComposeBackup.kt", "ComposeExtensions.kt", "ComposeBackend.kt", "ComposeConverter.kt", "DesktopPdfImport.kt", "DesktopTextEpubImport.kt", "DesktopImageEpubImport.kt", "NooirEpubBook.kt", "DesktopDataHome.kt", "OfficialSuwayomiCache.kt", "SuwayomiProcessManager.kt", "DesktopBackupInspector.kt", "DesktopBackupTransport.kt", "DesktopBackupExtensions.kt", "DesktopLegacyRepoIndex.kt", "SuwayomiClient.kt", "MiniJson.kt", "SuwayomiToNooir.kt",
+        kotlin.include("Main.kt", "ComposeExport.kt", "ComposeBackup.kt", "ComposeExtensions.kt", "ComposeBackend.kt", "ComposeConverter.kt", "ComposeQueue.kt", "DesktopConversionQueue.kt", "DesktopPdfImport.kt", "DesktopTextEpubImport.kt", "DesktopImageEpubImport.kt", "NooirEpubBook.kt", "DesktopDataHome.kt", "OfficialSuwayomiCache.kt", "SuwayomiProcessManager.kt", "DesktopBackupInspector.kt", "DesktopBackupTransport.kt", "DesktopBackupExtensions.kt", "DesktopLegacyRepoIndex.kt", "SuwayomiClient.kt", "MiniJson.kt", "SuwayomiToNooir.kt",
             "NooirDesktopCli.kt", "XtcCodec.kt", "XtcBookPreview.kt", "ExportFormats.kt", "NooirDeviceProfiles.kt",
             "BookArchiveWriter.kt", "Epub2Writer.kt", "GrayscaleConverter.kt", "GrayscalePng.kt", "NaturalPageOrder.kt",
             "PageSlicePlanner.kt", "PanelContextPeek.kt", "PanelDetectionCore.kt", "PanelViewportPlanner.kt",
