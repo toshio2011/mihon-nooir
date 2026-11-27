@@ -36,7 +36,16 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
 }
 compose.desktop {
-    application { mainClass = "dev.nooir.desktop.compose.MainKt" }
+    application {
+        mainClass = "dev.nooir.desktop.compose.MainKt"
+        nativeDistributions {
+            packageName = "MihonNooir-Compose-Preview"
+            packageVersion = "0.1.0"
+            description = "Experimental MihonNooir desktop preview"
+            vendor = "MihonNooir"
+            includeAllModules = true
+        }
+    }
 }
 
 tasks.register<JavaExec>("qaExport") {

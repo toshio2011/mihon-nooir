@@ -53,3 +53,39 @@ jobs:
           name: mihonnooir-compose-library-visual
           path: compose-visual-evidence/
           if-no-files-found: warn
+
+  windows-preview:
+    needs: [compile, capture-library]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12.1'
+      - name: Create Windows Compose application image
+        shell: pwsh
+        run: |
+          gradle -p desktop/compose-preview createDistributable --no-daemon --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw "Compose packaging failed" }
+          $image = 'desktop/compose-preview/build/compose/binaries/main/app/MihonNooir-Compose-Preview'
+          if (!(Test-Path "$image/MihonNooir-Compose-Preview.exe")) { throw "Missing Compose launcher" }
+          $source = $env:JAVA_HOME
+          if (!(Test-Path "$source/bin/java.exe")) { throw "Missing Java 21 runtime" }
+          Copy-Item -LiteralPath $source -Destination "$image/backend-java" -Recurse
+          if (!(Test-Path "$image/backend-java/bin/java.exe")) { throw "Missing backend launcher" }
+          & "$image/backend-java/bin/java.exe" -version
+          if ($LASTEXITCODE -ne 0) { throw "Backend runtime failed" }
+          $commit = git rev-parse HEAD
+          "Experimental preview; commit $commit. No real device acceptance yet." | Set-Content "$image/PREVIEW.txt"
+          Compress-Archive -Path $image -DestinationPath MihonNooir-Compose-Windows-Preview.zip
+      - name: Upload portable Windows preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihonnooir-compose-windows-preview
+          path: MihonNooir-Compose-Windows-Preview.zip
+          if-no-files-found: error

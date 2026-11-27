@@ -27,7 +27,21 @@ internal sealed interface BackendState {
 /** Reuses the verified pinned backend and existing data root; never takes ownership
  * of an already-bound service. Download is separate from automatic cached startup. */
 internal class ComposeBackendSession : Closeable {
-    private val manager = SuwayomiProcessManager()
+    private val manager = SuwayomiProcessManager(javaExecutable = backendJava())
+
+    // jpackage can strip native launch commands from its UI runtime.
+    // The portable Windows image includes a sibling, full Java 21 runtime.
+    private fun backendJava(): java.nio.file.Path {
+        val home = java.nio.file.Path.of(System.getProperty("java.home")).toAbsolutePath().normalize()
+        val windows = System.getProperty("os.name").startsWith("Windows")
+        val name = if (windows) "java.exe" else "java"
+        val own = home.resolve("bin").resolve(name)
+        if (windows && home.fileName.toString() == "runtime") {
+            val bundled = home.parent.resolve("backend-java").resolve("bin").resolve(name)
+            if (java.nio.file.Files.isRegularFile(bundled)) return bundled
+        }
+        return own
+    }
     private val cache = OfficialSuwayomiCache()
     private val closed = AtomicBoolean(false)
     fun connectOrStartCached(): BackendState {

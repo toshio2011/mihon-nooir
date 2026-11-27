@@ -154,16 +154,17 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { page-- }, enabled = !saving && page > 0 && rendered != null) { Text("Previous") }
-                Text("${page + 1} / ${manifest.pageCount}")
-                TextButton(onClick = { page++ }, enabled = !saving && page + 1 < manifest.pageCount && rendered != null) { Text("Next") }
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(saveStatus.ifBlank { "Progress is saved only on request." }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                TextButton(onClick = { saveOpen = true }, enabled = !saving && rendered?.isSuccess == true &&
+            Box(Modifier.fillMaxWidth()) {
+                Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { page-- }, enabled = !saving && page > 0 && rendered != null) { Text("Previous") }
+                    Text("${page + 1} / ${manifest.pageCount}")
+                    TextButton(onClick = { page++ }, enabled = !saving && page + 1 < manifest.pageCount && rendered != null) { Text("Next") }
+                }
+                TextButton(onClick = { saveOpen = true }, modifier = Modifier.align(Alignment.CenterEnd),
+                    enabled = !saving && rendered?.isSuccess == true &&
                     manifest.syncConflict == null && page > (savedPage ?: Int.MAX_VALUE)) { Text("Save position") }
             }
+            Text(saveStatus.ifBlank { "Progress is saved only on request." }, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (saveOpen) AlertDialog(onDismissRequest = { saveOpen = false },
                 title = { Text("Save reading position?") },
                 text = { Text("Save page " + (page + 1) + " to your local reading service? A known later position will not be overwritten. Concurrent writers may still race.") },
