@@ -111,17 +111,7 @@ object NooirDesktopCli {
                             val firstInChapter = !entry.cover && entry.chapter != lastNonCoverChapter
                             if (!entry.cover) lastNonCoverChapter = entry.chapter
                             val img = decode(entry.open)
-                            val wholePageOpts = options.copy(
-                                layout = "PAGED", cropWhiteMargins = false,
-                                splitSpreads = false, orientation = "PORTRAIT", overlapPercent = 0,
-                                panelMode = "OFF", showFullPageBeforeSplits = false,
-                                contextPeekPercent = 0,
-                            )
-                            val opts = when {
-                                entry.cover || namedCover(entry.name) -> wholePageOpts
-                                firstInChapter && options.keepChapterFirstPageWhole -> options.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED")
-                                else -> options
-                            }
+                            val opts = effectivePageOptions(options,entry.cover || namedCover(entry.name),firstInChapter)
                             for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
                                 yield(Rendered(entry.chapter, entry.cover, frame))
                             }
@@ -359,19 +349,47 @@ object NooirDesktopCli {
 
     /** Bounded sample-page preview: identical renderer and dimensions as export.
      * No source modification, archive output or network access. */
+    private fun effectivePageOptions(options:MangaConversionOptions,cover:Boolean,firstChapterPage:Boolean):MangaConversionOptions =
+        when {
+            cover -> options.copy(layout="PAGED",cropWhiteMargins=false,splitSpreads=false,orientation="PORTRAIT",
+                overlapPercent=0,panelMode="OFF",showFullPageBeforeSplits=false,contextPeekPercent=0)
+            firstChapterPage && options.keepChapterFirstPageWhole -> options.copy(
+                layout="PAGED",cropWhiteMargins=false,splitSpreads=false,panelMode="OFF")
+            else -> options
+        }
+
+    internal data class LocalSample(val bytes:ByteArray,val name:String,val index:Int,val count:Int,
+        val cover:Boolean,val firstChapterPage:Boolean)
+
+    /** Inspect one source page using exactly the CLI source ordering, without extracting the archive.
+     * Only an explicitly selected local input is read. No source data is modified. */
+    internal fun localSample(input:File,index:Int,includeCover:Boolean):LocalSample {
+        val source=input.canonicalFile
+        require(source.isDirectory || source.isFile && source.extension.lowercase() in (setOf("cbz","zip")+imageExt))
+        return withInput(source){items->
+            val pages=items.filter{!it.cover || includeCover}
+            require(pages.isNotEmpty()){"No readable image pages"}
+            val actual=index.coerceIn(0,pages.lastIndex)
+            val page=pages[actual]
+            val previous=pages.subList(0,actual).lastOrNull{!it.cover}
+            val first=!page.cover && previous?.chapter!=page.chapter
+            val bytes=page.open().use{it.readNBytes(MAX_IMAGE_BYTES+1)}
+            require(bytes.isNotEmpty() && bytes.size<=MAX_IMAGE_BYTES)
+            LocalSample(bytes,page.name,actual,pages.size,page.cover || namedCover(page.name),first)
+        }
+    }
+
     internal data class SamplePreview(val frames: List<ByteArray>, val truncated: Boolean)
     internal fun previewImage(bytes: ByteArray, device: String, format: ExportFormat,
                               options: MangaConversionOptions, firstChapterPage: Boolean = false,
-                              checkCancelled: () -> Unit = {}): SamplePreview {
+                              cover:Boolean = false, checkCancelled: () -> Unit = {}): SamplePreview {
         require(bytes.isNotEmpty() && bytes.size <= MAX_IMAGE_BYTES)
         val profile = NooirDeviceProfiles.forId(device)
         require(format != ExportFormat.AUTO && profile.accepts(format))
         val archive = format in setOf(ExportFormat.EPUB, ExportFormat.EPUB2, ExportFormat.CBZ)
         val width = if (archive && options.orientation == "LANDSCAPE") profile.height else profile.width
         val height = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
-        val effective = if (firstChapterPage && options.keepChapterFirstPageWhole) options.copy(
-            layout = "PAGED", cropWhiteMargins = false, splitSpreads = false, panelMode = "OFF",
-        ) else options
+        val effective = effectivePageOptions(options,cover,firstChapterPage)
         val source = DesktopImageDecoder.decode(bytes, MAX_IMAGE_PIXELS)
         try {
             val frames = mutableListOf<ByteArray>()

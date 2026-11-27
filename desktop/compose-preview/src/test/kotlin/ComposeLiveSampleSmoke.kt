@@ -72,6 +72,36 @@ fun main() {
         check(decoded.width==device.width && decoded.height==device.height)
         decoded.flush()
     }
+    val sampleDir=java.nio.file.Files.createTempDirectory("nooir-sample-archive").toFile()
+    try {
+        val input=sampleDir.resolve("sample.cbz")
+        java.util.zip.ZipOutputStream(input.outputStream()).use{zip->
+            for(name in listOf("10.png","cover.png","2.png")){
+                zip.putNextEntry(java.util.zip.ZipEntry(name));zip.write(bytes);zip.closeEntry()
+            }
+        }
+        val original=input.readBytes()
+        val cover=NooirDesktopCli.localSample(input,0,true)
+        check(cover.cover && cover.name=="cover.png" && cover.count==3)
+        val opening=NooirDesktopCli.localSample(input,0,false)
+        val content=NooirDesktopCli.localSample(input,1,false)
+        check(opening.name=="2.png" && opening.firstChapterPage && opening.count==2)
+        check(content.name=="10.png" && !content.firstChapterPage)
+        val selected=NooirDesktopCli.previewImage(content.bytes,"X4",ExportFormat.XTC,options,content.firstChapterPage,content.cover)
+        check(selected.frames.size==normal.frames.size && selected.frames.zip(normal.frames).all{(a,b)->a.contentEquals(b)})
+        val out=sampleDir.resolve("sample.xtc")
+        NooirDesktopCli.main(arrayOf("--input",input.path,"--output",out.path,"--device","X4","--format","XTC",
+            "--options-token",options.copy(includeCover=false).token()))
+        val exported=dev.nooir.bridge.XtcBookPreview(out)
+        check(exported.pageCount==whole.frames.size+selected.frames.size)
+        for((i,png) in selected.frames.withIndex()){
+            val frame=dev.nooir.bridge.GrayscalePng.encode(exported.page(whole.frames.size+i))
+            val a=ImageIO.read(frame.inputStream());val b=ImageIO.read(png.inputStream())
+            try{check(a.width==b.width && a.height==b.height && a.getRGB(0,0,a.width,a.height,null,0,a.width).contentEquals(b.getRGB(0,0,b.width,b.height,null,0,b.width)))}
+            finally{a.flush();b.flush()}
+        }
+        check(input.readBytes().contentEquals(original))
+    }finally{sampleDir.deleteRecursively()}
     val gray=NooirDesktopCli.previewImage(bytes,device.id,ExportFormat.XTCH,options,false)
     check(gray.frames.isNotEmpty())
     println("PASS: actual renderer sample preview, first chapter page and fixed device dimensions")
