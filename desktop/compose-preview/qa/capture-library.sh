@@ -173,7 +173,9 @@ done
 grep -Fq 'QA_CONVERTED_FRAME page=2 count=' "$out/application.log"
 sleep 1
 import -window root "$out/compose-converted-manga-page.png"
-# Dismiss the export modal and verify real read-only chapter feeds.
+# Return from the inspector, then dismiss the export modal.
+xdotool key Escape
+sleep 1
 xdotool key Escape
 sleep 1
 xdotool mousemove --window "$window" 40 150 click 1

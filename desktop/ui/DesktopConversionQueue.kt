@@ -140,7 +140,7 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
 
     fun enqueue(inputs: List<File>, target: File, format: ExportFormat, device: String,
         options: MangaConversionOptions, textEpub: DesktopTextEpubImport.Settings? = null,
-        pdfReflow: Boolean = false): Int = transaction {
+        pdfReflow: Boolean = false, outputNames:List<String>?=null): Int = transaction {
         require(inputs.isNotEmpty() && inputs.size <= MAX_JOBS)
         require(format != ExportFormat.AUTO && NooirDeviceProfiles.forId(device).accepts(format))
         require(!pdfReflow || textEpub == null && format in setOf(ExportFormat.EPUB, ExportFormat.EPUB2)) {
@@ -149,14 +149,15 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
         require(textEpub == null || format in setOf(ExportFormat.XTC, ExportFormat.XTCH)) {
             "Text EPUB batches require XTC or XTCH output"
         }
-        require(device.matches(Regex("[A-Za-z0-9._-]{1,80}"))) { "Invalid device profile ID" }
+        require(device.length<=80 && NooirDeviceProfiles.forId(device).id==device) { "Invalid device profile ID" }
+        require(outputNames==null || outputNames.size==inputs.size){"Provide one output name per input"}
         val directory = target.canonicalFile
         require(directory.isDirectory) { "Choose an existing output folder" }
         val jobs = read()
         require(jobs.size + inputs.size <= MAX_JOBS) { "Conversion queue full; clear finished records first" }
         val reserved = jobs.filter { it.state != ConversionJobState.CANCELED }
             .map { it.output.lowercase(java.util.Locale.ROOT) }.toMutableSet()
-        val added = inputs.map { selected ->
+        val added = inputs.mapIndexed { index,selected ->
             val source = selected.canonicalFile
             require(source.isDirectory || source.isFile && source.extension.lowercase() in setOf("zip", "cbz", "pdf", "epub", "png", "jpg", "jpeg", "webp", "bmp", "gif")) {
                 "Choose an image folder, CBZ/ZIP, PDF or image-based EPUB"
@@ -167,7 +168,12 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             require(textEpub == null || source.isFile && source.extension.equals("epub", true)) {
                 "Choose only EPUB files for a text EPUB batch"
             }
-            val output = File(directory, queueOutputName(source.nameWithoutExtension, format)).canonicalFile
+            val requested=outputNames?.get(index)?.trim().orEmpty()
+            val name=if(requested.isBlank())queueOutputName(source.nameWithoutExtension,format) else {
+                require(requested.length<=80 && queueOutputName(requested,format)==requested+"."+format.extension){"Invalid output name: "+requested}
+                requested+"."+format.extension
+            }
+            val output = File(directory, name).canonicalFile
             require(output.parentFile == directory && source != output && !output.exists()) {
                 "Output already exists or is not a new local destination: " + output.name
             }

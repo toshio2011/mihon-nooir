@@ -143,13 +143,13 @@ internal fun ComposeQueue(close: () -> Unit) {
             }
         }
     }
-    if (addOpen) ComposeBatchOptions(close = { addOpen = false }) { files, folder, kind, format, device, options, typography ->
+    if (addOpen) ComposeBatchOptions(close = { addOpen = false }) { files, folder, kind, format, device, options, typography, names ->
         addOpen = false
         action {
             val count = withContext(Dispatchers.IO) {
                 queue.enqueue(files,folder,format,device,options,
                     textEpub = if (kind == BatchKind.EPUB_TEXT) typography else null,
-                    pdfReflow = kind == BatchKind.REFLOW)
+                    pdfReflow = kind == BatchKind.REFLOW,outputNames=names)
             }
             status = "Added $count local jobs. Press Run to convert."
         }
@@ -166,7 +166,7 @@ internal fun ComposeQueue(close: () -> Unit) {
 
 @Composable
 private fun ComposeBatchOptions(close: () -> Unit,
-    enqueue: (List<File>,File,BatchKind,ExportFormat,String,MangaConversionOptions,DesktopTextEpubImport.Settings) -> Unit) {
+    enqueue: (List<File>,File,BatchKind,ExportFormat,String,MangaConversionOptions,DesktopTextEpubImport.Settings,List<String>) -> Unit) {
     var kind by remember { mutableStateOf(BatchKind.MANGA) }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
     var folder by remember { mutableStateOf<File?>(null) }
@@ -176,6 +176,8 @@ private fun ComposeBatchOptions(close: () -> Unit,
     var mangaDefaults by remember { mutableStateOf(defaults.options) }
     var options by remember { mutableStateOf(mangaDefaults) }
     var typography by remember { mutableStateOf(androidTypographyDefaults()) }
+    var names by remember{mutableStateOf<List<String>>(emptyList())}
+    var rename by remember{mutableStateOf(false)}
     var selectionError by remember { mutableStateOf("") }
     val formats = ExportFormat.entries.filter { kind.accepts(it) && device.accepts(it) }
     fun adjust() { if (format !in formats && formats.isNotEmpty()) format = formats.first() }
@@ -184,7 +186,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
         text = { Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState()),verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Input type")
             ExportChoice(kind.label,BatchKind.entries.map { it.label },true) { label ->
-                kind = BatchKind.entries.first { it.label == label }; files = emptyList(); selectionError = ""
+                kind = BatchKind.entries.first { it.label == label }; files = emptyList(); names=emptyList(); selectionError = ""
                 options = if(kind in setOf(BatchKind.MANGA,BatchKind.EPUB_IMAGES)) mangaDefaults else androidMangaDefaults().copy(rightToLeft=false)
             }
             OutlinedButton(onClick = {
@@ -197,9 +199,17 @@ private fun ComposeBatchOptions(close: () -> Unit,
                 if (picker.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
                     val picked = picker.selectedFiles.toList().ifEmpty { listOfNotNull(picker.selectedFile) }
                     val accepted = picked.filter { kind.folders && it.isDirectory || it.isFile && it.extension.lowercase() in kind.extensions }
-                    if(accepted.size!=picked.size){files=emptyList();selectionError="Some selected files are unsupported. Choose again."} else {files=accepted;selectionError=""}
+                    if(accepted.size!=picked.size){files=emptyList();names=emptyList();selectionError="Some selected files are unsupported. Choose again."} else {files=accepted;names=accepted.map{""};selectionError=""}
                 }
             }) { Text("Choose books (${files.size})") }
+            if(files.isNotEmpty()){
+                TextButton(onClick={rename=!rename}){Text(if(rename)"Hide output names" else "Rename output books")}
+                if(rename) files.forEachIndexed{index,file->
+                    OutlinedTextField(names.getOrElse(index){""},{v->names=names.mapIndexed{i,n->if(i==index)v.take(80) else n}},
+                        label={Text(file.name+" · output name")},placeholder={Text(file.nameWithoutExtension)},singleLine=true,modifier=Modifier.fillMaxWidth())
+                }
+                Text("Leave blank for the original filename. Enter names without the extension.",style=MaterialTheme.typography.bodySmall)
+            }
             Text("Device")
             ComposeDeviceChoice(device,true) { chosen -> device = chosen }
             Text("Format")
@@ -219,7 +229,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
         } },
         confirmButton = { Button(enabled = files.isNotEmpty() && folder != null && format in formats, onClick = {
             val target = folder ?: return@Button
-            enqueue(files,target,kind,format,device.id,options,typography)
+            enqueue(files,target,kind,format,device.id,options,typography,names)
         }) { Text("Add to queue") } },
         dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
 }

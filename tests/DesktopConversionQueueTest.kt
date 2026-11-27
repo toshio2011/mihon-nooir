@@ -43,6 +43,15 @@ fun main() {
         check(out.resolve("alpha.xtc").readBytes().contentEquals(old))
         check(q.forgetFinished() == 2 && q.list().isEmpty())
         check(out.list()?.size == 2)
+        val custom=dev.nooir.bridge.NooirDeviceProfiles.custom(600,1000)
+        check(runCatching{q.enqueue(listOf(a,b),out,ExportFormat.XTC,custom,opts,outputNames=listOf("same","same"))}.isFailure)
+        check(q.list().isEmpty())
+        check(runCatching{q.enqueue(listOf(a),out,ExportFormat.XTC,custom,opts,outputNames=listOf("../escape"))}.isFailure)
+        check(q.enqueue(listOf(a,b),out,ExportFormat.XTC,custom,opts,outputNames=listOf("Volume 1","Volume 2"))==2)
+        q.runPending({false})
+        check(q.list().all{it.state==ConversionJobState.COMPLETED && it.device==custom})
+        check(XtcBookPreview(out.resolve("Volume 1.xtc")).page(0).width==600)
+        check(XtcBookPreview(out.resolve("Volume 2.xtc")).page(0).height==1000)
         println("PASS: persistent local conversion batches, pause, resume, conflict refusal, retry, actual XTC output and clear metadata only")
     } finally { root.toFile().deleteRecursively() }
 }

@@ -26,24 +26,37 @@ import kotlin.math.roundToInt
  * Text companion mode deliberately keeps each original page image AND its
  * extracted selectable text. It is not an exact layout-preserving reflow.
  */
+internal data class PdfBookDetails(val title:String="",val author:String="") {
+    init { require(title.length<=120 && author.length<=120 && (title+author).none{Character.isISOControl(it)}) }
+}
+
 internal object DesktopPdfImport {
     fun export(input: File, output: File, format: ExportFormat, device: String,
         options: MangaConversionOptions, textCompanion: Boolean = false,
-        canceled: () -> Boolean = { false }, progress: (Int, Int) -> Unit = { _, _ -> }): Int {
+        canceled: () -> Boolean = { false }, progress: (Int, Int) -> Unit = { _, _ -> }): Int =
+        exportWithDetails(input,output,format,device,options,PdfBookDetails(),textCompanion,canceled,progress)
+
+    fun exportWithDetails(input: File, output: File, format: ExportFormat, device: String,
+        options: MangaConversionOptions, details:PdfBookDetails, textCompanion:Boolean=false,
+        canceled:()->Boolean={false},progress:(Int,Int)->Unit={_,_->}):Int {
         return exportInternal(input, output, format, device, options,
-            if (textCompanion) PdfMode.COMPANION else PdfMode.ORIGINAL, canceled, progress)
+            if (textCompanion) PdfMode.COMPANION else PdfMode.ORIGINAL, canceled, progress, details)
     }
 
     fun exportReflow(input: File, output: File, format: ExportFormat, device: String,
         options: MangaConversionOptions, canceled: () -> Boolean = { false },
         progress: (Int, Int) -> Unit = { _, _ -> }): Int =
-        exportInternal(input, output, format, device, options, PdfMode.REFLOW, canceled, progress)
+        exportReflowWithDetails(input,output,format,device,options,PdfBookDetails(),canceled,progress)
+
+    fun exportReflowWithDetails(input: File, output: File, format: ExportFormat, device: String,
+        options:MangaConversionOptions,details:PdfBookDetails,canceled:()->Boolean={false},progress:(Int,Int)->Unit={_,_->}):Int =
+        exportInternal(input, output, format, device, options, PdfMode.REFLOW, canceled, progress, details)
 
     private enum class PdfMode { ORIGINAL, COMPANION, REFLOW }
 
     private fun exportInternal(input: File, output: File, format: ExportFormat, device: String,
         options: MangaConversionOptions, mode: PdfMode, canceled: () -> Boolean,
-        progress: (Int, Int) -> Unit): Int {
+        progress: (Int, Int) -> Unit, details:PdfBookDetails): Int {
         val source = input.canonicalFile
         val target = output.canonicalFile
         require(source.isFile && source.extension.equals("pdf", true))
@@ -64,13 +77,16 @@ internal object DesktopPdfImport {
                     "XTC/XTCH container permits at most 65,535 pages; choose EPUB or split the source"
                 }
                 val renderer = PDFRenderer(doc).apply { isSubsamplingAllowed = true }
-                val title = source.nameWithoutExtension.take(120).ifBlank { "PDF" }
-                val metadata = ExtendedMetadata(title = title,
+                val epub=actual in setOf(ExportFormat.EPUB,ExportFormat.EPUB2)
+                fun clean(value:String?)=value.orEmpty().filterNot{Character.isISOControl(it)}.trim().take(120)
+                val title=details.title.trim().ifBlank{if(epub)clean(doc.documentInformation.title) else ""}.ifBlank{clean(source.nameWithoutExtension)}.ifBlank{"PDF"}
+                val author=details.author.trim().ifBlank{if(epub)clean(doc.documentInformation.author) else ""}
+                val metadata = ExtendedMetadata(title = title, author=author,
                     direction = if (options.rightToLeft) ReadingDirection.RIGHT_TO_LEFT else ReadingDirection.LEFT_TO_RIGHT)
                 fun checkCancel() { if (canceled()) throw java.util.concurrent.CancellationException("Conversion canceled") }
                 if (mode != PdfMode.ORIGINAL) {
                     val stripper = PDFTextStripper().apply { sortByPosition = true }
-                    ReflowEpubWriter.write(temp, ReflowMetadata(title),
+                    ReflowEpubWriter.write(temp, ReflowMetadata(title,author),
                         if (actual == ExportFormat.EPUB2) ReflowEpubFormat.EPUB2 else ReflowEpubFormat.EPUB3) { writer ->
                         for (i in 0 until total) {
                             checkCancel()

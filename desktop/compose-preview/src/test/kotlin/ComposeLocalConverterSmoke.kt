@@ -87,6 +87,8 @@ fun main(args: Array<String>) {
                     content.endText()
                 }
             }
+            doc.documentInformation.title="Original PDF Title"
+            doc.documentInformation.author="Original PDF Author"
             doc.save(pdf)
         }
         decoded(run(pdf,"local-pdf",LocalConversionMode.PDF,ExportFormat.XTC),XtcFormat.XTC,"local-pdf-preview",2)
@@ -94,6 +96,11 @@ fun main(args: Array<String>) {
         epub(companion)
         val reflow = run(pdf,"local-pdf-reflow",LocalConversionMode.PDF_REFLOW,ExportFormat.EPUB2)
         epub(reflow)
+        fun opf(file:File)=ZipFile(file).use{zip->val entry=zip.entries().asSequence().single{it.name.endsWith(".opf")};zip.getInputStream(entry).bufferedReader().use{it.readText()}}
+        check("Original PDF Title" in opf(reflow) && "Original PDF Author" in opf(reflow))
+        val override=evidence.resolve("local-pdf-override.epub")
+        convertLocalFile(pdf,override,LocalConversionMode.PDF,ExportFormat.EPUB,"X4",opts,settings,dev.nooir.desktop.ui.PdfBookDetails("Custom PDF Title","Custom PDF Author"))
+        check("Custom PDF Title" in opf(override) && "Custom PDF Author" in opf(override))
         decoded(run(reflow,"local-epub-text",LocalConversionMode.EPUB_TEXT,ExportFormat.XTCH),
             XtcFormat.XTCH,"local-epub-text-preview",1)
         check(runCatching { convertLocalFile(images,manga,LocalConversionMode.MANGA,ExportFormat.XTC,"X4",opts,settings) }.isFailure)

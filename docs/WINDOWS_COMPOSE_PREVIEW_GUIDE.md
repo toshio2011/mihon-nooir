@@ -134,3 +134,7 @@ Projects tab saves/loads/deletes local chapter inventories and book settings wit
 ### Reader keyboard navigation (next candidate)
 
 Online reader and finished XTC/XTCH inspector now handle Left/Right, Page Up/Down, Space (next), Shift+Space (previous), Home (first), End (last), and Escape (back). In the online reader Ctrl+S opens the existing explicit save-position confirmation only when a later page is successfully decoded and no conflict is reported. Shortcuts are scoped to reader focus and blocked during save/transfer dialogs. Left and right always mean previous and next in source reading order, regardless of manga artwork direction. GUI regression now verifies real keyboard page requests, End/Home and Escape plus converted-preview Right. Pending CI and Windows keyboard acceptance.
+
+### PDF metadata, batch filenames and custom profiles (next candidate)
+
+PDF single export offers optional title and author; EPUB falls back to embedded PDF metadata, then filename for title. Both original-page and reflow/companion paths consume overrides. Local batch jobs allow per-file output names without an extension; blank retains safe default. Duplicate, unsafe and existing targets reject the entire enqueue transaction. Custom reader IDs use shared validated profile rather than the old alphanumeric-only guard. Queue index format and existing job records unchanged. Tests exercise decoded custom resolution batches, duplicate/traversal refusal and EPUB metadata. CI pending; batch PDF metadata overrides not implemented. Android source unchanged.

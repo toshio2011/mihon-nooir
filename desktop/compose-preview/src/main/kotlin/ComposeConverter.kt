@@ -13,6 +13,7 @@ import dev.nooir.bridge.ExportFormat
 import dev.nooir.bridge.NooirDeviceProfiles
 import dev.nooir.desktop.NooirDesktopCli
 import dev.nooir.desktop.ui.DesktopPdfImport
+import dev.nooir.desktop.ui.PdfBookDetails
 import dev.nooir.desktop.ui.DesktopTextEpubImport
 import dev.nooir.desktop.ui.DesktopImageEpubImport
 import dev.nooir.mangabridge.MangaConversionOptions
@@ -37,7 +38,7 @@ internal enum class LocalConversionMode(val label: String) {
 
 internal fun convertLocalFile(input: File, target: File, mode: LocalConversionMode,
                               format: ExportFormat, device: String, options: MangaConversionOptions,
-                              typography: DesktopTextEpubImport.Settings) {
+                              typography: DesktopTextEpubImport.Settings, pdfDetails:PdfBookDetails=PdfBookDetails()) {
     val source = input.canonicalFile
     val out = target.canonicalFile
     require(input.isAbsolute && target.isAbsolute && source != out &&
@@ -47,9 +48,9 @@ internal fun convertLocalFile(input: File, target: File, mode: LocalConversionMo
     when (mode) {
         LocalConversionMode.MANGA -> NooirDesktopCli.main(arrayOf("--input", source.path, "--output", out.path,
             "--format", format.name, "--device", device, "--options-token", options.token()))
-        LocalConversionMode.PDF -> DesktopPdfImport.export(source, out, format, device, options)
-        LocalConversionMode.PDF_REFLOW -> DesktopPdfImport.exportReflow(source, out, format, device, options)
-        LocalConversionMode.PDF_COMPANION -> DesktopPdfImport.export(source, out, format, device, options, textCompanion = true)
+        LocalConversionMode.PDF -> DesktopPdfImport.exportWithDetails(source, out, format, device, options,pdfDetails)
+        LocalConversionMode.PDF_REFLOW -> DesktopPdfImport.exportReflowWithDetails(source, out, format, device, options,pdfDetails)
+        LocalConversionMode.PDF_COMPANION -> DesktopPdfImport.exportWithDetails(source, out, format, device, options,pdfDetails,textCompanion=true)
         LocalConversionMode.EPUB_TEXT -> DesktopTextEpubImport.export(source, out, format, device, typography, options)
         LocalConversionMode.EPUB_IMAGES -> DesktopImageEpubImport.export(source, out, format, device, options)
     }
@@ -81,6 +82,8 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
     var mangaDefaults by remember { mutableStateOf(defaults.options) }
     var options by remember { mutableStateOf(if(initialInput.mode()==LocalConversionMode.MANGA) mangaDefaults else androidMangaDefaults().copy(rightToLeft=false)) }
     var typography by remember { mutableStateOf(androidTypographyDefaults()) }
+    var pdfTitle by remember(source){mutableStateOf("")}
+    var pdfAuthor by remember(source){mutableStateOf("")}
     var outputText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf("") }
@@ -156,6 +159,12 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                                 }
                             }
                         }
+                        if(inputKind==UniversalInput.PDF){
+                            Text("Book metadata (optional)",style=MaterialTheme.typography.titleMedium)
+                            OutlinedTextField(pdfTitle,{pdfTitle=it.filterNot{c->Character.isISOControl(c)}.take(120)},label={Text("Book title")},singleLine=true,enabled=!busy)
+                            OutlinedTextField(pdfAuthor,{pdfAuthor=it.filterNot{c->Character.isISOControl(c)}.take(120)},label={Text("Author")},singleLine=true,enabled=!busy)
+                            Text("Blank uses PDF title/author for EPUB when available; otherwise the filename supplies the title.",style=MaterialTheme.typography.bodySmall)
+                        }
                         when(mode) {
                             LocalConversionMode.MANGA, LocalConversionMode.EPUB_IMAGES ->
                                 { MangaPreferenceActions(options,!busy,defaults.warning,{mangaDefaults=it}) { options = it }; ComposeMangaSettings(options,format,!busy) { options = it }; ComposeLiveSample(device.id,format,options,!busy) }
@@ -190,10 +199,10 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                             val input=source ?: return@TextButton
                             val target=File(outputText)
                             val selectedMode=mode;val selectedFormat=format;val selectedDevice=device.id
-                            val selectedOptions=options;val selectedTypography=typography
+                            val selectedOptions=options;val selectedTypography=typography;val selectedDetails=PdfBookDetails(pdfTitle,pdfAuthor)
                             try{
                                 sessionConversions.submit(target,input.name){
-                                    convertLocalFile(input,target,selectedMode,selectedFormat,selectedDevice,selectedOptions,selectedTypography)
+                                    convertLocalFile(input,target,selectedMode,selectedFormat,selectedDevice,selectedOptions,selectedTypography,selectedDetails)
                                 }
                                 close()
                             }catch(e:Exception){result=e.message ?: "Unable to queue conversion"}
@@ -204,12 +213,12 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                             val input = source ?: return@Button
                             val target = File(outputText)
                             val selectedMode = mode; val selectedFormat = format; val selectedDevice = device.id
-                            val selectedOptions = options; val selectedTypography = typography
+                            val selectedOptions = options; val selectedTypography = typography;val selectedDetails=PdfBookDetails(pdfTitle,pdfAuthor)
                             busy = true; finished = null; result = "Converting…"
                             scope.launchProtected(operations) {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        convertLocalFile(input,target,selectedMode,selectedFormat,selectedDevice,selectedOptions,selectedTypography)
+                                        convertLocalFile(input,target,selectedMode,selectedFormat,selectedDevice,selectedOptions,selectedTypography,selectedDetails)
                                     }
                                     finished = target.takeIf { selectedFormat in setOf(ExportFormat.XTC,ExportFormat.XTCH) }
                                     result = "Converted: ${target.name}"; outputText = ""
