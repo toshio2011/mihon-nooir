@@ -89,6 +89,7 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
     var result by remember { mutableStateOf("") }
     var finished by remember { mutableStateOf<File?>(null) }
     var preview by remember { mutableStateOf(false) }
+    var sendApproval by remember{mutableStateOf(false)}
     val formats = ExportFormat.entries.filter { mode.accepts(it) && device.accepts(it) }
     fun adjustFormat() {
         val available = ExportFormat.entries.filter { mode.accepts(it) && device.accepts(it) }
@@ -96,6 +97,15 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
         outputText = ""
     }
     LaunchedEffect(Unit){ adjustFormat() }
+    if(sendApproval)ComposeConvertSendApproval(File(outputText),{sendApproval=false}){dest->
+        val input=checkNotNull(source);val target=File(outputText);val selectedMode=mode
+        val selectedFormat=format;val selectedDevice=device.id;val selectedOptions=options;val selectedTypography=typography
+        val selectedDetails=PdfBookDetails(pdfTitle,pdfAuthor)
+        sessionConversions.submitWithTransfer(target,input.name,dest::send){
+            convertLocalFile(input,target,selectedMode,selectedFormat,selectedDevice,selectedOptions,selectedTypography,selectedDetails)
+        }
+        sendApproval=false;close()
+    }
     BasicAlertDialog(onDismissRequest = { if (!busy) close() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(0.9f)) {
@@ -165,6 +175,9 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                             OutlinedTextField(pdfAuthor,{pdfAuthor=it.filterNot{c->Character.isISOControl(c)}.take(120)},label={Text("Author")},singleLine=true,enabled=!busy)
                             Text("Blank uses PDF title/author for EPUB when available; otherwise the filename supplies the title.",style=MaterialTheme.typography.bodySmall)
                         }
+                        if(device.xteinkWifi && source!=null && format in formats &&
+                            File(outputText).isAbsolute && File(outputText).extension.equals(format.extension,true))
+                            OutlinedButton(onClick={sendApproval=true},enabled=!busy){Text("Convert & send to XTEink")}
                         when(mode) {
                             LocalConversionMode.MANGA, LocalConversionMode.EPUB_IMAGES ->
                                 { MangaPreferenceActions(options,!busy,defaults.warning,{mangaDefaults=it}) { options = it }; ComposeMangaSettings(options,format,!busy) { options = it }; ComposeLiveSample(device.id,format,options,!busy,localInput=source.takeIf{mode==LocalConversionMode.MANGA}) }

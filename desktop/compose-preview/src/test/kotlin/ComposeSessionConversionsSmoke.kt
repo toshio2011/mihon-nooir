@@ -36,8 +36,17 @@ fun main()=runBlocking {
         controller.submit(third,"after batch"){third.writeText("third")}
         withTimeout(15000){while(controller.active)delay(10)}
         check(third.isFile && controller.jobs.last().state==SessionJobState.COMPLETED)
+        val sent=File(root,"sent.xtc");val unsent=File(root,"unsent.xtc");val failed=File(root,"failed.xtc")
+        var sends=0
+        controller.submitWithTransfer(sent,"successful transfer",{book->check(book.readText()=="saved");sends++}){sent.writeText("saved")}
+        controller.submitWithTransfer(unsent,"failed transfer",{book->check(book.isFile);sends++;error("Reader offline")}){unsent.writeText("saved")}
+        controller.submitWithTransfer(failed,"failed conversion",{sends++}){error("Conversion failed")}
+        withTimeout(15000){while(controller.active)delay(10)}
+        check(sends==2 && unsent.readText()=="saved" && !failed.exists())
+        check(controller.jobs.takeLast(3).map{it.state}==listOf(SessionJobState.COMPLETED,SessionJobState.TRANSFER_UNCONFIRMED,SessionJobState.FAILED))
+        check(controller.jobs[controller.jobs.lastIndex-1].detail.contains("Local book saved"))
         controller.clearFinished()
-        check(controller.jobs.isEmpty() && first.isFile && second.isFile && third.isFile)
+        check(controller.jobs.isEmpty() && first.isFile && second.isFile && third.isFile && unsent.isFile)
         println("PASS: app-owned conversion ordering, duplicate protection, cancellation and batch handoff")
     }finally{gate.countDown();root.deleteRecursively()}
 }

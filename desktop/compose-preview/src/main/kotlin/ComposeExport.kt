@@ -51,6 +51,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
     var result by remember { mutableStateOf<String?>(null) }
     var finishedBook by remember { mutableStateOf<File?>(null) }
     var showPreview by remember { mutableStateOf(false) }
+    var sendApproval by remember{mutableStateOf(false)}
     LaunchedEffect(Unit) {
         // Opt-in CI diagnostic only: no title, source IDs or user paths.
         if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") {
@@ -65,6 +66,12 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
     val scope = rememberCoroutineScope()
     val missing = chapters.count { !it.downloaded }
     val valid = chapters.isNotEmpty() && chapters.size <= 500 && (missing == 0 || allowDownload)
+    if(sendApproval && output!=null)ComposeConvertSendApproval(output,{sendApproval=false}){dest->
+        val target=output
+        val args=arrayOf("--mode","export","--manga-id",card.id.toString(),"--chapters",chapters.joinToString(","){it.id.toString()},"--format",format.name,"--device",device.id,"--output",target.absolutePath,"--options-token",options.token(),"--download-missing",allowDownload.toString())
+        sessionConversions.submitWithTransfer(target,card.title,dest::send){runComposeExport(args,target)}
+        sendApproval=false;close()
+    }
     BasicAlertDialog(onDismissRequest = { if (!busy) close() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth(0.85f)) {
@@ -87,6 +94,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 ExportChoice(format.name, ExportFormat.entries.filter { it != ExportFormat.AUTO && device.accepts(it) }.map { it.name }, !busy) {
                     format = ExportFormat.valueOf(it); outputText = ""
                 }
+                if(device.xteinkWifi && valid && output!=null)OutlinedButton(onClick={sendApproval=true},enabled=!busy){Text("Convert & send to XTEink")}
                 MangaPreferenceActions(options,!busy,defaults.warning) { options = it }
                 ComposeMangaSettings(options,format,!busy) { options = it }
                 ComposeLiveSample(device.id,format,options,!busy)

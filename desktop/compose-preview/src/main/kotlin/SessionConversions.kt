@@ -19,11 +19,11 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import dev.nooir.desktop.ui.DesktopConversionQueue
 
-internal enum class SessionJobState { QUEUED, RUNNING, COMPLETED, FAILED, CANCELED }
+internal enum class SessionJobState { QUEUED, RUNNING, COMPLETED, FAILED, TRANSFER_UNCONFIRMED, CANCELED }
 internal data class SessionConversionJob(val id:String,val target:File,val label:String,
     val state:SessionJobState,val detail:String="")
 internal class SessionConversions(private val scope:CoroutineScope) {
-    private data class Task(val job:SessionConversionJob,val convert:()->Unit)
+    private data class Task(val job:SessionConversionJob,val convert:()->Unit,val send:((File)->Unit)?=null)
     private val pending=ArrayDeque<Task>()
     private val records=mutableStateListOf<SessionConversionJob>()
     val jobs:List<SessionConversionJob> get()=records.toList()
@@ -57,13 +57,17 @@ internal class SessionConversions(private val scope:CoroutineScope) {
         val i=records.indexOfFirst{it.id==id}
         if(i>=0)records[i]=records[i].copy(state=state,detail=detail)
     }
-    fun submit(target:File,label:String,convert:()->Unit):String {
+    fun submit(target:File,label:String,convert:()->Unit):String = enqueue(target,label,null,convert)
+    fun submitWithTransfer(target:File,label:String,send:(File)->Unit,convert:()->Unit):String =
+        enqueue(target,label,send,convert)
+    private fun enqueue(target:File,label:String,send:((File)->Unit)?,convert:()->Unit):String {
+        require(target.isAbsolute){"Choose an absolute output path"}
         val out=target.canonicalFile
         require(out.isAbsolute && out.parentFile.isDirectory && !out.exists()){"Choose a new output file in an existing folder"}
         require(records.none{it.state in setOf(SessionJobState.QUEUED,SessionJobState.RUNNING) && it.target.path.equals(out.path,true)}){"Output already reserved by an active job"}
         require(records.size<500){"Clear finished activity records before adding jobs"}
         val job=SessionConversionJob(UUID.randomUUID().toString(),out,label,SessionJobState.QUEUED)
-        records.add(job);pending.addLast(Task(job,convert))
+        records.add(job);pending.addLast(Task(job,convert,send))
         startPending()
         return job.id
     }
@@ -81,7 +85,19 @@ internal class SessionConversions(private val scope:CoroutineScope) {
                                 task.convert()
                                 check(task.job.target.isFile && task.job.target.length()>0){"No output created"}
                             }
-                            replace(task.job.id,SessionJobState.COMPLETED)
+                            val send=task.send
+                            if(send==null) replace(task.job.id,SessionJobState.COMPLETED)
+                            else {
+                                replace(task.job.id,SessionJobState.RUNNING,"Local book saved · sending to reader…")
+                                try{
+                                    withContext(Dispatchers.IO){send(task.job.target)}
+                                    replace(task.job.id,SessionJobState.COMPLETED,"Local book saved · reader confirmed upload and size")
+                                }catch(e:CancellationException){throw e}
+                                catch(e:Exception){
+                                    replace(task.job.id,SessionJobState.TRANSFER_UNCONFIRMED,
+                                        "Local book saved. Transfer not confirmed: "+(e.message?:"Unknown error").take(150)+". Inspect reader before retrying.")
+                                }
+                            }
                         }catch(e:CancellationException){throw e}
                         catch(e:Exception){replace(task.job.id,SessionJobState.FAILED,(e.message ?: "Conversion failed").take(240))}
                     }
@@ -93,7 +109,7 @@ internal class SessionConversions(private val scope:CoroutineScope) {
         val task=pending.firstOrNull{it.job.id==id} ?: return
         pending.remove(task);replace(id,SessionJobState.CANCELED)
     }
-    fun clearFinished(){records.removeAll{it.state in setOf(SessionJobState.COMPLETED,SessionJobState.FAILED,SessionJobState.CANCELED)}}
+    fun clearFinished(){records.removeAll{it.state in setOf(SessionJobState.COMPLETED,SessionJobState.FAILED,SessionJobState.TRANSFER_UNCONFIRMED,SessionJobState.CANCELED)}}
 }
 internal val LocalSessionConversions=staticCompositionLocalOf<SessionConversions>{error("Missing session conversion owner")}
 
@@ -102,8 +118,10 @@ internal val LocalSessionConversions=staticCompositionLocalOf<SessionConversions
 internal fun SessionActivity(close:()->Unit,openBatch:()->Unit){
     val controller=LocalSessionConversions.current
     var preview by remember{mutableStateOf<File?>(null)}
+    var sendBook by remember{mutableStateOf<File?>(null)}
     val jobs=controller.jobs
-    BasicAlertDialog(onDismissRequest=close,properties=DialogProperties(usePlatformDefaultWidth=false),
+    if(sendBook!=null)ComposeTransfer(initialFile=sendBook){sendBook=null}
+    BasicAlertDialog(onDismissRequest={if(sendBook==null)close()},properties=DialogProperties(usePlatformDefaultWidth=false),
         modifier=Modifier.widthIn(max=840.dp).fillMaxWidth(.9f)){
         Surface(shape=MaterialTheme.shapes.extraLarge,tonalElevation=6.dp){
             Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
@@ -124,8 +142,13 @@ internal fun SessionActivity(close:()->Unit,openBatch:()->Unit){
                                 if(job.detail.isNotBlank())Text(job.detail,style=MaterialTheme.typography.bodySmall)
                             }},trailingContent={
                                 if(job.state==SessionJobState.QUEUED)TextButton(onClick={controller.cancel(job.id)}){Text("Cancel")}
-                                if(job.state==SessionJobState.COMPLETED && job.target.extension.lowercase() in setOf("xtc","xtch"))
-                                    TextButton(onClick={preview=job.target}){Text("Preview")}
+                                if(job.state in setOf(SessionJobState.COMPLETED,SessionJobState.TRANSFER_UNCONFIRMED)){
+                                    Row{
+                                        if(job.target.extension.lowercase() in setOf("xtc","xtch"))
+                                            TextButton(onClick={preview=job.target}){Text("Preview")}
+                                        if(job.target.isFile)TextButton(onClick={sendBook=job.target}){Text("Send")}
+                                    }
+                                }
                             })
                             HorizontalDivider()
                         }

@@ -124,3 +124,41 @@ internal fun ComposeTransfer(initialFile: File? = null, close: () -> Unit) {
         }){Text("Confirm send")}},
         dismissButton={TextButton(onClick={approval=null}){Text("Cancel")}})
 }
+
+
+internal data class QueuedReaderDestination(val address:String,val folder:String,val filename:String) {
+    fun send(book:File) {
+        DesktopReaderTransfer.privateReader(address).send(book,folder,filename)
+    }
+}
+
+/** Explicitly approve both the local conversion and subsequent upload before queueing.
+ * Existing local output is retained if the reader is unreachable or rejects the file. */
+@Composable
+internal fun ComposeConvertSendApproval(target:File,close:()->Unit,approve:(QueuedReaderDestination)->Unit){
+    var address by remember(target){mutableStateOf("")}
+    var folder by remember(target){mutableStateOf("/Books")}
+    var name by remember(target){mutableStateOf(target.name)}
+    var error by remember(target){mutableStateOf("")}
+    AlertDialog(onDismissRequest=close,title={Text("Convert & send to XTEink")},
+        text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            Text("Save a new local book, then send it over Wi-Fi. The local copy is retained even if transfer fails.")
+            Text(target.name,style=MaterialTheme.typography.titleSmall)
+            OutlinedTextField(address,{address=it.take(15)},label={Text("Reader private IPv4")},singleLine=true)
+            OutlinedTextField(folder,{folder=it.take(240)},label={Text("Existing reader folder")},singleLine=true)
+            OutlinedTextField(name,{name=it.take(120)},label={Text("Destination filename")},singleLine=true)
+            Text("Trusted local network only; HTTP is unencrypted. Existing destination names are refused, and uploads over 180 MiB are not sent. Leave File Transfer enabled. Avoid concurrent uploads.",style=MaterialTheme.typography.bodySmall)
+            if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
+        }},
+        confirmButton={Button(onClick={
+            try{
+                require(target.isAbsolute && target.parentFile.isDirectory && !target.exists()){"Choose a new local output file"}
+                DesktopReaderTransfer.privateReader(address)
+                val dest=DesktopReaderTransfer.folder(folder)
+                val filename=DesktopReaderTransfer.filename(name)
+                require(target.extension.equals(filename.substringAfterLast('.'),true)){"Keep the output extension"}
+                approve(QueuedReaderDestination(address.trim(),dest,filename))
+            }catch(e:Exception){error=(e.message?:"Invalid conversion or destination").take(200)}
+        }){Text("Confirm & queue")}},
+        dismissButton={TextButton(onClick=close){Text("Cancel")}})
+}

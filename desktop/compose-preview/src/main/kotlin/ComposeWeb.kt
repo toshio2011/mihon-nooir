@@ -109,6 +109,7 @@ internal fun ComposeWeb(close: () -> Unit) {
     var chapterPreview by remember { mutableStateOf<Pair<String,String>?>(null) }
     var session by remember { mutableStateOf<DesktopWebExportSession?>(null) }
     var cancelRequested by remember { mutableStateOf(false) }
+    var sendApproval by remember{mutableStateOf(false)}
     fun links() = urls.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
     fun extraCovers()=if(collage)collageLinks.lineSequence().map{it.trim()}.filter{it.isNotBlank()}.toList() else emptyList()
     fun snapshot()=DesktopWebProjects.Project(projectId,projectName.trim(),sourceUrl,known,entries.toList(),title,author,synopsis,language,cover,localCover?.absolutePath.orEmpty(),collage,format==ReflowEpubFormat.EPUB2,style.name,imageProfile.name,images,css,selector,remove,extraCovers())
@@ -124,6 +125,13 @@ internal fun ComposeWeb(close: () -> Unit) {
     }
     LaunchedEffect(Unit) {
         if(System.getenv("NOOIR_COMPOSE_QA_CAPTURE")=="1") println("QA_WEB_EDITOR_OPEN")
+    }
+    if(sendApproval)ComposeConvertSendApproval(File(output),{sendApproval=false}){dest->
+        val target=File(output);val plan=entries.toList()
+        val opts=ComposeWebOptions(title,author,synopsis,language,cover,localCover,collage,format,style,imageProfile,images,css,selector,remove,extraCovers())
+        NooirWebChapterPlan.export(plan)
+        sessionConversions.submitWithTransfer(target,title,dest::send){runComposeWebExport(plan,target,opts,DesktopWebExportSession())}
+        sendApproval=false;close()
     }
     BasicAlertDialog(onDismissRequest={ if(!busy) close() },
         properties=DialogProperties(usePlatformDefaultWidth=false),
@@ -288,6 +296,8 @@ internal fun ComposeWeb(close: () -> Unit) {
                         if(picker.showSaveDialog(null)==JFileChooser.APPROVE_OPTION) output=picker.selectedFile.absolutePath
                     },enabled=!busy){Text("Browse")}
                 }
+                if(title.isNotBlank() && entries.any{it.included} && File(output).isAbsolute && File(output).extension.equals("epub",true))
+                    OutlinedButton(onClick={sendApproval=true},enabled=!busy){Text("Convert & send to XTEink")}
                 if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Text(status,style=MaterialTheme.typography.bodySmall)
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
