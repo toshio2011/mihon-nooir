@@ -441,6 +441,11 @@ fun main() = application {
                                     supportingContent = { Text("Convert local manga, PDF and EPUB files") },
                                     trailingContent = { TextButton(onClick = { converterOpen = true }) { Text("Open") } })
                                 if (converterOpen) ComposeConverter { converterOpen = false }
+                                var webOpen by remember { mutableStateOf(false) }
+                                ListItem(headlineContent = { Text("Web to EPUB") },
+                                    supportingContent = { Text("Analyze public chapters and create an EPUB") },
+                                    trailingContent = { TextButton(onClick = { webOpen = true }) { Text("Open") } })
+                                if (webOpen) ComposeWeb { webOpen = false }
                                 var queueOpen by remember { mutableStateOf(false) }
                                 ListItem(headlineContent = { Text("Activity Queue") },
                                     supportingContent = { Text("Local conversion jobs and completed books") },
@@ -455,7 +460,7 @@ fun main() = application {
                                 ListItem(headlineContent = { Text("Reading service") },
                                     supportingContent = { Text(if (connection?.owned == true) "Managed by MihonNooir" else "Connected to existing local service") },
                                     trailingContent = { TextButton(onClick = { setupRevision++ }) { Text("Reconnect") } })
-                                Text("Experimental desktop interface. Web import, remote chapter jobs and saved reading progress still require the existing preview.")
+                                Text("Experimental desktop interface. Remote chapter jobs and saved reading progress still require the existing preview.")
                             }
                         }
                     }
