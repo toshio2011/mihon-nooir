@@ -80,6 +80,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
                 ExportChoice(format.name, ExportFormat.entries.filter { it != ExportFormat.AUTO && device.accepts(it) }.map { it.name }, !busy) {
                     format = ExportFormat.valueOf(it); outputText = ""
                 }
+                MangaPreferenceActions(options,!busy) { options = it }
                 ComposeMangaSettings(options,format,!busy) { options = it }
                 if (missing > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(allowDownload, { allowDownload = it }, enabled = !busy)

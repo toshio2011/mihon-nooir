@@ -104,14 +104,14 @@ import -window "$window" "$out/compose-return-details.png"
 test -s "$out/compose-return-details.png"
 
 # Capture the chapter selection state before running the actual export engine test.
-xdotool mousemove --window "$window" 948 324 click 1
+xdotool mousemove --window "$window" 948 344 click 1
 sleep 1
-xdotool mousemove --window "$window" 145 384 click 1
+xdotool mousemove --window "$window" 145 404 click 1
 sleep 2
 import -window "$window" "$out/compose-chapter-selection.png"
 test -s "$out/compose-chapter-selection.png"
 # The Export action is at the right edge of the selection toolbar.
-xdotool mousemove --window "$window" 980 324 click 1
+xdotool mousemove --window "$window" 980 344 click 1
 for i in {1..20}; do
   if grep -Fxq 'QA_EXPORT_DIALOG chapters=1' "$out/application.log"; then break; fi
   sleep 1

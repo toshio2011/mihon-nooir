@@ -197,7 +197,9 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
     var selectionMode by remember(card.id) { mutableStateOf(false) }
     var selectedIds by remember(card.id) { mutableStateOf(setOf<Int>()) }
     var exportOpen by remember(card.id) { mutableStateOf(false) }
-    var chapterFilter by remember(card.id) { mutableStateOf("All") }
+    var readFilter by remember(card.id) { mutableStateOf("All") }
+    var downloadFilter by remember(card.id) { mutableStateOf("All") }
+    var bookmarkFilter by remember(card.id) { mutableStateOf("All") }
     var chapterSort by remember(card.id) { mutableStateOf("Source order") }
     var descending by remember(card.id) { mutableStateOf(false) }
     var filterOpen by remember(card.id) { mutableStateOf(false) }
@@ -241,15 +243,12 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
         else if (result.isFailure) Text("Unable to load chapters. Return to the library and retry.", color = MaterialTheme.colorScheme.error)
         else {
             val chapters = result.getOrThrow().chapters
-            val visible = remember(chapters,chapterFilter,chapterSort,descending) {
-                val filtered = chapters.filter { when(chapterFilter) {
-                    "Unread" -> it.read == false
-                    "Read" -> it.read == true
-                    "Downloaded" -> it.downloaded
-                    "Not downloaded" -> !it.downloaded
-                    "Bookmarked" -> it.bookmarked == true
-                    else -> true
-                } }
+            val visible = remember(chapters,readFilter,downloadFilter,bookmarkFilter,chapterSort,descending) {
+                val filtered = chapters.filter {
+                    (readFilter=="All" || (readFilter=="Read" && it.read==true) || (readFilter=="Unread" && it.read==false)) &&
+                    (downloadFilter=="All" || (downloadFilter=="Downloaded" && it.downloaded) || (downloadFilter=="Not downloaded" && !it.downloaded)) &&
+                    (bookmarkFilter=="All" || (bookmarkFilter=="Bookmarked" && it.bookmarked==true) || (bookmarkFilter=="Not bookmarked" && it.bookmarked==false))
+                }
                 val sorted = when(chapterSort) {
                     "Chapter number" -> filtered.sortedWith(compareBy<SuwayomiChapter>{it.chapterNumber}.thenBy{it.sourceOrder})
                     "Upload date" -> filtered.sortedWith(compareBy<SuwayomiChapter>{it.uploadDate ?: 0L}.thenBy{it.sourceOrder})
@@ -259,15 +258,20 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
             }
             if(filterOpen) AlertDialog(onDismissRequest={filterOpen=false},title={Text("Chapter filters and sorting")},
                 text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    Text("Filter")
-                    ExportChoice(chapterFilter,listOf("All","Unread","Read","Downloaded","Not downloaded","Bookmarked"),true){chapterFilter=it;selectedIds=emptySet()}
+                    Text("Reading status")
+                    ExportChoice(readFilter,listOf("All","Unread","Read"),true){readFilter=it;selectedIds=emptySet()}
+                    Text("Download status")
+                    ExportChoice(downloadFilter,listOf("All","Downloaded","Not downloaded"),true){downloadFilter=it;selectedIds=emptySet()}
+                    Text("Bookmarks")
+                    ExportChoice(bookmarkFilter,listOf("All","Bookmarked","Not bookmarked"),true){bookmarkFilter=it;selectedIds=emptySet()}
+                    TextButton(onClick={readFilter="All";downloadFilter="All";bookmarkFilter="All";selectedIds=emptySet()}){Text("Clear filters")}
                     Text("Sort by")
                     ExportChoice(chapterSort,listOf("Source order","Chapter number","Upload date"),true){chapterSort=it;selectedIds=emptySet()}
                     ConversionToggle("Reverse order",descending,true){descending=it;selectedIds=emptySet()}
                     Text("Changing filters or sorting clears chapter selection.",style=MaterialTheme.typography.bodySmall)
                 }},confirmButton={TextButton(onClick={filterOpen=false}){Text("Done")}})
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if(chapterFilter=="All") "${chapters.size} chapters" else "${visible.size} / ${chapters.size} chapters", Modifier.weight(1f))
+                Text(if(readFilter=="All" && downloadFilter=="All" && bookmarkFilter=="All") "${chapters.size} chapters" else "${visible.size} / ${chapters.size} chapters", Modifier.weight(1f))
                 val next = chapters.firstOrNull { it.id == result.getOrThrow().firstUnreadId }
                 if (!selectionMode && next != null) TextButton(onClick = { opened = next }) { Text("Continue reading") }
                 TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }) {
@@ -275,7 +279,7 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
                 }
                 if (selectionMode) {
                     Text("${selectedIds.size} selected")
-                    TextButton(onClick={selectedIds=visible.take(500).map{it.id}.toSet()},enabled=!downloading){Text("Select all")}
+                    TextButton(onClick={selectedIds=visible.take(500).map{it.id}.toSet()},enabled=!downloading){Text(if(visible.size>500) "Select first 500" else "Select all")}
                     TextButton(onClick={downloadConfirm=visible.filter{it.id in selectedIds && !it.downloaded}.map{it.id}},enabled=!downloading && visible.any{it.id in selectedIds && !it.downloaded}){Text("Download")}
                     TextButton(onClick = { exportOpen = true }, enabled = selectedIds.isNotEmpty() && !downloading) { Text("Export") }
                 }
@@ -301,7 +305,7 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
                 items(visible, key = { it.id }) { chapter ->
                     ListItem(headlineContent = { Text(chapter.name) },
                         supportingContent = { Text(listOfNotNull(if (chapter.downloaded) "Downloaded" else "Online",
-                            chapter.read?.let { if (it) "Read" else "Unread" }, chapter.lastPageRead?.takeIf { it > 0 }?.let { "Saved page " + (it + 1) }).joinToString(" · ")) },
+                            chapter.read?.let { if (it) "Read" else "Unread" }, if(chapter.bookmarked==true) "Bookmarked" else null, chapter.lastPageRead?.takeIf { it > 0 }?.let { "Saved page " + (it + 1) }).joinToString(" · ")) },
                         leadingContent = if (selectionMode) {
                             { Checkbox(checked = chapter.id in selectedIds, onCheckedChange = { checked ->
                                 if (checked && selectedIds.size < 500) selectedIds = selectedIds + chapter.id
