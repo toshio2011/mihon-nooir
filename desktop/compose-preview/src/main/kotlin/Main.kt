@@ -687,9 +687,9 @@ fun main() = application {
                                 }
                                 var converterOpen by remember { mutableStateOf(false) }
                                 ListItem(headlineContent = { Text("Universal Converter") },
-                                    supportingContent = { Text("Convert local manga, PDF and EPUB files") },
+                                    supportingContent = { Text("Local files, PDF, web novels and finished-book inspection") },
                                     trailingContent = { TextButton(onClick = { converterOpen = true }) { Text("Open") } })
-                                if (converterOpen) ComposeConverter { converterOpen = false }
+                                if (converterOpen) ComposeUniversalHub({converterOpen=false},{batchOpen=true})
                                 var webOpen by remember { mutableStateOf(false) }
                                 ListItem(headlineContent = { Text("Web to EPUB") },
                                     supportingContent = { Text("Analyze public chapters and create an EPUB") },

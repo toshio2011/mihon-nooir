@@ -80,8 +80,8 @@ object NooirDesktopCli {
             require(flags.keys.all { it in setOf("--input", "--output", "--format", "--device", "--options-token", "--title") }) { "Unknown option" }
             val input = File(flags["--input"] ?: error("Missing --input")).canonicalFile
             val output = File(flags["--output"] ?: error("Missing --output")).canonicalFile
-            require(input.isDirectory || (input.isFile && input.extension.lowercase() in setOf("cbz", "zip"))) {
-                "Input must be an image folder or CBZ/ZIP archive"
+            require(input.isDirectory || (input.isFile && input.extension.lowercase() in (setOf("cbz", "zip") + imageExt))) {
+                "Input must be an image, image folder or CBZ/ZIP archive"
             }
             require(!output.exists()) { "Output already exists: $output" }
             require(output.parentFile.isDirectory) { "Output directory does not exist" }
@@ -178,6 +178,9 @@ object NooirDesktopCli {
     }
 
     private fun <T> withInput(input: File, use: (List<SourcePage>) -> T): T {
+        if(input.isFile && input.extension.lowercase() in imageExt) {
+            return use(listOf(SourcePage(input.name,input.nameWithoutExtension,false){input.inputStream()}))
+        }
         if (input.isDirectory) {
             val files = input.walkTopDown().filter { it.isFile && it.extension.lowercase() in imageExt }.toList()
             require(files.size <= MAX_PAGES) { "Too many source files" }

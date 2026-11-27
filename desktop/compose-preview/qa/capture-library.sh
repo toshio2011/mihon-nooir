@@ -183,8 +183,17 @@ import -window "$window" "$out/compose-history.png"
 xdotool mousemove --window "$window" 40 341 click 1
 sleep 2
 import -window "$window" "$out/compose-more.png"
-# Open the first More list item (Universal Converter).
+# Open the source hub and capture its actual window, then click Local files.
 xdotool mousemove --window "$window" 970 148 click 1
+for i in {1..20}; do
+  if grep -Fxq 'QA_UNIVERSAL_HUB_OPEN' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'QA_UNIVERSAL_HUB_OPEN' "$out/application.log"
+sleep 2
+import -window root "$out/compose-universal-hub.png"
+hub=$(xdotool getactivewindow)
+xdotool mousemove --window "$hub" 280 100 click 1
 for i in {1..20}; do
   if grep -Fxq 'QA_LOCAL_CONVERTER_OPEN' "$out/application.log"; then break; fi
   sleep 1

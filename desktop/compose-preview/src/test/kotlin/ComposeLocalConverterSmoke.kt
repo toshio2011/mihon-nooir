@@ -65,6 +65,9 @@ fun main(args: Array<String>) {
             check(ImageIO.write(image,"png",images.resolve("page" + i + ".png")))
             image.flush()
         }
+        val single=images.resolve("page0.png")
+        check(UniversalInput.IMAGE.accepts(single) && !UniversalInput.COMIC.accepts(single) && !UniversalInput.PDF.accepts(single))
+        decoded(run(single,"local-single-image",LocalConversionMode.MANGA,ExportFormat.XTC),XtcFormat.XTC,"local-single-image-preview",1)
         val manga = run(images,"local-comic",LocalConversionMode.MANGA,ExportFormat.XTC)
         decoded(manga,XtcFormat.XTC,"local-comic-preview",2)
         val comicEpub = run(images,"local-comic-archive",LocalConversionMode.MANGA,ExportFormat.EPUB2)

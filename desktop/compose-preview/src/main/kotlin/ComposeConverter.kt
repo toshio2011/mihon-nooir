@@ -65,7 +65,7 @@ private fun modesFor(file: File?): List<LocalConversionMode> = when {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ComposeConverter(close: () -> Unit) {
+internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,close: () -> Unit) {
     LaunchedEffect(Unit) {
         if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_LOCAL_CONVERTER_OPEN")
     }
@@ -73,10 +73,11 @@ internal fun ComposeConverter(close: () -> Unit) {
     val sessionConversions = LocalSessionConversions.current
     val scope = rememberCoroutineScope()
     var source by remember { mutableStateOf<File?>(null) }
-    var mode by remember { mutableStateOf(LocalConversionMode.MANGA) }
+    var inputKind by remember { mutableStateOf(initialInput) }
+    var mode by remember { mutableStateOf(initialInput.mode()) }
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
-    var options by remember { mutableStateOf(MangaConversionOptions.preset("Manga")) }
+    var options by remember { mutableStateOf(if(initialInput.mode()==LocalConversionMode.MANGA) MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft=false)) }
     var typography by remember { mutableStateOf(DesktopTextEpubImport.Settings()) }
     var outputText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -89,6 +90,7 @@ internal fun ComposeConverter(close: () -> Unit) {
         if (format !in available && available.isNotEmpty()) format = available.first()
         outputText = ""
     }
+    LaunchedEffect(Unit){ adjustFormat() }
     BasicAlertDialog(onDismissRequest = { if (!busy) close() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(0.9f)) {
@@ -98,31 +100,42 @@ internal fun ComposeConverter(close: () -> Unit) {
                 if (preview && finished != null) {
                     ConvertedBookPreview(finished!!) { preview = false }
                 } else {
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Text("Input type")
+                        ExportChoice(inputKind.label,UniversalInput.entries.map{it.label},!busy){label->
+                            inputKind=UniversalInput.entries.first{it.label==label}
+                            source=null;mode=inputKind.mode()
+                            options=if(mode==LocalConversionMode.MANGA)MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft=false)
+                            finished=null;result="";adjustFormat()
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(source?.name ?: "Choose a local file or image folder", Modifier.weight(1f))
                         OutlinedButton(onClick = {
                             val picker = JFileChooser().apply {
-                                fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
-                                fileFilter = FileNameExtensionFilter("CBZ, ZIP, PDF or EPUB", "cbz","zip","pdf","epub")
+                                fileSelectionMode = if(inputKind.folders)JFileChooser.FILES_AND_DIRECTORIES else JFileChooser.FILES_ONLY
+                                fileFilter = FileNameExtensionFilter(inputKind.label,*inputKind.extensions.toTypedArray())
+                                isAcceptAllFileFilterUsed=false
                             }
                             if (picker.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
                                 val file = picker.selectedFile.absoluteFile
-                                if (file.isDirectory || file.isFile && file.extension.lowercase() in setOf("cbz","zip","pdf","epub")) {
+                                if (inputKind.accepts(file)) {
                                     source = file
                                     mode = modesFor(file).first()
                                     options = if (mode == LocalConversionMode.MANGA) MangaConversionOptions.preset("Manga")
                                         else MangaConversionOptions().copy(rightToLeft = false)
                                     adjustFormat()
                                     result = ""; finished = null
-                                }
+                                } else { result="Choose a supported "+inputKind.label+" input." }
                             }
                         }, enabled = !busy) { Text("Choose input") }
                     }
                     Column(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Input mode")
-                        ExportChoice(mode.label, modesFor(source).map { it.label }, !busy) { label ->
-                            mode = modesFor(source).first { it.label == label }
+                        val modes=when(inputKind){UniversalInput.PDF->listOf(LocalConversionMode.PDF,LocalConversionMode.PDF_REFLOW,LocalConversionMode.PDF_COMPANION);UniversalInput.EPUB->listOf(LocalConversionMode.EPUB_TEXT,LocalConversionMode.EPUB_IMAGES);else->listOf(LocalConversionMode.MANGA)}
+                        ExportChoice(mode.label, modes.map { it.label }, !busy) { label ->
+                            mode = modes.first { it.label == label }
                             options = if (mode in setOf(LocalConversionMode.MANGA,LocalConversionMode.EPUB_IMAGES))
                                 MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft = false)
                             adjustFormat()
@@ -142,17 +155,15 @@ internal fun ComposeConverter(close: () -> Unit) {
                             }
                         }
                         when(mode) {
-                            LocalConversionMode.MANGA, LocalConversionMode.EPUB_IMAGES, LocalConversionMode.PDF ->
+                            LocalConversionMode.MANGA, LocalConversionMode.EPUB_IMAGES ->
                                 { MangaPreferenceActions(options,!busy) { options = it }; ComposeMangaSettings(options,format,!busy) { options = it }; ComposeLiveSample(device.id,format,options,!busy) }
                             LocalConversionMode.EPUB_TEXT -> {
                                 ComposeTypographySettings(typography,!busy) { typography = it }
                                 ComposeRenderingSettings(options,!busy) { options = it }
                             }
-                            LocalConversionMode.PDF_COMPANION -> {
-                                ComposeRenderingSettings(options,!busy) { options = it }
-                                ConversionToggle("Include cover",options.includeCover,!busy){options=options.copy(includeCover=it)}
-                            }
-                            LocalConversionMode.PDF_REFLOW -> Text("Reflowable PDF text retains existing extraction defaults.",style=MaterialTheme.typography.bodySmall)
+                            LocalConversionMode.PDF -> ComposePdfSettings(options,format,!busy){options=it}
+                            LocalConversionMode.PDF_COMPANION -> Text("Original page images plus selectable text. Rendering uses the source colors and device dimensions.",style=MaterialTheme.typography.bodySmall)
+                            LocalConversionMode.PDF_REFLOW -> Text("Reflow text when safe; preserve complex pages as images with extracted text.",style=MaterialTheme.typography.bodySmall)
                         }
                         Text("Protected documents are not supported. Text reflow is not a full CSS layout reproduction.", style = MaterialTheme.typography.bodySmall)
                     }

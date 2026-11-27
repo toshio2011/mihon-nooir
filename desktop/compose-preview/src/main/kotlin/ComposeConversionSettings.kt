@@ -93,3 +93,25 @@ internal fun ComposeTypographySettings(s:DesktopTextEpubImport.Settings,enabled:
     Text("Reading direction")
     ExportChoice(s.direction,listOf("Auto","Left to right","Right to left"),enabled){change(s.copy(direction=it))}
 }
+
+/** Only settings consumed by DesktopPdfImport's original-page adapter. */
+@Composable
+internal fun ComposePdfSettings(o:MangaConversionOptions,format:ExportFormat,enabled:Boolean,change:(MangaConversionOptions)->Unit){
+    Text("PDF page rendering",style=MaterialTheme.typography.titleMedium)
+    Text("Original PDF pages remain intact, fitted to the selected device.",style=MaterialTheme.typography.bodySmall)
+    ConversionToggle("Right-to-left book metadata",o.rightToLeft,enabled){change(o.copy(rightToLeft=it))}
+    val archive=format in setOf(ExportFormat.EPUB,ExportFormat.EPUB2,ExportFormat.CBZ)
+    if(archive)ConversionToggle("Retain source colors",o.epubColor,enabled){change(o.copy(epubColor=it))}
+    if(!archive || !o.epubColor)ComposeRenderingSettings(o,enabled,change)
+    if(format in setOf(ExportFormat.EPUB,ExportFormat.EPUB2)){
+        Text("Pages per XHTML")
+        val grouping=when(o.epubPagesPerXhtml){0->"Entire book";1->"One page";else->"Custom"}
+        ExportChoice(grouping,listOf("One page","Entire book","Custom"),enabled){change(o.copy(epubPagesPerXhtml=when(it){"Entire book"->0;"One page"->1;else->2}))}
+        if(grouping=="Custom"){
+            var value by remember{mutableStateOf(o.epubPagesPerXhtml.toString())}
+            OutlinedTextField(value,{v->value=v.take(3);v.toIntOrNull()?.takeIf{it in 2..999}?.let{change(o.copy(epubPagesPerXhtml=it))}},
+                label={Text("Pages per XHTML (2–999)")},singleLine=true,enabled=enabled)
+            Text("Applied: "+o.epubPagesPerXhtml)
+        }
+    }
+}

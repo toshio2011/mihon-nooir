@@ -158,7 +158,7 @@ internal class DesktopConversionQueue(private val folder: Path = DesktopDataHome
             .map { it.output.lowercase(java.util.Locale.ROOT) }.toMutableSet()
         val added = inputs.map { selected ->
             val source = selected.canonicalFile
-            require(source.isDirectory || source.isFile && source.extension.lowercase() in setOf("zip", "cbz", "pdf", "epub")) {
+            require(source.isDirectory || source.isFile && source.extension.lowercase() in setOf("zip", "cbz", "pdf", "epub", "png", "jpg", "jpeg", "webp", "bmp", "gif")) {
                 "Choose an image folder, CBZ/ZIP, PDF or image-based EPUB"
             }
             require(!pdfReflow || source.isFile && source.extension.equals("pdf", true)) {

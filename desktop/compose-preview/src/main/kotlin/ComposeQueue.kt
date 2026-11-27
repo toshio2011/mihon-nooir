@@ -27,7 +27,7 @@ import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 
 private enum class BatchKind(val label: String, val extensions: List<String>, val folders: Boolean) {
-    MANGA("Manga / image folders", listOf("cbz","zip"),true),
+    MANGA("Manga / image files and folders", listOf("cbz","zip","png","jpg","jpeg","webp","bmp","gif"),true),
     PDF("PDF original pages", listOf("pdf"),false),
     REFLOW("PDF reflow", listOf("pdf"),false),
     EPUB_TEXT("Text EPUB", listOf("epub"),false),
@@ -208,7 +208,8 @@ private fun ComposeBatchOptions(close: () -> Unit,
             }) { Text(folder?.name ?: "Choose output folder") }
             if(selectionError.isNotBlank()) Text(selectionError,color=MaterialTheme.colorScheme.error)
             when(kind) {
-                BatchKind.MANGA,BatchKind.EPUB_IMAGES,BatchKind.PDF -> { MangaPreferenceActions(options,true){options=it}; ComposeMangaSettings(options,format,true){options=it}; ComposeLiveSample(device.id,format,options,formats.contains(format)) }
+                BatchKind.MANGA,BatchKind.EPUB_IMAGES -> { MangaPreferenceActions(options,true){options=it}; ComposeMangaSettings(options,format,true){options=it}; ComposeLiveSample(device.id,format,options,formats.contains(format)) }
+                BatchKind.PDF -> ComposePdfSettings(options,format,true){options=it}
                 BatchKind.EPUB_TEXT -> {ComposeTypographySettings(typography,true){typography=it};ComposeRenderingSettings(options,true){options=it}}
                 BatchKind.REFLOW -> Text("PDF reflow uses existing extraction defaults.")
             }
