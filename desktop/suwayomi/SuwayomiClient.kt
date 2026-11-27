@@ -70,6 +70,18 @@ data class SuwayomiBrowsePage(
 
 enum class SuwayomiBrowseMode { POPULAR, LATEST, SEARCH }
 
+data class SuwayomiFeedEntry(
+    val manga: SuwayomiMangaCard,
+    val chapter: SuwayomiChapter,
+    val read: Boolean,
+    val lastPageRead: Int,
+    val pageCount: Int,
+    val lastReadAt: Long,
+    val fetchedAt: Long,
+)
+
+data class SuwayomiFeedPage(val entries: List<SuwayomiFeedEntry>, val totalCount: Int)
+
 /** Numeric identities from a validated pinned-server chapter-page manifest. */
 data class SuwayomiOnlineChapter internal constructor(
     val chapterId: Int,
@@ -313,6 +325,52 @@ class SuwayomiClient(
         require(response.obj("manga").int("id") == mangaId) {
             "Suwayomi returned an unexpected manga ID"
         }
+    }
+
+    /** Read-only library chapter feed, using pinned v2.4.2366 ChapterQuery.
+     * History lists chapters with a saved read timestamp, not an invented event log.
+     * Updates lists cached chapter metadata, never implies a remote source refresh.
+     */
+    fun chapterFeed(history: Boolean, offset: Int = 0, limit: Int = 50): SuwayomiFeedPage {
+        require(offset in 0..100_000 && limit in 1..100)
+        val order = if (history) "LAST_READ_AT" else "FETCHED_AT"
+        val timestamp = if (history) "lastReadAt" else "fetchedAt"
+        val query = """
+            query NooirChapterFeed {
+              chapters(filter: { inLibrary: { equalTo: true }, $timestamp: { greaterThan: "0" } },
+                order: [{ by: $order, byType: DESC }], first: $limit, offset: $offset) {
+                totalCount
+                nodes { id mangaId name chapterNumber sourceOrder isDownloaded isRead lastPageRead pageCount lastReadAt fetchedAt
+                  manga { id title author description thumbnailUrl inLibrary }
+                }
+              }
+            }
+        """.trimIndent()
+        val root = graphql(query).obj("chapters")
+        val total = root.int("totalCount")
+        val rows = root.list("nodes")
+        require(total >= 0 && rows.size <= limit && (rows.isEmpty() || offset + rows.size <= total))
+        val entries = rows.map { raw ->
+            val c = raw.asObject()
+            val m = c.obj("manga")
+            val card = SuwayomiMangaCard(m.int("id"), m.str("title"), m["author"] as? String,
+                m["description"] as? String, m["thumbnailUrl"] as? String, m["inLibrary"] == true)
+            val chapter = SuwayomiChapter(c.int("id"), c.str("name"),
+                (c["chapterNumber"] as? Number)?.toDouble() ?: error("Missing chapter number"),
+                c.int("sourceOrder"), c["isDownloaded"] as? Boolean ?: error("Missing download status"))
+            val readAt = c.long("lastReadAt")
+            val fetched = c.long("fetchedAt")
+            val lastPage = c.int("lastPageRead")
+            val pageCount = c.int("pageCount")
+            require(card.id > 0 && card.id == c.int("mangaId") && card.inLibrary &&
+                chapter.id > 0 && chapter.chapterNumber.isFinite() && chapter.sourceOrder >= 0 &&
+                lastPage >= 0 && pageCount >= 0 && readAt >= 0 && fetched >= 0 &&
+                (if (history) readAt > 0 else fetched > 0)) { "Invalid chapter feed record" }
+            SuwayomiFeedEntry(card,chapter,c["isRead"] as? Boolean ?: error("Missing reading state"),
+                lastPage,pageCount,readAt,fetched)
+        }
+        require(entries.map { it.chapter.id }.distinct().size == entries.size)
+        return SuwayomiFeedPage(entries,total)
     }
 
     fun manga(id: Int): SuwayomiManga {

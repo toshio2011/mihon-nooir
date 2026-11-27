@@ -116,6 +116,20 @@ class Handler(BaseHTTPRequestHandler):
                 {"id": 2, "name": "Plan to read", "order": 2}
             ]}}}
             marker = "CATEGORIES_OK"
+        elif "query NooirChapterFeed" in query:
+            paging = re.search(r"first: (\d+), offset: (\d+)", query)
+            if not paging or not 1 <= int(paging.group(1)) <= 100:
+                self.reply(400, b"invalid feed pagination", "text/plain")
+                return
+            limit, offset = map(int, paging.groups())
+            history = "LAST_READ_AT" in query
+            rows = [{"id": i*100+1, "mangaId": i, "name": "Chapter 1 — Original QA sample",
+                     "chapterNumber": 1.0, "sourceOrder": 1, "isDownloaded": True,
+                     "isRead": False, "lastPageRead": 1, "pageCount": 3,
+                     "lastReadAt": str(1700000000000-i*1000), "fetchedAt": str(1700000000000-i*1000),
+                     "manga": CARDS[i-1]} for i in range(1,4 if history else 7)]
+            data = {"data": {"chapters": {"totalCount": len(rows), "nodes": rows[offset:offset+limit]}}}
+            marker = "HISTORY_OK" if history else "UPDATES_OK"
         elif "query NooirManga" in query and "mutation" not in query:
             match = re.search(r"manga\(id: ([1-6])\)", query)
             if not match:

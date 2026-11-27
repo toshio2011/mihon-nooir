@@ -1,6 +1,11 @@
 package dev.nooir.desktop.compose
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
@@ -409,6 +414,82 @@ private fun Sources(client: SuwayomiClient) {
     }
 }
 
+@Composable
+private fun ChapterFeed(client: SuwayomiClient, history: Boolean) {
+    var result by remember(history) { mutableStateOf<Result<SuwayomiFeedPage>?>(null) }
+    var offset by remember(history) { mutableStateOf(0) }
+    var revision by remember(history) { mutableStateOf(0) }
+    var selected by remember(history) { mutableStateOf<SuwayomiFeedEntry?>(null) }
+    LaunchedEffect(client,history,offset,revision) {
+        result = null
+        result = request { client.chapterFeed(history,offset,50) }
+        if (result?.isSuccess == true && System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") {
+            println(if (history) "QA_HISTORY_READY" else "QA_UPDATES_READY")
+        }
+    }
+    val entry = selected
+    if (entry != null) {
+        Reader(client,entry.manga,entry.chapter) { selected = null; revision++ }
+        return
+    }
+    Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            Text(if(history) "History" else "Updates",style=MaterialTheme.typography.headlineMedium,modifier=Modifier.weight(1f))
+            OutlinedButton(onClick={revision++}) {Text("Reload")}
+        }
+        Text(if(history) "Previously read library chapters, most recent first."
+            else "Recently fetched library chapters. Reload reads the local catalogue; it does not refresh remote sources.",
+            style=MaterialTheme.typography.bodySmall)
+        val state=result
+        val data=state?.getOrNull()
+        when {
+            state==null -> CircularProgressIndicator()
+            data==null -> Text("Unable to load chapter records. Check your local reading service and reload.",color=MaterialTheme.colorScheme.error)
+            else -> {
+                if(data.entries.isEmpty()) Text(if(history) "No saved reading history yet." else "No cached chapter updates yet.")
+                LazyColumn(Modifier.weight(1f)) {
+                    items(data.entries,key={it.chapter.id}) { row ->
+                        ListItem(leadingContent={Cover(client,row.manga,Modifier.width(54.dp).height(76.dp))},
+                            headlineContent={Text(row.manga.title,maxLines=1,overflow=TextOverflow.Ellipsis)},
+                            supportingContent={Column {
+                                Text(row.chapter.name,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                Text(if(row.read) "Read" else if(history && row.pageCount>0)
+                                    "Saved page " + (row.lastPageRead.coerceIn(0,row.pageCount-1)+1) + " / " + row.pageCount
+                                    else if(row.chapter.downloaded) "Downloaded" else "Unread")
+                            }},
+                            trailingContent={TextButton(onClick={selected=row}) {Text(if(history) "Continue" else "Read")}})
+                        HorizontalDivider()
+                    }
+                }
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    TextButton(onClick={offset=maxOf(0,offset-50)},enabled=offset>0){Text("Previous")}
+                    Text("Page " + (offset/50+1) + " · " + data.totalCount + " records")
+                    TextButton(onClick={offset+=50},enabled=offset+50<data.totalCount){Text("Next")}
+                }
+            }
+        }
+    }
+}
+
+/** Lightweight vector navigation icons without adding a large icon dependency. */
+@Composable
+private fun NooirNavigationIcon(name: String) {
+    val ink=MaterialTheme.colorScheme.onSurface
+    Canvas(Modifier.size(24.dp)) {
+        val u=size.width/24f
+        val width=1.9f*u
+        fun line(x:Float,y:Float,x2:Float,y2:Float)=drawLine(ink,Offset(x*u,y*u),Offset(x2*u,y2*u),width,StrokeCap.Round)
+        fun rect(x:Float,y:Float,w:Float,h:Float)=drawRect(ink,Offset(x*u,y*u),Size(w*u,h*u),style=Stroke(width))
+        when(name) {
+            "Library" -> {rect(3f,4f,4f,16f);rect(9f,4f,4f,16f);line(16f,5f,20f,19f)}
+            "Updates" -> {drawCircle(ink,8f*u,Offset(12f*u,12f*u),style=Stroke(width));line(12f,7f,12f,12f);line(12f,12f,16f,14f)}
+            "History" -> {drawArc(ink,45f,285f,false,Offset(4f*u,4f*u),Size(16f*u,16f*u),style=Stroke(width));line(4f,4f,4f,10f);line(4f,10f,10f,10f);line(12f,8f,12f,12f);line(12f,12f,15f,15f)}
+            "Browse" -> {drawCircle(ink,8f*u,Offset(12f*u,12f*u),style=Stroke(width));line(8f,16f,11f,9f);line(11f,9f,16f,8f);line(16f,8f,13f,15f);line(13f,15f,8f,16f)}
+            else -> {for(x in listOf(5f,12f,19f)) drawCircle(ink,1.6f*u,Offset(x*u,12f*u))}
+        }
+    }
+}
+
 fun main() = application {
     val backend = remember { ComposeBackendSession() }
     val lifecycle = rememberCoroutineScope()
@@ -445,15 +526,17 @@ fun main() = application {
                         Spacer(Modifier.height(16.dp))
                         Text("Nooir", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(20.dp))
-                        listOf("Library", "Browse", "More").forEach { name ->
+                        listOf("Library", "Updates", "History", "Browse", "More").forEach { name ->
                             NavigationRailItem(selected = section == name, onClick = { section = name },
-                                icon = { Text(name.take(1)) }, label = { Text(name) })
+                                icon = { NooirNavigationIcon(name) }, label = { Text(name) })
                         }
                     }
                     VerticalDivider()
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         when (section) {
                             "Library" -> Library(client)
+                            "Updates" -> ChapterFeed(client,false)
+                            "History" -> ChapterFeed(client,true)
                             "Browse" -> Sources(client)
                             else -> Column(Modifier.padding(24.dp)) {
                                 Text("More", style = MaterialTheme.typography.headlineMedium)

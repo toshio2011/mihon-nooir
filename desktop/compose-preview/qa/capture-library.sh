@@ -159,10 +159,28 @@ done
 grep -Fq 'QA_CONVERTED_FRAME page=2 count=' "$out/application.log"
 sleep 1
 import -window root "$out/compose-converted-manga-page.png"
-# Dismiss the export modal and open the More screen.
+# Dismiss the export modal and verify real read-only chapter feeds.
 xdotool key Escape
 sleep 1
+xdotool mousemove --window "$window" 40 150 click 1
+for i in {1..20}; do
+  if grep -Fxq 'QA_UPDATES_READY' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'QA_UPDATES_READY' "$out/application.log"
+grep -Fxq UPDATES_OK "$out/fixture.log"
+sleep 2
+import -window "$window" "$out/compose-updates.png"
 xdotool mousemove --window "$window" 40 213 click 1
+for i in {1..20}; do
+  if grep -Fxq 'QA_HISTORY_READY' "$out/application.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'QA_HISTORY_READY' "$out/application.log"
+grep -Fxq HISTORY_OK "$out/fixture.log"
+sleep 2
+import -window "$window" "$out/compose-history.png"
+xdotool mousemove --window "$window" 40 341 click 1
 sleep 2
 import -window "$window" "$out/compose-more.png"
 # Open the first More list item (Universal Converter).
