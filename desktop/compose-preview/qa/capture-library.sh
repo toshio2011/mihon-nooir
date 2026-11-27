@@ -192,8 +192,8 @@ done
 grep -Fxq 'QA_UNIVERSAL_HUB_OPEN' "$out/application.log"
 sleep 2
 import -window root "$out/compose-universal-hub.png"
-hub=$(xdotool getactivewindow)
-xdotool mousemove --window "$hub" 280 100 click 1
+# Reviewed root screenshot: Local files centered at (568,305); active window can be the owner.
+xdotool mousemove 568 305 click 1
 for i in {1..20}; do
   if grep -Fxq 'QA_LOCAL_CONVERTER_OPEN' "$out/application.log"; then break; fi
   sleep 1

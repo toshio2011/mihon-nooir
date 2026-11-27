@@ -1,6 +1,8 @@
 package dev.nooir.desktop.compose
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,6 +57,7 @@ internal fun ComposeUniversalHub(close:()->Unit,openBatch:()->Unit) {
                     Column(Modifier.padding(20.dp).height(390.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                         Text("Universal Book Converter",style=MaterialTheme.typography.headlineSmall)
                         Text("Choose where your book comes from",style=MaterialTheme.typography.bodyMedium)
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
                         OutlinedButton(onClick={route="local"},modifier=Modifier.fillMaxWidth()){Text("Local files · EPUB, CBZ, ZIP, images")}
                         OutlinedButton(onClick={route="pdf"},modifier=Modifier.fillMaxWidth()){Text("PDF files · original pages / reflow")}
                         OutlinedButton(onClick={route="web"},modifier=Modifier.fillMaxWidth()){Text("Web link · public page to EPUB")}
@@ -72,6 +75,7 @@ internal fun ComposeUniversalHub(close:()->Unit,openBatch:()->Unit) {
                             }
                         },modifier=Modifier.fillMaxWidth()){Text("Preview finished XTC / XTCH book")}
                         TextButton(onClick={close();openBatch()}){Text("Multiple books · batch conversion")}
+                        }
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){TextButton(onClick=close){Text("Close")}}
                     }
                 }
