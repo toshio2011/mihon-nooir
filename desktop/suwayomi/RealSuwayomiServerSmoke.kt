@@ -61,6 +61,18 @@ object RealSuwayomiServerSmoke {
             check(api.library(0, 100).mangas.any { it.id == card.id })
             check(api.chapterFeed(false).entries.any { it.manga.id == card.id }) { "Missing actual server chapter updates" }
             println("PASS: actual pinned server chapter updates including unopened chapters")
+            val first=manga.chapters.first()
+            api.updateChapterFlags(card.id,listOf(first.id),bookmarked=true)
+            check(api.manga(card.id).chapters.single{it.id==first.id}.bookmarked==true)
+            api.updateChapterFlags(card.id,listOf(first.id),read=true)
+            check(api.manga(card.id).chapters.single{it.id==first.id}.read==true)
+            api.updateChapterFlags(card.id,listOf(first.id),read=false)
+            api.updateChapterFlags(card.id,listOf(first.id),bookmarked=false)
+            val restored=api.manga(card.id).chapters.single{it.id==first.id}
+            check(restored.read==false && restored.bookmarked==false && restored.lastPageRead==first.lastPageRead)
+            check(runCatching{api.updateChapterFlags(card.id,listOf(Int.MAX_VALUE),bookmarked=true)}.isFailure)
+            check(api.downloadStatus().queue.isEmpty())
+            println("PASS: pinned server chapter flags, membership guard and native empty download queue")
             for (chapter in manga.chapters) {
                 val opened = api.openOnlineChapter(manga.id, chapter.id)
                 check(opened.pageCount == 2 && opened.syncConflict == null)

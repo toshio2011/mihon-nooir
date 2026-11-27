@@ -87,6 +87,10 @@ data class SuwayomiFeedEntry(
 
 data class SuwayomiFeedPage(val entries: List<SuwayomiFeedEntry>, val totalCount: Int)
 
+data class SuwayomiDownload(val chapterId:Int,val mangaId:Int,val mangaTitle:String,val chapterName:String,
+    val state:String,val tries:Int,val position:Int)
+data class SuwayomiDownloads(val state:String,val queue:List<SuwayomiDownload>)
+
 /** Numeric identities from a validated pinned-server chapter-page manifest. */
 data class SuwayomiOnlineChapter internal constructor(
     val chapterId: Int,
@@ -412,6 +416,61 @@ class SuwayomiClient(
         require(firstUnread == null || chapters.any { it.id == firstUnread && it.read != true })
         return SuwayomiManga(result.int("id"), result.str("title"),
             result["author"] as? String ?: "", chapters, firstUnread)
+    }
+
+    /** Explicit flag-only update. Validate membership against a fresh manga snapshot.
+     * Mark unread preserves lastPageRead; this never deletes or resets a chapter. */
+    fun updateChapterFlags(mangaId:Int,ids:List<Int>,read:Boolean?=null,bookmarked:Boolean?=null) {
+        require(mangaId>0 && ids.size in 1..500 && ids.all{it>0} && ids.distinct().size==ids.size)
+        require((read!=null) != (bookmarked!=null)) { "Choose one chapter action" }
+        val current=manga(mangaId).chapters.associateBy{it.id}
+        require(ids.all{it in current}) { "Chapter selection changed; reload before updating" }
+        val patch=if(read!=null) "isRead: $read" else "isBookmarked: $bookmarked"
+        val result=graphql("mutation NooirUpdateFlags { updateChapters(input: { ids: ["+
+            ids.joinToString(",")+"], patch: { "+patch+" } }) { chapters { id mangaId isRead isBookmarked } } }")
+            .obj("updateChapters").list("chapters").map{it.asObject()}
+        require(result.size==ids.size && result.map{it.int("id")}.toSet()==ids.toSet() &&
+            result.all{it.int("mangaId")==mangaId && (if(read!=null)it["isRead"]==read else it["isBookmarked"]==bookmarked)}) {
+            "Server did not confirm every chapter flag; reload before retrying"
+        }
+    }
+
+    /** Actual pinned downloader state; progress is not fabricated from local records. */
+    fun downloadStatus():SuwayomiDownloads {
+        val root=graphql("query NooirDownloadStatus { downloadStatus { state queue { state tries position chapter { id mangaId name } manga { id title } } } }").obj("downloadStatus")
+        val state=root.str("state")
+        require(state in setOf("STARTED","STOPPED"))
+        val rows=root.list("queue")
+        require(rows.size<=10000)
+        val entries=rows.map{
+            val item=it.asObject();val c=item.obj("chapter");val m=item.obj("manga")
+            val row=SuwayomiDownload(c.int("id"),m.int("id"),m.str("title"),c.str("name"),item.str("state"),item.int("tries"),item.int("position"))
+            require(row.chapterId>0 && row.mangaId>0 && c.int("mangaId")==row.mangaId && row.tries>=0 && row.position>=0 &&
+                row.state in setOf("QUEUED","DOWNLOADING","FINISHED","ERROR"))
+            row
+        }
+        require(entries.map{it.chapterId}.distinct().size==entries.size)
+        return SuwayomiDownloads(state,entries.sortedBy{it.position})
+    }
+
+    fun setDownloaderRunning(running:Boolean) {
+        val target=if(running)"STARTED" else "STOPPED"
+        if(downloadStatus().state==target) return
+        val operation=if(running)"startDownloader" else "stopDownloader"
+        val result=graphql("mutation NooirDownloader { "+operation+"(input: {}) { downloadStatus { state } } }")
+            .obj(operation).obj("downloadStatus")
+        require(result.str("state")==target) { "Downloader state not confirmed; reload" }
+    }
+
+    fun removeQueuedChapter(mangaId:Int,chapterId:Int) {
+        require(mangaId>0 && chapterId>0)
+        val current=downloadStatus().queue.singleOrNull{it.chapterId==chapterId}
+            ?: error("Chapter is no longer in the queue")
+        require(current.mangaId==mangaId && current.state in setOf("QUEUED","ERROR")) { "Queue changed; reload" }
+        val result=graphql("mutation NooirRemoveQueued { dequeueChapterDownloads(input: { ids: ["+
+            chapterId+"] }) { downloadStatus { queue { chapter { id } } } } }")
+            .obj("dequeueChapterDownloads").obj("downloadStatus").list("queue")
+        require(result.none{it.asObject().obj("chapter").int("id")==chapterId}) { "Queue removal not confirmed" }
     }
 
     fun enqueue(ids: List<Int>) {

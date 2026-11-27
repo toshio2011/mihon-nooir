@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -203,6 +204,8 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
     var chapterSort by remember(card.id) { mutableStateOf("Source order") }
     var descending by remember(card.id) { mutableStateOf(false) }
     var filterOpen by remember(card.id) { mutableStateOf(false) }
+    var flagAction by remember(card.id) { mutableStateOf<String?>(null) }
+    var actionsOpen by remember(card.id) { mutableStateOf(false) }
     var downloadConfirm by remember(card.id) { mutableStateOf<List<Int>>(emptyList()) }
     var downloadStatus by remember(card.id) { mutableStateOf("") }
     var downloading by remember(card.id) { mutableStateOf(false) }
@@ -222,7 +225,7 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
         return
     }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
-        TextButton(onClick = back) { Text(backLabel) }
+        TextButton(onClick = back, enabled = !downloading) { Text(backLabel) }
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Cover(client, card, Modifier.width(128.dp).height(184.dp))
             Column(Modifier.weight(1f)) {
@@ -235,6 +238,14 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
         Spacer(Modifier.height(16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Chapters", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            if(selectionMode) Box {
+                TextButton(onClick={actionsOpen=true},enabled=selectedIds.isNotEmpty() && !downloading){Text("Chapter actions")}
+                DropdownMenu(actionsOpen,onDismissRequest={actionsOpen=false}){
+                    listOf("Mark read","Mark unread","Bookmark","Remove bookmark").forEach{action->
+                        DropdownMenuItem(text={Text(action)},onClick={actionsOpen=false;flagAction=action})
+                    }
+                }
+            }
             TextButton(onClick = { filterOpen = true }, enabled = state?.isSuccess == true && !downloading) { Text("Filter / sort") }
             TextButton(onClick = { refreshRevision++ }, enabled = state != null && !downloading) { Text("Refresh chapters") }
         }
@@ -274,7 +285,7 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
                 Text(if(readFilter=="All" && downloadFilter=="All" && bookmarkFilter=="All") "${chapters.size} chapters" else "${visible.size} / ${chapters.size} chapters", Modifier.weight(1f))
                 val next = chapters.firstOrNull { it.id == result.getOrThrow().firstUnreadId }
                 if (!selectionMode && next != null) TextButton(onClick = { opened = next }) { Text("Continue reading") }
-                TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }) {
+                TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }, enabled = !downloading) {
                     Text(if (selectionMode) "Cancel selection" else "Select chapters")
                 }
                 if (selectionMode) {
@@ -285,6 +296,28 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
                 }
             }
             if (exportOpen) ComposeExport(card, visible.filter { it.id in selectedIds }) { exportOpen = false }
+            val action=flagAction
+            if(action!=null) AlertDialog(onDismissRequest={flagAction=null},title={Text(action+"?")},
+                text={Text("Apply to "+selectedIds.size+" selected chapters? Existing page positions and downloaded files are retained. Marking read may sync to connected readers.")},
+                confirmButton={Button(onClick={
+                    val ids=visible.filter{it.id in selectedIds}.map{it.id}
+                    flagAction=null;downloading=true
+                    scope.launchProtected(operations){
+                        try {
+                            withContext(Dispatchers.IO){
+                                when(action){
+                                    "Mark read"->client.updateChapterFlags(card.id,ids,read=true)
+                                    "Mark unread"->client.updateChapterFlags(card.id,ids,read=false)
+                                    "Bookmark"->client.updateChapterFlags(card.id,ids,bookmarked=true)
+                                    else->client.updateChapterFlags(card.id,ids,bookmarked=false)
+                                }
+                            }
+                            downloadStatus="Updated "+ids.size+" chapters."
+                        }catch(e:CancellationException){throw e}
+                        catch(e:Exception){downloadStatus="Chapter changes not fully confirmed. Reload before retrying."}
+                        finally{selectedIds=emptySet();selectionMode=false;reloadRevision++;downloading=false}
+                    }
+                }){Text("Apply")}},dismissButton={TextButton(onClick={flagAction=null}){Text("Cancel")}})
             if(downloadStatus.isNotBlank()) Text(downloadStatus,style=MaterialTheme.typography.bodySmall)
             if(downloadConfirm.isNotEmpty()) AlertDialog(onDismissRequest={downloadConfirm=emptyList()},title={Text("Download chapters?")},
                 text={Text("Queue "+downloadConfirm.size+" chapters in the local reading service? Download completion is separate from queue acceptance.")},
@@ -310,7 +343,7 @@ private fun Details(client: SuwayomiClient, card: SuwayomiMangaCard, backLabel: 
                             { Checkbox(checked = chapter.id in selectedIds, onCheckedChange = { checked ->
                                 if (checked && selectedIds.size < 500) selectedIds = selectedIds + chapter.id
                                 if (!checked) selectedIds = selectedIds - chapter.id
-                            }, enabled = chapter.id in selectedIds || selectedIds.size < 500) }
+                            }, enabled = !downloading && (chapter.id in selectedIds || selectedIds.size < 500)) }
                         } else null,
                         trailingContent = { Row {
                             if(!selectionMode && !chapter.downloaded) TextButton(onClick={downloadConfirm=listOf(chapter.id)},enabled=!downloading){Text("Download")}
@@ -642,7 +675,7 @@ fun main() = application {
                             "Updates" -> ChapterFeed(client,false)
                             "History" -> ChapterFeed(client,true)
                             "Browse" -> Sources(client)
-                            else -> Column(Modifier.padding(24.dp)) {
+                            else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
                                 Text("More", style = MaterialTheme.typography.headlineMedium)
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("Dark theme"); Switch(dark, { dark = it })
@@ -672,11 +705,16 @@ fun main() = application {
                                     supportingContent = { Text("Transfer a local book to a compatible Folio Nooir reader") },
                                     trailingContent = { TextButton(onClick = { transferOpen = true }) { Text("Open") } })
                                 if (transferOpen) ComposeTransfer { transferOpen = false }
+                                var downloadsOpen by remember { mutableStateOf(false) }
+                                ListItem(headlineContent={Text("Download queue")},
+                                    supportingContent={Text("Actual chapter downloads from the reading service")},
+                                    trailingContent={TextButton(onClick={downloadsOpen=true}){Text("Open")}})
+                                if(downloadsOpen) ComposeDownloads(client){downloadsOpen=false}
                                 val connection = backendState as? BackendState.Ready
                                 ListItem(headlineContent = { Text("Reading service") },
                                     supportingContent = { Text(if (connection?.owned == true) "Managed by MihonNooir" else "Connected to existing local service") },
                                     trailingContent = { TextButton(onClick = { if (!operations.active) setupRevision++ }, enabled = !operations.active) { Text("Reconnect") } })
-                                Text("Experimental desktop interface. Remote chapter jobs still require the existing preview.")
+                                Text("Experimental desktop interface. Conversion jobs and chapter downloads are separate.")
                             }
                         }
                     }
