@@ -52,6 +52,12 @@ internal class OfficialSuwayomiCache(
         }.getOrDefault(false)
     }
 
+    /** Read-only lookup; unlike obtain(), this method never starts a download. */
+    fun cachedOrNull(): File? {
+        if (Files.isSymbolicLink(directory)) return null
+        return directory.resolve(SuwayomiProcessManager.PINNED_JAR).toFile().takeIf(::validate)
+    }
+
     /**
      * Must be run off the Swing event thread. Reports bounded progress for
      * display only; progress callbacks must not make network/GUI operations.

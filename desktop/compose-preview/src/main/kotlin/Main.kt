@@ -22,6 +22,7 @@ import androidx.compose.ui.window.rememberWindowState
 import dev.nooir.desktop.suwayomi.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -385,14 +386,37 @@ private fun Sources(client: SuwayomiClient) {
 }
 
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "MihonNooir · Compose experiment",
+    val backend = remember { ComposeBackendSession() }
+    val lifecycle = rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+    Window(onCloseRequest = {
+        if (!closing) {
+            closing = true
+            lifecycle.launch {
+                try { withContext(Dispatchers.IO) { backend.close() } }
+                finally { exitApplication() }
+            }
+        }
+    }, title = "MihonNooir · Compose experiment",
         state = rememberWindowState(width = 1040.dp, height = 720.dp)) {
         var section by remember { mutableStateOf("Library") }
         var dark by remember { mutableStateOf(true) }
         val client = remember { SuwayomiClient() }
+        var backendState by remember { mutableStateOf<BackendState>(BackendState.Checking) }
+        var setupRevision by remember { mutableStateOf(0) }
+        LaunchedEffect(setupRevision) {
+            backendState = BackendState.Checking
+            backendState = try { withContext(Dispatchers.IO) { backend.connectOrStartCached() } }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { BackendState.Unavailable("Local reading service could not start. Check the existing server and retry.") }
+        }
         MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
             Surface(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxSize()) {
+                if (closing) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Closing MihonNooir…") }
+                } else if (backendState !is BackendState.Ready) {
+                    ComposeBackendSetup(backend, backendState, { backendState = it }) { setupRevision++ }
+                } else Row(Modifier.fillMaxSize()) {
                     NavigationRail {
                         Spacer(Modifier.height(16.dp))
                         Text("Nooir", style = MaterialTheme.typography.titleMedium)
@@ -417,7 +441,11 @@ fun main() = application {
                                     supportingContent = { Text("Library backups and compatible extension recovery") },
                                     trailingContent = { TextButton(onClick = { backupOpen = true }) { Text("Open") } })
                                 if (backupOpen) ComposeBackup { backupOpen = false }
-                                Text("Experimental desktop interface. Use the existing preview for backend controls, repository setup and saved reading progress.")
+                                val connection = backendState as? BackendState.Ready
+                                ListItem(headlineContent = { Text("Reading service") },
+                                    supportingContent = { Text(if (connection?.owned == true) "Managed by MihonNooir" else "Connected to existing local service") },
+                                    trailingContent = { TextButton(onClick = { setupRevision++ }) { Text("Reconnect") } })
+                                Text("Experimental desktop interface. Repository setup and saved reading progress still require the existing preview.")
                             }
                         }
                     }
