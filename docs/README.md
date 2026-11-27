@@ -12,6 +12,10 @@
 
 [View the real Android screenshots for this workflow](ANDROID_VISUAL_GUIDE.md#first-launch-and-local-book-conversion) (v1.0.20 release-source emulator).
 
+## Windows preview testers
+
+[**Windows Compose preview guide**](WINDOWS_COMPOSE_PREVIEW_GUIDE.md) — download, setup, backup and extension migration, native navigation, reader/export, Universal Converter, Web to EPUB, queue, Wi-Fi transfer and actual screenshot evidence. Experimental; Android guides below remain for v1.0.20.
+
 ## If this is your first time
 
 1. [**Install MihonNooir and export your first book**](GETTING_STARTED.md) — APK download, Android installation, selection.

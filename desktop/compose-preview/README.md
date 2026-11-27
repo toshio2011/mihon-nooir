@@ -1,5 +1,7 @@
 # Android-inspired desktop UI experiment
 
+> **Current preview:** [Windows Compose user guide](../../docs/WINDOWS_COMPOSE_PREVIEW_GUIDE.md). The notes below are chronological development checkpoints, not the current feature list. CI run 45952282235 passed all five Compose jobs and produced the portable Windows ZIP. Actual Windows startup and physical-device acceptance remain pending.
+
 Isolated feasibility work based on the accepted Swing candidate c2385938f9877869a1ff6afb465dbc73c3e7fd52. No change to Android, stable packages, existing Swing UI, conversion engine, or release workflows.
 
 This first vertical slice uses Material 3, a responsive library cover grid, chapter details, and the installed source list. It compiles the existing SuwayomiClient and MiniJson directly, not a copied backend or mock library. It expects an already-running local server on port 4567. No credentials, automatic server startup, repository changes, downloads, reading-position writes, backup restore, or conversions are initiated by this slice. Cover decoding is bounded and off the UI thread; library pagination is explicit. Missing covers use title placeholders. It does not yet provide full Mihon UI parity.
