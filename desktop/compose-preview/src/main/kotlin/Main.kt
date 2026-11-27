@@ -342,6 +342,11 @@ private fun Sources(client: SuwayomiClient) {
     var revision by remember { mutableStateOf(0) }
     var offset by remember { mutableStateOf(0) }
     var selected by remember { mutableStateOf<SuwayomiSource?>(null) }
+    var extensionsOpen by remember { mutableStateOf(false) }
+    if (extensionsOpen) {
+        ComposeExtensions { extensionsOpen = false; revision++ }
+        return
+    }
     LaunchedEffect(client, revision, offset) { result = null; result = request { client.sources(offset, 100) } }
     val source = selected
     if (source != null) {
@@ -350,8 +355,11 @@ private fun Sources(client: SuwayomiClient) {
     }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Browse", style = MaterialTheme.typography.headlineMedium)
-        Text("Installed sources")
-        TextButton(onClick = { revision++ }) { Text("Reload") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Installed sources", Modifier.weight(1f))
+            TextButton(onClick = { extensionsOpen = true }) { Text("Extensions") }
+            TextButton(onClick = { revision++ }) { Text("Reload") }
+        }
         val current = result
         when {
             current == null -> CircularProgressIndicator()

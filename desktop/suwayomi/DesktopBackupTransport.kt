@@ -139,6 +139,41 @@ class DesktopBackupTransport(endpoint: String) {
         require(restored==approved.sourceIds) { "Package installed, but some requested sources remain unavailable; inspect WebUI" }
         return restored
     }
+    /**
+     * Native catalogue installation, with the same exact-identity checks as backup
+     * recovery. Caller must display and obtain explicit approval of the package and
+     * store before invoking. No automatic install, refresh, retry or downgrade.
+     */
+    fun installCatalogExtension(approved:DesktopBackupExtensions.Extension,
+                                approvedStore:DesktopBackupExtensions.Store):Set<Long> {
+        require(!approved.installed && !approved.obsolete &&
+            approved.pkgName.length<=250 && approved.pkgName.matches(Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")) &&
+            approved.indexUrl==approvedStore.indexUrl &&
+            approved.versionCode!=null && approved.versionCode>=0 && !approved.versionName.isNullOrBlank()) {
+            "Package requires complete identity and version information"
+        }
+        val identity=DesktopBackupInspector.Store(approvedStore.name,approvedStore.indexUrl,
+            approvedStore.signingKey,approvedStore.legacy,approvedStore.extensionListUrl.orEmpty())
+        require(identity.reviewableHttps && identity.signingKey.isNotBlank()) { "Repository requires review" }
+        require(extensionStores().singleOrNull{it.indexUrl==approvedStore.indexUrl}==approvedStore &&
+            extensionCatalog().singleOrNull{it.pkgName==approved.pkgName}==approved) {
+            "Catalogue changed; review again"
+        }
+        val result=json("mutation NooirRecoverExtension { updateExtension(input: { id: "+
+            MiniJson.quote(approved.pkgName)+", patch: { install: true } }) { extension { pkgName storeIndexUrl isInstalled source { nodes { id } } } } }")
+            .obj("updateExtension").obj("extension")
+        require(result.str("pkgName")==approved.pkgName && result["storeIndexUrl"]==approvedStore.indexUrl &&
+            result["isInstalled"]==true) { "Installation not confirmed" }
+        val exposed=result.obj("source").list("nodes").map{it.asObject().long("id")}.toSet()
+        val installed=extensionCatalog().singleOrNull{it.pkgName==approved.pkgName}
+        require(installed!=null && installed.installed && installed.indexUrl==approvedStore.indexUrl &&
+            installed.versionCode==approved.versionCode && installed.versionName==approved.versionName &&
+            extensionStores().singleOrNull{it.indexUrl==approvedStore.indexUrl}==approvedStore &&
+            installed.sources.containsAll(approved.sources) && exposed.containsAll(approved.sources)) {
+            "Installation status uncertain; review the catalogue before retrying"
+        }
+        return installed.sources
+    }
     fun export(target:File, includeExtensionStores:Boolean=false) {
         require(!target.exists()) { "Choose a new backup filename" }
         val parent=target.absoluteFile.parentFile
