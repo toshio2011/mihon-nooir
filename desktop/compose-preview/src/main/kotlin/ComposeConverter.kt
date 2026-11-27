@@ -70,6 +70,7 @@ internal fun ComposeConverter(close: () -> Unit) {
         if (System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_LOCAL_CONVERTER_OPEN")
     }
     val operations = LocalOperations.current
+    val sessionConversions = LocalSessionConversions.current
     val scope = rememberCoroutineScope()
     var source by remember { mutableStateOf<File?>(null) }
     var mode by remember { mutableStateOf(LocalConversionMode.MANGA) }
@@ -171,6 +172,19 @@ internal fun ComposeConverter(close: () -> Unit) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { preview = true }, enabled = !busy && finished != null) { Text("Preview converted book") }
                         Spacer(Modifier.weight(1f))
+                        TextButton(enabled=!busy && source!=null && File(outputText).isAbsolute &&
+                            File(outputText).extension.equals(format.extension,true) && format in formats,onClick={
+                            val input=source ?: return@TextButton
+                            val target=File(outputText)
+                            val selectedMode=mode;val selectedFormat=format;val selectedDevice=device.id
+                            val selectedOptions=options;val selectedTypography=typography
+                            try{
+                                sessionConversions.submit(target,input.name){
+                                    convertLocalFile(input,target,selectedMode,selectedFormat,selectedDevice,selectedOptions,selectedTypography)
+                                }
+                                close()
+                            }catch(e:Exception){result=e.message ?: "Unable to queue conversion"}
+                        }){Text("Queue & close")}
                         TextButton(onClick = close, enabled = !busy) { Text("Close") }
                         Button(enabled = !busy && source != null && File(outputText).isAbsolute &&
                             File(outputText).extension.equals(format.extension,true) && format in formats, onClick = {

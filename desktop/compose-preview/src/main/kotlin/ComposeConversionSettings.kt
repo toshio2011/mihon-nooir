@@ -33,8 +33,8 @@ internal fun ComposeRenderingSettings(o:MangaConversionOptions,enabled:Boolean,c
 @Composable
 internal fun ComposeMangaSettings(o:MangaConversionOptions,format:ExportFormat,enabled:Boolean,change:(MangaConversionOptions)->Unit) {
     Text("Conversion preset",style=MaterialTheme.typography.titleMedium)
-    ExportChoice(o.preset,listOf("Manga","Manhwa","Manhua"),enabled){change(MangaConversionOptions.preset(it))}
-    OutlinedButton(onClick={change(MangaConversionOptions.preset("Manga").copy(panelMode="PANEL_BY_PANEL",orientation="AUTO_FIT",overlapPercent=0))},enabled=enabled){Text("Apply manga settings")}
+    ExportChoice(o.preset,listOf("Manga","Manhwa","Manhua","Custom"),enabled){change(if(it=="Custom")o.copy(preset="Custom") else MangaConversionOptions.preset(it))}
+    OutlinedButton(onClick={change(o.copy(preset="Custom",layout="PAGED",panelMode="PANEL_BY_PANEL",orientation="AUTO_FIT",overlapPercent=0,cropWhiteMargins=true,splitSpreads=true,rightToLeft=true,showFullPageBeforeSplits=false))},enabled=enabled){Text("Apply manga settings")}
     Text("Layout")
     ExportChoice(o.layout,listOf("AUTO","PAGED","WEBTOON"),enabled){change(o.copy(layout=it))}
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {

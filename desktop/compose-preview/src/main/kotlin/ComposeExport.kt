@@ -55,6 +55,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
         if (output != null && System.getenv("NOOIR_COMPOSE_QA_CAPTURE") == "1") println("QA_OUTPUT_READY")
     }
     val operations = LocalOperations.current
+    val sessionConversions = LocalSessionConversions.current
     val scope = rememberCoroutineScope()
     val missing = chapters.count { !it.downloaded }
     val valid = chapters.isNotEmpty() && chapters.size <= 500 && (missing == 0 || allowDownload)
@@ -121,6 +122,17 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { showPreview = true }, enabled = !busy && finishedBook != null) { Text("Preview converted book") }
             Spacer(Modifier.weight(1f))
+            if(System.getenv("NOOIR_COMPOSE_QA_CAPTURE")!="1") TextButton(enabled=!busy && valid && output!=null,onClick={
+                val target=output ?: return@TextButton
+                val args=arrayOf("--mode","export","--manga-id",card.id.toString(),
+                    "--chapters",chapters.joinToString(","){it.id.toString()},"--format",format.name,
+                    "--device",device.id,"--output",target.absolutePath,"--options-token",options.token(),
+                    "--download-missing",allowDownload.toString())
+                try {
+                    sessionConversions.submit(target,card.title){runComposeExport(args,target)}
+                    close()
+                }catch(e:Exception){result=e.message ?: "Unable to queue export"}
+            }){Text("Queue & close")}
             TextButton(onClick = close, enabled = !busy) { Text("Close") }
             Button(enabled = !busy && valid && output != null, onClick = {
                 val target = output ?: return@Button

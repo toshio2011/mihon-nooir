@@ -119,7 +119,7 @@ object NooirDesktopCli {
                             )
                             val opts = when {
                                 entry.cover -> wholePageOpts
-                                firstInChapter && options.keepChapterFirstPageWhole -> wholePageOpts
+                                firstInChapter && options.keepChapterFirstPageWhole -> options.copy(panelMode = "OFF", splitSpreads = false, cropWhiteMargins = false, layout = "PAGED")
                                 else -> options
                             }
                             for (frame in render(img, w, h, depth, opts, fixedFramebuffer = !archive)) {
@@ -361,8 +361,7 @@ object NooirDesktopCli {
         val width = if (archive && options.orientation == "LANDSCAPE") profile.height else profile.width
         val height = if (archive && options.orientation == "LANDSCAPE") profile.width else profile.height
         val effective = if (firstChapterPage && options.keepChapterFirstPageWhole) options.copy(
-            layout = "PAGED", cropWhiteMargins = false, splitSpreads = false, orientation = "PORTRAIT",
-            overlapPercent = 0, panelMode = "OFF", showFullPageBeforeSplits = false, contextPeekPercent = 0,
+            layout = "PAGED", cropWhiteMargins = false, splitSpreads = false, panelMode = "OFF",
         ) else options
         val source = DesktopImageDecoder.decode(bytes, MAX_IMAGE_PIXELS)
         try {
@@ -490,7 +489,7 @@ object NooirDesktopCli {
                 options.panelMode=="PANEL_BY_PANEL" && options.layout!="WEBTOON" -> trimDetectedPanel(src,region)
                 else -> trimWhite(src,region)
             }
-            val scale = minOf(vw.toDouble() / r.width, vh.toDouble() / r.height)
+            val scale = minOf(vw.toFloat() / r.width, vh.toFloat() / r.height)
             val dw = (r.width * scale).toInt().coerceIn(1, vw)
             val dh = (r.height * scale).toInt().coerceIn(1, vh)
             val frame = BufferedImage(frameWidth, frameHeight, BufferedImage.TYPE_INT_RGB)

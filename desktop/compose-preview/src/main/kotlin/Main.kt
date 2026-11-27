@@ -623,9 +623,10 @@ fun main() = application {
     val operations = remember { OperationGuard() }
     var closeBlocked by remember { mutableStateOf(false) }
     val lifecycle = rememberCoroutineScope()
+    val sessionConversions = remember { SessionConversions(lifecycle) }
     var closing by remember { mutableStateOf(false) }
     Window(onCloseRequest = {
-        if (operations.active) {
+        if (operations.active || sessionConversions.active) {
             closeBlocked = true
         } else if (!closing) {
             closing = true
@@ -637,6 +638,8 @@ fun main() = application {
     }, title = "MihonNooir · Compose experiment",
         state = rememberWindowState(width = 1040.dp, height = 720.dp)) {
         var section by remember { mutableStateOf("Library") }
+        var activityOpen by remember { mutableStateOf(false) }
+        var batchOpen by remember { mutableStateOf(false) }
         var dark by remember { mutableStateOf(true) }
         val client = remember { SuwayomiClient() }
         var backendState by remember { mutableStateOf<BackendState>(BackendState.Checking) }
@@ -647,7 +650,7 @@ fun main() = application {
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { BackendState.Unavailable("Local reading service could not start. Check the existing server and retry.") }
         }
-        CompositionLocalProvider(LocalOperations provides operations) {
+        CompositionLocalProvider(LocalOperations provides operations, LocalSessionConversions provides sessionConversions) {
         MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
             if (closeBlocked) AlertDialog(onDismissRequest = { closeBlocked = false },
                 title = { Text("Operation in progress") },
@@ -669,6 +672,8 @@ fun main() = application {
                         }
                     }
                     VerticalDivider()
+                    if(activityOpen) SessionActivity({activityOpen=false},{activityOpen=false;batchOpen=true})
+                    if(batchOpen) ComposeQueue { batchOpen=false }
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         when (section) {
                             "Library" -> Library(client)
@@ -690,11 +695,9 @@ fun main() = application {
                                     supportingContent = { Text("Analyze public chapters and create an EPUB") },
                                     trailingContent = { TextButton(onClick = { webOpen = true }) { Text("Open") } })
                                 if (webOpen) ComposeWeb { webOpen = false }
-                                var queueOpen by remember { mutableStateOf(false) }
                                 ListItem(headlineContent = { Text("Activity Queue") },
-                                    supportingContent = { Text("Local conversion jobs and completed books") },
-                                    trailingContent = { TextButton(onClick = { queueOpen = true }) { Text("Open") } })
-                                if (queueOpen) ComposeQueue { queueOpen = false }
+                                    supportingContent = { Text(if(sessionConversions.active) "Conversion running · continue browsing" else "Conversions and completed books") },
+                                    trailingContent = { TextButton(onClick = { activityOpen = true }) { Text("Open") } })
                                 var backupOpen by remember { mutableStateOf(false) }
                                 ListItem(headlineContent = { Text("Backup & restore") },
                                     supportingContent = { Text("Library backups and compatible extension recovery") },
@@ -713,7 +716,7 @@ fun main() = application {
                                 val connection = backendState as? BackendState.Ready
                                 ListItem(headlineContent = { Text("Reading service") },
                                     supportingContent = { Text(if (connection?.owned == true) "Managed by MihonNooir" else "Connected to existing local service") },
-                                    trailingContent = { TextButton(onClick = { if (!operations.active) setupRevision++ }, enabled = !operations.active) { Text("Reconnect") } })
+                                    trailingContent = { TextButton(onClick = { if (!operations.active) setupRevision++ }, enabled = !operations.active && !sessionConversions.active) { Text("Reconnect") } })
                                 Text("Experimental desktop interface. Conversion jobs and chapter downloads are separate.")
                             }
                         }
