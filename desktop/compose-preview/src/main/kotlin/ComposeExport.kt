@@ -181,7 +181,7 @@ internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapt
 private data class DecodedFrame(val count: Int, val image: ImageBitmap)
 
 @Composable
-private fun ConvertedBookPreview(file: File, back: () -> Unit) {
+internal fun ConvertedBookPreview(file: File, back: () -> Unit) {
     var page by remember(file) { mutableStateOf(0) }
     var frame by remember(file, page) { mutableStateOf<DecodedFrame?>(null) }
     var failed by remember(file, page) { mutableStateOf(false) }
@@ -220,7 +220,7 @@ private fun ConvertedBookPreview(file: File, back: () -> Unit) {
 
 
 @Composable
-private fun ExportChoice(value: String, choices: List<String>, enabled: Boolean, select: (String) -> Unit) {
+internal fun ExportChoice(value: String, choices: List<String>, enabled: Boolean, select: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { expanded = true }, enabled = enabled) { Text(value) }

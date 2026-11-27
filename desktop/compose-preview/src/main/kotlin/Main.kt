@@ -436,6 +436,11 @@ fun main() = application {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("Dark theme"); Switch(dark, { dark = it })
                                 }
+                                var converterOpen by remember { mutableStateOf(false) }
+                                ListItem(headlineContent = { Text("Universal Converter") },
+                                    supportingContent = { Text("Convert local manga, PDF and EPUB files") },
+                                    trailingContent = { TextButton(onClick = { converterOpen = true }) { Text("Open") } })
+                                if (converterOpen) ComposeConverter { converterOpen = false }
                                 var backupOpen by remember { mutableStateOf(false) }
                                 ListItem(headlineContent = { Text("Backup & restore") },
                                     supportingContent = { Text("Library backups and compatible extension recovery") },
@@ -445,7 +450,7 @@ fun main() = application {
                                 ListItem(headlineContent = { Text("Reading service") },
                                     supportingContent = { Text(if (connection?.owned == true) "Managed by MihonNooir" else "Connected to existing local service") },
                                     trailingContent = { TextButton(onClick = { setupRevision++ }) { Text("Reconnect") } })
-                                Text("Experimental desktop interface. Repository setup and saved reading progress still require the existing preview.")
+                                Text("Experimental desktop interface. Web import, persistent queue and saved reading progress still require the existing preview.")
                             }
                         }
                     }
