@@ -10,6 +10,20 @@ import dev.nooir.bridge.ExportFormat
 import dev.nooir.mangabridge.MangaConversionOptions
 import dev.nooir.desktop.ui.DesktopTextEpubImport
 
+// Android stores legacy tokens for compatibility but displays their actual algorithm.
+internal fun androidRendering(o:MangaConversionOptions):String =
+    if(o.renderAlgorithm=="LEGACY") {if(o.dither)"FLOYD_STEINBERG" else "THRESHOLD"} else o.renderAlgorithm
+
+internal fun androidMangaDefaults():MangaConversionOptions =
+    MangaConversionOptions().copy(renderAlgorithm="FLOYD_STEINBERG",dither=true)
+
+internal fun androidMangaPreset(name:String):MangaConversionOptions =
+    MangaConversionOptions.preset(name).copy(renderAlgorithm="FLOYD_STEINBERG",dither=true)
+
+internal fun recommendedManga(o:MangaConversionOptions):MangaConversionOptions =
+    o.copy(preset="Custom",layout="PAGED",panelMode="PANEL_BY_PANEL",orientation="AUTO_FIT",
+        overlapPercent=0,cropWhiteMargins=true,splitSpreads=true,rightToLeft=true,showFullPageBeforeSplits=false)
+
 @Composable
 internal fun ConversionToggle(label:String, checked:Boolean, enabled:Boolean, change:(Boolean)->Unit) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -25,59 +39,74 @@ internal fun ConversionSlider(label:String,value:Int,range:IntRange,enabled:Bool
 @Composable
 internal fun ComposeRenderingSettings(o:MangaConversionOptions,enabled:Boolean,change:(MangaConversionOptions)->Unit) {
     Text("Image and rendering",style=MaterialTheme.typography.titleMedium)
-    ConversionSlider("Contrast (50 = original)",o.contrast,0..100,enabled){change(o.copy(contrast=it))}
+    Text("Contrast · "+o.contrast+" (50 = original)")
+    Slider(o.contrast.toFloat(),{change(o.copy(preset="Custom",contrast=it.toInt()))},valueRange=0f..100f,enabled=enabled)
     Text("E-ink rendering style")
-    ExportChoice(o.renderAlgorithm,listOf("LEGACY","FLOYD_STEINBERG","ATKINSON","BAYER_8X8","THRESHOLD"),enabled){change(o.copy(renderAlgorithm=it))}
-    if(o.renderAlgorithm=="LEGACY") ConversionToggle("Dithering",o.dither,enabled){change(o.copy(dither=it))}
+    val names=linkedMapOf("FLOYD_STEINBERG" to "Floyd–Steinberg","ATKINSON" to "Atkinson","BAYER_8X8" to "Bayer 8×8","THRESHOLD" to "Threshold")
+    val active=androidRendering(o)
+    ExportChoice(names[active] ?: active,names.values.toList(),enabled){label->
+        val algorithm=names.entries.first{it.value==label}.key
+        change(o.copy(preset="Custom",renderAlgorithm=algorithm,dither=algorithm!="THRESHOLD"))
+    }
+    Text(when(active){
+        "ATKINSON"->"Cleaner white areas and sharper lettering; some soft tones may disappear."
+        "BAYER_8X8"->"Regular dot patterns for manga screentones; may show a visible grid."
+        "THRESHOLD"->"No dither texture; smooth gradients may band."
+        else->"Original default: smooth shading, with possible texture in dark areas."
+    },style=MaterialTheme.typography.bodySmall)
 }
 @Composable
 internal fun ComposeMangaSettings(o:MangaConversionOptions,format:ExportFormat,enabled:Boolean,change:(MangaConversionOptions)->Unit) {
     Text("Conversion preset",style=MaterialTheme.typography.titleMedium)
-    ExportChoice(o.preset,listOf("Manga","Manhwa","Manhua","Custom"),enabled){change(if(it=="Custom")o.copy(preset="Custom") else MangaConversionOptions.preset(it))}
-    OutlinedButton(onClick={change(o.copy(preset="Custom",layout="PAGED",panelMode="PANEL_BY_PANEL",orientation="AUTO_FIT",overlapPercent=0,cropWhiteMargins=true,splitSpreads=true,rightToLeft=true,showFullPageBeforeSplits=false))},enabled=enabled){Text("Apply manga settings")}
+    ExportChoice(o.preset,listOf("Manga","Manhwa","Manhua","Custom"),enabled){change(if(it=="Custom")o.copy(preset="Custom") else androidMangaPreset(it))}
+    OutlinedButton(onClick={change(recommendedManga(o))},enabled=enabled){Text("Apply manga settings")}
     Text("Layout")
-    ExportChoice(o.layout,listOf("AUTO","PAGED","WEBTOON"),enabled){change(o.copy(layout=it))}
+    ExportChoice(o.layout,listOf("AUTO","PAGED","WEBTOON"),enabled){change(o.copy(preset="Custom",layout=it))}
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f)) {
             Text("Panel mode")
             ExportChoice(o.panelMode,listOf("OFF","ROW_BY_ROW","PANEL_BY_PANEL"),enabled){
-                change(o.copy(panelMode=it,orientation=if(it!="PANEL_BY_PANEL" && o.orientation=="AUTO_FIT")"PORTRAIT" else o.orientation))
+                change(o.copy(preset="Custom",panelMode=it,orientation=if(it=="OFF" && o.orientation=="AUTO_FIT")"PORTRAIT" else o.orientation))
             }
         }
         Column(Modifier.weight(1f)) {
             Text("Orientation")
-            ExportChoice(o.orientation,if(o.panelMode=="PANEL_BY_PANEL")listOf("PORTRAIT","LANDSCAPE","AUTO_FIT") else listOf("PORTRAIT","LANDSCAPE"),enabled){change(o.copy(orientation=it))}
+            ExportChoice(o.orientation,if(o.panelMode!="OFF")listOf("PORTRAIT","LANDSCAPE","AUTO_FIT") else listOf("PORTRAIT","LANDSCAPE"),enabled){change(o.copy(preset="Custom",orientation=it))}
         }
     }
-    if(o.orientation!="PORTRAIT") ConversionToggle("Rotate content clockwise",o.landscapeClockwise,enabled){change(o.copy(landscapeClockwise=it))}
-    ConversionToggle("Full page before splits",o.showFullPageBeforeSplits,enabled){change(o.copy(showFullPageBeforeSplits=it))}
-    ConversionToggle("Keep chapter first page whole",o.keepChapterFirstPageWhole,enabled){change(o.copy(keepChapterFirstPageWhole=it))}
+    if(format in setOf(ExportFormat.XTC,ExportFormat.XTCH) && o.orientation!="PORTRAIT") ConversionToggle("Rotate content clockwise",o.landscapeClockwise,enabled){change(o.copy(preset="Custom",landscapeClockwise=it))}
+    ConversionToggle("Full page before splits",o.showFullPageBeforeSplits,enabled){change(o.copy(preset="Custom",showFullPageBeforeSplits=it))}
+    ConversionToggle("Keep chapter first page whole",o.keepChapterFirstPageWhole,enabled){change(o.copy(preset="Custom",keepChapterFirstPageWhole=it))}
     if(o.panelMode!="OFF") {
-        ConversionToggle("Enlarge oversized splits",o.enlargeOversizedSplits,enabled){change(o.copy(enlargeOversizedSplits=it))}
-        if(o.enlargeOversizedSplits) ConversionSlider("Minimum screen fill (%)",o.minimumScreenFillPercent,25..80,enabled){change(o.copy(minimumScreenFillPercent=it))}
-        if(o.panelMode=="PANEL_BY_PANEL") ConversionSlider("Context Peek (%) · 0 = off",o.contextPeekPercent,0..8,enabled){change(o.copy(contextPeekPercent=it))}
+        ConversionToggle("Enlarge oversized splits",o.enlargeOversizedSplits,enabled){change(o.copy(preset="Custom",enlargeOversizedSplits=it))}
+        if(o.enlargeOversizedSplits) {
+            Text("Minimum screen fill · "+o.minimumScreenFillPercent+"%")
+            Slider(o.minimumScreenFillPercent.toFloat(),{change(o.copy(preset="Custom",minimumScreenFillPercent=it.toInt()))},
+                valueRange=25f..80f,steps=10,enabled=enabled)
+        }
+        if(o.panelMode=="PANEL_BY_PANEL") ConversionSlider("Context Peek (%) · 0 = off",o.contextPeekPercent,0..8,enabled){change(o.copy(preset="Custom",contextPeekPercent=it))}
     }
-    ConversionSlider("Overlap (%)",o.overlapPercent,0..50,enabled){change(o.copy(overlapPercent=it))}
-    ConversionToggle("Trim white margins",o.cropWhiteMargins,enabled){change(o.copy(cropWhiteMargins=it))}
-    ConversionToggle("Split double-page spreads",o.splitSpreads,enabled){change(o.copy(splitSpreads=it))}
-    ConversionToggle("Read right to left",o.rightToLeft,enabled){change(o.copy(rightToLeft=it))}
+    if(o.panelMode!="OFF" || o.layout!="PAGED" || o.orientation!="PORTRAIT") ConversionSlider("Overlap (%)",o.overlapPercent,0..50,enabled){change(o.copy(preset="Custom",overlapPercent=it))}
+    ConversionToggle("Trim white margins",o.cropWhiteMargins,enabled){change(o.copy(preset="Custom",cropWhiteMargins=it))}
+    ConversionToggle("Split double-page spreads",o.splitSpreads,enabled){change(o.copy(preset="Custom",splitSpreads=it))}
+    ConversionToggle("Read right to left",o.rightToLeft,enabled){change(o.copy(preset="Custom",rightToLeft=it))}
     ComposeRenderingSettings(o,enabled,change)
     HorizontalDivider()
     Text("Book packaging",style=MaterialTheme.typography.titleMedium)
-    ConversionToggle("Include cover",o.includeCover,enabled){change(o.copy(includeCover=it))}
+    ConversionToggle("Include cover",o.includeCover,enabled){change(o.copy(preset="Custom",includeCover=it))}
     if(format in setOf(ExportFormat.XTC,ExportFormat.XTCH)) {
-        ConversionToggle("Extended metadata (experimental)",o.xtcExtendedMetadata,enabled){change(o.copy(xtcExtendedMetadata=it))}
+        ConversionToggle("Extended metadata (experimental)",o.xtcExtendedMetadata,enabled){change(o.copy(preset="Custom",xtcExtendedMetadata=it))}
         Text("Older readers may ignore the private metadata trailer.",style=MaterialTheme.typography.bodySmall)
     }
-    if(format in setOf(ExportFormat.EPUB,ExportFormat.EPUB2,ExportFormat.CBZ)) ConversionToggle("Retain original color",o.epubColor,enabled){change(o.copy(epubColor=it))}
+    if(format in setOf(ExportFormat.EPUB,ExportFormat.EPUB2,ExportFormat.CBZ)) ConversionToggle("Retain original color",o.epubColor,enabled){change(o.copy(preset="Custom",epubColor=it))}
     if(format in setOf(ExportFormat.EPUB,ExportFormat.EPUB2)) {
         val grouping=when(o.epubPagesPerXhtml){0->"Entire chapter";1->"One page per XHTML";else->"Custom"}
         ExportChoice(grouping,listOf("One page per XHTML","Entire chapter","Custom"),enabled){
-            change(o.copy(epubPagesPerXhtml=when(it){"Entire chapter"->0;"One page per XHTML"->1;else->2}))
+            change(o.copy(preset="Custom",epubPagesPerXhtml=when(it){"Entire chapter"->0;"One page per XHTML"->1;else->2}))
         }
         if(grouping=="Custom") {
             var text by remember { mutableStateOf(o.epubPagesPerXhtml.toString()) }
-            OutlinedTextField(text,{v->text=v.take(3);v.toIntOrNull()?.takeIf{it in 2..999}?.let{change(o.copy(epubPagesPerXhtml=it))}},
+            OutlinedTextField(text,{v->text=v.take(3);v.toIntOrNull()?.takeIf{it in 2..999}?.let{change(o.copy(preset="Custom",epubPagesPerXhtml=it))}},
                 label={Text("Pages per XHTML (2–999)")},singleLine=true,enabled=enabled,isError=text.toIntOrNull()?.let{it !in 2..999}!=false)
             Text("Applied: "+o.epubPagesPerXhtml,style=MaterialTheme.typography.labelSmall)
         }
@@ -99,17 +128,17 @@ internal fun ComposeTypographySettings(s:DesktopTextEpubImport.Settings,enabled:
 internal fun ComposePdfSettings(o:MangaConversionOptions,format:ExportFormat,enabled:Boolean,change:(MangaConversionOptions)->Unit){
     Text("PDF page rendering",style=MaterialTheme.typography.titleMedium)
     Text("Original PDF pages remain intact, fitted to the selected device.",style=MaterialTheme.typography.bodySmall)
-    ConversionToggle("Right-to-left book metadata",o.rightToLeft,enabled){change(o.copy(rightToLeft=it))}
+    ConversionToggle("Right-to-left book metadata",o.rightToLeft,enabled){change(o.copy(preset="Custom",rightToLeft=it))}
     val archive=format in setOf(ExportFormat.EPUB,ExportFormat.EPUB2,ExportFormat.CBZ)
-    if(archive)ConversionToggle("Retain source colors",o.epubColor,enabled){change(o.copy(epubColor=it))}
+    if(archive)ConversionToggle("Retain source colors",o.epubColor,enabled){change(o.copy(preset="Custom",epubColor=it))}
     if(!archive || !o.epubColor)ComposeRenderingSettings(o,enabled,change)
     if(format in setOf(ExportFormat.EPUB,ExportFormat.EPUB2)){
         Text("Pages per XHTML")
         val grouping=when(o.epubPagesPerXhtml){0->"Entire book";1->"One page";else->"Custom"}
-        ExportChoice(grouping,listOf("One page","Entire book","Custom"),enabled){change(o.copy(epubPagesPerXhtml=when(it){"Entire book"->0;"One page"->1;else->2}))}
+        ExportChoice(grouping,listOf("One page","Entire book","Custom"),enabled){change(o.copy(preset="Custom",epubPagesPerXhtml=when(it){"Entire book"->0;"One page"->1;else->2}))}
         if(grouping=="Custom"){
             var value by remember{mutableStateOf(o.epubPagesPerXhtml.toString())}
-            OutlinedTextField(value,{v->value=v.take(3);v.toIntOrNull()?.takeIf{it in 2..999}?.let{change(o.copy(epubPagesPerXhtml=it))}},
+            OutlinedTextField(value,{v->value=v.take(3);v.toIntOrNull()?.takeIf{it in 2..999}?.let{change(o.copy(preset="Custom",epubPagesPerXhtml=it))}},
                 label={Text("Pages per XHTML (2–999)")},singleLine=true,enabled=enabled)
             Text("Applied: "+o.epubPagesPerXhtml)
         }

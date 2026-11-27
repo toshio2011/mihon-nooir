@@ -77,7 +77,7 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
     var mode by remember { mutableStateOf(initialInput.mode()) }
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
-    var options by remember { mutableStateOf(if(initialInput.mode()==LocalConversionMode.MANGA) MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft=false)) }
+    var options by remember { mutableStateOf(if(initialInput.mode()==LocalConversionMode.MANGA) androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)) }
     var typography by remember { mutableStateOf(DesktopTextEpubImport.Settings()) }
     var outputText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -105,7 +105,7 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                         ExportChoice(inputKind.label,UniversalInput.entries.map{it.label},!busy){label->
                             inputKind=UniversalInput.entries.first{it.label==label}
                             source=null;mode=inputKind.mode()
-                            options=if(mode==LocalConversionMode.MANGA)MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft=false)
+                            options=if(mode==LocalConversionMode.MANGA)androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)
                             finished=null;result="";adjustFormat()
                         }
                     }
@@ -122,8 +122,8 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                                 if (inputKind.accepts(file)) {
                                     source = file
                                     mode = modesFor(file).first()
-                                    options = if (mode == LocalConversionMode.MANGA) MangaConversionOptions.preset("Manga")
-                                        else MangaConversionOptions().copy(rightToLeft = false)
+                                    options = if (mode == LocalConversionMode.MANGA) androidMangaDefaults()
+                                        else androidMangaDefaults().copy(rightToLeft=false)
                                     adjustFormat()
                                     result = ""; finished = null
                                 } else { result="Choose a supported "+inputKind.label+" input." }
@@ -137,7 +137,7 @@ internal fun ComposeConverter(initialInput:UniversalInput=UniversalInput.COMIC,c
                         ExportChoice(mode.label, modes.map { it.label }, !busy) { label ->
                             mode = modes.first { it.label == label }
                             options = if (mode in setOf(LocalConversionMode.MANGA,LocalConversionMode.EPUB_IMAGES))
-                                MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft = false)
+                                androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)
                             adjustFormat()
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

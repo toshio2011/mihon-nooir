@@ -172,7 +172,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
     var folder by remember { mutableStateOf<File?>(null) }
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
-    var options by remember { mutableStateOf(MangaConversionOptions.preset("Manga")) }
+    var options by remember { mutableStateOf(androidMangaDefaults()) }
     var typography by remember { mutableStateOf(DesktopTextEpubImport.Settings()) }
     var selectionError by remember { mutableStateOf("") }
     val formats = ExportFormat.entries.filter { kind.accepts(it) && device.accepts(it) }
@@ -183,7 +183,7 @@ private fun ComposeBatchOptions(close: () -> Unit,
             Text("Input type")
             ExportChoice(kind.label,BatchKind.entries.map { it.label },true) { label ->
                 kind = BatchKind.entries.first { it.label == label }; files = emptyList(); selectionError = ""
-                options = if(kind in setOf(BatchKind.MANGA,BatchKind.EPUB_IMAGES)) MangaConversionOptions.preset("Manga") else MangaConversionOptions().copy(rightToLeft=false,renderAlgorithm="THRESHOLD")
+                options = if(kind in setOf(BatchKind.MANGA,BatchKind.EPUB_IMAGES)) androidMangaDefaults() else androidMangaDefaults().copy(rightToLeft=false)
             }
             OutlinedButton(onClick = {
                 val picker = JFileChooser().apply {

@@ -21,7 +21,22 @@ fun main() {
     }finally{g.dispose()}
     val bytes=ByteArrayOutputStream().also{ImageIO.write(image,"png",it)}.toByteArray()
     image.flush()
+    val fresh=androidMangaDefaults()
+    check(fresh.copy(renderAlgorithm="LEGACY")==MangaConversionOptions())
+    check(androidRendering(fresh)=="FLOYD_STEINBERG")
+    check(androidRendering(MangaConversionOptions(dither=false))=="THRESHOLD")
+    for(name in listOf("Manga","Manhwa","Manhua")){
+        check(androidMangaPreset(name).copy(renderAlgorithm="LEGACY")==MangaConversionOptions.preset(name))
+    }
+    val prior=MangaConversionOptions(renderAlgorithm="ATKINSON",contrast=73,contextPeekPercent=4,showFullPageBeforeSplits=true)
+    val recommended=recommendedManga(prior)
+    check(recommended.panelMode=="PANEL_BY_PANEL" && recommended.orientation=="AUTO_FIT" &&
+        recommended.renderAlgorithm=="ATKINSON" && recommended.contrast==73 && recommended.contextPeekPercent==4 &&
+        !recommended.showFullPageBeforeSplits && recommended.overlapPercent==0)
     val device=NooirDeviceProfiles.forId("X4")
+    val legacy=NooirDesktopCli.previewImage(bytes,device.id,ExportFormat.XTC,MangaConversionOptions())
+    val explicit=NooirDesktopCli.previewImage(bytes,device.id,ExportFormat.XTC,fresh)
+    check(legacy.frames.size==explicit.frames.size && legacy.frames.zip(explicit.frames).all{(a,b)->a.contentEquals(b)})
     val options=MangaConversionOptions.preset("Manga").copy(panelMode="PANEL_BY_PANEL",orientation="AUTO_FIT",keepChapterFirstPageWhole=true)
     val whole=NooirDesktopCli.previewImage(bytes,device.id,ExportFormat.XTC,options,true)
     check(whole.frames.size==1)

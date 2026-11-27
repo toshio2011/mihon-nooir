@@ -35,7 +35,7 @@ import javax.swing.JFileChooser
 internal fun ComposeExport(card: SuwayomiMangaCard, chapters: List<SuwayomiChapter>, close: () -> Unit) {
     var device by remember { mutableStateOf(NooirDeviceProfiles.builtins.first()) }
     var format by remember { mutableStateOf(ExportFormat.XTC) }
-    var options by remember { mutableStateOf(MangaConversionOptions.preset("Manga")) }
+    var options by remember { mutableStateOf(androidMangaDefaults()) }
     var allowDownload by remember { mutableStateOf(false) }
     var outputText by remember { mutableStateOf("") }
     val output = remember(outputText, format) {
