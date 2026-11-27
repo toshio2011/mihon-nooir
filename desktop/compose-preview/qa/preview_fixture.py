@@ -59,7 +59,7 @@ def chapter_archive():
 CBZ = chapter_archive()
 COVERS = {i: cover(i) for i in range(1, 7)}
 CARDS = [{"id": i, "title": t, "author": "QA fixture", "description": "Synthetic demonstration library.",
-          "thumbnailUrl": f"/api/v1/manga/{i}/thumbnail", "inLibrary": True}
+          "thumbnailUrl": f"/api/v1/manga/{i}/thumbnail", "inLibrary": True, "unreadCount": i*2}
          for i, t in enumerate(TITLES, 1)]
 
 class Handler(BaseHTTPRequestHandler):
@@ -103,8 +103,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(400, b"invalid library pagination", "text/plain")
                 return
             limit, offset = map(int, paging.groups())
-            data = {"data": {"mangas": {"totalCount": len(CARDS), "nodes": CARDS[offset:offset+limit]}}}
-            marker = "STARTUP_LIBRARY_OK" if limit == 1 else "LIBRARY_OK"
+            category = re.search(r"categoryIds: \[(\d+)\]", query)
+            rows = CARDS
+            if category:
+                cid = int(category.group(1))
+                rows = [c for c in CARDS if c["id"] in ({1, 2, 3} if cid == 1 else {4, 5, 6} if cid == 2 else set())]
+            data = {"data": {"mangas": {"totalCount": len(rows), "nodes": rows[offset:offset+limit]}}}
+            marker = "CATEGORY_LIBRARY_OK" if category else ("STARTUP_LIBRARY_OK" if limit == 1 else "LIBRARY_OK")
+        elif "query NooirCategories" in query:
+            data = {"data": {"categories": {"totalCount": 2, "nodes": [
+                {"id": 1, "name": "Reading", "order": 1},
+                {"id": 2, "name": "Plan to read", "order": 2}
+            ]}}}
+            marker = "CATEGORIES_OK"
         elif "query NooirManga" in query and "mutation" not in query:
             match = re.search(r"manga\(id: ([1-6])\)", query)
             if not match:

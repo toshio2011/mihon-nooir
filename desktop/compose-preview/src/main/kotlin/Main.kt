@@ -1,6 +1,8 @@
 package dev.nooir.desktop.compose
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -229,10 +231,19 @@ private fun Library(client: SuwayomiClient) {
     var offset by remember { mutableStateOf(0) }
     var revision by remember { mutableStateOf(0) }
     var search by remember { mutableStateOf("") }
-    LaunchedEffect(client, offset, revision) {
+    var categories by remember { mutableStateOf<List<SuwayomiCategory>>(emptyList()) }
+    var categoryId by remember { mutableStateOf<Int?>(null) }
+    var categoryError by remember { mutableStateOf(false) }
+    LaunchedEffect(client, revision) {
+        request { client.categories() }.fold({ values ->
+            categories = values; categoryError = false
+            if (categoryId != null && values.none { it.id == categoryId }) { categoryId = null; offset = 0 }
+        }, { categoryError = true })
+    }
+    LaunchedEffect(client, offset, revision, categoryId) {
         page = null
         error = false
-        request { client.library(offset, 100) }.fold({ page = it }, { error = true })
+        request { client.library(offset, 100, categoryId) }.fold({ page = it }, { error = true })
     }
     val card = selected
     if (card != null) Details(client, card) { selected = null }
@@ -242,7 +253,13 @@ private fun Library(client: SuwayomiClient) {
             OutlinedTextField(search, { search = it }, label = { Text("Filter this page") }, singleLine = true, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = { revision++ }) { Text("Refresh") }
         }
-        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = categoryId == null, onClick = { categoryId = null; offset = 0 }, label = { Text("All") })
+            categories.forEach { category ->
+                FilterChip(selected = categoryId == category.id, onClick = { categoryId = category.id; offset = 0 }, label = { Text(category.name) })
+            }
+        }
+        if (categoryError) Text("Categories unavailable; refresh to retry.", style = MaterialTheme.typography.labelSmall)
         val current = page
         when {
             error -> {
@@ -258,7 +275,14 @@ private fun Library(client: SuwayomiClient) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(cards, key = { it.id }) { item ->
                         Card(onClick = { selected = item }) {
-                            Cover(client, item, Modifier.fillMaxWidth().aspectRatio(0.70f))
+                            Box(Modifier.fillMaxWidth().aspectRatio(0.70f)) {
+                                Cover(client, item, Modifier.fillMaxSize())
+                                item.unreadCount?.takeIf { it > 0 }?.let { count ->
+                                    Surface(modifier = Modifier.align(Alignment.TopEnd).padding(8.dp), shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.primaryContainer) {
+                                        Text(count.toString(), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            }
                             Text(item.title, Modifier.padding(10.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }

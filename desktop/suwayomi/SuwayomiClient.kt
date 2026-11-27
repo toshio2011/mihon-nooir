@@ -49,7 +49,10 @@ data class SuwayomiMangaCard(
     val description: String?,
     val thumbnailUrl: String?,
     val inLibrary: Boolean,
+    val unreadCount: Int? = null,
 )
+
+data class SuwayomiCategory(val id: Int, val name: String, val order: Int)
 
 data class SuwayomiLibraryPage(
     val mangas: List<SuwayomiMangaCard>,
@@ -167,13 +170,38 @@ class SuwayomiClient(
     }
 
     /** User's Suwayomi library (not an Android Mihon library sync). */
-    fun library(offset: Int = 0, limit: Int = 100): SuwayomiLibraryPage {
+    fun categories(): List<SuwayomiCategory> {
+        val found = mutableListOf<SuwayomiCategory>()
+        var offset = 0
+        do {
+            val page = graphql("query NooirCategories { categories(first: 100, offset: $offset) { totalCount nodes { id name order } } }").obj("categories")
+            val total = page.int("totalCount")
+            require(total in 0..1000)
+            val nodes = page.list("nodes")
+            require(nodes.size <= 100 && offset + nodes.size <= total)
+            found += nodes.map {
+                val node = it.asObject()
+                SuwayomiCategory(node.int("id"),node.str("name"),node.int("order")).also { category ->
+                    require(category.id >= 0 && category.name.length <= 500)
+                }
+            }
+            offset += nodes.size
+            if (offset == total) break
+            require(nodes.isNotEmpty()) { "Incomplete category listing" }
+        } while (true)
+        require(found.map { it.id }.distinct().size == found.size)
+        return found.sortedWith(compareBy<SuwayomiCategory> { it.order }.thenBy { it.id })
+    }
+
+    fun library(offset: Int = 0, limit: Int = 100, categoryId: Int? = null): SuwayomiLibraryPage {
         require(offset in 0..100_000 && limit in 1..200) { "Invalid library pagination" }
+        require(categoryId == null || categoryId >= 0)
+        val category = categoryId?.let { ", categoryIds: [$it]" }.orEmpty()
         val query = """
             query NooirLibrary {
-              mangas(condition: { inLibrary: true }, first: $limit, offset: $offset) {
+              mangas(condition: { inLibrary: true$category }, first: $limit, offset: $offset) {
                 totalCount
-                nodes { id title author description thumbnailUrl inLibrary }
+                nodes { id title author description thumbnailUrl inLibrary unreadCount }
               }
             }
         """.trimIndent()
@@ -189,6 +217,7 @@ class SuwayomiClient(
                 description = node["description"] as? String,
                 thumbnailUrl = node["thumbnailUrl"] as? String,
                 inLibrary = node["inLibrary"] as? Boolean ?: error("Missing inLibrary"),
+                unreadCount = (node["unreadCount"] as? Long)?.takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt(),
             )
         }
         require(mangas.size <= limit && mangas.all { it.inLibrary }) {
