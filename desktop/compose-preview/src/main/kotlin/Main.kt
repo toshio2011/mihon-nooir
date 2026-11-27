@@ -1,6 +1,11 @@
 package dev.nooir.desktop.compose
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -125,7 +130,30 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
     }
     val result = manifestResult
     val manifest = result?.getOrNull()
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    val readerFocus=remember{FocusRequester()}
+    var pageReady by remember(manifest,page,pageRevision){mutableStateOf(false)}
+    var pageDecoded by remember(manifest,page,pageRevision){mutableStateOf(false)}
+    LaunchedEffect(card.id,chapter.id,saveOpen,saving) {
+        if(!saveOpen && !saving) readerFocus.requestFocus()
+    }
+    Column(Modifier.fillMaxSize().focusRequester(readerFocus).onPreviewKeyEvent { event ->
+        if(event.type!=KeyEventType.KeyUp || saving || saveOpen || operations.active) false
+        else if(event.key==Key.Escape && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed){back();true}
+        else if(event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed && event.key==Key.S &&
+            manifest!=null && pageDecoded && manifest.syncConflict==null && page>(savedPage?:Int.MAX_VALUE)){
+            saveOpen=true;true
+        } else if(manifest!=null && pageReady && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed){
+            val target=when(event.key){
+                Key.DirectionRight,Key.PageDown->(page+1).coerceAtMost(manifest.pageCount-1)
+                Key.DirectionLeft,Key.PageUp->(page-1).coerceAtLeast(0)
+                Key.Home->0
+                Key.End->manifest.pageCount-1
+                Key.Spacebar->if(event.isShiftPressed)(page-1).coerceAtLeast(0) else (page+1).coerceAtMost(manifest.pageCount-1)
+                else->null
+            }
+            if(target!=null){page=target;true}else false
+        } else false
+    }.focusable().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = back, enabled = !saving) { Text("‹ Chapters") }
             Text(card.title + " · " + chapter.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -141,6 +169,8 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
             LaunchedEffect(client, manifest, page, pageRevision) {
                 val index = page
                 imageResult = pageSlots.withPermit { request { decodeReaderPage(client.onlinePage(manifest, index)) } }
+                pageReady=true
+                pageDecoded=imageResult?.isSuccess==true
             }
             if (manifest.syncConflict != null) Text("Reading-position conflict reported by server. No position is being written.")
             val rendered = imageResult
@@ -165,7 +195,7 @@ private fun Reader(client: SuwayomiClient, card: SuwayomiMangaCard, chapter: Suw
                     enabled = !saving && rendered?.isSuccess == true &&
                     manifest.syncConflict == null && page > (savedPage ?: Int.MAX_VALUE)) { Text("Save position") }
             }
-            Text(saveStatus.ifBlank { "Progress is saved only on request." }, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(saveStatus.ifBlank { "←/→ or PgUp/PgDn · Space/Shift+Space · Home/End · Ctrl+S save · Esc back" }, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (saveOpen) AlertDialog(onDismissRequest = { saveOpen = false },
                 title = { Text("Save reading position?") },
                 text = { Text("Save page " + (page + 1) + " to your local reading service? A known later position will not be overwritten. Concurrent writers may still race.") },

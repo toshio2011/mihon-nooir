@@ -73,7 +73,7 @@ test -s "$out/compose-reader-page1.png"
 identify "$out/compose-reader-page1.png" >> "$out/window.txt"
 # The actual 1040x720 reader capture places Next at (621,665)
 # and Previous at (510,665). Verify real page requests, not just clicks.
-xdotool mousemove --window "$window" 621 665 click 1
+xdotool key Right
 for i in {1..30}; do
   if grep -Fxq 'PAGE_OK 1' "$out/fixture.log"; then break; fi
   sleep 1
@@ -88,7 +88,7 @@ if compare -metric AE "$out/compose-reader-page1.png" "$out/compose-reader-page2
   echo "Reader page did not visibly change" >&2
   exit 1
 fi
-xdotool mousemove --window "$window" 510 665 click 1
+xdotool key Left
 for i in {1..30}; do
   if [[ "$(grep -Fxc 'PAGE_OK 0' "$out/fixture.log" || true)" -ge 2 ]]; then break; fi
   sleep 1
@@ -97,8 +97,22 @@ test "$(grep -Fxc 'PAGE_OK 0' "$out/fixture.log" || true)" -ge 2
 sleep 3
 import -window "$window" "$out/compose-reader-return-page1.png"
 test -s "$out/compose-reader-return-page1.png"
-# Leave the reader by its actual back control, preserving the chapter list.
-xdotool mousemove --window "$window" 145 40 click 1
+# Test End and Home against real fixture page requests, then Escape.
+xdotool key End
+for i in {1..20}; do
+  if grep -Fxq 'PAGE_OK 2' "$out/fixture.log"; then break; fi
+  sleep 1
+done
+grep -Fxq 'PAGE_OK 2' "$out/fixture.log"
+sleep 2
+xdotool key Home
+for i in {1..20}; do
+  if [[ "$(grep -Fxc 'PAGE_OK 0' "$out/fixture.log" || true)" -ge 3 ]]; then break; fi
+  sleep 1
+done
+test "$(grep -Fxc 'PAGE_OK 0' "$out/fixture.log" || true)" -ge 3
+sleep 2
+xdotool key Escape
 sleep 3
 import -window "$window" "$out/compose-return-details.png"
 test -s "$out/compose-return-details.png"
@@ -151,7 +165,7 @@ sleep 2
 import -window root "$out/compose-converted-book-preview.png"
 test -s "$out/compose-converted-book-preview.png"
 # Capture a content page as well as the cover of the actual converted book.
-xdotool mousemove 629 621 click 1
+xdotool key Right
 for i in {1..20}; do
   if grep -Fq 'QA_CONVERTED_FRAME page=2 count=' "$out/application.log"; then break; fi
   sleep 1

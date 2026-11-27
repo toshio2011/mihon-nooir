@@ -1,6 +1,11 @@
 package dev.nooir.desktop.compose
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -185,7 +190,25 @@ internal fun ConvertedBookPreview(file: File, back: () -> Unit) {
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { failed = true }
     }
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    var sendOpen by remember(file) { mutableStateOf(false) }
+    val previewFocus=remember{FocusRequester()}
+    LaunchedEffect(file,sendOpen){if(!sendOpen)previewFocus.requestFocus()}
+    Column(Modifier.fillMaxWidth().focusRequester(previewFocus).onPreviewKeyEvent{event->
+        if(event.type!=KeyEventType.KeyUp || sendOpen || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) false
+        else if(event.key==Key.Escape){back();true}
+        else {
+            val count=frame?.count
+            val target=if(count==null)null else when(event.key){
+                Key.DirectionRight,Key.PageDown->(page+1).coerceAtMost(count-1)
+                Key.DirectionLeft,Key.PageUp->(page-1).coerceAtLeast(0)
+                Key.Home->0
+                Key.End->count-1
+                Key.Spacebar->if(event.isShiftPressed)(page-1).coerceAtLeast(0) else (page+1).coerceAtMost(count-1)
+                else->null
+            }
+            if(target!=null){page=target;true}else false
+        }
+    }.focusable(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(file.name, style = MaterialTheme.typography.titleMedium)
         Text("Actual converted output", style = MaterialTheme.typography.labelMedium)
         Box(Modifier.fillMaxWidth().height(390.dp), contentAlignment = Alignment.Center) {
@@ -202,7 +225,6 @@ internal fun ConvertedBookPreview(file: File, back: () -> Unit) {
             Text("${page + 1} / ${frame?.count ?: "…"}")
             TextButton(onClick = { page++ }, enabled = frame?.let { page + 1 < it.count } == true) { Text("Next") }
         }
-        var sendOpen by remember(file) { mutableStateOf(false) }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TextButton(onClick = back) { Text("Back to export") }
             TextButton(onClick = { sendOpen = true }) { Text("Send to XTEink") }
